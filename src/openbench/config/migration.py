@@ -236,31 +236,18 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
 
     # Case-insensitive lookup: ref_per_source_root keys are lower-cased
     # because f90nml lower-cases all namelist identifiers.
-    used_roots = [ref_per_source_root[s.lower()] for s in used_source_names if s.lower() in ref_per_source_root]
-    if used_roots:
-        # commonpath raises ValueError if mixing absolute/relative or empty
+    used_root_map = {s: ref_per_source_root[s.lower()] for s in used_source_names if s.lower() in ref_per_source_root}
+    if used_root_map:
+        # Preserve exact per-source roots. A common data_root alone can make
+        # multiple legacy refs resolve to the first child directory.
+        filtered_ref["overrides"] = {source: {"root_dir": root} for source, root in sorted(used_root_map.items())}
+        used_roots = list(used_root_map.values())
         try:
             common = os.path.commonpath(used_roots)
         except ValueError:
             common = ""
-        # Reject trivially-empty / root-only prefixes
-        if common and common not in ("/", "."):
+        if common and common not in ("/", ".") and len(set(used_roots)) == 1:
             filtered_ref["data_root"] = common
-            if len(set(used_roots)) > 1:
-                logger.info(
-                    "Migration: reference paths share common prefix %s; "
-                    "writing as reference.data_root. Per-source roots were: %s",
-                    common,
-                    ref_per_source_root,
-                )
-        else:
-            logger.warning(
-                "Migration: legacy reference root_dir paths have no usable "
-                "common prefix; reference.data_root left unset. Migrated "
-                "config will resolve via registry root_dir, which may not "
-                "match your data layout. Legacy per-source roots: %s",
-                {s: ref_per_source_root[s.lower()] for s in used_source_names if s.lower() in ref_per_source_root},
-            )
 
     new_config: dict[str, Any] = {
         "project": {

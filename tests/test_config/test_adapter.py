@@ -933,3 +933,115 @@ def test_statistics_context_per_pair_uses_pair_specific_ref_prefix():
 
     assert context.stats_nml["Hellinger_Distance"]["ET_SimA2_prefix"] == "ET_ref_RefA_SimA_et_ref"
     assert context.stats_nml["Hellinger_Distance"]["ET_SimB2_prefix"] == "ET_ref_RefA_SimB_et_ref"
+
+
+def test_adapter_uses_reference_override_and_fallbacks(monkeypatch, tmp_path):
+    from openbench.data.registry.schema import FallbackVar, ReferenceDataset, VariableMapping
+
+    ref_root = tmp_path / "ref"
+    ref_root.mkdir()
+    (ref_root / "alt.nc4").write_bytes(b"x")
+    ref = ReferenceDataset(
+        name="RefA",
+        description="",
+        category="Water",
+        data_type="grid",
+        tim_res="Month",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2001],
+        root_dir="/wrong",
+        variables={
+            "Runoff": VariableMapping(
+                varname="runoff",
+                varunit="mm day-1",
+                prefix="",
+                suffix="",
+                fallbacks=[FallbackVar(varname="q", varunit="kg m-2 s-1", convert="value * 86400")],
+                prefix_fallback=["alt_"],
+            )
+        },
+        grid_res=0.5,
+    )
+    registry = SimpleNamespace(
+        get_model=lambda name: SimpleNamespace(tim_res="Month", grid_res=0.5, data_type="grid", variables={}),
+        get_resolution_variants=lambda name: {},
+        get_reference=lambda name, **kwargs: ref,
+    )
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="override", output_dir="./out", years=[2000, 2001]),
+        evaluation=EvaluationConfig(variables=["Runoff"]),
+        reference=ReferenceConfig(
+            data_root="/common",
+            sources={"Runoff": "RefA"},
+            overrides={"RefA": {"root_dir": str(ref_root), "variables": {"Runoff": {"varname": "q2"}}}},
+        ),
+        simulation={"SimA": SimulationEntry(model="M", root_dir="/sim", tim_res="Month", grid_res=0.5)},
+    )
+
+    _main, ref_nml, _sim = adapter_module.build_legacy_namelists(cfg)
+
+    section = ref_nml["Runoff"]
+    assert section["RefA_dir"] == str(ref_root)
+    assert section["RefA_varname"] == "q2"
+    assert section["RefA_prefix_fallback"] == ["alt_"]
+    assert section["RefA_fallbacks"][0]["varname"] == "q"
+    assert section["RefA_fallbacks"][0]["convert"] == "value * 86400"
+
+
+def test_find_nc_dir_does_not_substitute_lowres(tmp_path):
+    mid = tmp_path / "Grid" / "MidRes" / "Water" / "Runoff" / "Demo"
+    low = tmp_path / "Grid" / "LowRes" / "Water" / "Runoff" / "Demo"
+    mid.mkdir(parents=True)
+    low.mkdir(parents=True)
+    (low / "demo.nc").write_bytes(b"x")
+
+    assert adapter_module._find_nc_dir(str(mid), str(tmp_path / "Grid" / "MidRes"), "Water/Runoff/Demo") == str(mid)
+
+
+
+def test_adapter_reference_data_root_still_overrides_catalog_root(monkeypatch):
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    ref = ReferenceDataset(
+        name="RefA",
+        description="",
+        category="Water",
+        data_type="grid",
+        tim_res="Month",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2001],
+        root_dir="/catalog/root",
+        variables={"Runoff": VariableMapping(varname="runoff", varunit="mm day-1")},
+        grid_res=0.5,
+    )
+    registry = SimpleNamespace(
+        get_model=lambda name: SimpleNamespace(tim_res="Month", grid_res=0.5, data_type="grid", variables={}),
+        get_resolution_variants=lambda name: {},
+        get_reference=lambda name, **kwargs: ref,
+    )
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="root", output_dir="./out", years=[2000, 2001]),
+        evaluation=EvaluationConfig(variables=["Runoff"]),
+        reference=ReferenceConfig(data_root="/config/root", sources={"Runoff": "RefA"}),
+        simulation={"SimA": SimulationEntry(model="M", root_dir="/sim", tim_res="Month", grid_res=0.5)},
+    )
+
+    _main, ref_nml, _sim = adapter_module.build_legacy_namelists(cfg)
+
+    assert ref_nml["Runoff"]["RefA_dir"] == "/config/root"
+
+
+def test_adapter_rejects_programmatic_unsafe_labels():
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="unsafe", output_dir="./out", years=[2000, 2001]),
+        evaluation=EvaluationConfig(variables=["Runoff"]),
+        reference=ReferenceConfig(sources={"Runoff": "CON"}),
+        simulation={"SimA ": SimulationEntry(model="M", root_dir="/sim", tim_res="Month", grid_res=0.5)},
+    )
+
+    with pytest.raises(ConfigError, match="path-safe"):
+        adapter_module.build_runner_config(cfg)

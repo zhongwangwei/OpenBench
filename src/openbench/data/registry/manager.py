@@ -348,9 +348,9 @@ class RegistryManager:
                         self._references[key] = ref
                         logger.debug("Added new user reference '%s'", name)
                 except Exception as e:
-                    logger.warning("Failed to merge user reference '%s': %s", name, e)
+                    raise RuntimeError(f"Failed to merge user reference {name!r} from {path}: {e}") from e
         except Exception as e:
-            logger.warning("Failed to read user reference catalog %s: %s", path, e)
+            raise RuntimeError(f"Failed to read user reference catalog {path}: {e}") from e
 
     def _merge_reference_dir(self, directory: Path) -> None:
         """Deep-merge individual user reference YAML files."""
@@ -383,7 +383,7 @@ class RegistryManager:
                         self._references[key] = ref
                         logger.debug("Added new user reference '%s' from %s", name, path.name)
             except Exception as e:
-                logger.warning("Failed to merge user reference from %s: %s", path.name, e)
+                raise RuntimeError(f"Failed to read user reference file {path}: {e}") from e
 
     def _merge_model_catalog(self, path: Path) -> None:
         """Deep-merge user model catalog on top of built-in entries."""
@@ -655,6 +655,18 @@ class RegistryManager:
         catalog_path = get_writable_reference_catalog_path()
         with _catalog_write_lock(catalog_path):
             catalog = self._read_catalog(catalog_path)
+            existing_key = next(
+                (candidate for candidate in catalog if normalize_name(candidate) == normalize_name(name)),
+                None,
+            )
+            existing_name = existing_key
+            if existing_name is None:
+                existing = self._references.get(normalize_name(name))
+                existing_name = existing.name if existing is not None else None
+            if existing_name is not None and existing_name != name:
+                raise ValueError(
+                    f"Reference name '{name}' conflicts with existing catalog entry '{existing_name}' case-insensitively"
+                )
             catalog[name] = dataset.to_dict()
             self._write_catalog(catalog_path, catalog)
         self._references[normalize_name(name)] = dataset
@@ -769,24 +781,8 @@ def _auto_resolve_variant(
 
     candidates.sort(key=_score)
 
-    # Prefer variants whose root_dir actually exists on disk
-    best_label, best, best_rank = candidates[0]
-    chosen_reason = f"best match: {best.name} (tim_res={best.tim_res}, grid_res={best.grid_res})"
-
-    if best.root_dir and not Path(best.root_dir).is_dir():
-        for _, ref, _ in candidates[1:]:
-            if ref.root_dir and Path(ref.root_dir).is_dir():
-                logger.info(
-                    "Auto-resolve: preferred %s has no data on disk, using %s instead",
-                    best.name,
-                    ref.name,
-                )
-                reasons.append(f"{best.name} not on disk, switched to {ref.name}")
-                return ref, "; ".join(reasons + [f"selected {ref.name}"])
-        logger.warning("Auto-resolve: %s selected but root_dir not found: %s", best.name, best.root_dir)
-        reasons.append(f"{best.name} selected but root_dir missing")
-
-    reasons.append(chosen_reason)
+    _best_label, best, _best_rank = candidates[0]
+    reasons.append(f"best match: {best.name} (tim_res={best.tim_res}, grid_res={best.grid_res})")
     return best, "; ".join(reasons)
 
 
@@ -825,7 +821,7 @@ def _normalize_legacy_varname_list(var_data: dict) -> tuple[str, list[FallbackVa
 def _build_reference(data: dict) -> ReferenceDataset:
     """Build a ReferenceDataset from a raw dict."""
     variables = {}
-    for var_name, var_data in data.get("variables", {}).items():
+    for var_name, var_data in (data.get("variables") or {}).items():
         primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
         variables[var_name] = VariableMapping(
             varname=primary_varname,
@@ -905,7 +901,7 @@ def _build_reference(data: dict) -> ReferenceDataset:
 def _build_model(data: dict) -> ModelProfile:
     """Build a ModelProfile from a raw dict."""
     variables = {}
-    for var_name, var_data in data.get("variables", {}).items():
+    for var_name, var_data in (data.get("variables") or {}).items():
         primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
         variables[var_name] = VariableMapping(
             varname=primary_varname,
@@ -981,7 +977,7 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
         delete_key = get_mapping_key_case_insensitive(variables, deleted)
         if delete_key is not None:
             variables.pop(delete_key, None)
-    for var_name, var_data in overlay.get("variables", {}).items():
+    for var_name, var_data in (overlay.get("variables") or {}).items():
         variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
         variables[variable_key] = _merge_variable_mapping(
             variables.get(variable_key),
@@ -1059,7 +1055,7 @@ def _deep_merge_reference(existing: ReferenceDataset, overlay: dict) -> Referenc
 
     # Deep-merge variables
     variables = dict(existing.variables)
-    for var_name, var_data in overlay.get("variables", {}).items():
+    for var_name, var_data in (overlay.get("variables") or {}).items():
         variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
         if var_data is None:
             variables.pop(variable_key, None)

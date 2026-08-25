@@ -812,10 +812,13 @@ def _grid_resolution_from_subdir(root_sub_dir: str) -> str | None:
 
 def _matching_nc_files(directory: Path, pattern: str | list[str] | tuple[str, ...] | None) -> list[Path]:
     """Return NC files in directory matching one or more profile glob patterns."""
+    from pathlib import PurePosixPath
+
+    from openbench.data.coordinates import NC_SUFFIXES
+
     if not directory.is_dir():
         return []
 
-    patterns: list[str]
     if isinstance(pattern, (list, tuple)):
         patterns = [str(p) for p in pattern]
     elif pattern:
@@ -823,10 +826,22 @@ def _matching_nc_files(directory: Path, pattern: str | list[str] | tuple[str, ..
     else:
         patterns = ["*.nc", "*.nc4"]
 
+    def _casefold_match(file_path: Path, pat: str) -> bool:
+        rel = file_path.relative_to(directory).as_posix().casefold()
+        folded_pat = pat.casefold()
+        if "/" not in folded_pat and "**" not in folded_pat:
+            return fnmatch(file_path.name.casefold(), folded_pat)
+        rel_path = PurePosixPath(rel)
+        return rel_path.match(folded_pat) or (folded_pat.startswith("**/") and rel_path.match(folded_pat[3:]))
+
     files: dict[Path, None] = {}
     for pat in patterns:
         for file_path in directory.glob(pat):
-            if file_path.is_file() and file_path.suffix in {".nc", ".nc4"}:
+            if file_path.is_file() and file_path.suffix in NC_SUFFIXES:
+                files[file_path] = None
+        search = directory.rglob("*") if "/" in pat or "**" in pat else directory.iterdir()
+        for file_path in search:
+            if file_path.is_file() and file_path.suffix in NC_SUFFIXES and _casefold_match(file_path, pat):
                 files[file_path] = None
     return sorted(files)
 

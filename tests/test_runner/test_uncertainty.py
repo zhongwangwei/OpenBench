@@ -120,6 +120,53 @@ def test_grid_uncertainty_outputs_keep_model_and_reference_axes_separate(tmp_pat
         assert {"ensemble_mean", "model_spread", "member_count", "coefficient_of_variation"} <= set(product.data_vars)
 
 
+def test_uncertainty_releases_one_reference_group_before_loading_next(tmp_path, monkeypatch):
+    import gc
+    import weakref
+
+    import openbench.runner.uncertainty as uncertainty_module
+
+    output = tmp_path / "case"
+    output.mkdir()
+    simulations = ["A", "B"]
+    references = ["R1", "R2"]
+    bindings = _bindings(simulations, references, "grid")
+    first_group_arrays = []
+
+    def load_pair(task, _output_dir):
+        if task["ref_source"] == "R2":
+            gc.collect()
+            assert all(reference() is None for reference in first_group_arrays)
+        time = np.arange(20)
+        ref = xr.DataArray(np.zeros(20), coords={"time": time}, dims="time")
+        sim = xr.DataArray(
+            np.full(20, 1.0 if task["sim_source"] == "A" else 2.0),
+            coords={"time": time},
+            dims="time",
+        )
+        if task["ref_source"] == "R1":
+            first_group_arrays.extend([weakref.ref(sim), weakref.ref(ref)])
+        return sim, ref
+
+    monkeypatch.setattr(uncertainty_module, "_load_grid_pair", load_pair)
+    monkeypatch.setattr(
+        uncertainty_module,
+        "_write_spread_products",
+        lambda *_args, **_kwargs: {"model_spread": [], "reference_sensitivity": [], "skipped": []},
+    )
+
+    errors = run_uncertainty(
+        _cfg(tmp_path, simulations, references),
+        _tasks(bindings, simulations, references),
+        output,
+        ["RMSE"],
+        make_phase_error_fn=lambda phase, message, **details: {"phase": phase, "message": message, **details},
+    )
+
+    assert errors == []
+    assert first_group_arrays
+
+
 def test_station_uncertainty_writes_network_bootstrap_and_csv_products(tmp_path):
     output = tmp_path / "case"
     (output / "metrics").mkdir(parents=True)

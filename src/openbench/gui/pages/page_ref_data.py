@@ -51,27 +51,30 @@ from openbench.gui.path_utils import get_remote_ssh_manager
 def _registry_source_data(var_name: str, source_name: str) -> dict | None:
     """Build the GUI source config directly from a registry descriptor."""
     from openbench.data.registry.manager import get_registry
+    from openbench.util.names import get_mapping_key_case_insensitive
 
     ref = get_registry().get_reference(source_name)
     if ref is None:
         return None
 
+    years = list(ref.years or [])
     general = {
         "root_dir": ref.root_dir or "",
         "data_type": ref.data_type,
         "tim_res": ref.tim_res,
         "data_groupby": ref.data_groupby,
         "timezone": ref.timezone,
-        "syear": ref.years[0] if ref.years else "",
-        "eyear": ref.years[1] if len(ref.years) > 1 else "",
+        "syear": years[0] if years else "",
+        "eyear": years[1] if len(years) > 1 else "",
     }
     if ref.grid_res is not None:
         general["grid_res"] = ref.grid_res
     if ref.fulllist:
         general["fulllist"] = ref.fulllist
 
-    source_data = {"general": general}
-    var_mapping = ref.variables.get(var_name)
+    source_data = {"general": general, "_explicit_override": False}
+    var_key = get_mapping_key_case_insensitive(ref.variables or {}, var_name)
+    var_mapping = ref.variables.get(var_key) if var_key is not None else None
     if var_mapping:
         source_data.update(
             {
@@ -577,8 +580,7 @@ class PageRefData(BasePage):
                 combo.setCurrentIndex(0)
                 combo.blockSignals(False)
                 return
-            # After picker, select the resolved item in the combo if present,
-            # otherwise just proceed with the source_name we got.
+            self._select_combo_source(combo, source_name)
         else:
             source_name = combo_data
 
@@ -595,6 +597,19 @@ class PageRefData(BasePage):
 
         except ImportError:
             QMessageBox.warning(self, "Error", "Registry module not available.")
+
+    def _select_combo_source(self, combo: QComboBox, source_name: str):
+        """Make combo state reflect a resolved dataset name instead of a group row."""
+        combo.blockSignals(True)
+        try:
+            for i in range(combo.count()):
+                if combo.itemData(i) == source_name:
+                    combo.setCurrentIndex(i)
+                    return
+            combo.addItem(source_name, source_name)
+            combo.setCurrentIndex(combo.count() - 1)
+        finally:
+            combo.blockSignals(False)
 
     def _fill_advanced_fields(self, var_name: str, source_data: dict):
         """Populate the Advanced fields from *source_data*."""
@@ -619,6 +634,8 @@ class PageRefData(BasePage):
         # There is exactly one source per variable now
         source_name = next(iter(sources))
         source_data = sources[source_name]
+
+        source_data["_explicit_override"] = True
 
         fields = self._var_advanced_fields.get(var_name, {})
         for key, line_edit in fields.items():
@@ -678,8 +695,9 @@ class PageRefData(BasePage):
     def load_from_config(self):
         """Load from config.
 
-        For each variable, reads the single ``{var}_ref_source`` value, restores
-        the combo selection, and fills the advanced fields.
+        For each variable, reads the ``{var}_ref_source`` value, restores
+        all selected sources, and fills the advanced fields from the first
+        source that the single-select GUI can display.
         """
         import os
         import yaml
@@ -717,80 +735,77 @@ class PageRefData(BasePage):
         for var_name in selected:
             key = f"{var_name}_ref_source"
             raw = general_section.get(key, "")
-            # Accept both string and single-element list for backward compat
-            if isinstance(raw, list):
-                source_name = raw[0] if raw else ""
-            else:
-                source_name = raw or ""
-
-            if not source_name:
+            source_names = [name for name in raw if name] if isinstance(raw, list) else ([raw] if raw else [])
+            if not source_names:
                 continue
 
-            # Try to restore from saved source_configs (compound key)
-            compound_key = f"{var_name}::{source_name}"
-            source_data = None
+            loaded_sources = {}
+            first_source_data = None
+            for source_name in source_names:
+                # Try to restore from saved source_configs (compound key)
+                compound_key = f"{var_name}::{source_name}"
+                source_data = None
 
-            if compound_key in saved_source_configs:
-                saved = saved_source_configs[compound_key]
-                general = saved.get("general", {})
-                if general.get("root_dir") or general.get("dir"):
-                    source_data = saved.copy()
+                explicit_override = False
+                if compound_key in saved_source_configs and isinstance(saved_source_configs[compound_key], dict):
+                    source_data = saved_source_configs[compound_key].copy()
+                    source_data.setdefault("_explicit_override", True)
+                    explicit_override = bool(source_data.get("_explicit_override"))
 
-            # Fall back to def_nml file
-            if source_data is None:
-                def_nml_path = def_nml.get(source_name, "")
-                source_data = {"def_nml_path": def_nml_path}
+                # Fall back to def_nml file
+                if source_data is None:
+                    def_nml_path = def_nml.get(source_name, "")
+                    source_data = {"def_nml_path": def_nml_path}
 
-                if def_nml_path:
-                    nml_content = None
+                    if def_nml_path:
+                        nml_content = None
 
-                    if is_remote:
-                        if ssh_manager and ssh_manager.is_connected:
-                            remote_path = self._resolve_remote_def_nml_path(ssh_manager, def_nml_path)
-                            nml_content = self._load_remote_nml_content(ssh_manager, remote_path)
-                    else:
-                        full_path = self._resolve_def_nml_path(def_nml_path)
-                        if full_path and os.path.exists(full_path):
-                            try:
-                                with open(full_path, "r", encoding="utf-8") as f:
-                                    nml_content = yaml.safe_load(f) or {}
-                            except Exception as e:
-                                logger.warning("Failed to load def_nml file %s: %s", full_path, e)
+                        if is_remote:
+                            if ssh_manager and ssh_manager.is_connected:
+                                remote_path = self._resolve_remote_def_nml_path(ssh_manager, def_nml_path)
+                                nml_content = self._load_remote_nml_content(ssh_manager, remote_path)
+                        else:
+                            full_path = self._resolve_def_nml_path(def_nml_path)
+                            if full_path and os.path.exists(full_path):
+                                try:
+                                    with open(full_path, "r", encoding="utf-8") as f:
+                                        nml_content = yaml.safe_load(f) or {}
+                                except Exception as e:
+                                    logger.warning("Failed to load def_nml file %s: %s", full_path, e)
 
-                    if nml_content:
-                        if "general" in nml_content:
-                            source_data["general"] = nml_content["general"].copy()
-                        if var_name in nml_content:
-                            for field, value in nml_content[var_name].items():
-                                source_data[field] = value
+                        if nml_content:
+                            explicit_override = True
+                            if "general" in nml_content:
+                                source_data["general"] = nml_content["general"].copy()
+                            if var_name in nml_content:
+                                for field, value in nml_content[var_name].items():
+                                    source_data[field] = value
+                            source_data["_explicit_override"] = True
 
-            registry_data = _registry_source_data(var_name, source_name)
-            if registry_data:
-                registry_data["general"].update(source_data.get("general", {}))
-                registry_data.update({key: value for key, value in source_data.items() if key != "general"})
-                source_data = registry_data
+                registry_data = _registry_source_data(var_name, source_name)
+                if registry_data:
+                    registry_data["general"].update(source_data.get("general", {}))
+                    registry_data.update({key: value for key, value in source_data.items() if key != "general"})
+                    registry_data["_explicit_override"] = explicit_override
+                    source_data = registry_data
+                else:
+                    source_data["_explicit_override"] = explicit_override
 
-            self._source_configs[var_name] = {source_name: source_data}
+                loaded_sources[source_name] = source_data
+                if first_source_data is None:
+                    first_source_data = source_data
 
-            # Set the combo to the matching item (block signals to avoid re-trigger)
+            self._source_configs[var_name] = loaded_sources
+
+            first_source_name = next(iter(loaded_sources))
+            # Set the combo to the first matching item (block signals to avoid re-trigger)
             combo = self._var_combos.get(var_name)
             if combo:
-                combo.blockSignals(True)
-                matched = False
-                for i in range(combo.count()):
-                    item_data = combo.itemData(i)
-                    if item_data == source_name:
-                        combo.setCurrentIndex(i)
-                        matched = True
-                        break
-                if not matched:
-                    # Source not in combo — add it as a custom entry
-                    combo.addItem(source_name, source_name)
-                    combo.setCurrentIndex(combo.count() - 1)
-                combo.blockSignals(False)
+                self._select_combo_source(combo, first_source_name)
 
-            # Fill advanced fields
-            self._fill_advanced_fields(var_name, source_data)
+            # Fill advanced fields from the first displayed source
+            if first_source_data is not None:
+                self._fill_advanced_fields(var_name, first_source_data)
 
         # Persist loaded state back
         if self._source_configs:
@@ -895,7 +910,7 @@ class PageRefData(BasePage):
     def save_to_config(self):
         """Save to config.
 
-        Each variable stores exactly one source name as a string in
+        Each variable stores a source name as a string or a list of names in
         ``ref_data["general"]["{var}_ref_source"]``.
         """
         existing_ref_data = self.controller.config.get("ref_data", {})
@@ -922,20 +937,22 @@ class PageRefData(BasePage):
 
         for var_name, sources in self._source_configs.items():
             if sources:
-                # Single source per variable — store the name as a plain string
-                source_name = next(iter(sources))
-                general[f"{var_name}_ref_source"] = source_name
+                source_names = [name for name in sources if name]
+                if not source_names:
+                    continue
+                general[f"{var_name}_ref_source"] = source_names[0] if len(source_names) == 1 else source_names
 
-                source_data = sources[source_name]
-                def_nml_path = source_data.get("def_nml_path", "")
-                if not def_nml_path:
-                    basedir = self.controller.config.get("general", {}).get("basedir", "./output")
-                    def_nml_path = f"{basedir}/nml/ref/{source_name}.yaml"
-                def_nml[source_name] = def_nml_path
+                for source_name in source_names:
+                    source_data = sources[source_name]
+                    def_nml_path = source_data.get("def_nml_path", "")
+                    if not def_nml_path:
+                        basedir = self.controller.config.get("general", {}).get("basedir", "./output")
+                        def_nml_path = f"{basedir}/nml/ref/{source_name}.yaml"
+                    def_nml[source_name] = def_nml_path
 
-                compound_key = f"{var_name}::{source_name}"
-                source_configs[compound_key] = source_data.copy()
-                source_configs[compound_key]["_var_name"] = var_name
+                    compound_key = f"{var_name}::{source_name}"
+                    source_configs[compound_key] = source_data.copy()
+                    source_configs[compound_key]["_var_name"] = var_name
 
         ref_data = {
             **preserved,

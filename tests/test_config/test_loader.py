@@ -813,3 +813,106 @@ def test_simulation_defaults_must_be_mapping():
 
     with pytest.raises(ConfigError, match="simulation._defaults must be a mapping"):
         _build_config(raw)
+
+
+
+def test_reference_rejects_duplicate_sources(tmp_path):
+    cfg = tmp_path / "openbench.yaml"
+    cfg.write_text(
+        """
+project:
+  name: dupref
+  output_dir: ./out
+  years: [2000, 2001]
+evaluation:
+  variables: [Runoff]
+reference:
+  Runoff: [RefA, RefA]
+simulation:
+  SimA:
+    model: M
+    root_dir: /tmp/model
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="duplicate reference source"):
+        load_config(cfg)
+
+
+def test_reference_rejects_path_unsafe_source_name(tmp_path):
+    cfg = tmp_path / "openbench.yaml"
+    cfg.write_text(
+        """
+project:
+  name: saferef
+  output_dir: ./out
+  years: [2000, 2001]
+evaluation:
+  variables: [Runoff]
+reference:
+  Runoff: "../RefA"
+simulation:
+  SimA:
+    model: M
+    root_dir: /tmp/model
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="path-safe"):
+        load_config(cfg)
+
+
+def test_reference_overrides_schema_loaded(tmp_path):
+    cfg = tmp_path / "openbench.yaml"
+    cfg.write_text(
+        """
+project:
+  name: refoverride
+  output_dir: ./out
+  years: [2000, 2001]
+evaluation:
+  variables: [Runoff]
+reference:
+  data_root: /common
+  Runoff: RefA
+  overrides:
+    RefA:
+      root_dir: /specific/ref
+      variables:
+        Runoff:
+          varname: q
+          varunit: mm day-1
+          prefix_fallback: [alt_]
+simulation:
+  SimA:
+    model: M
+    root_dir: /tmp/model
+""",
+        encoding="utf-8",
+    )
+    loaded = load_config(cfg)
+    assert loaded.reference.overrides["RefA"]["root_dir"] == "/specific/ref"
+    assert loaded.reference.overrides["RefA"]["variables"]["Runoff"]["varname"] == "q"
+
+
+def test_simulation_label_rejects_surrounding_space(tmp_path):
+    cfg = tmp_path / "openbench.yaml"
+    cfg.write_text(
+        """
+project:
+  name: safesim
+  output_dir: ./out
+  years: [2000, 2001]
+evaluation:
+  variables: [Runoff]
+reference:
+  Runoff: RefA
+simulation:
+  "SimA ":
+    model: M
+    root_dir: /tmp/model
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="path-safe"):
+        load_config(cfg)
