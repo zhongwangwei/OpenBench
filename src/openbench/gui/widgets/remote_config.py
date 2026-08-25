@@ -105,7 +105,7 @@ def parse_ssh_config() -> List[Dict[str, str]]:
         ]
     else:
         # Unix/macOS: ~/.ssh/config
-        home = os.path.expanduser("~")
+        home = os.environ.get("HOME") or os.path.expanduser("~")
         config_paths = [
             os.path.join(home, ".ssh", "config"),
         ]
