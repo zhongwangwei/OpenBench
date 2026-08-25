@@ -180,6 +180,7 @@ class EvaluationRunner(QThread):
             env["PYTHONIOENCODING"] = "utf-8"
             # Disable output buffering to ensure real-time log display
             env["PYTHONUNBUFFERED"] = "1"
+            env["OPENBENCH_GUI_PROGRESS"] = "1"
 
             progress = 0
             for index, cmd in enumerate(commands):
@@ -442,6 +443,7 @@ class EvaluationRunner(QThread):
         do_evaluation: bool = True,
         do_comparison: bool = False,
         do_statistics: bool = False,
+        num_evaluation_tasks: int | None = None,
     ):
         """
         Set detailed task counts for accurate progress calculation.
@@ -478,8 +480,9 @@ class EvaluationRunner(QThread):
         self._total_tasks = 0
 
         if do_evaluation:
-            # Each variable × each ref source × each sim source
-            self._total_tasks += num_variables * self._num_ref_sources * self._num_sim_sources
+            if num_evaluation_tasks is None:
+                num_evaluation_tasks = num_variables * self._num_ref_sources * self._num_sim_sources
+            self._total_tasks += max(0, int(num_evaluation_tasks))
 
         if do_comparison and num_comparisons > 0:
             self._total_tasks += num_comparisons

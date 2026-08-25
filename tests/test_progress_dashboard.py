@@ -1,3 +1,4 @@
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -41,6 +42,30 @@ def test_completed_task_status_can_advance_progress_when_higher(qapp):
 
     assert dashboard.progress_bar.value() == 50
     assert dashboard.progress_label.text() == "50%"
+
+
+def test_resource_usage_updates_from_psutil(qapp, monkeypatch):
+    fake_psutil = SimpleNamespace(
+        cpu_percent=lambda: 37.9,
+        virtual_memory=lambda: SimpleNamespace(percent=62.1),
+    )
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    dashboard = ProgressDashboard()
+
+    dashboard._update_resource_usage()
+
+    assert dashboard.cpu_label.text() == "37%"
+    assert dashboard.mem_label.text() == "62%"
+
+
+def test_resource_usage_shows_unavailable_when_psutil_is_missing(qapp, monkeypatch):
+    monkeypatch.setitem(sys.modules, "psutil", None)
+    dashboard = ProgressDashboard()
+
+    dashboard._update_resource_usage()
+
+    assert dashboard.cpu_label.text() == "N/A"
+    assert dashboard.mem_label.text() == "N/A"
 
 
 def _validation_progress_probe():

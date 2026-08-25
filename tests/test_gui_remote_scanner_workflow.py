@@ -207,8 +207,12 @@ def test_remote_run_command_expands_tilde_paths():
     # '~/OpenBench' is the documented remote default; a shlex-quoted literal
     # tilde would make both cd and the interpreter path fail remotely.
     assert 'cd "$HOME"/OpenBench && ' in cmd
+    assert "OPENBENCH_GUI_PROGRESS=1" in cmd
     assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench check' in cmd
-    assert '&& PYTHONUNBUFFERED=1 "$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
+    assert (
+        "&& PYTHONUNBUFFERED=1 OPENBENCH_GUI_PROGRESS=1 "
+        '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
+    )
     assert "'~/" not in cmd
 
 

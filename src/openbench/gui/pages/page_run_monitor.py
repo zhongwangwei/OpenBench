@@ -24,6 +24,39 @@ from openbench.gui.remote_runner import RemoteRunner
 logger = logging.getLogger(__name__)
 
 
+def _source_list(value) -> list:
+    if isinstance(value, (list, tuple, set)):
+        return [source for source in value if source]
+    return [value] if value else []
+
+
+def count_evaluation_tasks(config: dict, selected_variables: list[str]) -> int:
+    """Count the per-variable ref/sim pairs that the runner will actually build."""
+    ref_data = config.get("ref_data", {}) or {}
+    sim_data = config.get("sim_data", {}) or {}
+    ref_general = ref_data.get("general", {}) or {}
+    sim_general = sim_data.get("general", {}) or {}
+    ref_configs = ref_data.get("source_configs", {}) or {}
+    sim_configs = sim_data.get("source_configs", {}) or {}
+    fallback_refs = [name for name, path in (ref_data.get("def_nml", {}) or {}).items() if path]
+    fallback_sims = [name for name, path in (sim_data.get("def_nml", {}) or {}).items() if path]
+
+    total = 0
+    for variable in selected_variables:
+        refs = _source_list(ref_general.get(f"{variable}_ref_source"))
+        if not refs:
+            refs = [key.split("::", 1)[1] for key in ref_configs if key.startswith(f"{variable}::")]
+        if not refs:
+            refs = fallback_refs
+
+        sims = _source_list(sim_general.get(f"{variable}_sim_source"))
+        if not sims:
+            sims = list(sim_configs) or fallback_sims
+
+        total += len(set(refs)) * len(set(sims))
+    return total
+
+
 class PageRunMonitor(BasePage):
     """Run and Monitor page."""
 
@@ -167,6 +200,7 @@ class PageRunMonitor(BasePage):
             do_evaluation=general.get("evaluation", True),
             do_comparison=general.get("comparison", False),
             do_statistics=general.get("statistics", False),
+            num_evaluation_tasks=count_evaluation_tasks(config, selected),
         )
 
         # Connect signals - same interface for both runners

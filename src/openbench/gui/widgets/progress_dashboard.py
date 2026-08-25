@@ -217,8 +217,11 @@ class ProgressDashboard(QWidget):
             mem_percent = int(mem.percent)
             self.mem_bar.setValue(mem_percent)
             self.mem_label.setText(f"{mem_percent}%")
-        except ImportError:
-            pass
+        except (ImportError, AttributeError, OSError):
+            self.cpu_bar.setValue(0)
+            self.mem_bar.setValue(0)
+            self.cpu_label.setText("N/A")
+            self.mem_label.setText("N/A")
 
     def start_monitoring(self):
         """Start resource monitoring."""

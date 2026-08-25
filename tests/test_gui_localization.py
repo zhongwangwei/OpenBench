@@ -90,6 +90,7 @@ def test_main_window_language_button_updates_existing_pages(qapp, monkeypatch):
         monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
         window.btn_about.click()
         about = next(dialog for dialog in window.findChildren(QDialog) if dialog.windowTitle() == "关于 OpenBench")
+        assert about.testAttribute(Qt.WA_DeleteOnClose)
         about_text = "\n".join(label.text() for label in about.findChildren(QLabel))
         assert "版权所有：CoLM陆面模式开发团队，中山大学大气科学学院" in about_text
         assert "开发与维护\nCoLM陆面模式开发团队" in about_text

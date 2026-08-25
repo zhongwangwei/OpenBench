@@ -33,7 +33,7 @@ def build_remote_run_command(python_path: str, openbench_path: str, config_path:
     q_python = quote_remote_path(python_path or "python3")
     q_openbench = quote_remote_path(openbench_path)
     q_config = shlex.quote(config_path)
-    prefix = f"PYTHONUNBUFFERED=1 {q_python} -u -m openbench"
+    prefix = f"PYTHONUNBUFFERED=1 OPENBENCH_GUI_PROGRESS=1 {q_python} -u -m openbench"
     invocation = f"{prefix} check {q_config} && {prefix} run {q_config}"
     return wrap_with_conda_env(
         f"cd {q_openbench} && {invocation}",
@@ -497,6 +497,7 @@ class RemoteRunner(QThread):
         do_evaluation: bool = True,
         do_comparison: bool = False,
         do_statistics: bool = False,
+        num_evaluation_tasks: int | None = None,
     ):
         """Set detailed task counts for accurate progress calculation.
 
@@ -517,7 +518,9 @@ class RemoteRunner(QThread):
         self._total_tasks = 0
 
         if do_evaluation:
-            self._total_tasks += num_variables * self._num_ref_sources * self._num_sim_sources
+            if num_evaluation_tasks is None:
+                num_evaluation_tasks = num_variables * self._num_ref_sources * self._num_sim_sources
+            self._total_tasks += max(0, int(num_evaluation_tasks))
 
         if do_comparison and num_comparisons > 0:
             self._total_tasks += num_comparisons
