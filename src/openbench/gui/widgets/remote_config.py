@@ -76,6 +76,7 @@ from openbench.gui.widgets._ssh_worker import (
     call_responsive,
     execute_responsive,
 )
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.widgets._task_worker import CallableWorker
 from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.remote.credentials import CredentialManager, CredentialStorageError
@@ -796,7 +797,7 @@ class RemoteConfigWidget(QWidget):
         cores_layout.setSpacing(8)
         self.num_cores_spin = NoScrollSpinBox()
         self.num_cores_spin.setRange(1, 128)
-        self.num_cores_spin.setValue(4)
+        self.num_cores_spin.setValue(DEFAULT_NUM_CORES)
         self.num_cores_spin.setMinimumWidth(80)
         self.num_cores_spin.setToolTip("Number of CPU cores to use for parallel processing")
         self.num_cores_spin.valueChanged.connect(self._on_config_changed)
@@ -2041,7 +2042,7 @@ class RemoteConfigWidget(QWidget):
             self.radio_node_none.setChecked(True)
 
         # Set num_cores
-        self.num_cores_spin.setValue(config.get("num_cores", 4))
+        self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
 
         # Set Python environment
         python_path = config.get("python_path", "")
@@ -2161,7 +2162,7 @@ class RemoteConfigWidget(QWidget):
         self.radio_node_password.setChecked(True)
 
         # Environment
-        self.num_cores_spin.setValue(4)
+        self.num_cores_spin.setValue(DEFAULT_NUM_CORES)
         self.conda_combo.clear()
         self.conda_combo.addItem("(Not using conda environment)")
         self.conda_combo.setCurrentIndex(0)

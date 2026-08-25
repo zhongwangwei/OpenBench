@@ -141,6 +141,25 @@ def test_ref_page_data_root_inferred_from_windows_registry_tree(monkeypatch):
     assert inferred == "G:/Cases_for_openbench/Reference"
 
 
+def test_ref_registry_combo_keeps_only_datasets_found_by_last_scan(qapp, monkeypatch):
+    from PySide6.QtWidgets import QComboBox
+
+    from openbench.gui.pages.page_ref_data import PageRefData
+
+    found = SimpleNamespace(name="Found_LowRes", data_type="grid", tim_res="Month", grid_res=1.0)
+    missing = SimpleNamespace(name="OpenBench_Missing", data_type="stn", tim_res="Day", grid_res=None)
+    registry = SimpleNamespace(references_for_variable=lambda _name: [found, missing])
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+
+    page = PageRefData.__new__(PageRefData)
+    page._available_registry_names = {found.name}
+    combo = QComboBox()
+
+    PageRefData._populate_registry_combo(page, combo, "Runoff")
+
+    assert [combo.itemData(index) for index in range(combo.count())] == [None, found.name]
+
+
 def test_gui_reference_validation_uses_explicit_runtime_root(tmp_path):
     from openbench.gui.data_validator import DataValidator
 

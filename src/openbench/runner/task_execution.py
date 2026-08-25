@@ -92,6 +92,8 @@ def evaluate_single(
 
     try:
         info = build_bridge_runtime_info_fn(task)
+        if "num_cores_override" in task:
+            info["num_cores"] = task["num_cores_override"]
         evaluation_fig_nml = bindings.build_evaluation_fig_nml().to_fig_nml()
 
         # Step 1: Preprocess data (skip if already done by _preprocess_variable)

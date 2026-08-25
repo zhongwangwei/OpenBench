@@ -103,6 +103,8 @@ class PageRegistry(BasePage):
 
     def _setup_content(self):
         self.tabs = QTabWidget()
+        self.tabs.tabBar().setExpanding(False)
+        self.tabs.setStyleSheet("QTabWidget::tab-bar { alignment: left; }")
         self.content_layout.addWidget(self.tabs)
 
         # --- Models tab ---

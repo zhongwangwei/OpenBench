@@ -12,6 +12,7 @@ resolution choices (e.g., GLEAM_v4.2a → LowRes / MidRes / HigRes).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from fnmatch import fnmatch
 import logging
 import os
@@ -23,6 +24,7 @@ from typing import Any, Optional
 
 import yaml
 
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.config.user_settings import resolve_home_dir, resolve_reference_root
 from openbench.util.names import AmbiguousNameError
 from openbench.util.netcdf import write_file_atomic
@@ -1276,7 +1278,59 @@ def _scan_profile_layouts(ref_root: Path, on_skip=None) -> tuple[dict[str, Datas
     return groups, consumed_dirs
 
 
-def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=None) -> list[DatasetGroup]:
+def _reference_dataset_dirs(ref_root: Path, consumed_dirs: set[Path]) -> list[Path]:
+    """Collect generic dataset roots that need recursive NetCDF discovery."""
+    directories = []
+    grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
+    for res_name in ("LowRes", "MidRes", "HigRes"):
+        res_dir = _child_dir_case_insensitive(grid_dir, res_name)
+        for category_dir in _iter_dirs(res_dir):
+            for var_dir in _iter_dirs(category_dir):
+                if not _is_profile_consumed(var_dir, consumed_dirs):
+                    directories.extend(
+                        dataset_dir
+                        for dataset_dir in _iter_dirs(var_dir)
+                        if not _is_profile_consumed(dataset_dir, consumed_dirs)
+                    )
+
+    station_dir = _child_dir_case_insensitive(ref_root, "Station")
+    for category_dir in _iter_dirs(station_dir):
+        for var_dir in _iter_dirs(category_dir):
+            if _is_profile_consumed(var_dir, consumed_dirs) or _count_nc(var_dir):
+                continue
+            directories.extend(
+                dataset_dir
+                for dataset_dir in _iter_dirs(var_dir)
+                if not _is_profile_consumed(dataset_dir, consumed_dirs)
+            )
+    return list(dict.fromkeys(directories))
+
+
+def _find_reference_nc_dirs(directories: list[Path], max_workers: int) -> dict[Path, tuple[Path | None, int, str]]:
+    """Locate independent dataset trees concurrently while preserving order."""
+    if not directories:
+        return {}
+
+    workers = min(max(1, int(max_workers)), len(directories))
+
+    def find(directory):
+        return _find_nc_dir_with_descent(directory, max_descent=DEFAULT_NC_DESCENT)
+
+    if workers == 1:
+        results = map(find, directories)
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="openbench-ref-scan") as executor:
+            results = executor.map(find, directories)
+            return dict(zip(directories, results))
+    return dict(zip(directories, results))
+
+
+def scan_reference_directory(
+    ref_root: str | Path,
+    on_progress=None,
+    on_skip=None,
+    max_workers: int = DEFAULT_NUM_CORES,
+) -> list[DatasetGroup]:
     """Scan a reference data directory and discover all datasets.
 
     Args:
@@ -1284,6 +1338,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
         on_progress: Optional callback(message: str) for progress updates.
         on_skip: Optional callback(ScanSkip) for unsupported folders that
             scanner saw but intentionally did not auto-register.
+        max_workers: Maximum concurrent filesystem directory scans.
 
     Returns:
         List of DatasetGroup, each containing resolution variants.
@@ -1294,6 +1349,10 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
         return []
 
     groups, consumed_dirs = _scan_profile_layouts(ref_root, on_skip=on_skip)
+    nc_locations = _find_reference_nc_dirs(
+        _reference_dataset_dirs(ref_root, consumed_dirs),
+        max_workers=max_workers,
+    )
 
     # Scan grid data: Grid/{Res}/<Category>/<Variable>/<Dataset>/*.nc
     # Walk 3 levels of directories. Composite category is scanned too:
@@ -1378,10 +1437,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
                         #   level 1: dataset_dir/X/*.nc (single NC-bearing child)
                         #   level 2: dataset_dir/X/Y/*.nc (single chain to NCs)
                         #   level 3+: skip with deeper-glob warning
-                        nc_dir, nc_count, status = _find_nc_dir_with_descent(
-                            dataset_dir,
-                            max_descent=DEFAULT_NC_DESCENT,
-                        )
+                        nc_dir, nc_count, status = nc_locations[dataset_dir]
 
                         if status == "ambiguous":
                             logger.warning(
@@ -1494,10 +1550,7 @@ def scan_reference_directory(ref_root: str | Path, on_progress=None, on_skip=Non
                     #   level 2: dataset_dir/X/Y/*.nc
                     # multi-child → ambiguous (previously silently merged
                     # year-subdir layouts with last-alphabetical wins)
-                    nc_dir, nc_count, status = _find_nc_dir_with_descent(
-                        dataset_dir,
-                        max_descent=DEFAULT_NC_DESCENT,
-                    )
+                    nc_dir, nc_count, status = nc_locations[dataset_dir]
 
                     if status == "ambiguous":
                         logger.warning(

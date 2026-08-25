@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.path_utils import convert_paths_in_dict, get_openbench_root, to_absolute_path
 
 _BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
@@ -175,7 +176,7 @@ class ConfigManager:
             "min_lon": lon_range[0] if len(lon_range) > 0 else -180.0,
             "max_lon": lon_range[1] if len(lon_range) > 1 else 180.0,
             "time_alignment": project.get("time_alignment", "intersection"),
-            "num_cores": project.get("num_cores", 4),
+            "num_cores": project.get("num_cores", DEFAULT_NUM_CORES),
             "evaluation": True,
             "comparison": bool((config.get("comparison") or {}).get("enabled", False)),
             "statistics": bool((config.get("statistics") or {}).get("enabled", False)),
@@ -368,7 +369,7 @@ class ConfigManager:
             "simulation_nml": sim_nml_path,
             "statistics_nml": stats_nml_path,
             "figure_nml": figure_nml_path,
-            "num_cores": general.get("num_cores", 4),
+            "num_cores": general.get("num_cores", DEFAULT_NUM_CORES),
             "evaluation": general.get("evaluation", True),
             "comparison": general.get("comparison", False),
             "statistics": general.get("statistics", False),
@@ -688,7 +689,7 @@ class ConfigManager:
             project["weight"] = "none" if str(weight).lower() == "none" else weight
 
         # Runtime
-        num_cores = general.get("num_cores", 4)
+        num_cores = general.get("num_cores", DEFAULT_NUM_CORES)
         if num_cores:
             project["num_cores"] = int(num_cores)
         if not general.get("unified_mask", True):

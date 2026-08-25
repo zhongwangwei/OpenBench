@@ -44,6 +44,48 @@ IMPLEMENTED_SCORE_NAMES = tuple(_public_callable_names(scores))
 IMPLEMENTED_METRICS = set(IMPLEMENTED_METRIC_NAMES)
 IMPLEMENTED_SCORES = set(IMPLEMENTED_SCORE_NAMES)
 
+METRIC_LABELS = {
+    "percent_bias": "Percent Bias (PBIAS)",
+    "absolute_percent_bias": "Absolute Percent Bias (APB)",
+    "RMSE": "Root Mean Squared Error (RMSE)",
+    "ubRMSE": "Unbiased Root Mean Squared Error (ubRMSE)",
+    "CRMSD": "Centered Root Mean Square Difference (CRMSD)",
+    "mean_absolute_error": "Mean Absolute Error (MAE)",
+    "bias": "Bias (BIAS)",
+    "L": "Likelihood (L)",
+    "correlation": "Correlation Coefficient (r)",
+    "correlation_R2": "Coefficient of Determination (R²)",
+    "NSE": "Nash–Sutcliffe Efficiency (NSE)",
+    "KGE": "Kling–Gupta Efficiency (KGE)",
+    "KGESS": "Kling–Gupta Efficiency Skill Score (KGESS)",
+    "rv": "Relative Variability (RV)",
+    "ubNSE": "Unbiased Nash–Sutcliffe Efficiency (ubNSE)",
+    "ubcorrelation": "Unbiased Correlation Coefficient (ubr)",
+    "ubcorrelation_R2": "Unbiased Coefficient of Determination (ubR²)",
+    "pc_max": "Relative Maximum Deviation (PCmax)",
+    "pc_min": "Relative Minimum Deviation (PCmin)",
+    "pc_ampli": "Relative Amplitude Deviation (PCamp)",
+    "APFB": "Annual Peak Flow Bias (APFB)",
+    "br2": "Slope-adjusted Coefficient of Determination (br²)",
+    "cp": "Coefficient of Persistence (CP)",
+    "dr": "Refined Index of Agreement (dr)",
+    "MFM_omega": "Model Fidelity Metric Phase Component (MFM-ω)",
+    "MFM_varphi": "Model Fidelity Metric Variability Component (MFM-φ)",
+    "MFM_eta": "Model Fidelity Metric Distribution Component (MFM-η)",
+    "MFM": "Model Fidelity Metric (MFM)",
+}
+
+SCORE_LABELS = {
+    "index_agreement": "Index of Agreement (IOA)",
+    "nBiasScore": "Normalized Bias Score (nBiasScore)",
+    "nRMSEScore": "Normalized RMSE Score (nRMSEScore)",
+    "nPhaseScore": "Normalized Phase Score (nPhaseScore)",
+    "nIavScore": "Normalized Interannual Variability Score (nIAVScore)",
+    "nSpatialScore": "Normalized Spatial Score (nSpatialScore)",
+    "Overall_Score": "Overall Score (OS)",
+    "nSeasonalityScore": "Normalized Seasonality Score (nSeasonalityScore)",
+}
+
 
 def _filtered(items: Iterable[str], valid: set[str]) -> list[str]:
     return [item for item in items if item in valid]

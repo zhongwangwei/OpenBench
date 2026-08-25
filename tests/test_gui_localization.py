@@ -46,7 +46,9 @@ def test_show_event_respects_i18n_skip(qapp):
     assert button.text() == "New"
 
 
-def test_main_window_language_button_updates_existing_pages(qapp):
+def test_main_window_language_button_updates_existing_pages(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog, QLabel
+
     old_manager = getattr(qapp, "_openbench_language_manager", None)
     if old_manager is not None:
         qapp.removeEventFilter(old_manager)
@@ -64,11 +66,28 @@ def test_main_window_language_button_updates_existing_pages(qapp):
         assert window.btn_language.text() == "中文"
         assert window.btn_language.parent() is window.title_label.parent()
         assert window.title_label.alignment() & Qt.AlignHCenter
+        assert not window.logo_label.pixmap().isNull()
+        assert not window.windowIcon().isNull()
+        assert window.copyright_label.text() == (
+            "Copyright: CoLM LSM Development Team, School of Atmospheric Sciences, SYSU"
+        )
         window.btn_language.click()
         assert window.windowTitle() == "OpenBench NML 配置向导"
         assert window.btn_language.text() == "English"
+        assert window.btn_about.text() == "关于"
+        assert window.copyright_label.text() == "版权所有：CoLM陆面模式开发团队，中山大学大气科学学院"
+        assert window.pages["registry"].tabs.tabBar().expanding() is False
+        assert "alignment: left" in window.pages["registry"].tabs.styleSheet()
         assert window.btn_next.text() == "下一步"
         assert window.nav_list.item(0).text() == "运行环境"
+
+        monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+        window.btn_about.click()
+        about = next(dialog for dialog in window.findChildren(QDialog) if dialog.windowTitle() == "关于 OpenBench")
+        about_text = "\n".join(label.text() for label in about.findChildren(QLabel))
+        assert "版权所有：CoLM陆面模式开发团队，中山大学大气科学学院" in about_text
+        assert "开发与维护\nCoLM陆面模式开发团队" in about_text
+        assert "联系人\n魏忠旺" in about_text
 
         window.btn_language.click()
         assert window.windowTitle() == "OpenBench NML Wizard"

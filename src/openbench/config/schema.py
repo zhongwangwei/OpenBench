@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Optional
 
+DEFAULT_NUM_CORES = 6
+
 
 def is_simple_project_name(name: object) -> bool:
     """Return True when *name* is a directory name, not a path."""

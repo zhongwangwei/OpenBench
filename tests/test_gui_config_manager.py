@@ -139,7 +139,7 @@ def test_generate_config_yaml_preserves_gui_default_min_year_and_none_weight(tmp
     assert data["project"]["tim_res"] == "month"
     assert data["project"]["grid_res"] == 2.0
     assert data["project"]["timezone"] == 0.0
-    assert data["project"]["num_cores"] == 4
+    assert data["project"]["num_cores"] == 6
     assert data["project"]["IGBP_groupby"] is True
     assert data["project"]["PFT_groupby"] is True
     assert data["project"]["climate_zone_groupby"] is True

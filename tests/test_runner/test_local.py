@@ -214,7 +214,7 @@ def test_ready_tasks_parallelize_only_when_unified_mask_disabled(monkeypatch):
     evaluated = []
 
     def fake_evaluate(task):
-        evaluated.append(task["sim_source"])
+        evaluated.append((task["sim_source"], task.get("num_cores_override")))
         return {
             "variable": task["var_name"],
             "sim": task["sim_source"],
@@ -250,7 +250,7 @@ def test_ready_tasks_parallelize_only_when_unified_mask_disabled(monkeypatch):
     )
 
     assert [result["sim"] for result in results] == ["Sim0", "Sim1", "Sim2"]
-    assert evaluated == ["Sim0", "Sim1", "Sim2"]
+    assert evaluated == [("Sim0", 1), ("Sim1", 1), ("Sim2", 1)]
     assert FakeExecutor.calls == [2]
 
 
@@ -1472,8 +1472,8 @@ def test_groupby_helper_uses_bindings_groupby_context(tmp_path, monkeypatch):
     ]
 
 
-def test_evaluate_single_uses_bindings_evaluation_fig_nml(tmp_path, monkeypatch):
-    """Single-task evaluation should get figure config from bindings, not read fig_nml directly."""
+def test_evaluate_single_uses_bindings_fig_nml_and_runtime_core_budget(tmp_path, monkeypatch):
+    """Single-task evaluation should apply the task-level core budget."""
     import openbench.core.evaluation as evaluation_module
     import openbench.runner.local as local_runner
 
@@ -1506,6 +1506,7 @@ def test_evaluate_single_uses_bindings_evaluation_fig_nml(tmp_path, monkeypatch)
         "use_cache": False,
         "cache_dir": str(tmp_path / "case"),
         "ref_preprocessed": True,
+        "num_cores_override": 2,
     }
 
     class FakeGridEvaluation:
@@ -1530,6 +1531,7 @@ def test_evaluate_single_uses_bindings_evaluation_fig_nml(tmp_path, monkeypatch)
                 "sim_data_type": "grid",
                 "ref_source": "TestRef",
                 "sim_source": "SimA",
+                "num_cores": 2,
             },
             {"Validation": {"title": "ok"}},
         )

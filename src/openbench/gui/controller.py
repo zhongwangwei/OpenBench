@@ -7,6 +7,7 @@ import os
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
 
+from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.config_manager import ConfigManager
 from openbench.gui.path_utils import get_openbench_root
 
@@ -135,7 +136,7 @@ class WizardController(QObject):
                 "min_lon": -180.0,
                 "max_lon": 180.0,
                 "time_alignment": "intersection",
-                "num_cores": 4,
+                "num_cores": DEFAULT_NUM_CORES,
                 "evaluation": True,
                 "comparison": True,
                 "statistics": False,

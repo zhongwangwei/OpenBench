@@ -19,10 +19,8 @@ def _local_attr(name: str, default: Any = None) -> Any:
     return default
 
 
-def evaluation_task_worker_count(num_cores: Any, task_count: int) -> int:
-    """Return task-level evaluation workers, bounded by user cores, CPUs, and work size."""
-    if task_count <= 1:
-        return 1
+def _core_budget(num_cores: Any) -> int:
+    """Return the configured core budget capped to CPUs on this host."""
     try:
         requested = int(num_cores)
     except (TypeError, ValueError):
@@ -30,8 +28,14 @@ def evaluation_task_worker_count(num_cores: Any, task_count: int) -> int:
     if requested <= 1:
         return 1
     os_module = _local_attr("os", os)
-    cpu_limit = max(1, os_module.cpu_count() or 1)
-    return min(requested, task_count, cpu_limit)
+    return min(requested, max(1, os_module.cpu_count() or 1))
+
+
+def evaluation_task_worker_count(num_cores: Any, task_count: int) -> int:
+    """Return task-level evaluation workers, bounded by user cores, CPUs, and work size."""
+    if task_count <= 1:
+        return 1
+    return min(_core_budget(num_cores), task_count)
 
 
 def task_level_parallel_safe(ready_tasks: list[dict[str, Any]]) -> bool:
@@ -100,15 +104,25 @@ def evaluate_ready_tasks(
         group_workers = worker_count(num_cores, len(groups))
         if group_workers <= 1 or len(groups) <= 1:
             return [evaluate_single(task) for task in ready_tasks]
+        cores_per_worker = max(1, _core_budget(num_cores) // group_workers)
+        groups = [[{**task, "num_cores_override": cores_per_worker} for task in group] for group in groups]
         logger.info(
-            "Evaluating %d unified-mask ref group(s) in parallel with %d worker(s)",
+            "Evaluating %d unified-mask ref group(s) with %d worker(s), %d core(s) each",
             len(groups),
             group_workers,
+            cores_per_worker,
         )
         with executor_cls(max_workers=group_workers) as executor:
             grouped_results = executor.map(evaluate_group, groups)
         return [result for group in grouped_results for result in group]
 
-    logger.info("Evaluating %d independent grid task(s) in parallel with %d worker(s)", len(ready_tasks), workers)
+    cores_per_worker = max(1, _core_budget(num_cores) // workers)
+    budgeted_tasks = [{**task, "num_cores_override": cores_per_worker} for task in ready_tasks]
+    logger.info(
+        "Evaluating %d independent grid task(s) with %d worker(s), %d core(s) each",
+        len(ready_tasks),
+        workers,
+        cores_per_worker,
+    )
     with executor_cls(max_workers=workers) as executor:
-        return list(executor.map(evaluate_single, ready_tasks))
+        return list(executor.map(evaluate_single, budgeted_tasks))

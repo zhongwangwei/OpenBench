@@ -53,57 +53,6 @@ FLUXNET_PLUMBER2:
       varname: NEE
       varunit: mumolCO2 m-2 s-1
 
-FLUX_PLUMBER2:
-  scan:
-    layout: station_direct
-    root_sub_dir: Station/Composite/FLUXNET_PLUMBER2
-    nc_sub_dir: dataset
-    consume: false
-  description: FLUXNET PLUMBER2 flux tower composite (hourly)
-  category: Composite
-  tim_res: Hour
-  data_groupby: single
-  fulllist: ${OPENBENCH_REF_ROOT}/Station/Composite/FLUXNET_PLUMBER2/list/FLUXNET_PLUMBER2.csv
-  variables:
-    Latent_Heat:
-      sub_dir: ''
-      varname: Qle_cor
-      varunit: W m-2
-      fallbacks:
-        - varname: Qle
-          varunit: W m-2
-    Sensible_Heat:
-      sub_dir: ''
-      varname: Qh_cor
-      varunit: W m-2
-      fallbacks:
-        - varname: Qh
-          varunit: W m-2
-    Ground_Heat:
-      sub_dir: ''
-      varname: Qg
-      varunit: W m-2
-    Net_Radiation:
-      sub_dir: ''
-      varname: Rnet
-      varunit: W m-2
-    Surface_Upward_SW_Radiation:
-      sub_dir: ''
-      varname: SWup
-      varunit: W m-2
-    Surface_Upward_LW_Radiation:
-      sub_dir: ''
-      varname: LWup
-      varunit: W m-2
-    Gross_Primary_Productivity:
-      sub_dir: ''
-      varname: GPP
-      varunit: mumolCO2 m-2 s-1
-    Net_Ecosystem_Exchange:
-      sub_dir: ''
-      varname: NEE
-      varunit: mumolCO2 m-2 s-1
-
 PLUMBER2S:
   description: PLUMBER2 supplementary flux tower dataset (90 sites)
   tim_res: Hour
@@ -577,76 +526,6 @@ Xu_et_al2025_stn:
       sub_dir: ''
       varname: et
       varunit: mm day-1
-
-Daily:
-  scan:
-    layout: station_shared_files
-    root_sub_dir: Station/Water/StreamFlow/Daily
-    file_glob: OpenBench_Streamflow_Daily.nc
-  description: OpenBench consolidated daily streamflow alias
-  tim_res: Day
-  data_groupby: single
-  station_matching:
-    method: cama_allocation
-    dataset_file: OpenBench_Streamflow_Daily.nc
-    station_id_var: station
-    time_var: time
-    discharge_var: discharge
-    lat_var: lat
-    lon_var: lon
-    area_var: area
-  variables:
-    Streamflow:
-      min_uparea: 1000.0
-      max_uparea: 50000000000.0
-      varname: discharge
-      varunit: m3 s-1
-
-Monthly:
-  scan:
-    layout: station_shared_files
-    root_sub_dir: Station/Water/StreamFlow/Monthly
-    file_glob: OpenBench_Streamflow_Monthly_full.nc
-  description: OpenBench consolidated monthly streamflow alias
-  tim_res: Month
-  data_groupby: single
-  station_matching:
-    method: cama_allocation
-    dataset_file: OpenBench_Streamflow_Monthly_full.nc
-    station_id_var: station
-    time_var: time
-    discharge_var: streamflow
-    lat_var: lat
-    lon_var: lon
-    area_var: upstream_area
-  variables:
-    Streamflow:
-      min_uparea: 1000.0
-      max_uparea: 50000000000.0
-      varname: discharge
-      varunit: m3 s-1
-
-Hourly:
-  scan:
-    layout: station_shared_files
-    root_sub_dir: Station/Water/StreamFlow/Hourly
-    file_glob: OpenBench_Streamflow_Hourly_full.nc
-  description: OpenBench consolidated hourly streamflow alias
-  tim_res: Hour
-  data_groupby: single
-  station_matching:
-    method: cama_allocation
-    dataset_file: OpenBench_Streamflow_Hourly_full.nc
-    station_id_var: station
-    time_var: time
-    discharge_var: discharge
-    lat_var: lat
-    lon_var: lon
-    area_var: area
-  variables:
-    Streamflow:
-      varname: discharge
-      varunit: m3 s-1
 
 # Profile-driven scans for StreamFlow folders that contain many named
 # single-file station datasets in one shared directory.

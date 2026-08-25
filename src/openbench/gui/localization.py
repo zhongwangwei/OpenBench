@@ -31,6 +31,51 @@ CHINESE = "zh_CN"
 
 ZH_CN = {
     "OpenBench NML Wizard": "OpenBench NML 配置向导",
+    "About": "关于",
+    "About OpenBench": "关于 OpenBench",
+    "Open Source Land Surface Model Benchmarking System": "开源陆面模式评估系统",
+    "Copyright: CoLM LSM Development Team, School of Atmospheric Sciences, SYSU": (
+        "版权所有：CoLM陆面模式开发团队，中山大学大气科学学院"
+    ),
+    "Developed and maintained by\nCoLM LSM Development Team\nSchool of Atmospheric Sciences, SYSU\n\nContact\nZhongwang Wei (魏忠旺)\nweizhw6@mail.sysu.edu.cn": (
+        "开发与维护\nCoLM陆面模式开发团队\n中山大学大气科学学院\n\n联系人\n魏忠旺\nweizhw6@mail.sysu.edu.cn"
+    ),
+    "Percent Bias (PBIAS)": "百分比偏差（PBIAS）",
+    "Absolute Percent Bias (APB)": "绝对百分比偏差（APB）",
+    "Root Mean Squared Error (RMSE)": "均方根误差（RMSE）",
+    "Unbiased Root Mean Squared Error (ubRMSE)": "无偏均方根误差（ubRMSE）",
+    "Centered Root Mean Square Difference (CRMSD)": "中心化均方根差（CRMSD）",
+    "Mean Absolute Error (MAE)": "平均绝对误差（MAE）",
+    "Bias (BIAS)": "偏差（BIAS）",
+    "Likelihood (L)": "似然指标（L）",
+    "Correlation Coefficient (r)": "相关系数（r）",
+    "Coefficient of Determination (R²)": "决定系数（R²）",
+    "Nash–Sutcliffe Efficiency (NSE)": "纳什–萨特克利夫效率系数（NSE）",
+    "Kling–Gupta Efficiency (KGE)": "克林–古普塔效率系数（KGE）",
+    "Kling–Gupta Efficiency Skill Score (KGESS)": "克林–古普塔效率技巧评分（KGESS）",
+    "Relative Variability (RV)": "相对变异性（RV）",
+    "Unbiased Nash–Sutcliffe Efficiency (ubNSE)": "无偏纳什–萨特克利夫效率系数（ubNSE）",
+    "Unbiased Correlation Coefficient (ubr)": "无偏相关系数（ubr）",
+    "Unbiased Coefficient of Determination (ubR²)": "无偏决定系数（ubR²）",
+    "Relative Maximum Deviation (PCmax)": "相对最大值偏差（PCmax）",
+    "Relative Minimum Deviation (PCmin)": "相对最小值偏差（PCmin）",
+    "Relative Amplitude Deviation (PCamp)": "相对振幅偏差（PCamp）",
+    "Annual Peak Flow Bias (APFB)": "年峰值流量偏差（APFB）",
+    "Slope-adjusted Coefficient of Determination (br²)": "斜率修正决定系数（br²）",
+    "Coefficient of Persistence (CP)": "持续性系数（CP）",
+    "Refined Index of Agreement (dr)": "改进一致性指数（dr）",
+    "Model Fidelity Metric Phase Component (MFM-ω)": "模式保真度指标相位分量（MFM-ω）",
+    "Model Fidelity Metric Variability Component (MFM-φ)": "模式保真度指标变异分量（MFM-φ）",
+    "Model Fidelity Metric Distribution Component (MFM-η)": "模式保真度指标分布分量（MFM-η）",
+    "Model Fidelity Metric (MFM)": "模式保真度指标（MFM）",
+    "Index of Agreement (IOA)": "一致性指数（IOA）",
+    "Normalized Bias Score (nBiasScore)": "归一化偏差评分（nBiasScore）",
+    "Normalized RMSE Score (nRMSEScore)": "归一化均方根误差评分（nRMSEScore）",
+    "Normalized Phase Score (nPhaseScore)": "归一化相位评分（nPhaseScore）",
+    "Normalized Interannual Variability Score (nIAVScore)": "归一化年际变异评分（nIAVScore）",
+    "Normalized Spatial Score (nSpatialScore)": "归一化空间评分（nSpatialScore）",
+    "Overall Score (OS)": "综合评分（OS）",
+    "Normalized Seasonality Score (nSeasonalityScore)": "归一化季节性评分（nSeasonalityScore）",
     "NML Configuration Wizard": "NML 配置向导",
     "Load Config...": "加载配置...",
     "New Config": "新建配置",
@@ -325,6 +370,9 @@ def translate_text(text: str, language: str = ENGLISH) -> str:
     match = re.fullmatch(r"Step (\d+) of (\d+)", text)
     if match:
         return f"第 {match.group(1)} 步，共 {match.group(2)} 步"
+    match = re.fullmatch(r"Version (.+)", text)
+    if match:
+        return f"版本 {match.group(1)}"
     match = re.fullmatch(r"Selected: (\d+)(?: / (\d+))?", text)
     if match:
         suffix = f" / {match.group(2)}" if match.group(2) else ""

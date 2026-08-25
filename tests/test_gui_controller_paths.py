@@ -17,6 +17,12 @@ def _controller(config, storage=None, project_root=""):
     return controller
 
 
+def test_default_cpu_count_is_six():
+    controller = WizardController.__new__(WizardController)
+
+    assert controller._default_config()["general"]["num_cores"] == 6
+
+
 def test_remote_default_output_dir_uses_remote_openbench_path_not_local_root():
     controller = _controller(
         {
