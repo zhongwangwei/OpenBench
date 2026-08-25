@@ -812,11 +812,22 @@ class ConfigManager:
                 override = overrides.setdefault(source_name, {})
                 general_cfg = source_cfg.get("general", {}) if isinstance(source_cfg.get("general"), dict) else {}
                 if general_cfg:
-                    for key in ("root_dir", "dir", "data_type", "tim_res", "data_groupby", "timezone", "grid_res", "fulllist"):
+                    for key in (
+                        "root_dir",
+                        "dir",
+                        "data_type",
+                        "tim_res",
+                        "data_groupby",
+                        "timezone",
+                        "grid_res",
+                        "fulllist",
+                    ):
                         value = general_cfg.get(key)
                         if value not in (None, ""):
                             out_key = "root_dir" if key == "dir" else key
-                            override[out_key] = _maybe_transform_path(value) if out_key in {"root_dir", "fulllist"} else value
+                            override[out_key] = (
+                                _maybe_transform_path(value) if out_key in {"root_dir", "fulllist"} else value
+                            )
                     syear = general_cfg.get("syear")
                     eyear = general_cfg.get("eyear")
                     if syear not in (None, "") or eyear not in (None, ""):

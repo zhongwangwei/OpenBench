@@ -105,9 +105,7 @@ def source_specific_section(
     """Return legacy namelist keys owned by one reference/simulation source."""
     prefix = f"{source}_"
     nested_prefixes = tuple(
-        f"{candidate}_"
-        for candidate in all_sources
-        if candidate != source and str(candidate).startswith(prefix)
+        f"{candidate}_" for candidate in all_sources if candidate != source and str(candidate).startswith(prefix)
     )
     return {
         key: value

@@ -600,6 +600,7 @@ def test_generate_config_yaml_can_export_groupby_without_comparison(tmp_path):
     assert "PFT_groupby" not in data["project"]
     assert "climate_zone_groupby" not in data["project"]
 
+
 def test_unified_to_gui_deep_merges_simulation_variable_defaults():
     unified = {
         "project": {"name": "demo"},
