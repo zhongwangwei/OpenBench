@@ -186,7 +186,15 @@ def test_gui_modules_have_no_main_thread_ssh_band_aids():
     process_events_allowlist = {"_ssh_worker.py"}
     # Raw executes allowed only where the call already runs off the GUI
     # thread or is the responsive layer itself.
-    raw_execute_allowlist = {"_ssh_worker.py", "remote_config.py", "remote_runner.py", "remote_python.py"}
+    raw_execute_allowlist = {
+        "_ssh_worker.py",
+        "remote_config.py",
+        "remote_runner.py",
+        "remote_python.py",
+        # RemoteFolderDownloadWorker owns its execute() call on a QThread; the
+        # GUI slot only starts the worker and receives signals.
+        "page_run_monitor.py",
+    }
 
     offenders = []
     for path in sorted(gui_root.rglob("*.py")):
@@ -226,6 +234,32 @@ def test_node_connect_is_blocked_while_main_handshake_runs(qapp):
     widget._confirm_node_connection()
 
     assert calls == []
+
+
+@pytest.mark.parametrize("node_auth", ["password", "key"])
+def test_main_connect_rejects_missing_selected_compute_credentials(qapp, monkeypatch, node_auth):
+    from openbench.gui.widgets import remote_config
+
+    widget = RemoteConfigWidget()
+    widget.host_input.setText("alice@login.example")
+    widget.radio_password.setChecked(True)
+    widget.password_input.setText("main-secret")
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    if node_auth == "password":
+        widget.radio_node_password.setChecked(True)
+        widget.node_password_input.clear()
+    else:
+        widget.radio_node_key.setChecked(True)
+        widget.node_key_input.clear()
+
+    warnings = []
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", lambda *args: warnings.append(args))
+    monkeypatch.setattr(remote_config, "SSHManager", lambda *args, **kwargs: pytest.fail("SSH fallback attempted"))
+
+    widget._test_connection()
+
+    assert warnings and warnings[-1][1] == "Authentication Required"
 
 
 def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
@@ -764,3 +798,173 @@ def test_runtime_local_install_cleanup_disconnects_and_detaches(qapp):
     assert worker in page_runtime._DETACHED_INSTALL_WORKERS
     assert page._local_install_worker is None
     page_runtime._DETACHED_INSTALL_WORKERS.remove(worker)
+
+
+def test_remote_config_roundtrips_compute_node_key_without_saved_credentials(qapp):
+    widget = RemoteConfigWidget()
+
+    widget.set_config(
+        {
+            "host": "alice@login.example.org",
+            "auth_type": "key",
+            "key_file": "/keys/login",
+            "use_jump": True,
+            "jump_node": "node001",
+            "jump_auth": "key",
+            "node_key_file": "/keys/node",
+            "num_cores": 12,
+            "python_path": "/opt/python/bin/python",
+            "openbench_path": "/remote/OpenBench",
+        }
+    )
+
+    config = widget.get_config()
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.node_group.isChecked() is True
+    assert widget.node_input.text() == "node001"
+    assert widget.radio_node_key.isChecked() is True
+    assert widget.node_key_input.text() == "/keys/node"
+    assert config["jump_auth"] == "key"
+    assert config["node_key_file"] == "/keys/node"
+
+
+def test_test_connection_passes_compute_node_key_to_jump_connect(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    calls = []
+
+    class FakeManager:
+        def __init__(self, host_key_callback=None):
+            self.is_connected = True
+
+        def connect(self, host, password=None, key_file=None):
+            calls.append(("connect", host, password, key_file))
+
+        def connect_with_jump(self, **kwargs):
+            calls.append(("jump", kwargs))
+
+        def execute(self, command, timeout=None):
+            return "banner\n64\n", "", 0
+
+    monkeypatch.setattr(remote_config, "SSHManager", FakeManager)
+    monkeypatch.setattr(remote_config.QMessageBox, "information", staticmethod(lambda *args, **kwargs: None))
+    monkeypatch.setattr(remote_config.QMessageBox, "critical", staticmethod(lambda *args, **kwargs: None))
+
+    widget = RemoteConfigWidget()
+    widget.host_input.setText("alice@login")
+    widget.password_input.setText("login-pw")
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/node")
+
+    widget._test_connection()
+
+    assert ("jump", {"main_host": "node001", "main_password": None, "main_key_file": "/keys/node"}) in calls
+
+
+def test_save_current_credentials_includes_compute_node_secret(qapp):
+    saved = []
+
+    class Creds:
+        def save_credential(self, **kwargs):
+            saved.append(kwargs)
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+    widget.host_input.setText("alice@login")
+    widget.radio_key.setChecked(True)
+    widget.key_input.setText("/keys/login")
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/node")
+
+    widget._save_current_credentials()
+
+    assert saved == [
+        {
+            "host": "alice@login",
+            "auth_type": "key",
+            "password": None,
+            "key_file": "/keys/login",
+            "jump_node": "node001",
+            "jump_auth": "key",
+            "node_key_file": "/keys/node",
+        }
+    ]
+
+
+def test_load_saved_credentials_restores_compute_node_key(qapp):
+    class Creds:
+        def get_credential(self, host):
+            return {
+                "auth_type": "password",
+                "password": "login-pw",
+                "jump_node": "node001",
+                "jump_auth": "key",
+                "node_key_file": "/keys/node",
+            }
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+
+    widget._load_saved_credentials("alice@login")
+
+    assert widget.password_input.text() == "login-pw"
+    assert widget.node_group.isChecked() is True
+    assert widget.node_input.text() == "node001"
+    assert widget.radio_node_key.isChecked() is True
+    assert widget.node_key_input.text() == "/keys/node"
+
+
+def test_reset_to_defaults_keeps_compute_node_auth_none(qapp):
+    widget = RemoteConfigWidget()
+    widget.radio_node_password.setChecked(True)
+
+    widget.reset_to_defaults()
+
+    assert widget.radio_node_none.isChecked() is True
+
+
+def test_update_remote_cpu_count_ignores_banner_lines(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+
+    def fake_execute(_ssh, command, timeout=None):
+        return "Welcome to cluster\n64\n", "", 0
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_execute)
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+
+    widget._update_remote_cpu_count()
+
+    assert widget.cpu_available_label.text() == "(Available on remote: 64)"
+    assert widget.num_cores_spin.maximum() >= 128
+
+
+def test_parse_ssh_config_splits_multiple_host_aliases(tmp_path, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir()
+    (ssh_dir / "config").write_text(
+        "Host login login-short *.internal\n"
+        "  HostName login.example.org\n"
+        "  User alice\n"
+        "  Port 2222\n"
+        "  IdentityFile ~/.ssh/id_login\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(remote_config.platform, "system", lambda: "Darwin")
+
+    hosts = remote_config.parse_ssh_config()
+
+    assert [host["name"] for host in hosts] == ["login", "login-short"]
+    assert {host["hostname"] for host in hosts} == {"login.example.org"}
+    assert {host["user"] for host in hosts} == {"alice"}
+    assert {host["port"] for host in hosts} == {"2222"}

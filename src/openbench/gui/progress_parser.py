@@ -32,6 +32,13 @@ def parse_progress_line(
     var = state.get("current_variable", "")
     stage = ""
 
+    state.setdefault("started_preprocess_tasks", set())
+    state.setdefault("completed_preprocess_tasks", set())
+    state.setdefault("completed_eval_tasks", set())
+    state.setdefault("completed_groupby_tasks", set())
+    state.setdefault("completed_comparison_tasks", set())
+    state.setdefault("completed_statistics_tasks", set())
+
     line_lower = line.lower()
 
     protocol_line = GUI_PROGRESS_PREFIX in line
@@ -104,17 +111,23 @@ def parse_progress_line(
         var = state["current_variable"]
         stage = "Evaluation"
 
+    statistics_done = re.search(r"\bcompleted\s+([^:]+?)\s+analysis\b", natural_line, re.IGNORECASE)
+    statistics_running = re.search(r"\brunning\s+([^:]+?)\s+analysis\b", natural_line, re.IGNORECASE)
+    if statistics_done or statistics_running:
+        state["current_statistic"] = (statistics_done or statistics_running).group(1).strip()
+        stage = "Statistics"
+
     # Detect stage
     if not stage and "evaluation" in natural_line_lower and "item" not in natural_line_lower:
         stage = "Evaluation"
-    elif "comparison" in natural_line_lower or "groupby" in natural_line_lower:
+    elif not stage and ("comparison" in natural_line_lower or "groupby" in natural_line_lower):
         stage = "Comparison"
         comparison_done = re.search(r"(?:done running|completed)\s+([\w-]+)\s+comparison", natural_line_lower)
         if comparison_done:
             state["completed_comparison_tasks"].add(comparison_done.group(1))
-    elif "statistic" in natural_line_lower:
+    elif not stage and "statistic" in natural_line_lower:
         stage = "Statistics"
-    elif "report" in natural_line_lower:
+    elif not stage and "report" in natural_line_lower:
         stage = "Report"
 
     # Detect task completions
@@ -130,20 +143,21 @@ def parse_progress_line(
         if groupby_type in natural_line_lower and (
             "complete" in natural_line_lower or "finished" in natural_line_lower or "done" in natural_line_lower
         ):
-            task_key = (state.get("current_variable", ""), groupby_type)
+            task_key = groupby_type
             if task_key not in state["completed_groupby_tasks"]:
                 state["completed_groupby_tasks"].add(task_key)
                 task_completed = True
 
     if stage == "Statistics" and ("completed" in line_lower or "finished" in line_lower):
-        comp_name = state.get("current_variable") or "comparison"
-        if comp_name not in state["completed_comparison_tasks"]:
-            state["completed_comparison_tasks"].add(comp_name)
+        stat_name = state.get("current_statistic") or "statistics"
+        if stat_name not in state["completed_statistics_tasks"]:
+            state["completed_statistics_tasks"].add(stat_name)
             task_completed = True
 
     # Calculate progress
     total_tasks = state.get("total_tasks", 0)
     num_comparisons = state.get("num_comparisons", 0)
+    num_statistics = state.get("num_statistics", 0)
     num_variables = state.get("num_variables", 0)
 
     P_INIT = constants["PROGRESS_INIT"]
@@ -163,13 +177,18 @@ def parse_progress_line(
             len(completed_eval_tasks)
             + len(state["completed_groupby_tasks"])
             + len(state["completed_comparison_tasks"])
+            + len(state["completed_statistics_tasks"])
             + 0.4 * len(preprocess_only)
             + 0.05 * len(preprocess_started_only)
         )
         task_progress = (total_completed / max(1, total_tasks)) * P_WORK
         current_progress = min(P_INIT + task_progress, P_MAX)
-    elif num_comparisons > 0 and len(state["completed_comparison_tasks"]) > 0:
-        comparison_progress = (len(state["completed_comparison_tasks"]) / max(1, num_comparisons)) * P_WORK
+    elif (num_comparisons + num_statistics) > 0 and (
+        len(state["completed_comparison_tasks"]) + len(state["completed_statistics_tasks"])
+    ) > 0:
+        post_completed = len(state["completed_comparison_tasks"]) + len(state["completed_statistics_tasks"])
+        post_total = num_comparisons + num_statistics
+        comparison_progress = (post_completed / max(1, post_total)) * P_WORK
         current_progress = min(P_INIT + comparison_progress, P_MAX)
     elif num_variables > 0:
         completed_vars = len(set(t[0] for t in state["completed_eval_tasks"] if t[0]))

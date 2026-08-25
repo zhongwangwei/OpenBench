@@ -598,11 +598,13 @@ class ConfigManager:
         if not selected_items:
             errors.append("At least one evaluation item must be selected")
 
-        # Check metrics
+        # Evaluation supports metrics, scores, or both.
         metrics = config.get("metrics", {})
         selected_metrics = [k for k, v in metrics.items() if v]
-        if not selected_metrics:
-            errors.append("At least one metric must be selected")
+        scores = config.get("scores", {})
+        selected_scores = [k for k, v in scores.items() if v]
+        if not selected_metrics and not selected_scores:
+            errors.append("At least one metric or score must be selected")
 
         # Check ref data if any items selected
         if selected_items:

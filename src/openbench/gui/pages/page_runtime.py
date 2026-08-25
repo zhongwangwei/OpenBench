@@ -40,7 +40,7 @@ class _LocalInstallWorker(QThread):
 
     def __init__(self, cmd, parent=None):
         super().__init__(parent)
-        self._cmd = cmd
+        self._cmds = cmd if cmd and isinstance(cmd[0], list) else [cmd]
         self._process = None
 
     def stop(self) -> None:
@@ -58,16 +58,26 @@ class _LocalInstallWorker(QThread):
         import subprocess
 
         try:
-            self._process = subprocess.Popen(
-                self._cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-            )
-            for line in self._process.stdout:
+            for cmd in self._cmds:
                 if self.isInterruptionRequested():
-                    self._process.terminate()
-                    break
-                self.line.emit(line.rstrip())
-            self._process.wait()
-            self.finished_with_result.emit(self._process.returncode)
+                    self.finished_with_result.emit(1)
+                    return
+                self.line.emit(f"$ {' '.join(cmd)}")
+                self._process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+                )
+                for line in self._process.stdout:
+                    if self.isInterruptionRequested():
+                        self._process.terminate()
+                        break
+                    self.line.emit(line.rstrip())
+                self._process.wait()
+                returncode = self._process.returncode
+                self._process = None
+                if returncode != 0:
+                    self.finished_with_result.emit(returncode)
+                    return
+            self.finished_with_result.emit(0)
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         finally:
@@ -78,6 +88,16 @@ from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollCom
 from openbench.gui.path_utils import is_cross_platform_path
 
 logger = logging.getLogger(__name__)
+
+
+def _conda_python_path(env_path: str) -> str:
+    """Return the Python executable path for a conda environment path."""
+    env_path = (env_path or "").strip()
+    if not env_path:
+        return ""
+    if sys.platform == "win32":
+        return os.path.join(env_path, "python.exe")
+    return os.path.join(env_path, "bin", "python")
 
 
 def get_default_runtime_settings_path() -> str:
@@ -249,15 +269,13 @@ class PageRuntime(BasePage):
             # Reset CPU available label to local
             self.cpu_available_label.setText(f"(Available: {os.cpu_count() or 'N/A'})")
 
-            # Disconnect remote connection when switching to local mode
-            if self.remote_config_widget.is_connected():
+            # Flush pending remote writes before disconnecting the SSH session.
+            self._switch_to_local_storage()
+            if self.remote_config_widget.get_ssh_manager() is not None:
                 self.remote_config_widget.disconnect()
 
             # Clear remote config when switching to local
             self.remote_config_widget.reset_to_defaults()
-
-            # Switch to local storage
-            self._switch_to_local_storage()
         else:
             self.parallel_group.hide()  # Parallel Processing is inside RemoteConfigWidget
             self.local_env_group.hide()
@@ -344,11 +362,66 @@ class PageRuntime(BasePage):
 
     def _on_conda_changed(self, text):
         """Handle conda environment change."""
+        self._sync_python_combo_to_conda_selection()
         self._on_config_changed()
+
+    def _add_python_choice(self, path: str, label: str | None = None) -> None:
+        """Add a Python interpreter option while storing the real path in itemData."""
+        path = (path or "").strip()
+        if not path:
+            return
+        display = f"{path} ({label})" if label else path
+        self.python_combo.addItem(display, path)
+
+    def _python_path_from_combo(self) -> str:
+        """Read the selected/typed Python path without splitting on spaces."""
+        text = self.python_combo.currentText().strip()
+        idx = self.python_combo.currentIndex()
+        if idx >= 0 and text == self.python_combo.itemText(idx):
+            data = self.python_combo.currentData()
+            if isinstance(data, str) and data.strip():
+                return data.strip()
+
+        # Compatibility with older saved/display strings such as
+        # "C:\\Program Files\\Python\\python.exe (PATH)"; strip only the
+        # display suffix rather than splitting the path itself on spaces.
+        if text.endswith(")") and " (" in text:
+            return text.rsplit(" (", 1)[0].strip()
+        return text
+
+    def _selected_conda_python_path(self) -> str:
+        """Return the Python executable implied by the selected conda env."""
+        if self.conda_combo.currentIndex() <= 0:
+            return ""
+        env_path = self.conda_combo.currentData()
+        if isinstance(env_path, str) and env_path.strip():
+            return _conda_python_path(env_path)
+        return ""
+
+    def _sync_python_combo_to_conda_selection(self) -> None:
+        """Make the conda selector authoritative for the saved local Python."""
+        python_path = self._selected_conda_python_path()
+        if not python_path:
+            return
+
+        self.python_combo.blockSignals(True)
+        try:
+            found = False
+            for i in range(self.python_combo.count()):
+                if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
+                    self.python_combo.setCurrentIndex(i)
+                    found = True
+                    break
+            if not found:
+                self._add_python_choice(python_path, self.conda_combo.currentText())
+                self.python_combo.setCurrentIndex(self.python_combo.count() - 1)
+        finally:
+            self.python_combo.blockSignals(False)
 
     def _detect_python(self):
         """Auto-detect available Python interpreters."""
         detected = []
+        detected_paths = set()
         is_windows = sys.platform == "win32"
         user_home = os.path.expanduser("~")
 
@@ -360,7 +433,8 @@ class PageRuntime(BasePage):
             else:
                 conda_python = os.path.join(conda_prefix, "bin", "python")
             if os.path.exists(conda_python):
-                detected.append(f"{conda_python} (active conda)")
+                detected.append((conda_python, "active conda"))
+                detected_paths.add(conda_python)
 
         # PRIORITY 2: Check common conda/miniforge locations
         if is_windows:
@@ -379,30 +453,40 @@ class PageRuntime(BasePage):
             ]
 
         for path, label in conda_paths:
-            if os.path.exists(path) and path not in [d.split(" ")[0] for d in detected]:
-                detected.append(f"{path} ({label})")
+            if os.path.exists(path) and path not in detected_paths:
+                detected.append((path, label))
+                detected_paths.add(path)
 
         # PRIORITY 3: Check PATH
         python_names = ["python3", "python"] if not is_windows else ["python", "python3"]
         for name in python_names:
             path = shutil.which(name)
-            if path and path not in [d.split(" ")[0] for d in detected]:
+            if path and path not in detected_paths:
                 if path == "/usr/bin/python3":
-                    detected.append(f"{path} (system)")
+                    detected.append((path, "system"))
                 else:
-                    detected.append(f"{path} (PATH)")
+                    detected.append((path, "PATH"))
+                detected_paths.add(path)
 
         # Update combo box
         current_text = self.python_combo.currentText()
         self.python_combo.blockSignals(True)
         self.python_combo.clear()
 
-        for item in detected:
-            self.python_combo.addItem(item)
+        for path, label in detected:
+            self._add_python_choice(path, label)
 
         # Restore previous selection if valid
         if current_text:
-            idx = self.python_combo.findText(current_text)
+            current_path = (
+                current_text.rsplit(" (", 1)[0].strip() if current_text.endswith(")") else current_text.strip()
+            )
+            for idx in range(self.python_combo.count()):
+                if self.python_combo.itemText(idx) == current_text or self.python_combo.itemData(idx) == current_path:
+                    self.python_combo.setCurrentIndex(idx)
+                    break
+            else:
+                idx = -1
             if idx >= 0:
                 self.python_combo.setCurrentIndex(idx)
 
@@ -424,6 +508,26 @@ class PageRuntime(BasePage):
 
         if path:
             self.python_combo.setCurrentText(path)
+
+    def _build_local_install_commands(
+        self, install_path: str, repo_url: str, is_update: bool
+    ) -> tuple[list[list[str]], str]:
+        """Build git + editable pip install commands for local OpenBench setup."""
+        if is_update:
+            git_cmd = ["git", "-C", install_path, "pull", "--ff-only"]
+            starting = "Running git pull..."
+        else:
+            parent_dir = os.path.dirname(install_path)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+            git_cmd = ["git", "clone", "--progress", repo_url, install_path]
+            starting = f"Cloning from {repo_url}..."
+
+        python_exe = self._selected_conda_python_path() or self._python_path_from_combo()
+        if not python_exe:
+            python_exe = sys.executable
+        pip_cmd = [python_exe, "-m", "pip", "install", "-e", install_path]
+        return [git_cmd, pip_cmd], starting
 
     def _browse_openbench(self):
         """Browse for OpenBench installation directory."""
@@ -551,16 +655,9 @@ class PageRuntime(BasePage):
             if radio_ssh.isChecked():
                 repo_url = "git@github.com:zhongwangwei/OpenBench.git"
 
-        # Build the git command up front so failures surface before the dialog.
-        if is_update:
-            cmd = ["git", "-C", install_path, "pull", "--ff-only"]
-            starting = "Running git pull..."
-        else:
-            parent_dir = os.path.dirname(install_path)
-            if parent_dir and not os.path.exists(parent_dir):
-                os.makedirs(parent_dir, exist_ok=True)
-            cmd = ["git", "clone", "--progress", repo_url, install_path]
-            starting = f"Cloning from {repo_url}..."
+        # Build the git + editable install commands up front so failures
+        # surface before the dialog. Success is reported only after both pass.
+        commands, starting = self._build_local_install_commands(install_path, repo_url, is_update)
 
         # Progress dialog (Esc/close stays blocked until the worker finishes).
         progress_dialog = _InstallProgressDialog(self)
@@ -581,14 +678,13 @@ class PageRuntime(BasePage):
         close_btn.clicked.connect(progress_dialog.accept)
         progress_layout.addWidget(close_btn)
 
-        output_text.append(f"$ {' '.join(cmd)}\n")
         self.btn_install_openbench.setEnabled(False)
 
         def finish(returncode: int):
             if returncode == 0:
                 status_label.setText("✓ Installation successful!" if not is_update else "✓ Update successful!")
                 status_label.setStyleSheet("color: green; font-weight: bold;")
-                output_text.append("\n\nOpenBench installed successfully!")
+                output_text.append("\n\nOpenBench installed and registered in the selected Python environment.")
             else:
                 status_label.setText("✗ Installation failed!" if not is_update else "✗ Update failed!")
                 status_label.setStyleSheet("color: red; font-weight: bold;")
@@ -606,7 +702,7 @@ class PageRuntime(BasePage):
             progress_dialog.allow_close = True
             self._local_install_worker = None
 
-        worker = _LocalInstallWorker(cmd)
+        worker = _LocalInstallWorker(commands)
         self._local_install_worker = worker
         if not getattr(self, "_install_destroy_hooked", False):
             # Embedded pages don't get closeEvent on app quit; destroyed does fire.
@@ -644,7 +740,7 @@ class PageRuntime(BasePage):
     def _refresh_conda(self):
         """Refresh the list of available conda environments."""
 
-        current_python = self.python_combo.currentText().split(" ")[0]
+        current_python = self._python_path_from_combo()
         envs = self._get_conda_envs(current_python)
 
         current_env = self.conda_combo.currentText()
@@ -662,6 +758,7 @@ class PageRuntime(BasePage):
                 self.conda_combo.setCurrentIndex(idx)
 
         self.conda_combo.blockSignals(False)
+        self._sync_python_combo_to_conda_selection()
 
     def _get_conda_envs(self, python_path: str) -> list:
         """Get list of conda environments."""
@@ -745,7 +842,7 @@ class PageRuntime(BasePage):
             self.python_combo.blockSignals(True)
             found = False
             for i in range(self.python_combo.count()):
-                if self.python_combo.itemText(i).startswith(python_path):
+                if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
                     self.python_combo.setCurrentIndex(i)
                     found = True
                     break
@@ -760,6 +857,7 @@ class PageRuntime(BasePage):
             idx = self.conda_combo.findText(conda_env)
             if idx >= 0:
                 self.conda_combo.setCurrentIndex(idx)
+                self._sync_python_combo_to_conda_selection()
             self.conda_combo.blockSignals(False)
 
         # Load local OpenBench path
@@ -782,11 +880,8 @@ class PageRuntime(BasePage):
         # Save execution mode
         general["execution_mode"] = "local" if self.radio_local.isChecked() else "remote"
 
-        # Save num_cores
-        general["num_cores"] = self.num_cores_spin.value()
-
         # Save Python path, conda env, and OpenBench path for local mode
-        general["python_path"] = self.python_combo.currentText().split(" ")[0]
+        general["python_path"] = self._selected_conda_python_path() or self._python_path_from_combo()
         general["conda_env"] = self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else ""
         general["local_openbench_path"] = self.local_openbench_input.text().strip()
 
@@ -794,22 +889,20 @@ class PageRuntime(BasePage):
         if self.radio_remote.isChecked():
             remote_config = self.remote_config_widget.get_config()
             general["remote"] = remote_config
+            general["num_cores"] = int(remote_config.get("num_cores") or self.num_cores_spin.value())
+        else:
+            general["num_cores"] = self.num_cores_spin.value()
 
     def validate(self) -> bool:
         """Validate the page configuration."""
         if self.radio_remote.isChecked():
-            # Check if remote server is configured
             if not self.remote_config_widget.is_connected():
-                from PySide6.QtWidgets import QMessageBox
-
-                reply = QMessageBox.question(
+                QMessageBox.warning(
                     self,
-                    "Not Connected",
-                    "You haven't connected to the remote server yet.\n\nDo you want to continue anyway?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
+                    "Remote Connection Required",
+                    "Connect to the configured remote execution target before continuing.",
                 )
-                return reply == QMessageBox.Yes
+                return False
         return True
 
     def get_remote_config_widget(self):
@@ -866,15 +959,18 @@ class PageRuntime(BasePage):
         """Collect current runtime settings into a dictionary."""
         settings = {
             "execution_mode": "local" if self.radio_local.isChecked() else "remote",
-            "num_cores": self.num_cores_spin.value(),
-            "python_path": self.python_combo.currentText().split(" ")[0],
+            "python_path": self._selected_conda_python_path() or self._python_path_from_combo(),
             "conda_env": self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else "",
             "local_openbench_path": self.local_openbench_input.text().strip(),
         }
 
         # Include remote config if in remote mode
         if self.radio_remote.isChecked():
-            settings["remote"] = self.remote_config_widget.get_config()
+            remote_config = self.remote_config_widget.get_config()
+            settings["remote"] = remote_config
+            settings["num_cores"] = int(remote_config.get("num_cores") or self.num_cores_spin.value())
+        else:
+            settings["num_cores"] = self.num_cores_spin.value()
 
         return settings
 
@@ -896,7 +992,7 @@ class PageRuntime(BasePage):
             self.python_combo.blockSignals(True)
             found = False
             for i in range(self.python_combo.count()):
-                if self.python_combo.itemText(i).startswith(python_path):
+                if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
                     self.python_combo.setCurrentIndex(i)
                     found = True
                     break
@@ -911,6 +1007,7 @@ class PageRuntime(BasePage):
             idx = self.conda_combo.findText(conda_env)
             if idx >= 0:
                 self.conda_combo.setCurrentIndex(idx)
+                self._sync_python_combo_to_conda_selection()
             self.conda_combo.blockSignals(False)
 
         # Apply local OpenBench path

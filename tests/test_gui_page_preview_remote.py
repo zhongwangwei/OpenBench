@@ -191,6 +191,30 @@ def test_remote_preview_uses_same_remote_path_transform_as_export():
     assert kwargs["path_transform"]("Reference") == "/remote/openbench/Reference"
 
 
+def test_remote_execution_never_falls_back_to_local_export(monkeypatch):
+    from openbench.remote.storage import LocalStorage
+
+    class Controller(FakeControllerBase):
+        config = {"general": {"execution_mode": "remote"}}
+        storage = LocalStorage("/local/project")
+
+        def get_output_dir(self):
+            return "/local/output"
+
+    preview = _preview()
+    preview.controller = Controller()
+    preview.config_manager = type("Manager", (), {"validate": lambda self, config: []})()
+    preview._export_and_run_local = lambda output_dir: pytest.fail("remote mode fell back to local export")
+    warnings = []
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_preview.QMessageBox.warning",
+        lambda *args: warnings.append(args),
+    )
+
+    assert preview._export_and_run_once() is False
+    assert warnings and warnings[-1][1] == "Remote Connection Required"
+
+
 def test_resolve_remote_model_path_raises_on_ssh_failure():
     preview = _preview()
 

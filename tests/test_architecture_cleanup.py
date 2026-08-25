@@ -27,6 +27,16 @@ def test_runtime_dependencies_declare_direct_imports_without_unused_platformdirs
     assert "platformdirs" not in conda_reqs
 
 
+def test_gui_and_dask_runtime_dependencies_are_installable_from_declared_extras():
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = "\n".join(pyproject["project"]["dependencies"]).lower()
+    gui_dependencies = "\n".join(pyproject["project"]["optional-dependencies"]["gui"]).lower()
+
+    assert "distributed" in dependencies
+    assert "paramiko" in gui_dependencies
+    assert "cryptography" in gui_dependencies
+
+
 def test_core_public_api_does_not_export_unwired_evaluation_engine():
     import openbench
     import openbench.core as core

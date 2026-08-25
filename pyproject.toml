@@ -95,7 +95,7 @@ dependencies = [
     "netCDF4>=1.5.7",
     "matplotlib>=3.4.0",
     "cartopy>=0.20.0",
-    "dask>=2022.1.0",
+    "dask[distributed]>=2022.1.0",
     "joblib>=1.1.0",
     "flox>=0.5.0",
     "PyYAML>=6.0",
@@ -118,7 +118,13 @@ dependencies = [
 # is in the base install. The report/migration/statistics/plot extras are kept
 # (empty) for backward compatibility so e.g. `pip install colm-openbench[report]`
 # still resolves and never errors.
-gui = ["PySide6>=6.5.0", "psutil>=5.9.0"]
+gui = [
+    "PySide6>=6.5.0",
+    "psutil>=5.9.0",
+    # The runtime page imports the remote widgets during GUI startup.
+    "paramiko>=3.0.0",
+    "cryptography>=41.0.0",
+]
 remote = ["paramiko>=3.0.0", "cryptography>=41.0.0"]
 # PDF reports need xhtml2pdf, which pulls pycairo (requires system cairo to
 # build), so it stays optional to keep the base `pip install` lightweight and

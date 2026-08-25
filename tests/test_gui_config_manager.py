@@ -226,6 +226,14 @@ def test_validate_requires_selected_items_when_comparison_or_statistics_enabled(
     assert "At least one statistics item must be selected when statistics is enabled" in errors
 
 
+def test_validate_accepts_scores_without_metrics(tmp_path):
+    config = _runnable_config(tmp_path)
+    config["metrics"] = {}
+    config["scores"] = {"Overall_Score": True}
+
+    assert ConfigManager().validate(config) == []
+
+
 def test_generate_config_yaml_does_not_enable_empty_comparison_or_statistics(tmp_path):
     config = _runnable_config(tmp_path)
     config["general"]["comparison"] = True
