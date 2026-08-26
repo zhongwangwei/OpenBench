@@ -167,20 +167,7 @@ class TimeCoreMixin:
                 return ds.expand_dims(time=[pd.Timestamp(f"{syear}-01-01")])
             if tim_res_lower == "climatology-month":
                 raise ValueError("Monthly climatology requires a time coordinate with 12 monthly values")
-            logging.warning("The dataset does not contain a 'time' coordinate.")
-            time_index = pd.date_range(start=f"{syear}-01-01T00:00:00", end=f"{eyear}-12-31T23:59:59", freq=tim_res)
-            result = ds.expand_dims(time=time_index)
-            try:
-                result = result.transpose("time", "lat", "lon")
-            except (ValueError, KeyError):
-                try:
-                    result = result.transpose("time", "lon", "lat")
-                except (ValueError, TypeError):
-                    result = result.squeeze([dim for dim, size in result.sizes.items() if dim != "time" and size == 1])
-            if isinstance(result, xr.Dataset):
-                var_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(result.data_vars), None)
-                return result[var_name] if var_name and var_name in result else next(iter(result.data_vars.values()))
-            return result
+            raise ValueError("Non-climatology data must include a 'time' coordinate; refusing to broadcast static data")
 
         if not hasattr(ds["time"], "dt"):
             try:
@@ -198,6 +185,8 @@ class TimeCoreMixin:
 
         # Check for duplicate time values
         if ds["time"].to_index().has_duplicates:
+            if getattr(self, "time_alignment", "intersection") == "strict":
+                raise ValueError("strict time alignment requires unique time values; duplicate timestamps found")
             logging.warning("Warning: Duplicate time values found. Removing duplicates...")
             # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds["time"], return_index=True)
@@ -220,6 +209,41 @@ class TimeCoreMixin:
             return next(iter(result.data_vars.values()))
         return result
 
+    def _validate_strict_time_coverage(
+        self, ds: xr.Dataset | xr.DataArray, syear: int, eyear: int, tim_res: str
+    ) -> None:
+        """Strict mode rejects missing/extra timestamps before NaN reindexing can hide them."""
+        if getattr(self, "time_alignment", "intersection") != "strict" or "time" not in ds.coords:
+            return
+        text = str(tim_res or "").strip().lower()
+        match = re.match(r"\d*\s*([a-zA-Z]+)", text)
+        unit = match.group(1).lower() if match else text
+        if unit in {"m", "me", "mon", "month", "monthly"}:
+            expected = pd.period_range(f"{syear}-01", f"{eyear}-12", freq="M")
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="M")
+            label = "month"
+        elif unit in {"d", "day", "daily"}:
+            expected = pd.period_range(f"{syear}-01-01", f"{eyear}-12-31", freq="D")
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="D")
+            label = "day"
+        elif unit in {"h", "hr", "hour", "hourly"}:
+            expected = pd.period_range(f"{syear}-01-01 00:00:00", f"{eyear}-12-31 23:00:00", freq="h")
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="h")
+            label = "hour"
+        elif unit in {"y", "ye", "yr", "year", "annual", "yearly", "a"}:
+            expected = pd.period_range(str(syear), str(eyear), freq="Y")
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="Y")
+            label = "year"
+        else:
+            return
+        missing = expected.difference(present)
+        extra = present.difference(expected)
+        if len(missing) or len(extra):
+            raise ValueError(
+                f"strict time alignment requires complete {label} coverage for {syear}-{eyear}; "
+                f"missing={list(map(str, missing[:5]))}, extra={list(map(str, extra[:5]))}"
+            )
+
     def check_dataset_time_integrity(
         self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str
     ) -> xr.Dataset:
@@ -228,11 +252,13 @@ class TimeCoreMixin:
         ds = self.check_time(ds, syear, eyear, tim_res)
         if self._is_climatology_frequency_value(tim_res):
             return ds
-        # Apply model-specific time adjustments
+        # Apply model-specific time adjustments before strict coverage validation;
+        # strict must still run before make_time_integrity fills missing steps.
         if datasource == "stat":
             ds["time"] = pd.DatetimeIndex(ds["time"].values)
         else:
             if getattr(self, f"{datasource}_data_type", "") != "stn":
                 ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
+        self._validate_strict_time_coverage(ds, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds

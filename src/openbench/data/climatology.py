@@ -11,6 +11,17 @@ import pandas as pd
 import xarray as xr
 
 
+def _has_one_sample_per_calendar_month(ds: xr.Dataset) -> bool:
+    """True only for an explicit 12-point Jan-Dec monthly climatology axis."""
+    if "time" not in ds.coords or ds.sizes.get("time", 0) != 12:
+        return False
+    try:
+        months = pd.Index(pd.to_datetime(ds["time"].values).month)
+    except Exception:
+        return False
+    return months.is_unique and set(months) == set(range(1, 13))
+
+
 def _time_weights(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.DataArray | None:
     """Return weights for averaging over time.
 
@@ -207,15 +218,16 @@ class ClimatologyProcessor:
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Set single time point to {annual_time}")
-            elif time_size == 12:
-                # 12 time points - set to syear's 12 months, then average to annual
+            elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
+                # 12 monthly representative values - average to annual.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
                 ds = ds.assign_coords(time=monthly_times)
-                # Average to annual climatology
                 ds = _weighted_time_mean(ds, source_tim_res).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
-                logging.info(f"Reference: Averaged 12 months to annual climatology at {annual_time}")
+                logging.info(
+                    f"Reference: Averaged 12 monthly climatology points to annual climatology at {annual_time}"
+                )
             else:
                 # Multiple time points (e.g., daily data) - average to annual climatology
                 logging.info(f"Reference: Processing {time_size} time points to annual climatology")
@@ -228,11 +240,11 @@ class ClimatologyProcessor:
             # Monthly climatology processing
             if not has_time_dim or time_size == 0:
                 raise ValueError("Monthly climatology requires time dimension with data")
-            elif time_size == 12:
-                # 12 time points - set to syear's 12 months as monthly climatology
+            elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
+                # 12 explicit monthly representative values - normalize labels to the comparison year.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
-                ds = ds.assign_coords(time=monthly_times)
-                logging.info(f"Reference: Set 12 time points to monthly climatology for year {syear}")
+                ds = ds.sortby("time").assign_coords(time=monthly_times)
+                logging.info(f"Reference: Set 12 monthly climatology points to comparison year {syear}")
             else:
                 # Multiple time points - calculate monthly climatology via groupby
                 try:

@@ -161,6 +161,9 @@ def test_metric_worker_count_honors_configured_cores(monkeypatch):
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
     assert evaluation._metric_worker_count(0, 6) == 6
 
+    monkeypatch.setattr(evaluation, "get_system_resources", lambda: {"available_memory_gb": 1})
+    assert evaluation._metric_worker_count(4, 4, pair_nbytes=128 * 1024**2) == 1
+
 
 def test_metric_parallelism_no_longer_uses_hard_coded_worker_cap():
     source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
@@ -168,7 +171,7 @@ def test_metric_parallelism_no_longer_uses_hard_coded_worker_cap():
     assert "len(self.metrics) > 3" not in source
     assert "max_workers=min(4, len(self.metrics))" not in source
     assert "max_workers=metric_workers" in source
-    assert '_metric_worker_count(getattr(self, "num_cores", 1), len(self.metrics))' in source
+    assert "int(s.nbytes + o.nbytes)" in source
 
 
 def test_pc_ampli_builds_dask_graph_without_eager_compute():

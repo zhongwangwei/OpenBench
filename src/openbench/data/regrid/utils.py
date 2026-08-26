@@ -64,16 +64,23 @@ def create_lat_lon_coords(grid: Grid) -> tuple[np.ndarray, np.ndarray]:
         Latititude coordinates, longitude coordinates.
     """
 
-    if np.remainder((grid.north - grid.south), grid.resolution_lat) > 0:
-        lat_coords = np.arange(grid.south, grid.north, grid.resolution_lat)
-    else:
-        lat_coords = np.arange(grid.south, grid.north + grid.resolution_lat, grid.resolution_lat)
+    return (
+        _axis_coords(grid.south, grid.north, grid.resolution_lat),
+        _axis_coords(grid.west, grid.east, grid.resolution_lon),
+    )
 
-    if np.remainder((grid.east - grid.west), grid.resolution_lon) > 0:
-        lon_coords = np.arange(grid.west, grid.east, grid.resolution_lon)
+
+def _axis_coords(start: float, stop: float, resolution: float) -> np.ndarray:
+    if resolution <= 0:
+        raise InvalidBoundsError("Grid resolution must be positive.")
+
+    steps = (stop - start) / resolution
+    rounded_steps = int(round(steps))
+    if np.isclose(steps, rounded_steps, rtol=0.0, atol=1e-9):
+        count = rounded_steps + 1
     else:
-        lon_coords = np.arange(grid.west, grid.east + grid.resolution_lon, grid.resolution_lon)
-    return lat_coords, lon_coords
+        count = int(np.floor(steps)) + 1
+    return start + np.arange(max(count, 0), dtype=float) * resolution
 
 
 def create_regridding_dataset(grid: Grid, lat_name: str = "lat", lon_name: str = "lon") -> xr.Dataset:
@@ -138,13 +145,37 @@ def overlap(a: pd.IntervalIndex, b: pd.IntervalIndex) -> np.ndarray:
         2D numpy array containing overlap (as a fraction) between the intervals of a
             and b. If there is no overlap, the value will be 0.
     """
-    # TODO: newaxis on B and transpose is MUCH faster on benchmark.
-    #  likely due to it being the bigger dimension.
-    #  size(a) > size(b) leads to better perf than size(b) > size(a)
-    mins = np.minimum(a.right.to_numpy(), b.right.to_numpy()[:, np.newaxis])
-    maxs = np.maximum(a.left.to_numpy(), b.left.to_numpy()[:, np.newaxis])
-    overlap: np.ndarray = np.maximum(mins - maxs, 0).T
-    return overlap
+    a_left = a.left.to_numpy()
+    a_right = a.right.to_numpy()
+    b_left = b.left.to_numpy()
+    b_right = b.right.to_numpy()
+    result = np.zeros((len(a), len(b)), dtype=np.result_type(a_left, b_left, float))
+    if (
+        a.is_non_overlapping_monotonic
+        and b.is_non_overlapping_monotonic
+        and a.is_monotonic_increasing
+        and b.is_monotonic_increasing
+    ):
+        source = target = 0
+        while source < len(a) and target < len(b):
+            left = max(a_left[source], b_left[target])
+            source_right = a_right[source]
+            target_right = b_right[target]
+            right = min(source_right, target_right)
+            if right > left:
+                result[source, target] = right - left
+            if source_right <= target_right:
+                source += 1
+            if target_right <= source_right:
+                target += 1
+        return result
+
+    for column, (left, right) in enumerate(zip(b_left, b_right)):
+        values = result[:, column]
+        np.minimum(a_right, right, out=values)
+        values -= np.maximum(a_left, left)
+        np.maximum(values, 0, out=values)
+    return result
 
 
 def normalize_overlap(overlap: np.ndarray) -> np.ndarray:
@@ -298,6 +329,8 @@ def format_lat(
     # TODO: with cos(90) = 0 weighting, these weights might be 0?
 
     polar_lat = 90
+    if obj.sizes.get(lat_coord, 0) < 2:
+        return obj
     dy = obj.coords[lat_coord].diff(lat_coord).max().values.item()
 
     # Only pad if global but don't have edge values directly at poles
@@ -354,6 +387,8 @@ def format_lon(
     # Only pad if domain is global in lon
     source_lon = obj.coords[lon_coord]
     target_lon = target.coords[lon_coord]
+    if obj.sizes.get(lon_coord, 0) < 2 or target.sizes.get(lon_coord, 0) < 2:
+        return obj
     dx_s = source_lon.diff(lon_coord).max().values.item()
     dx_t = target_lon.diff(lon_coord).max().values.item()
     is_global_lon = source_lon.max().values - source_lon.min().values >= 360 - dx_s

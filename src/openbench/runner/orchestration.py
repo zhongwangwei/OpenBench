@@ -331,6 +331,10 @@ def run_evaluation_impl(
         _remove_stale_rerun_outputs(output_dir, rerun_tasks, _expected_output_paths)
 
     time_alignment = cfg.project.time_alignment  # "intersection", "per_pair", "strict"
+    if dask_distributed_active is None:
+        dask_active_for_tasks = _dask_distributed_requested(_project_dask_config(cfg)) and not comparison_only
+    else:
+        dask_active_for_tasks = bool(dask_distributed_active) and not comparison_only
 
     # Dispatch preprocessing + evaluation (skip preprocessing in comparison-only
     # and only_drawing modes).
@@ -354,6 +358,7 @@ def run_evaluation_impl(
                         var_tasks[vn],
                         unified_mask=bool(unified_mask),
                         time_alignment=time_alignment,
+                        max_workers=1 if dask_active_for_tasks else None,
                     )
                 )
 
@@ -361,10 +366,6 @@ def run_evaluation_impl(
 
         raw_results: list[dict[str, Any]] = list(cached_results)
         task_level_num_cores = getattr(cfg.project, "num_cores", 1) if getattr(cfg, "project", None) else 1
-        if dask_distributed_active is None:
-            dask_active_for_tasks = _dask_distributed_requested(_project_dask_config(cfg)) and not comparison_only
-        else:
-            dask_active_for_tasks = bool(dask_distributed_active) and not comparison_only
         try:
             raw_results.extend(
                 _evaluate_ready_tasks(

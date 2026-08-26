@@ -113,7 +113,6 @@ def test_adapter_preserves_inline_sim_variable_convert(monkeypatch):
         get_reference=lambda name, **kwargs: None,
     )
     monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
-
     _main, _ref, sim = adapter_module.build_legacy_namelists(cfg)
 
     assert sim["GPP"]["CaseA_convert"] == "value * 12.011"
@@ -970,13 +969,14 @@ def test_adapter_uses_reference_override_and_fallbacks(monkeypatch, tmp_path):
         get_reference=lambda name, **kwargs: ref,
     )
     monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    monkeypatch.setenv("OPENBENCH_TEST_REF_ROOT", str(ref_root))
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="override", output_dir="./out", years=[2000, 2001]),
         evaluation=EvaluationConfig(variables=["Runoff"]),
         reference=ReferenceConfig(
             data_root="/common",
             sources={"Runoff": "RefA"},
-            overrides={"RefA": {"root_dir": str(ref_root), "variables": {"Runoff": {"varname": "q2"}}}},
+            overrides={"RefA": {"root_dir": "$OPENBENCH_TEST_REF_ROOT", "variables": {"Runoff": {"varname": "q2"}}}},
         ),
         simulation={"SimA": SimulationEntry(model="M", root_dir="/sim", tim_res="Month", grid_res=0.5)},
     )

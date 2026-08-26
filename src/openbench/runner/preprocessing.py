@@ -19,6 +19,7 @@ def preprocess_variable(
     *,
     unified_mask: bool,
     time_alignment: str,
+    max_workers: int | None = None,
     build_bridge_runtime_info_fn,
     make_phase_error_fn,
     clone_or_link_ref_for_pair_fn,
@@ -72,6 +73,10 @@ def preprocess_variable(
     first_grid_task_per_ref: dict[str, dict[str, Any]] = {}
     first_grid_task_per_sim: dict[str, dict[str, Any]] = {}
     phase_errors: list[dict[str, Any]] = []
+    sibling_sims = {
+        ref: {task["sim_source"] for task in vtasks if task["ref_source"] == ref}
+        for ref in {task["ref_source"] for task in vtasks}
+    }
 
     def _backup_flat_ref(ref_source: str) -> None:
         flat_path = ref_flat_paths.get(ref_source)
@@ -136,6 +141,8 @@ def preprocess_variable(
             emit_gui_preprocessing_started(task)
             try:
                 info = build_bridge_runtime_info_fn(task)
+                if max_workers is not None:
+                    info["num_cores"] = min(max(1, int(info.get("num_cores") or 1)), max_workers)
                 ref_dtype = info.get("ref_data_type", "grid")
                 sim_dtype = info.get("sim_data_type", "grid")
                 task["ref_data_type"] = ref_dtype
@@ -232,11 +239,13 @@ def preprocess_variable(
                     if sim_dtype != "stn" and not is_stn_path:
                         _backup_flat_sim(sim_source)
 
-                # Unified mask: ensure evaluation only covers cells where both ref and sim are valid.
-                if unified_mask:
-                    if ref_dtype != "stn" and sim_dtype != "stn":
+                # Grid intersection must persist one shared timestamp axis
+                # even when the optional spatial unified mask is disabled.
+                if ref_dtype != "stn" and sim_dtype != "stn":
+                    needs_shared_intersection = time_alignment == "intersection" and len(sibling_sims[ref_source]) > 1
+                    if unified_mask or needs_shared_intersection:
                         ref_file_path_for_pair = ref_flat_paths.get(ref_source)
-                        if time_alignment == "per_pair":
+                        if time_alignment == "per_pair" and unified_mask:
                             if not ref_file_path_for_pair:
                                 raise RuntimeError(
                                     "per_pair time alignment requires a preprocessed flat reference file "
@@ -266,10 +275,16 @@ def preprocess_variable(
                             _backup_flat_ref(ref_source)
                             # Record per-pair ref path so evaluation uses this copy
                             task["ref_file_override"] = pair_ref
-                        else:
+                        elif time_alignment != "per_pair":
                             # intersection/strict: mask accumulates across sims onto shared ref
                             _restore_flat_ref_if_missing(ref_source)
-                            apply_unified_mask_fn(info, var_name, ref_source, sim_source)
+                            apply_unified_mask_fn(
+                                info,
+                                var_name,
+                                ref_source,
+                                sim_source,
+                                apply_spatial_mask=bool(unified_mask),
+                            )
                             _backup_flat_ref(ref_source)
 
                 task["ref_preprocessed"] = True
@@ -322,6 +337,8 @@ def preprocess_variable(
                     ref_to_restore,
                 )
                 info = build_bridge_runtime_info_fn(grid_task)
+                if max_workers is not None:
+                    info["num_cores"] = min(max(1, int(info.get("num_cores") or 1)), max_workers)
                 DatasetProcessing(info).prepare_source("ref")
             except Exception as exc:
                 phase_errors.append(
@@ -358,6 +375,8 @@ def preprocess_variable(
                     sim_to_restore,
                 )
                 info = build_bridge_runtime_info_fn(grid_task)
+                if max_workers is not None:
+                    info["num_cores"] = min(max(1, int(info.get("num_cores") or 1)), max_workers)
                 DatasetProcessing(info).prepare_source("sim")
             except Exception as exc:
                 phase_errors.append(

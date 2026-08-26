@@ -251,6 +251,13 @@ def _expand_config_paths(cfg):
     cfg.project.output_dir = _expand_path_value(cfg.project.output_dir)
     if cfg.reference.data_root:
         cfg.reference.data_root = _expand_path_value(cfg.reference.data_root)
+    for override in (cfg.reference.overrides or {}).values():
+        for key in ("root_dir", "fulllist"):
+            if override.get(key):
+                override[key] = _expand_path_value(override[key])
+        for variable in (override.get("variables") or {}).values():
+            if isinstance(variable, dict) and variable.get("fulllist"):
+                variable["fulllist"] = _expand_path_value(variable["fulllist"])
     for entry in cfg.simulation.values():
         entry.root_dir = _expand_path_value(entry.root_dir)
         if entry.fulllist:

@@ -47,7 +47,12 @@ def test_cache_clear():
 
 def test_cache_key():
     key = make_cache_key("Evapotranspiration", "CoLM2024", "GLEAM_v4.2a")
-    assert key == "Evapotranspiration__CoLM2024__GLEAM_v4.2a"
+    assert key.startswith("v2:")
+    assert key == make_cache_key("Evapotranspiration", "CoLM2024", "GLEAM_v4.2a")
+
+
+def test_cache_key_is_unambiguous_when_names_contain_separator():
+    assert make_cache_key("A__B", "C", "D") != make_cache_key("A", "B__C", "D")
 
 
 def test_hash_config():

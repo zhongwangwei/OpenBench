@@ -124,12 +124,8 @@ class scores:
         sim_monthly = s.groupby("time.month").mean("time")
         ref_amplitude = ref_monthly.max("month") - ref_monthly.min("month")
         sim_amplitude = sim_monthly.max("month") - sim_monthly.min("month")
-        valid = (
-            ref_monthly.notnull().any("month")
-            & sim_monthly.notnull().any("month")
-            & (ref_amplitude > 0)
-            & (sim_amplitude > 0)
-        )
+        complete_cycle = (np.isfinite(ref_monthly) & np.isfinite(sim_monthly)).sum("month") == 12
+        valid = complete_cycle & (ref_amplitude > 0) & (sim_amplitude > 0)
         ref_max_month = ref_monthly.idxmax("month")
         sim_max_month = sim_monthly.idxmax("month")
         phase_shift = (sim_max_month - ref_max_month) * 365 / 12
@@ -251,7 +247,8 @@ class scores:
         o_cycle = o.groupby("time.month").mean("time")
         s_amp = s_cycle.max("month") - s_cycle.min("month")
         o_amp = o_cycle.max("month") - o_cycle.min("month")
+        complete_cycle = (np.isfinite(s_cycle) & np.isfinite(o_cycle)).sum("month") == 12
         # Use annual-cycle amplitude so this score returns one value per
         # spatial cell, consistent with the other normalized score fields.
         relative_error = xr.where(o_amp != 0, (s_amp - o_amp) / o_amp, np.nan)
-        return np.exp(-np.abs(relative_error))
+        return xr.where(complete_cycle, np.exp(-np.abs(relative_error)), np.nan)

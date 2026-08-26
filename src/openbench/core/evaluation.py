@@ -8,7 +8,7 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
-from openbench.data._system_resources import effective_cpu_count
+from openbench.data._system_resources import effective_cpu_count, get_system_resources
 
 # Import chunked dataset loader for memory efficiency
 try:
@@ -99,7 +99,7 @@ except ImportError:
         return ""
 
 
-def _metric_worker_count(num_cores, metric_count: int) -> int:
+def _metric_worker_count(num_cores, metric_count: int, pair_nbytes: int = 0) -> int:
     """Return metric-level workers bounded by configured cores and metric count."""
     if metric_count <= 1:
         return 1
@@ -110,7 +110,13 @@ def _metric_worker_count(num_cores, metric_count: int) -> int:
     available = effective_cpu_count(os.cpu_count() or 1)
     if requested <= 0:
         requested = available
-    return min(max(1, requested), available, metric_count)
+    workers = min(max(1, requested), available, metric_count)
+    if pair_nbytes > 0:
+        available_bytes = get_system_resources()["available_memory_gb"] * 1024**3
+        # Metric reductions commonly need several pair-sized temporaries.
+        memory_workers = max(1, int((available_bytes * 0.25) // (pair_nbytes * 4)))
+        workers = min(workers, memory_workers)
+    return workers
 
 
 def _apply_pairwise_valid_mask(s: xr.DataArray, o: xr.DataArray) -> tuple[xr.DataArray, xr.DataArray]:
@@ -393,12 +399,15 @@ class Evaluation_grid(metrics, scores):
                 )
                 return
 
-            s, o = _apply_pairwise_valid_mask(s, o)
             logging.info("=" * 80)
 
             # Parallel processing of metrics if configured and beneficial.
             # Honor project.num_cores instead of the old hard-coded max=4.
-            metric_workers = _metric_worker_count(getattr(self, "num_cores", 1), len(self.metrics))
+            metric_workers = _metric_worker_count(
+                getattr(self, "num_cores", 1),
+                len(self.metrics),
+                int(s.nbytes + o.nbytes),
+            )
             if _HAS_PARALLEL_ENGINE and metric_workers > 1:
                 logging.info("Processing %d metrics in parallel with %d worker(s)", len(self.metrics), metric_workers)
                 from functools import partial
