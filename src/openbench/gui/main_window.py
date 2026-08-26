@@ -412,6 +412,7 @@ class MainWindow(QMainWindow):
         self.language_manager.apply(dialog)
         self._about_dialog = dialog
         dialog.exec()
+        self._about_dialog = None
 
     def closeEvent(self, event):
         """Stop any running evaluation before closing.

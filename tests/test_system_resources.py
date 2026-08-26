@@ -1,5 +1,5 @@
-from types import SimpleNamespace
 import logging
+from types import SimpleNamespace
 
 import openbench.data._system_resources as resource_module
 
@@ -35,3 +35,41 @@ def test_get_system_resources_uses_psutil_when_available(monkeypatch):
     assert resources["available_memory_gb"] == 10
     assert resources["cpu_count"] == 6
     assert resources["cpu_freq_mhz"] == 3200
+
+
+def test_effective_cpu_count_caps_host_count_to_affinity(monkeypatch):
+    monkeypatch.setattr(resource_module.os, "sched_getaffinity", lambda _pid: {0, 1}, raising=False)
+    monkeypatch.setattr(resource_module, "_cgroup_cpu_limit", lambda: None)
+
+    assert resource_module.effective_cpu_count(16) == 2
+
+
+def test_effective_cpu_count_caps_host_count_to_cgroup(monkeypatch):
+    monkeypatch.delattr(resource_module.os, "sched_getaffinity", raising=False)
+    monkeypatch.setattr(resource_module, "_cgroup_cpu_limit", lambda: 3)
+
+    assert resource_module.effective_cpu_count(16) == 3
+
+
+def test_worker_thread_limit_updates_loaded_blas_and_environment(monkeypatch):
+    import threadpoolctl
+
+    limiter = object()
+    monkeypatch.setattr(threadpoolctl, "threadpool_limits", lambda limits: limiter)
+    monkeypatch.setenv("OPENBLAS_NUM_THREADS", "8")
+
+    resource_module.limit_native_threads()
+
+    assert resource_module._NATIVE_THREAD_LIMITER is limiter
+    for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
+        assert resource_module.os.environ[name] == "1"
+
+
+def test_project_num_cores_respects_effective_cpu_limit(monkeypatch):
+    import openbench.runner.dask_runtime as dask_runtime
+
+    monkeypatch.setattr(dask_runtime.os, "cpu_count", lambda: 16)
+    monkeypatch.setattr(dask_runtime, "effective_cpu_count", lambda _count: 2)
+    cfg = SimpleNamespace(project=SimpleNamespace(num_cores=8))
+
+    assert dask_runtime.project_num_cores(cfg) == 2

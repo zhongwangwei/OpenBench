@@ -593,7 +593,9 @@ except Exception as e:
             return ValidationCheck("time_range", False, "Remote time check failed")
 
         if result.get("time_missing"):
-            return ValidationCheck("time_range", False, f"Time dimension not found, tried: {LocalNetCDFValidator.TIME_DIMS}")
+            return ValidationCheck(
+                "time_range", False, f"Time dimension not found, tried: {LocalNetCDFValidator.TIME_DIMS}"
+            )
 
         # Check for time conversion error
         if "time_error" in result:

@@ -22,6 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from tqdm import tqdm
 
+from openbench.data._system_resources import effective_cpu_count, limit_native_threads
+
 # Try to import psutil for resource monitoring, use fallback if not available
 try:
     import psutil
@@ -129,7 +131,7 @@ class ResourceMonitor:
 
     def __init__(self):
         """Initialize resource monitor."""
-        self.cpu_count = mp.cpu_count()
+        self.cpu_count = effective_cpu_count(mp.cpu_count())
         if _HAS_PSUTIL:
             self.memory_total = psutil.virtual_memory().total
         else:
@@ -263,6 +265,7 @@ class ParallelEngine:
                 memory_limit="auto",
                 silence_logs=logging.WARNING,
             )
+            self.dask_client.run(limit_native_threads)
             logging.info(f"Dask client initialized: {self.dask_client}")
         else:
             self.dask_client = None
@@ -342,7 +345,7 @@ class ParallelEngine:
 
     def _map_joblib(self, func: Callable, items: List[Any], n_workers: int, task_name: str) -> List[Any]:
         """Map using Joblib backend."""
-        with parallel_backend("loky", n_jobs=n_workers):
+        with parallel_backend("loky", n_jobs=n_workers, inner_max_num_threads=1):
             if self.show_progress:
                 results = Parallel()(delayed(func)(item) for item in tqdm(items, desc=task_name))
             else:
@@ -362,7 +365,7 @@ class ParallelEngine:
         failed_tasks = []
         successful_tasks = 0
 
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        with ProcessPoolExecutor(max_workers=n_workers, initializer=limit_native_threads) as executor:
             # Submit all tasks
             future_to_index = {executor.submit(func, item): i for i, item in enumerate(items)}
 
@@ -550,7 +553,7 @@ class ParallelEngine:
         results = []
         n_workers = self.max_workers or self.resource_monitor.get_optimal_workers()
 
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        with ProcessPoolExecutor(max_workers=n_workers, initializer=limit_native_threads) as executor:
             # Submit all tasks
             futures = []
             for i, (func, args, kwargs) in enumerate(tasks):

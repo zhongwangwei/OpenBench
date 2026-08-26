@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from openbench.data._system_resources import effective_cpu_count, limit_native_threads
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,13 +114,14 @@ def dask_station_guard_blocks(
 
 
 def project_num_cores(cfg: Any) -> int:
+    available = effective_cpu_count(os.cpu_count() or 1)
     requested = getattr(getattr(cfg, "project", None), "num_cores", None)
     if requested:
         try:
-            return max(1, int(requested))
+            return min(available, max(1, int(requested)))
         except (TypeError, ValueError):
-            return max(1, os.cpu_count() or 1)
-    return max(1, os.cpu_count() or 1)
+            return available
+    return available
 
 
 def project_dask_config(cfg: Any) -> Any | None:
@@ -236,6 +239,7 @@ def start_optional_dask_client(
             client = Client(scheduler_address, set_as_default=True)
         except Exception as exc:
             raise RuntimeError(f"Could not connect to dask scheduler {scheduler_address!r}: {exc}") from exc
+        client.run(limit_native_threads)
         logger.info("Dask distributed client connected: scheduler=%s", scheduler_address)
         return client, None
 
@@ -269,6 +273,7 @@ def start_optional_dask_client(
             silence_logs=logging.WARNING,
         )
         client = Client(cluster, set_as_default=True)
+        client.run(limit_native_threads)
         logger.info(
             "Dask distributed client started: workers=%d threads_per_worker=%d processes=%s dashboard=%s",
             workers,

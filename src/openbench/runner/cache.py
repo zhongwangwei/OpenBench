@@ -155,7 +155,7 @@ class EvaluationCache:
                     pass
                 raise
         except Exception as e:
-            logger.warning("Failed to save cache: %s", e)
+            logger.warning("Failed to save cache %s: %s", self._cache_file, e)
 
     def is_cached(self, key: str, config_hash: str) -> bool:
         """Check if an evaluation with this config hash is already done."""

@@ -530,9 +530,7 @@ class PageRunMonitor(BasePage):
 
         last_run_is_remote = getattr(self, "_last_run_is_remote", None)
         is_remote = (
-            last_run_is_remote
-            if last_run_is_remote is not None
-            else isinstance(self.controller.storage, RemoteStorage)
+            last_run_is_remote if last_run_is_remote is not None else isinstance(self.controller.storage, RemoteStorage)
         )
 
         if is_remote:

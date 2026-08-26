@@ -4,8 +4,8 @@ from tests.gui_fakes import FakeButton  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from openbench.gui.main_window import MainWindow  # noqa: E402
 from openbench.gui.controller import WizardController  # noqa: E402
+from openbench.gui.main_window import MainWindow  # noqa: E402
 from openbench.gui.pages.page_preview import PagePreview  # noqa: E402
 from openbench.gui.widgets.validation_dialog import ValidationWorker  # noqa: E402
 

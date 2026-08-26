@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from openbench.config.schema import OpenBenchConfig, is_simple_project_name
+from openbench.data._system_resources import effective_cpu_count
 from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_value_case_insensitive
 
 logger = logging.getLogger(__name__)
@@ -744,6 +745,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         registry = None
 
     target_ctx = derive_target_resolution_context(cfg, registry)
+    available_cores = effective_cpu_count(os.cpu_count() or 1)
 
     general = {
         "basename": basename,
@@ -755,7 +757,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         "max_lat": cfg.project.lat_range[1],
         "min_lon": cfg.project.lon_range[0],
         "max_lon": cfg.project.lon_range[1],
-        "num_cores": cfg.project.num_cores or max(1, os.cpu_count() or 1),
+        "num_cores": min(available_cores, cfg.project.num_cores or available_cores),
         "evaluation": True,
         "comparison": cfg.comparison.enabled,
         "statistics": cfg.statistics.enabled,

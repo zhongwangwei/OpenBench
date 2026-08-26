@@ -406,7 +406,7 @@ def test_remote_runner_num_cores_patch_expands_tilde_and_is_abortable(tmp_path):
 
     payload = ssh.commands[0].split()[2]
     script = base64.b64decode(payload).decode()
-    assert '.expanduser()' in script
+    assert ".expanduser()" in script
     assert '"~/OpenBench/output/case/openbench.yaml"' in script
     assert callable(ssh.execute_calls[0]["should_abort"])
 

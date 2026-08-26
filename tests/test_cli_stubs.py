@@ -5960,11 +5960,33 @@ def test_run_log_suppresses_matplotlib_backend_probe_noise(tmp_path):
 
     with _run_file_logging(cfg):
         logger.debug("backend probe traceback: No module named '_macosx'")
+        logging.getLogger("xhtml2pdf.files").debug("noisy PDF internals")
         logging.getLogger("openbench.tests").debug("openbench debug remains visible")
 
     text = (tmp_path / "quiet_plot_log" / "run.log").read_text(encoding="utf-8")
     assert "_macosx" not in text
+    assert "noisy PDF internals" not in text
     assert "openbench debug remains visible" in text
+
+
+def test_performance_decorator_preserves_existing_run_log_handler(tmp_path):
+    import logging
+
+    import openbench.util.logging_system as logging_system
+    from openbench.cli.run import _run_file_logging
+
+    logging_system._logging_manager = None
+    cfg = SimpleNamespace(project=SimpleNamespace(output_dir=str(tmp_path), name="performance_log"))
+
+    @logging_system.performance_logged("station_parallel")
+    def measured():
+        return 1
+
+    with _run_file_logging(cfg):
+        assert measured() == 1
+        logging.getLogger("openbench.tests").info("after performance marker")
+
+    assert "after performance marker" in (tmp_path / "performance_log" / "run.log").read_text(encoding="utf-8")
 
 
 def test_run_rejects_project_name_path_before_evaluation(tmp_path, monkeypatch):

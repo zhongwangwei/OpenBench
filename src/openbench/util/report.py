@@ -38,6 +38,33 @@ _jinja_env.filters["url_path"] = _url_path
 _MAX_REPORT_STAT_POINTS = 1_000_000
 _REPORT_FIGURE_SUFFIXES = (".jpg", ".jpeg", ".png", ".svg", ".webp")
 
+
+def _is_report_figure(path: str) -> bool:
+    """Accept real figure files, not hidden filesystem metadata sidecars."""
+    return not os.path.basename(path).startswith(".") and path.lower().endswith(_REPORT_FIGURE_SUFFIXES)
+
+
+def _remove_report_tree(path: str) -> None:
+    def ignore_disappeared_entries(_func, _path, exc_info):
+        if not isinstance(exc_info[1], FileNotFoundError):
+            raise exc_info[1]
+
+    shutil.rmtree(path, onerror=ignore_disappeared_entries)
+
+
+def _remove_appledouble_files(path: str) -> None:
+    """Remove macOS metadata sidecars from the generated report package."""
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            if name.startswith("._"):
+                try:
+                    os.unlink(os.path.join(root, name))
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    logging.getLogger(__name__).warning("Could not remove report metadata sidecar %s: %s", name, exc)
+
+
 # Import PDF generation libraries
 try:
     from xhtml2pdf import pisa
@@ -139,6 +166,7 @@ class ReportGenerator:
 
         # Generate PDF report (after figures are copied)
         pdf_path = self._generate_pdf_report(html_path, report_name)
+        _remove_appledouble_files(self.report_dir)
 
         logger.info("Report generation completed successfully")
         logger.info(f"HTML report: {html_path}")
@@ -593,7 +621,7 @@ class ReportGenerator:
         try:
             for name in sorted(os.listdir(directory)):
                 path = os.path.join(directory, name)
-                if os.path.isfile(path) and name.lower().endswith(lowered_suffixes):
+                if os.path.isfile(path) and not name.startswith(".") and name.lower().endswith(lowered_suffixes):
                     matches.append(path)
         except OSError as exc:
             logger.warning("Could not list report directory %s: %s", directory, exc)
@@ -656,7 +684,7 @@ class ReportGenerator:
             for root, dirs, files in os.walk(root_dir):
                 dirs.sort()
                 for file in sorted(files):
-                    if not file.lower().endswith(_REPORT_FIGURE_SUFFIXES):
+                    if not _is_report_figure(file):
                         continue
                     stem = os.path.splitext(file)[0]
                     if not (stem.endswith("_timeseries") or stem.endswith("__timeseries")):
@@ -696,7 +724,10 @@ class ReportGenerator:
     def _station_timeseries_aliases(self, item: str) -> List[str]:
         """Configured raw variable names that may prefix station timeseries files."""
         aliases: List[str] = []
-        for nml_name, sources in (("ref_nml", self._get_reference_sources(item)), ("sim_nml", self._get_simulation_sources(item))):
+        for nml_name, sources in (
+            ("ref_nml", self._get_reference_sources(item)),
+            ("sim_nml", self._get_simulation_sources(item)),
+        ):
             section = self.config.get(nml_name, {}).get(item, {})
             if not isinstance(section, dict):
                 continue
@@ -726,7 +757,7 @@ class ReportGenerator:
                 continue
             for root, _dirs, files in os.walk(groupby_path):
                 for file in files:
-                    if file.lower().endswith(_REPORT_FIGURE_SUFFIXES) and self._filename_matches_item(file, item):
+                    if _is_report_figure(file) and self._filename_matches_item(file, item):
                         matches.append(os.path.join(root, file))
         return _dedupe_paths(matches)
 
@@ -974,9 +1005,9 @@ class ReportGenerator:
             for data_file in mapping["data_files"]:
                 if os.path.exists(data_file):
                     try:
-                        comparison_data[mapping["data_key"]] = pd.read_csv(data_file, sep="\t").to_dict(
-                            orient="records"
-                        )
+                        comparison_data[mapping["data_key"]] = pd.read_csv(
+                            data_file, sep=None, engine="python"
+                        ).to_dict(orient="records")
                     except Exception as e:
                         logger.warning(f"Error reading {data_file}: {e}")
                     break
@@ -1487,7 +1518,7 @@ class ReportGenerator:
     def _find_figure(self, base_dir: str, subdir: str, pattern: str) -> Optional[str]:
         """Find a figure matching the pattern."""
         search_path = os.path.join(base_dir, subdir, pattern)
-        files = [f for f in sorted(glob.glob(search_path)) if f.lower().endswith(_REPORT_FIGURE_SUFFIXES)]
+        files = [f for f in sorted(glob.glob(search_path)) if _is_report_figure(f)]
         if files:
             return f"{subdir}/{os.path.basename(files[0])}"
         return None
@@ -1498,6 +1529,8 @@ class ReportGenerator:
 
         # Create figures subdirectory in reports
         figures_dir = os.path.join(self.report_dir, "figures")
+        if os.path.exists(figures_dir):
+            _remove_report_tree(figures_dir)
         os.makedirs(figures_dir, exist_ok=True)
 
         # Track copied files for debugging
@@ -1507,12 +1540,12 @@ class ReportGenerator:
         if os.path.exists(self.metrics_dir):
             for root, dirs, files in os.walk(self.metrics_dir):
                 for file in files:
-                    if file.lower().endswith(_REPORT_FIGURE_SUFFIXES):
+                    if _is_report_figure(file):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.metrics_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "metrics", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        shutil.copy2(src_file, dst_file)
+                        shutil.copyfile(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied metrics figure: {rel_path}")
 
@@ -1520,12 +1553,12 @@ class ReportGenerator:
         if os.path.exists(self.scores_dir):
             for root, dirs, files in os.walk(self.scores_dir):
                 for file in files:
-                    if file.lower().endswith(_REPORT_FIGURE_SUFFIXES):
+                    if _is_report_figure(file):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.scores_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "scores", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        shutil.copy2(src_file, dst_file)
+                        shutil.copyfile(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied scores figure: {rel_path}")
 
@@ -1533,12 +1566,12 @@ class ReportGenerator:
         if os.path.exists(self.comparisons_dir):
             for root, dirs, files in os.walk(self.comparisons_dir):
                 for file in files:
-                    if file.lower().endswith(_REPORT_FIGURE_SUFFIXES):
+                    if _is_report_figure(file):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.comparisons_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "comparisons", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        shutil.copy2(src_file, dst_file)
+                        shutil.copyfile(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied comparison figure: {rel_path}")
 
@@ -1546,16 +1579,17 @@ class ReportGenerator:
         if os.path.exists(self.data_dir):
             for root, dirs, files in os.walk(self.data_dir):
                 for file in files:
-                    if file.lower().endswith(_REPORT_FIGURE_SUFFIXES):
+                    if _is_report_figure(file):
                         src_file = os.path.join(root, file)
                         rel_path = os.path.relpath(src_file, self.data_dir).replace(os.sep, "/")
                         dst_file = os.path.join(figures_dir, "data", rel_path)
                         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        shutil.copy2(src_file, dst_file)
+                        shutil.copyfile(src_file, dst_file)
                         copied_count += 1
                         logger.debug(f"Copied data figure: {rel_path}")
 
         logger.info(f"Copied {copied_count} figures to report directory")
+        _remove_appledouble_files(figures_dir)
 
     def _verify_figure_paths(self, report_data: Dict[str, Any]):
         """Verify that all referenced figures exist in the report directory"""
@@ -2255,10 +2289,6 @@ class ReportGenerator:
                     page-break-inside: avoid;
                     text-align: center;
                     margin: 1em 0;
-                }
-                .figure-container img {
-                    max-width: 80%;
-                    height: auto;
                 }
                 table {
                     font-size: 8pt;

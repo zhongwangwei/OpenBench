@@ -92,6 +92,7 @@ def test_exists_requires_exact_success_sentinel():
 
     assert sync.exists("nml/main.yaml") is False
 
+
 def test_mark_synced_replaces_stale_pending_cache_without_remote_read():
     ssh = FakeSSH()
     sync = SyncEngine(ssh, "/remote/project")

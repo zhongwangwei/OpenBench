@@ -903,7 +903,9 @@ class PageRegistry(BasePage):
     def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
         registry = _get_registry()
         for variant in variants:
-            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
             existing_vars = existing.variables if existing is not None else {}
             inspections = getattr(variant, "nc_inspections", None)
             if inspections is None:
@@ -929,7 +931,9 @@ class PageRegistry(BasePage):
     def _choose_first_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
         registry = _get_registry()
         for variant in variants:
-            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
             existing_vars = existing.variables if existing is not None else {}
             inspections = getattr(variant, "nc_inspections", None)
             if inspections is None:
@@ -1002,7 +1006,7 @@ class PageRegistry(BasePage):
             # Show discovery dialog for user to select which datasets to register
             existing_names = {ref.name for ref in _get_registry().list_references()}
             try:
-                from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
+                from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
 
                 dlg = DataDiscoveryDialog(new_groups, existing_names=existing_names, parent=self)
                 if not dlg.exec():

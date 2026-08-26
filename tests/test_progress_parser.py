@@ -121,7 +121,6 @@ def test_progress_parser_advances_report_stage_without_backtracking():
     assert done > progress > 90
 
 
-
 def test_progress_parser_treats_evaluation_report_artifact_as_report_stage():
     state = _state(total_tasks=0)
 

@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data._system_resources import effective_cpu_count
+
 # Import chunked dataset loader for memory efficiency
 try:
     from openbench.util.dataset_loader import open_dataset as open_dataset_chunked
@@ -105,9 +107,10 @@ def _metric_worker_count(num_cores, metric_count: int) -> int:
         requested = int(num_cores) if num_cores is not None else 0
     except (TypeError, ValueError):
         requested = 1
+    available = effective_cpu_count(os.cpu_count() or 1)
     if requested <= 0:
-        requested = max(1, os.cpu_count() or 1)
-    return min(max(1, requested), metric_count)
+        requested = available
+    return min(max(1, requested), available, metric_count)
 
 
 def _apply_pairwise_valid_mask(s: xr.DataArray, o: xr.DataArray) -> tuple[xr.DataArray, xr.DataArray]:
@@ -344,8 +347,8 @@ class Evaluation_grid(metrics, scores):
                     logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
                     logging.info("=" * 80)
 
-                    o = o_clim[f"{self.ref_varname}"]
-                    s = s_clim[f"{self.sim_varname}"]
+                    o = select_data_array(o_clim, self.ref_varname, self.item)
+                    s = select_data_array(s_clim, self.sim_varname, self.item)
                     o = Convert_Type.convert_nc(o)
                     s = Convert_Type.convert_nc(s)
 
@@ -645,7 +648,7 @@ class Evaluation_stn(metrics, scores):
             return s_norm.sel(time=common_times).sortby("time"), o_norm.sel(time=common_times).sortby("time")
         raise ValueError(f"Station {station_id} has no overlapping time steps after exact or normalized alignment")
 
-    def make_evaluation_parallel(self, station_list, iik, plot=True):
+    def make_evaluation_parallel(self, station_list, iik):
         sim_ds = None
         ref_ds = None
         try:
@@ -744,9 +747,10 @@ class Evaluation_stn(metrics, scores):
                 lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
             else:
                 lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
-            plot_payload = (
-                s.load(),
-                o.load(),
+            plot_stn(
+                self,
+                s,
+                o,
                 station_list["ID"][iik],
                 self.ref_varname,
                 _scalar_plot_value(row["RMSE"], label="RMSE", station_id=station_list["ID"][iik]),
@@ -754,10 +758,6 @@ class Evaluation_stn(metrics, scores):
                 _scalar_plot_value(row["correlation"], label="correlation", station_id=station_list["ID"][iik]),
                 lat_lon,
             )
-            if plot:
-                plot_stn(self, *plot_payload)
-            else:
-                row["__plot_payload"] = plot_payload
             return row
         finally:
             # Close datasets to free memory and file handles
@@ -787,7 +787,7 @@ class Evaluation_stn(metrics, scores):
                 # Create partial function with station_list
                 from functools import partial
 
-                eval_func = partial(self.make_evaluation_parallel, station_list, plot=False)
+                eval_func = partial(self.make_evaluation_parallel, station_list)
 
                 # Process stations in parallel
                 try:
@@ -796,6 +796,7 @@ class Evaluation_stn(metrics, scores):
                         eval_func,
                         station_indices,
                         max_workers=max_workers,
+                        backend="concurrent",
                         task_name="Evaluating stations",
                         show_progress=True,
                     )
@@ -808,7 +809,7 @@ class Evaluation_stn(metrics, scores):
                 # Fallback to joblib — respect user core config if available
                 try:
                     results = Parallel(n_jobs=n_jobs)(
-                        delayed(self.make_evaluation_parallel)(station_list, iik, plot=False) for iik in station_indices
+                        delayed(self.make_evaluation_parallel)(station_list, iik) for iik in station_indices
                     )
                 except (PermissionError, OSError) as exc:
                     logging.warning(
@@ -821,14 +822,7 @@ class Evaluation_stn(metrics, scores):
                 raise RuntimeError(f"Station evaluation failed for {skipped}/{len(station_indices)} station(s)")
             if not results:
                 raise RuntimeError("Station evaluation produced no station results")
-            rows = []
-            for result in results:
-                row = dict(result)
-                plot_payload = row.pop("__plot_payload", None)
-                if plot_payload is not None:
-                    plot_stn(self, *plot_payload)
-                rows.append(row)
-            station_list = pd.concat([station_list, pd.DataFrame(rows)], axis=1)
+            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
             requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
             if not requested_columns:
                 requested_columns = ["KGESS", "RMSE", "correlation"]
@@ -837,12 +831,12 @@ class Evaluation_stn(metrics, scores):
                 raise RuntimeError(f"Station evaluation missing requested column(s): {missing_columns}")
             numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
             empty_columns = [
-                col
-                for col in requested_columns
-                if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
             ]
             if empty_columns:
-                raise RuntimeError(f"Station evaluation produced no finite values for requested column(s): {empty_columns}")
+                raise RuntimeError(
+                    f"Station evaluation produced no finite values for requested column(s): {empty_columns}"
+                )
 
             logging.info("Evaluation finished")
             logging.info("=======================================")

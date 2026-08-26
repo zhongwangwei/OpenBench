@@ -525,7 +525,7 @@ def apply_spherical_correction(dot_array: xr.DataArray, latitude_coord: Hashable
                 return da
 
     latitude_values = dot_array[latitude_coord].to_numpy()
-    latitude_res = np.median(np.diff(latitude_values, 1))
+    latitude_res = np.median(np.abs(np.diff(latitude_values, 1))) if latitude_values.size > 1 else 1.0
     lat_weights = lat_weight(latitude_values, latitude_res)
     corrected = utils.normalize_overlap(dot_array.values * lat_weights[:, np.newaxis])
     corrected.setflags(write=False)
@@ -553,10 +553,21 @@ def lat_weight(latitude: np.ndarray, latitude_res: float) -> np.ndarray:
     Returns:
         Weights, same shape as latitude input.
     """
-    dlat: float = np.radians(latitude_res)
-    lat = np.radians(latitude)
-    h = np.sin(lat + dlat / 2) - np.sin(lat - dlat / 2)
-    return h * dlat / (np.pi * 4)  # type: ignore
+    latitude = np.asarray(latitude, dtype=float)
+    if latitude.size == 1:
+        half_width = abs(float(latitude_res)) / 2.0
+        bounds = np.array([latitude[0] - half_width, latitude[0] + half_width])
+    else:
+        midpoints = (latitude[:-1] + latitude[1:]) / 2.0
+        bounds = np.concatenate(
+            ([latitude[0] - (midpoints[0] - latitude[0])], midpoints, [latitude[-1] + (latitude[-1] - midpoints[-1])])
+        )
+    bounds = np.clip(bounds, -90.0, 90.0)
+    lower = np.minimum(bounds[:-1], bounds[1:])
+    upper = np.maximum(bounds[:-1], bounds[1:])
+    width = np.radians(upper - lower)
+    spherical_width = np.sin(np.radians(upper)) - np.sin(np.radians(lower))
+    return np.divide(spherical_width, width, out=np.zeros_like(spherical_width), where=width > 0)
 
 
 def format_weights(

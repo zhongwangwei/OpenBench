@@ -445,7 +445,9 @@ class PageRefData(BasePage):
 
         registry = get_registry()
         for variant in variants:
-            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
             existing_vars = existing.variables if existing is not None else {}
             inspections = getattr(variant, "nc_inspections", None)
             if inspections is None:
@@ -497,9 +499,7 @@ class PageRefData(BasePage):
         clear_registry_cache()
         self._refresh_registry_after_scan()
 
-        message = (
-            f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
-        )
+        message = f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
         if getattr(self, "_scan_was_remote", False):
             from openbench.gui.pages._scan_worker import remote_scan_caveats
 

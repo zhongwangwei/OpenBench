@@ -99,6 +99,39 @@ def test_spherical_correction_reuses_latitude_weight_cache(monkeypatch):
     np.testing.assert_allclose(second.values, first.values)
 
 
+def test_latitude_correction_uses_nonuniform_cell_bounds_and_keeps_poles_finite():
+    from openbench.data.regrid.methods import conservative
+
+    latitude = np.array([0.0, 30.0, 80.0, 90.0])
+    weights = conservative.lat_weight(latitude, np.median(np.diff(latitude)))
+    bounds = np.array([-15.0, 15.0, 55.0, 85.0, 90.0])
+    widths = np.radians(np.diff(bounds))
+    expected = np.diff(np.sin(np.radians(bounds))) / widths
+
+    np.testing.assert_allclose(weights, expected)
+    assert np.isfinite(weights).all()
+    assert weights[-1] > 0
+
+
+def test_spherical_correction_handles_single_latitude_without_warning():
+    import warnings
+
+    import xarray as xr
+
+    from openbench.data.regrid.methods import conservative
+
+    weights = xr.DataArray(
+        np.array([[1.0]]),
+        dims=["lat", "target_lat"],
+        coords={"lat": [90.0], "target_lat": [90.0]},
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        corrected = conservative.apply_spherical_correction(weights, "lat")
+
+    np.testing.assert_allclose(corrected.values, [[1.0]])
+
+
 def test_conservative_regrid_disk_cache_prunes_by_ttl(tmp_path, monkeypatch):
     from openbench.data.regrid.methods import conservative
 
