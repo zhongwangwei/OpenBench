@@ -28,6 +28,38 @@ _NETCDF_COMPRESSION_LEVEL_ENV = "OPENBENCH_NETCDF_COMP_LEVEL"
 _DEFAULT_COMPRESSION_LEVEL = 1
 
 
+def _distributed_client_active() -> bool:
+    try:
+        from distributed import get_client
+
+        get_client()
+        return True
+    except (ImportError, ValueError):
+        return False
+
+
+def _needs_local_dask_netcdf_write(data: Any) -> bool:
+    """Keep distributed workers out of the HDF5 store phase."""
+    if not _distributed_client_active() or not isinstance(data, (xr.Dataset, xr.DataArray)):
+        return False
+
+    try:
+        from dask.base import is_dask_collection
+    except ImportError:
+        return False
+
+    arrays = data.variables.values() if isinstance(data, xr.Dataset) else (data.variable,)
+    return any(is_dask_collection(variable.data) for variable in arrays)
+
+
+def _has_distributed_futures(data: Any) -> bool:
+    try:
+        from distributed import futures_of
+    except ImportError:
+        return False
+    return bool(futures_of(data))
+
+
 def _env_truthy(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in _TRUTHY
 
@@ -199,6 +231,19 @@ def write_netcdf_atomic(
     def _locked_write(tmp_path: Path) -> None:
         # Serialize HDF5 writes across threads (netCDF4/HDF5 is not thread-safe).
         with _NETCDF_WRITE_LOCK:
-            data.to_netcdf(tmp_path, **nc_kwargs)
+            if _needs_local_dask_netcdf_write(data):
+                if _has_distributed_futures(data):
+                    raise ValueError(
+                        "Cannot write xarray data backed by distributed Futures; "
+                        "pass the unpersisted lazy Dataset or DataArray instead."
+                    )
+                logger.info("Writing lazy xarray data with local single-threaded NetCDF scheduler")
+                # ponytail: serial HDF5 store; use Zarr when parallel output bandwidth becomes the bottleneck.
+                data.to_netcdf(tmp_path, compute=False, **nc_kwargs).compute(
+                    scheduler="threads",
+                    num_workers=1,
+                )
+            else:
+                data.to_netcdf(tmp_path, **nc_kwargs)
 
     write_file_atomic(output_path, _locked_write, suffix=".tmp.nc")
