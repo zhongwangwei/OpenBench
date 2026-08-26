@@ -4524,6 +4524,7 @@ def test_init_reference_preflight_empty_overlay_configures_root_without_scanning
 def test_init_reference_refresh_with_no_matching_layouts_keeps_bundled_catalog(tmp_path, monkeypatch, capsys):
     import openbench.cli.init_cmd as init_module
 
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path / "home"))
     ref_root = tmp_path / "Reference"
     ref_root.mkdir()
     status = init_module.ReferenceCatalogStatus(
@@ -4545,6 +4546,7 @@ def test_init_reference_refresh_with_no_matching_layouts_keeps_bundled_catalog(t
 def test_init_reference_preflight_existing_catalog_can_skip_update(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
 
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path / "home"))
     catalog_path = tmp_path / "user" / "references" / "reference_catalog.yaml"
     catalog_path.parent.mkdir(parents=True)
     catalog_path.write_text("Dataset: {}\n")
@@ -5946,6 +5948,23 @@ def test_run_writes_per_run_log_with_debug_records(tmp_path, monkeypatch):
     text = log_path.read_text(encoding="utf-8")
     assert "debug marker for run.log" in text
     assert "info marker for run.log" in text
+
+
+def test_run_log_suppresses_matplotlib_backend_probe_noise(tmp_path):
+    import logging
+
+    from openbench.cli.run import _run_file_logging
+
+    cfg = SimpleNamespace(project=SimpleNamespace(output_dir=str(tmp_path), name="quiet_plot_log"))
+    logger = logging.getLogger("matplotlib.backends")
+
+    with _run_file_logging(cfg):
+        logger.debug("backend probe traceback: No module named '_macosx'")
+        logging.getLogger("openbench.tests").debug("openbench debug remains visible")
+
+    text = (tmp_path / "quiet_plot_log" / "run.log").read_text(encoding="utf-8")
+    assert "_macosx" not in text
+    assert "openbench debug remains visible" in text
 
 
 def test_run_rejects_project_name_path_before_evaluation(tmp_path, monkeypatch):

@@ -276,3 +276,33 @@ def test_detect_conda_envs_uses_last_absolute_path_from_noisy_login_shell():
         ("base", "/home/alice/miniconda3"),
         ("openbench", "/home/alice/miniconda3/envs/openbench"),
     ]
+
+
+def test_open_sftp_proxy_serializes_cached_client_operations():
+    import threading
+    import time
+
+    class UnsafeSFTP:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+
+        def put(self, local, remote):
+            current = self.active + 1
+            self.active = current
+            self.max_active = max(self.max_active, current)
+            time.sleep(0.01)
+            self.active -= 1
+
+    sftp = UnsafeSFTP()
+    manager = SSHManager(auto_add_host_keys=True)
+    manager._get_sftp = lambda: sftp
+    proxy = manager.open_sftp()
+
+    threads = [threading.Thread(target=proxy.put, args=(str(i), str(i))) for i in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sftp.max_active == 1

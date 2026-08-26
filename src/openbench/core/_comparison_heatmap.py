@@ -11,6 +11,10 @@ import numpy as np
 from openbench.core._comparison_helpers import _atomic_text_writer, _grid_score_mean, _station_csv_column_mean
 
 
+def _as_list(value):
+    return value if isinstance(value, list) else [value]
+
+
 def _comparison_callable(name: str):
     """Resolve monkeypatch-friendly callables from openbench.core.comparison."""
     comparison = sys.modules.get("openbench.core.comparison")
@@ -22,6 +26,9 @@ def _comparison_callable(name: str):
 class HeatMapComparisonMixin:
     def scenarios_HeatMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
+            if not scores:
+                raise ValueError("HeatMap comparison requires at least one score")
+
             dir_path = os.path.join(casedir, "comparisons", "HeatMap")
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
@@ -32,9 +39,7 @@ class HeatMapComparisonMixin:
                     # Collect all unique sim_sources across all evaluation items
                     all_sim_sources = []
                     for evaluation_item in evaluation_items:
-                        sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                        if isinstance(sim_sources, str):
-                            sim_sources = [sim_sources]
+                        sim_sources = _as_list(sim_nml["general"][f"{evaluation_item}_sim_source"])
                         for s in sim_sources:
                             if s not in all_sim_sources:
                                 all_sim_sources.append(s)
@@ -43,24 +48,18 @@ class HeatMapComparisonMixin:
                     output_file.write("\t".join(header) + "\n")
 
                     for evaluation_item in evaluation_items:
-                        sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                        ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-
-                        # if the sim_sources and ref_sources are not list, then convert them to list
-                        if isinstance(sim_sources, str):
-                            sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str):
-                            ref_sources = [ref_sources]
+                        sim_sources = _as_list(sim_nml["general"][f"{evaluation_item}_sim_source"])
+                        ref_sources = _as_list(ref_nml["general"][f"{evaluation_item}_ref_source"])
 
                         for ref_source in ref_sources:
                             output_file.write(f"{evaluation_item}\t")
                             output_file.write(f"{ref_source}\t")
-                            sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                            if isinstance(sim_sources, str):
-                                sim_sources = [sim_sources]
-
                             values = []
-                            for sim_source in sim_sources:
+                            for sim_source in all_sim_sources:
+                                if sim_source not in sim_sources:
+                                    values.append("N/A")
+                                    continue
+
                                 ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                                 ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]

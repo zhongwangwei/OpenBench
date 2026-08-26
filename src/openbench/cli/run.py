@@ -366,7 +366,9 @@ def _run_file_logging(cfg):
     log_path = log_dir / "run.log"
 
     root_logger = logging.getLogger()
+    matplotlib_logger = logging.getLogger("matplotlib")
     previous_root_level = root_logger.level
+    previous_matplotlib_level = matplotlib_logger.level
     previous_handler_levels = {handler: handler.level for handler in root_logger.handlers}
 
     handler = None
@@ -382,6 +384,7 @@ def _run_file_logging(cfg):
             if existing.level == logging.NOTSET:
                 existing.setLevel(previous_root_level or logging.INFO)
         root_logger.setLevel(logging.DEBUG)
+        matplotlib_logger.setLevel(logging.WARNING)
         root_logger.addHandler(handler)
         handler_added = True
         logging.getLogger(__name__).debug("Run log started: %s", log_path)
@@ -392,6 +395,7 @@ def _run_file_logging(cfg):
                 root_logger.removeHandler(handler)
             handler.close()
         root_logger.setLevel(previous_root_level)
+        matplotlib_logger.setLevel(previous_matplotlib_level)
         for existing, level in previous_handler_levels.items():
             existing.setLevel(level)
 

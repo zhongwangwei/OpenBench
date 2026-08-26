@@ -623,3 +623,49 @@ def test_station_evaluation_hard_fails_when_all_results_are_nonfinite(tmp_path, 
 
     with pytest.raises(RuntimeError, match="no finite"):
         ev.make_evaluation_P()
+
+
+def test_station_parallel_uses_non_loky_processes(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+    from openbench.core.evaluation import Evaluation_stn
+
+    stnlist = tmp_path / "stn_Ref_Sim_list.txt"
+    pd.DataFrame(
+        [
+            {"ID": "A", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000},
+            {"ID": "B", "sim_lon": 1, "sim_lat": 1, "use_syear": 2000, "use_eyear": 2000},
+        ]
+    ).to_csv(stnlist, index=False)
+
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir, ev.item, ev.ref_source, ev.sim_source = str(tmp_path), "Runoff", "Ref", "Sim"
+    ev.ref_fulllist, ev.num_cores, ev.output_manager = str(stnlist), 2, None
+    ev.metrics, ev.scores = ["bias"], []
+    seen_ids = []
+
+    def fake_eval(station_list, i):
+        seen_ids.append(station_list["ID"][i])
+        return {
+            "KGESS": 1.0,
+            "RMSE": 0.0,
+            "correlation": 1.0,
+            "bias": 0.0,
+        }
+
+    parallel_kwargs = {}
+
+    def fake_parallel_map(func, items, **kwargs):
+        parallel_kwargs.update(kwargs)
+        return [func(i) for i in items]
+
+    ev.make_evaluation_parallel = fake_eval
+    monkeypatch.setattr(evaluation, "_HAS_PARALLEL_ENGINE", True)
+    monkeypatch.setattr(evaluation, "parallel_map", fake_parallel_map)
+    monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
+
+    ev.make_evaluation_P()
+
+    assert seen_ids == ["A", "B"]
+    assert parallel_kwargs["backend"] == "concurrent"
+    saved = pd.read_csv(tmp_path / "metrics" / "Runoff_stn_Ref_Sim_evaluations.csv")
+    assert list(saved["ID"]) == ["A", "B"]

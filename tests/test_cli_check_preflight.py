@@ -116,7 +116,9 @@ def _write_fake_netcdf(path):
     import xarray as xr
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    xr.Dataset({"value": ("sample", np.array([1.0]))}).to_netcdf(path)
+    stem = path.stem
+    var = "Overall_Score" if stem.endswith("_Overall_Score") else stem.rsplit("_", 1)[-1]
+    xr.Dataset({var: ("sample", np.array([1.0]))}).to_netcdf(path)
 
 
 def _write_time_netcdf(path, years):
@@ -1159,4 +1161,33 @@ def test_load_config_rejects_invalid_project_io_block(tmp_path):
     path.write_text(yaml.safe_dump(config), encoding="utf-8")
 
     with pytest.raises(ConfigError, match="project.io.netcdf_compression_level"):
+        load_config(path)
+
+
+def test_check_rejects_explicit_empty_metrics_and_scores(tmp_path, monkeypatch):
+    from openbench.config.loader import ConfigError, load_config
+
+    sim_root = tmp_path / "sim"
+    sim_root.mkdir()
+    ref_root = tmp_path / "ref"
+    ref_root.mkdir()
+    (ref_root / "runoff.nc").touch()
+    config = _base_config(tmp_path)
+    config["metrics"] = []
+    config["scores"] = []
+    path = _write_config(tmp_path, config)
+    _install_registry(
+        monkeypatch,
+        _Registry(
+            {"DemoRef": _ref("DemoRef", str(ref_root))},
+            {"KnownModel": _model("KnownModel", variables={"Runoff": _var("runoff")})},
+        ),
+    )
+
+    result = runner.invoke(cli, ["check", str(path)])
+
+    assert result.exit_code == 1
+    assert "metrics and scores cannot both be empty" in result.output
+
+    with pytest.raises(ConfigError, match="metrics and scores cannot both be empty"):
         load_config(path)

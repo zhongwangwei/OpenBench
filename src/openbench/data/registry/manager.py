@@ -259,6 +259,17 @@ class RegistryManager:
             for var_name in ref.variables:
                 self._var_index.setdefault(normalize_name(var_name), []).append(key)
 
+    @staticmethod
+    def _reference_entry_with_name(name: str, data: dict) -> dict:
+        """Use mapping keys as names for reference YAML mapping entries."""
+        if not isinstance(data, dict):
+            return data
+        if data.get("name"):
+            return data
+        entry = dict(data)
+        entry["name"] = name
+        return entry
+
     # --- Loading ---
 
     def _load_reference_catalog(self, path: Any) -> None:
@@ -270,7 +281,7 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
-                    ref = _build_reference(data)
+                    ref = _build_reference(self._reference_entry_with_name(name, data))
                     self._references[normalize_name(name)] = ref
                 except Exception as e:
                     logger.warning("Failed to load reference '%s' from %s: %s", name, path.name, e)
@@ -291,7 +302,7 @@ class RegistryManager:
                 for name, entry in entries.items():
                     if not isinstance(entry, dict) or entry.get("_deleted"):
                         continue
-                    ref = _build_reference(entry)
+                    ref = _build_reference(self._reference_entry_with_name(name, entry))
                     self._references[normalize_name(name)] = ref
             except Exception as e:
                 logger.warning("Failed to load reference from %s: %s", path.name, e)
@@ -344,7 +355,7 @@ class RegistryManager:
                         self._references[key] = _deep_merge_reference(self._references[key], data)
                         logger.debug("Merged user overlay for reference '%s'", name)
                     else:
-                        ref = _build_reference(data)
+                        ref = _build_reference(self._reference_entry_with_name(name, data))
                         self._references[key] = ref
                         logger.debug("Added new user reference '%s'", name)
                 except Exception as e:
@@ -379,7 +390,7 @@ class RegistryManager:
                         self._references[key] = _deep_merge_reference(self._references[key], entry)
                         logger.debug("Merged user overlay for reference '%s' from %s", name, path.name)
                     else:
-                        ref = _build_reference(entry)
+                        ref = _build_reference(self._reference_entry_with_name(name, entry))
                         self._references[key] = ref
                         logger.debug("Added new user reference '%s' from %s", name, path.name)
             except Exception as e:

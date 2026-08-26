@@ -64,6 +64,11 @@ def parse_progress_line(
 
     natural_line = "" if protocol_line else line
     natural_line_lower = natural_line.lower()
+    evaluation_failure_summary = (
+        "evaluation completed with errors" in natural_line_lower
+        or "evaluation failed" in natural_line_lower
+        or "failed evaluation" in natural_line_lower
+    )
 
     # Detect variable being processed
     if "processing" in natural_line_lower or "evaluating" in natural_line_lower:
@@ -117,8 +122,12 @@ def parse_progress_line(
         state["current_statistic"] = (statistics_done or statistics_running).group(1).strip()
         stage = "Statistics"
 
-    # Detect stage
-    if not stage and "evaluation" in natural_line_lower and "item" not in natural_line_lower:
+    # Detect stage. Report filenames such as evaluation_report.html/pdf are
+    # report artifacts, not a new Evaluation phase.
+    report_artifact = re.search(r"\b[\w.-]*report\.(?:html|pdf)\b", natural_line_lower)
+    if not stage and ("report" in natural_line_lower or report_artifact):
+        stage = "Report"
+    elif not stage and "evaluation" in natural_line_lower and "item" not in natural_line_lower:
         stage = "Evaluation"
     elif not stage and ("comparison" in natural_line_lower or "groupby" in natural_line_lower):
         stage = "Comparison"
@@ -127,13 +136,15 @@ def parse_progress_line(
             state["completed_comparison_tasks"].add(comparison_done.group(1))
     elif not stage and "statistic" in natural_line_lower:
         stage = "Statistics"
-    elif not stage and "report" in natural_line_lower:
-        stage = "Report"
 
     # Detect task completions
     task_completed = False
 
-    if stage == "Evaluation" and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower):
+    if (
+        stage == "Evaluation"
+        and not evaluation_failure_summary
+        and ("completed" in line_lower or "finished" in line_lower or "done" in line_lower)
+    ):
         task_key = (state.get("current_variable", ""), state.get("current_ref", ""), state.get("current_sim", ""))
         if task_key not in state["completed_eval_tasks"] and state.get("current_variable"):
             state["completed_eval_tasks"].add(task_key)
@@ -200,7 +211,7 @@ def parse_progress_line(
         elif stage == "Report":
             report_inc = P_INC * (4 if "completed" in line_lower or "success" in line_lower else 2)
             current_progress = min(current_progress + report_inc, P_MAX)
-        elif task_completed or stage or "complete" in line_lower or "done" in line_lower:
+        elif not evaluation_failure_summary and (task_completed or stage or "complete" in line_lower or "done" in line_lower):
             current_progress = min(current_progress + P_INC * 2, P_MAX)
 
     if stage == "Report":

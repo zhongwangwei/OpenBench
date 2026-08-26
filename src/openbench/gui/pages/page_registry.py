@@ -875,7 +875,110 @@ class PageRegistry(BasePage):
 
     def closeEvent(self, event):
         self._finish_scan_worker(cancel=True)
+        self._finish_register_worker(cancel=True)
         super().closeEvent(event)
+
+    def _finish_register_worker(self, cancel: bool = False):
+        progress = getattr(self, "_register_progress", None)
+        if progress is not None:
+            progress.close()
+            progress.deleteLater()
+        worker = getattr(self, "_register_worker", None)
+        if worker is not None:
+            if cancel:
+                from openbench.gui.widgets._task_worker import safe_disconnect
+
+                safe_disconnect(worker.finished_with_result, worker.failed)
+                if worker.isRunning():
+                    worker.requestInterruption()
+                    worker.quit()
+                    worker.wait(3000)
+            if worker.isRunning():
+                from openbench.gui.widgets._task_worker import detach_worker
+
+                detach_worker(worker, _DETACHED_SCAN_WORKERS)
+        self._register_progress = None
+        self._register_worker = None
+
+    def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
+        registry = _get_registry()
+        for variant in variants:
+            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing_vars = existing.variables if existing is not None else {}
+            inspections = getattr(variant, "nc_inspections", None)
+            if inspections is None:
+                inspections = {}
+                variant.nc_inspections = inspections
+            for var_name, sub_dir in variant.variables.items():
+                if var_name in existing_vars:
+                    continue
+                nc_info = inspections.setdefault(var_name, {})
+                all_vars = nc_info.get("all_data_vars", [])
+                if len(all_vars) <= 1:
+                    continue
+                from openbench.gui.dialogs.data_discovery import choose_nc_variable
+
+                chosen = choose_nc_variable(self, var_name, sub_dir, all_vars)
+                if chosen:
+                    nc_info["varname"] = chosen
+                    for item in all_vars:
+                        if item.get("name") == chosen:
+                            nc_info["varunit"] = item.get("unit", "")
+                            break
+
+    def _choose_first_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
+        registry = _get_registry()
+        for variant in variants:
+            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing_vars = existing.variables if existing is not None else {}
+            inspections = getattr(variant, "nc_inspections", None)
+            if inspections is None:
+                inspections = {}
+                variant.nc_inspections = inspections
+            for var_name in variant.variables:
+                if var_name in existing_vars:
+                    continue
+                nc_info = inspections.setdefault(var_name, {})
+                all_vars = nc_info.get("all_data_vars", [])
+                if all_vars:
+                    nc_info["varname"] = all_vars[0]["name"]
+                    nc_info["varunit"] = all_vars[0].get("unit", "")
+
+    def _start_register_worker(self, variants):
+        from openbench.gui.pages._scan_worker import RegisterScannedDatasetsWorker
+
+        progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
+        progress.setWindowTitle("Registering")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
+
+        worker = RegisterScannedDatasetsWorker(variants)
+        self._register_worker = worker
+        self._register_progress = progress
+        worker.finished_with_result.connect(lambda _path: self._on_register_finished(len(variants)))
+        worker.failed.connect(self._on_register_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+        progress.show()
+
+    def _on_register_failed(self, message: str):
+        self._finish_register_worker()
+        QMessageBox.critical(self, "Scan Failed", f"Error registering scanned datasets:\n{message}")
+        logger.error("Directory scan registration failed: %s", message)
+
+    def _on_register_finished(self, registered: int):
+        self._finish_register_worker()
+        _clear_cache()
+        self._refresh_dataset_list()
+        message = f"Registered/updated {registered} dataset(s)."
+        if getattr(self, "_scan_was_remote", False):
+            from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+            caveats = remote_scan_caveats(getattr(self, "_register_variants", []))
+            if caveats:
+                message += f"\n\n{caveats}"
+        QMessageBox.information(self, "Scan Complete", message)
 
     def _on_scan_directory_failed(self, message: str):
         self._finish_scan_worker()
@@ -885,7 +988,6 @@ class PageRegistry(BasePage):
     def _on_scan_directory_finished(self, new_groups):
         self._finish_scan_worker()
         try:
-            from openbench.data.registry.scanner import register_scanned_datasets_batch
             from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
 
             new_groups, skipped = unpack_scan_result(new_groups)
@@ -900,7 +1002,7 @@ class PageRegistry(BasePage):
             # Show discovery dialog for user to select which datasets to register
             existing_names = {ref.name for ref in _get_registry().list_references()}
             try:
-                from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
+                from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
 
                 dlg = DataDiscoveryDialog(new_groups, existing_names=existing_names, parent=self)
                 if not dlg.exec():
@@ -921,33 +1023,18 @@ class PageRegistry(BasePage):
                         parent=self,
                         **remote_kwargs,
                     )
-                multi_var_picker = lambda var_name, sub_dir, all_vars: choose_nc_variable(
-                    self, var_name, sub_dir, all_vars
-                )
+                self._choose_scanned_nc_variables(variants, existing_names)
             except ImportError:
-                # Fallback: register all if dialog not available and choose the
-                # first inspected data variable for multi-variable files.
+                # Fallback: register all if dialog is unavailable.
                 variants = []
                 for group in new_groups:
                     for _res, variant in group.variants.items():
                         if variant.registry_name not in existing_names:
                             variants.append(variant)
-                multi_var_picker = lambda _var_name, _sub_dir, all_vars: all_vars[0]["name"] if all_vars else None
+                self._choose_first_scanned_nc_variables(variants, existing_names)
 
-            register_scanned_datasets_batch(
-                variants,
-                on_multi_var=multi_var_picker,
-            )
-            _clear_cache()
-            self._refresh_dataset_list()
-            message = f"Registered/updated {len(variants)} dataset(s)."
-            if getattr(self, "_scan_was_remote", False):
-                from openbench.gui.pages._scan_worker import remote_scan_caveats
-
-                caveats = remote_scan_caveats(variants)
-                if caveats:
-                    message += f"\n\n{caveats}"
-            QMessageBox.information(self, "Scan Complete", message)
+            self._register_variants = list(variants)
+            self._start_register_worker(variants)
         except Exception as exc:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning:\n{exc}")
             logger.exception("Directory scan registration failed")

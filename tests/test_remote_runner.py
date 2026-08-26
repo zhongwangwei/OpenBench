@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from openbench.gui.remote_runner import RemoteRunner  # noqa: E402
+from openbench.gui.remote_runner import RemoteRunner, build_remote_run_command  # noqa: E402
 
 
 class FakeSSH:
@@ -21,7 +21,7 @@ class FakeSSH:
         if os.path.basename(local_path) in self.fail_upload_names:
             raise RuntimeError(f"upload failed for {os.path.basename(local_path)}")
 
-    def execute(self, command, timeout=30):
+    def execute(self, command, timeout=30, should_abort=None):
         self.commands.append(command)
         return "", "", 0
 
@@ -117,8 +117,20 @@ class ExecuteSSH(FakeSSH):
         self.execute_response = execute_response
         self.commands = []
 
-    def execute(self, command, timeout=30):
+    def execute(self, command, timeout=30, should_abort=None):
         self.commands.append(command)
+        return self.execute_response
+
+
+class ExecuteKwargsSSH(FakeSSH):
+    def __init__(self, execute_response):
+        super().__init__()
+        self.execute_response = execute_response
+        self.execute_calls = []
+
+    def execute(self, command, timeout=30, should_abort=None):
+        self.commands.append(command)
+        self.execute_calls.append({"command": command, "timeout": timeout, "should_abort": should_abort})
         return self.execute_response
 
 
@@ -138,6 +150,18 @@ def test_create_remote_temp_dir_uses_mktemp_unique_path(tmp_path):
     assert ssh.commands == ["mktemp -d /tmp/openbench_wizard_XXXXXXXXXX"]
 
 
+def test_remote_run_command_expands_tilde_config_path():
+    command = build_remote_run_command(
+        "~/miniconda3/bin/python",
+        "~/OpenBench",
+        "~/OpenBench/output/case/openbench.yaml",
+        "",
+    )
+
+    assert '"$HOME"/OpenBench/output/case/openbench.yaml' in command
+    assert "'~/OpenBench/output/case/openbench.yaml'" not in command
+
+
 def test_kill_remote_process_matches_current_config_not_all_openbench_runs(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
@@ -152,6 +176,20 @@ def test_kill_remote_process_matches_current_config_not_all_openbench_runs(tmp_p
     assert "openbench_wizard_abcd1234" in ssh.commands[0]
     assert "python.*-m openbench (check|run)" in ssh.commands[0]
     assert ssh.commands[0] != "pkill -f 'python.*-m openbench (check|run)' || true"
+
+
+def test_kill_remote_process_matches_tilde_config_as_expanded_home(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("", "", 0))
+    runner = _runner(config, ssh)
+    runner._remote_config_path = "~/OpenBench/output/case/openbench.yaml"
+
+    runner._kill_remote_process()
+
+    assert len(ssh.commands) == 1
+    assert "OpenBench/output/case/openbench\\.yaml" in ssh.commands[0]
+    assert "/[^[:space:]]+/OpenBench/output/case/openbench\\.yaml" in ssh.commands[0]
 
 
 def test_cleanup_remote_reports_nonzero_rm_failure(tmp_path):
@@ -350,6 +388,66 @@ def test_remote_runner_applies_remote_num_cores_before_execution(tmp_path):
     payload = ssh.commands[0].split()[2]
     assert 'project["num_cores"] = 12' in base64.b64decode(payload).decode()
     assert "Using 12 CPU cores on remote server." in logs
+
+
+def test_remote_runner_num_cores_patch_expands_tilde_and_is_abortable(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteKwargsSSH(("", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "~/OpenBench", "num_cores": 12},
+        config_already_remote=True,
+    )
+    runner._remote_config_path = "~/OpenBench/output/case/openbench.yaml"
+
+    assert runner._apply_remote_num_cores_override() is True
+
+    payload = ssh.commands[0].split()[2]
+    script = base64.b64decode(payload).decode()
+    assert '.expanduser()' in script
+    assert '"~/OpenBench/output/case/openbench.yaml"' in script
+    assert callable(ssh.execute_calls[0]["should_abort"])
+
+
+def test_remote_runner_stop_during_num_cores_patch_does_not_start_openbench(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteKwargsSSH(("", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench", "num_cores": 12},
+        config_already_remote=True,
+    )
+    runner._remote_config_path = "/remote/main.yaml"
+
+    def execute_then_stop(command, timeout=30, should_abort=None):
+        ssh.commands.append(command)
+        ssh.execute_calls.append({"command": command, "timeout": timeout, "should_abort": should_abort})
+        runner.stop()
+        return "", "", 0
+
+    ssh.execute = execute_then_stop
+    executed = []
+    runner._execute_remote_openbench = lambda: executed.append(True) or (True, "Completed")
+
+    runner.run()
+
+    assert executed == []
+
+
+def test_remote_runner_stop_does_not_synchronously_execute_ssh_kill(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("", "", 0))
+    runner = _runner(config, ssh)
+    runner._remote_config_path = "/remote/main.yaml"
+
+    runner.stop()
+
+    assert ssh.commands == []
 
 
 def test_remote_runner_progress_parser_ignores_exception_source_names(tmp_path):

@@ -656,7 +656,7 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
 
         # Use a context manager so the file handle is released even if
         # data_vars probing or any later step inside this try block raises.
-        with xr.open_dataset(nc_files[0]) as ds:
+        with xr.open_dataset(nc_files[0], decode_timedelta=False) as ds:
             available = {str(name): str(name) for name in ds.data_vars}
 
         # Try primary first
@@ -776,7 +776,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
 
     evaluation_items = {var: True for var in cfg.evaluation.variables}
 
-    if cfg.metrics:
+    if cfg.metrics is not None:
         metrics_dict = {m: True for m in cfg.metrics}
     else:
         metrics_dict = {"bias": True, "RMSE": True, "correlation": True}

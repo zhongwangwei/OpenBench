@@ -27,6 +27,10 @@ import shlex
 from typing import Optional, Dict, Any, List
 
 
+def _has_exact_stdout_line(stdout: str, sentinel: str) -> bool:
+    return any(line.strip() == sentinel for line in stdout.splitlines())
+
+
 def _safe_remote_path(path: str) -> str:
     """Validate then shell-quote a user-supplied remote path.
 
@@ -617,6 +621,7 @@ class RemoteConfigWidget(QWidget):
         self._conda_create_worker = None
         self._conda_create_dialog = None
         self._install_worker = None
+        self._confirmed_node_config = None
         self._setup_ui()
         self.destroyed.connect(lambda *_: self._cleanup_conda_create_worker(detach=True))
         self.destroyed.connect(lambda *_: self._cleanup_install_worker(detach=True))
@@ -997,6 +1002,29 @@ class RemoteConfigWidget(QWidget):
             return None, os.path.expanduser(self.node_key_input.text().strip())
         return None, None
 
+    def _current_node_config(self):
+        if not self.node_group.isChecked() or not self.node_input.text().strip():
+            return None
+        return (
+            self.node_input.text().strip(),
+            self._node_auth_type(),
+            self.node_password_input.text() if self.radio_node_password.isChecked() else "",
+            self.node_key_input.text().strip() if self.radio_node_key.isChecked() else "",
+        )
+
+    def _node_target_confirmed(self) -> bool:
+        return self._current_node_config() == getattr(self, "_confirmed_node_config", None)
+
+    def _has_connected_target(self) -> bool:
+        if self._ssh_manager is None or not self._ssh_manager.is_connected:
+            return False
+        if not hasattr(self, "node_group"):
+            return True
+        return self.is_connected()
+
+    def _warn_not_connected(self):
+        QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+
     def _browse_node_key(self):
         """Open file dialog to browse for node SSH key file."""
         start_path = os.path.expanduser("~/.ssh")
@@ -1059,6 +1087,7 @@ class RemoteConfigWidget(QWidget):
                 self.node_status_label.setText(f"✓ Connected to {node_name}")
                 self.node_status_label.setStyleSheet("color: green; font-weight: bold;")
                 # Toggle buttons - connected
+                self._confirmed_node_config = self._current_node_config()
                 self.btn_confirm_node.setEnabled(False)
                 self.btn_disconnect_node.setEnabled(True)
                 # Update CPU count for compute node
@@ -1090,6 +1119,20 @@ class RemoteConfigWidget(QWidget):
 
     def _on_config_changed(self):
         """Handle any configuration change."""
+        if (
+            getattr(self, "_confirmed_node_config", None) is not None
+            and self._current_node_config() != self._confirmed_node_config
+        ):
+            self._confirmed_node_config = None
+            if self._ssh_manager is not None:
+                try:
+                    self._ssh_manager.disconnect_jump()
+                except Exception as exc:
+                    logger.warning("Error disconnecting stale compute node target: %s", exc)
+            self.node_status_label.setText("Not connected")
+            self.node_status_label.setStyleSheet("color: #999;")
+            self.btn_confirm_node.setEnabled(True)
+            self.btn_disconnect_node.setEnabled(False)
         self.config_changed.emit()
 
     def _on_conda_env_changed(self, index: int):
@@ -1107,7 +1150,7 @@ class RemoteConfigWidget(QWidget):
             return
 
         # Get Python path directly from conda
-        if self._ssh_manager and self._ssh_manager.is_connected:
+        if self._has_connected_target():
             # A combo change during the in-flight round trip supersedes this
             # query; the stale result must not be applied afterwards.
             seq = getattr(self, "_conda_env_sync_seq", 0) + 1
@@ -1151,7 +1194,7 @@ class RemoteConfigWidget(QWidget):
 
     def _update_remote_cpu_count(self):
         """Query remote server for CPU count and update label."""
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
+        if not self._has_connected_target():
             return
 
         try:
@@ -1270,6 +1313,7 @@ class RemoteConfigWidget(QWidget):
                         main_key_file=node_key_file,
                     )
                 )
+                self._confirmed_node_config = self._current_node_config()
 
             import shiboken6
 
@@ -1344,6 +1388,8 @@ class RemoteConfigWidget(QWidget):
                 logger.warning(f"Error during disconnect: {e}")
             self._ssh_manager = None
 
+        self._confirmed_node_config = None
+
         # Update UI
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
@@ -1366,6 +1412,8 @@ class RemoteConfigWidget(QWidget):
                 self._ssh_manager.disconnect_jump()
             except Exception as e:
                 logger.warning(f"Error during node disconnect: {e}")
+
+        self._confirmed_node_config = None
 
         # Update UI
         self.node_status_label.setText("Not connected")
@@ -1413,8 +1461,8 @@ class RemoteConfigWidget(QWidget):
         """Open remote file browser to select Python path."""
         from openbench.gui import path_utils
 
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         home = path_utils.remote_home_dir(self._ssh_manager)
@@ -1432,8 +1480,8 @@ class RemoteConfigWidget(QWidget):
         """Detect Python interpreters on remote server."""
         if getattr(self, "_handshake_active", False):
             return  # SSH auth in flight; don't open channels mid-handshake
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         try:
@@ -1466,8 +1514,8 @@ class RemoteConfigWidget(QWidget):
         """Refresh conda environments from remote server."""
         if getattr(self, "_handshake_active", False):
             return  # SSH auth in flight; don't open channels mid-handshake
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Test button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         try:
@@ -1519,8 +1567,8 @@ class RemoteConfigWidget(QWidget):
         """Create OpenBench conda environment."""
         from PySide6.QtWidgets import QVBoxLayout, QTextEdit
 
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         env_name = "openbench"
@@ -1764,8 +1812,8 @@ class RemoteConfigWidget(QWidget):
         """Open remote file browser to select OpenBench installation path."""
         from openbench.gui import path_utils
 
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         home = path_utils.remote_home_dir(self._ssh_manager)
@@ -1806,8 +1854,8 @@ class RemoteConfigWidget(QWidget):
             QButtonGroup,
         )
 
-        if not self._ssh_manager or not self._ssh_manager.is_connected:
-            QMessageBox.warning(self, "Error", "Please connect to server first using the Confirm button")
+        if not self._has_connected_target():
+            self._warn_not_connected()
             return
 
         # Get installation path
@@ -1838,13 +1886,13 @@ class RemoteConfigWidget(QWidget):
         stdout, stderr, exit_code = execute_responsive(
             self._ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
         )
-        if "exists" in stdout:
+        if exit_code == 0 and _has_exact_stdout_line(stdout, "exists"):
             # Check if it's a git repository
             quoted_git_dir = _safe_remote_path(f"{install_path}/.git")
             stdout2, stderr2, exit_code2 = execute_responsive(
                 self._ssh_manager, f"test -d {quoted_git_dir} && echo is_git", timeout=10
             )
-            if "is_git" in stdout2:
+            if exit_code2 == 0 and _has_exact_stdout_line(stdout2, "is_git"):
                 # It's a git repo, offer update
                 reply = QMessageBox.question(
                     self,
@@ -2049,8 +2097,8 @@ class RemoteConfigWidget(QWidget):
         """
         if self._ssh_manager is None or not self._ssh_manager.is_connected:
             return False
-        if self.node_group.isChecked() and self.node_input.text().strip():
-            return self._ssh_manager.is_jump_connected
+        if hasattr(self, "node_group") and self.node_group.isChecked() and self.node_input.text().strip():
+            return self._node_target_confirmed() and self._ssh_manager.is_jump_connected
         return True
 
     def get_config(self) -> Dict[str, Any]:

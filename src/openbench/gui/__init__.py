@@ -1,15 +1,22 @@
 """Wizard GUI (requires colm-openbench[gui]).
 
-This package requires PySide6. If not installed, importing submodules
-will raise ImportError with an installation hint.
+Use ``_check_gui_deps`` before importing GUI submodules so optional runtime
+dependencies fail once with an actionable installation hint.
 """
+
+from importlib import import_module
 
 
 def _check_gui_deps():
     """Check that GUI dependencies are available."""
-    try:
-        import PySide6  # noqa: F401
-    except ImportError:
+    missing = []
+    for module in ("PySide6", "psutil", "paramiko", "cryptography"):
+        try:
+            import_module(module)
+        except (ImportError, OSError):
+            missing.append(module)
+    if missing:
         raise ImportError(
-            "GUI requires PySide6. Install with: pip install 'colm-openbench[gui]' (or install PySide6 in your conda environment)"
+            f"Missing or broken GUI dependencies: {', '.join(missing)}. "
+            "Install them together with: pip install 'colm-openbench[gui]'"
         ) from None

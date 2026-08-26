@@ -171,8 +171,8 @@ class scores:
             xarray.DataArray: Normalized Spatial Score (0 to 1, 1 being best)
         """
         s, o = self._validate_inputs(s, o)
-        smean = s.mean(dim="time").squeeze()
-        omean = o.mean(dim="time").squeeze()
+        smean = s.mean(dim="time")
+        omean = o.mean(dim="time")
 
         # Calculate the spatial correlation between reference and model
         # spatial_corr = np.corrcoef(smean.values.flatten(), omean.values.flatten())[0, 1]

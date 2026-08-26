@@ -37,6 +37,59 @@ def quote_remote_path(path: str) -> str:
     return shlex.quote(path)
 
 
+class _LockedSFTPFile:
+    def __init__(self, wrapped, lock: threading.RLock):
+        self._wrapped = wrapped
+        self._lock = lock
+
+    def __enter__(self):
+        with self._lock:
+            entered = self._wrapped.__enter__()
+        if entered is self._wrapped:
+            return self
+        return _LockedSFTPFile(entered, self._lock)
+
+    def __exit__(self, exc_type, exc, tb):
+        with self._lock:
+            return self._wrapped.__exit__(exc_type, exc, tb)
+
+    def __iter__(self):
+        with self._lock:
+            return iter(list(self._wrapped))
+
+    def __getattr__(self, name):
+        attr = getattr(self._wrapped, name)
+        if not callable(attr):
+            return attr
+
+        def locked(*args, **kwargs):
+            with self._lock:
+                return attr(*args, **kwargs)
+
+        return locked
+
+
+class _LockedSFTPClient:
+    def __init__(self, get_client: Callable[[], paramiko.SFTPClient], lock: threading.RLock):
+        self._get_client = get_client
+        self._lock = lock
+
+    def __getattr__(self, name):
+        with self._lock:
+            attr = getattr(self._get_client(), name)
+        if not callable(attr):
+            return attr
+
+        def locked(*args, **kwargs):
+            with self._lock:
+                result = attr(*args, **kwargs)
+            if name == "open":
+                return _LockedSFTPFile(result, self._lock)
+            return result
+
+        return locked
+
+
 class SSHConnectionError(Exception):
     """SSH connection error."""
 
@@ -237,6 +290,8 @@ class SSHManager:
         # channel I/O — that would block stop()/kill paths that need to open
         # a second channel on the same SSHManager from another thread.
         self._state_lock = threading.RLock()
+        self._sftp_io_lock = threading.RLock()
+        self._sftp_proxy: Optional[_LockedSFTPClient] = None
 
     @property
     def last_detection_errors(self) -> tuple[str, ...]:
@@ -851,13 +906,16 @@ class SSHManager:
         return self._sftp
 
     def open_sftp(self) -> paramiko.SFTPClient:
-        """Public alias for the cached SFTP client.
+        """Return a thread-safe proxy for the cached SFTP client.
 
-        The returned client is owned by this SSHManager and reused across
-        callers; callers must NOT call .close() on it (closing is handled
-        by SSHManager.disconnect()).
+        Paramiko SFTPClient is not safe to use concurrently. Keep the public
+        API the same while serializing all SFTP operations in one place. The
+        returned client is owned by SSHManager; callers must NOT close it.
         """
-        return self._get_sftp()
+        with self._state_lock:
+            if self._sftp_proxy is None:
+                self._sftp_proxy = _LockedSFTPClient(self._get_sftp, self._sftp_io_lock)
+            return self._sftp_proxy
 
     def upload_file(self, local_path: str, remote_path: str) -> None:
         """Upload a file to remote server.
@@ -866,7 +924,7 @@ class SSHManager:
             local_path: Local file path
             remote_path: Remote destination path (POSIX)
         """
-        sftp = self._get_sftp()
+        sftp = self.open_sftp()
         # Use posixpath for remote paths so a Windows client doesn't truncate
         # at a backslash that's actually part of a remote (POSIX) filename.
         remote_dir = posixpath.dirname(remote_path)
@@ -881,7 +939,7 @@ class SSHManager:
             remote_path: Remote file path
             local_path: Local destination path
         """
-        sftp = self._get_sftp()
+        sftp = self.open_sftp()
         # Ensure local directory exists
         local_dir = os.path.dirname(local_path)
         if local_dir:
@@ -895,7 +953,7 @@ class SSHManager:
             local_dir: Local directory path
             remote_dir: Remote destination path (POSIX)
         """
-        sftp = self._get_sftp()
+        sftp = self.open_sftp()
         self._ensure_remote_dir(remote_dir)
 
         for root, dirs, files in os.walk(local_dir):
@@ -922,7 +980,7 @@ class SSHManager:
         Args:
             remote_dir: Remote directory path
         """
-        sftp = self._get_sftp()
+        sftp = self.open_sftp()
         normalized = remote_dir.replace("\\", "/").rstrip("/")
         dirs = [part for part in normalized.split("/") if part]
         is_absolute = normalized.startswith("/")

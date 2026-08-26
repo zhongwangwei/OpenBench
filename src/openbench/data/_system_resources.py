@@ -30,37 +30,35 @@ def get_system_resources():
         "cpu_freq_mhz": 0,
     }
 
-    try:
-        # Get memory information - works on all platforms
-        memory_info = psutil.virtual_memory()
-        result["total_memory_gb"] = memory_info.total / (1024**3)
-        result["available_memory_gb"] = memory_info.available / (1024**3)
-    except Exception as e:
-        logging.warning(f"Failed to get memory info: {e}")
-
-    try:
-        # Get CPU count - works on all platforms
-        cpu_count = psutil.cpu_count(logical=False)
-        if cpu_count is not None:
-            result["cpu_count"] = cpu_count
-        else:
-            # Fallback to logical CPU count
-            result["cpu_count"] = psutil.cpu_count(logical=True) or 4
-    except Exception as e:
-        logging.warning(f"Failed to get CPU count: {e}")
-
-    # Get CPU frequency with platform-specific handling
+    # psutil is optional; keep quiet defaults when it is not installed.
     cpu_freq_from_psutil = False
-    try:
-        cpu_freq_info = psutil.cpu_freq()
-        if cpu_freq_info is not None and hasattr(cpu_freq_info, "max") and cpu_freq_info.max:
-            result["cpu_freq_mhz"] = cpu_freq_info.max
-            cpu_freq_from_psutil = True
-        elif cpu_freq_info is not None and hasattr(cpu_freq_info, "current") and cpu_freq_info.current:
-            result["cpu_freq_mhz"] = cpu_freq_info.current
-            cpu_freq_from_psutil = True
-    except Exception as e:
-        logging.debug(f"psutil.cpu_freq() failed: {e}")
+    if psutil is not None:
+        try:
+            memory_info = psutil.virtual_memory()
+            result["total_memory_gb"] = memory_info.total / (1024**3)
+            result["available_memory_gb"] = memory_info.available / (1024**3)
+        except Exception as e:
+            logging.warning(f"Failed to get memory info: {e}")
+
+        try:
+            cpu_count = psutil.cpu_count(logical=False)
+            if cpu_count is not None:
+                result["cpu_count"] = cpu_count
+            else:
+                result["cpu_count"] = psutil.cpu_count(logical=True) or 4
+        except Exception as e:
+            logging.warning(f"Failed to get CPU count: {e}")
+
+        try:
+            cpu_freq_info = psutil.cpu_freq()
+            if cpu_freq_info is not None and hasattr(cpu_freq_info, "max") and cpu_freq_info.max:
+                result["cpu_freq_mhz"] = cpu_freq_info.max
+                cpu_freq_from_psutil = True
+            elif cpu_freq_info is not None and hasattr(cpu_freq_info, "current") and cpu_freq_info.current:
+                result["cpu_freq_mhz"] = cpu_freq_info.current
+                cpu_freq_from_psutil = True
+        except Exception as e:
+            logging.debug(f"psutil.cpu_freq() failed: {e}")
 
     # If psutil didn't work, try platform-specific fallbacks
     if not cpu_freq_from_psutil:

@@ -107,11 +107,11 @@ def _write_fake_grid_outputs(
     if metrics:
         (case / "metrics").mkdir(parents=True, exist_ok=True)
         for metric in metrics:
-            _write_fake_netcdf(case / "metrics" / f"{stem}_{metric}.nc")
+            _write_fake_netcdf(case / "metrics" / f"{stem}_{metric}.nc", metric)
     if scores:
         (case / "scores").mkdir(parents=True, exist_ok=True)
         for score in scores:
-            _write_fake_netcdf(case / "scores" / f"{stem}_{score}.nc")
+            _write_fake_netcdf(case / "scores" / f"{stem}_{score}.nc", score)
 
 
 def _write_fake_station_outputs(casedir, var_name, ref_source, sim_source, *, metrics=True, scores=True):
@@ -134,12 +134,12 @@ def _write_fake_station_outputs(casedir, var_name, ref_source, sim_source, *, me
         (case / "scores" / filename).write_text(_csv_text(score_columns))
 
 
-def _write_fake_netcdf(path):
+def _write_fake_netcdf(path, variable="value"):
     """Write a tiny valid NetCDF file for output-readability checks."""
     import numpy as np
     import xarray as xr
 
-    xr.Dataset({"value": ("sample", np.array([1.0]))}).to_netcdf(path)
+    xr.Dataset({variable: ("sample", np.array([1.0]))}).to_netcdf(path)
 
 
 class _ExplodingNamelist:
@@ -1384,6 +1384,60 @@ def test_comparison_helper_uses_bindings_comparison_context(tmp_path, monkeypatc
             context.comparison_fig["HeatMap"],
         ),
     ]
+
+
+def test_runner_score_comparison_with_empty_scores_returns_phase_error(tmp_path):
+    """HeatMap/RadarMap are score comparisons; empty scores must not be logged as completed."""
+    import openbench.config.adapter as adapter_module
+    from openbench.runner.postprocessing import run_comparison
+
+    output_dir = tmp_path / "case"
+    _write_fake_grid_outputs(output_dir, "Runoff", "RefA", "SimA", metrics=("bias",), scores=())
+
+    class Bindings:
+        runner_cfg = type("RunnerCfg", (), {})()
+
+        def build_comparison_context(self):
+            return adapter_module.ComparisonContext(
+                namelists=adapter_module.LegacyNamelists(
+                    main={
+                        "general": {
+                            "basename": "case",
+                            "basedir": str(tmp_path),
+                            "compare_grid_res": 0.5,
+                            "compare_tim_res": "Month",
+                            "weight": "none",
+                        }
+                    },
+                    reference={
+                        "general": {"Runoff_ref_source": "RefA"},
+                        "Runoff": {"RefA_data_type": "grid", "RefA_varname": "runoff_ref"},
+                    },
+                    simulation={
+                        "general": {"Runoff_sim_source": ["SimA"]},
+                        "Runoff": {"SimA_data_type": "grid", "SimA_varname": "runoff_sim"},
+                    },
+                ),
+                evaluation_items=["Runoff"],
+                score_vars=[],
+                metric_vars=["bias"],
+                comparison_fig={"HeatMap": {}},
+            )
+
+    errors = run_comparison(
+        Bindings(),
+        ["HeatMap"],
+        output_dir,
+        make_phase_error_fn=lambda phase, message, **kw: {"phase": phase, "message": message, **kw},
+        bindings_only_drawing_fn=lambda bindings: False,
+        post_phase_preflight_errors_fn=lambda *args, **kwargs: [],
+        filter_evaluation_items_with_outputs_fn=lambda output_dir, items: items,
+    )
+
+    assert len(errors) == 1
+    assert errors[0]["phase"] == "comparison"
+    assert errors[0]["item"] == "HeatMap"
+    assert "requires at least one score" in errors[0]["message"]
 
 
 def test_groupby_helper_uses_bindings_groupby_context(tmp_path, monkeypatch):
@@ -7428,6 +7482,120 @@ def test_core_comparison_grid_missing_score_output_raises(tmp_path, monkeypatch,
             [],
             {},
         )
+
+
+@pytest.mark.parametrize(
+    ("method_name", "plot_func", "folder"),
+    [
+        ("scenarios_HeatMap_comparison", "make_scenarios_scores_comparison_heat_map", "HeatMap"),
+        ("scenarios_RadarMap_comparison", "make_scenarios_comparison_radar_map", "RadarMap"),
+    ],
+)
+def test_core_score_comparison_aligns_rows_to_global_sim_header(tmp_path, monkeypatch, method_name, plot_func, folder):
+    """HeatMap/RadarMap rows must write N/A for sims not used by an item, not shift columns."""
+    import pandas as pd
+
+    import openbench.core.comparison as comparison_module
+
+    scores_dir = tmp_path / "scores"
+    scores_dir.mkdir()
+    for item, ref, sim, value in (
+        ("Runoff", "RefA", "SimA", 0.1),
+        ("Runoff", "RefA", "SimB", 0.2),
+        ("Evap", "RefB", "SimC", 0.3),
+    ):
+        pd.DataFrame([{"ID": "S1", "Overall_Score": value}]).to_csv(
+            scores_dir / f"{item}_stn_{ref}_{sim}_evaluations.csv", index=False
+        )
+
+    processor = comparison_module.ComparisonProcessing(
+        {
+            "general": {
+                "basename": "case",
+                "basedir": str(tmp_path),
+                "compare_grid_res": 0.5,
+                "compare_tim_res": "Month",
+                "weight": "none",
+            }
+        },
+        ["Overall_Score"],
+        [],
+    )
+    monkeypatch.setattr(comparison_module, plot_func, lambda *args, **kwargs: None)
+
+    getattr(processor, method_name)(
+        str(tmp_path),
+        {
+            "general": {"Runoff_sim_source": ["SimA", "SimB"], "Evap_sim_source": ["SimC"]},
+            "Runoff": {
+                "SimA_data_type": "stn",
+                "SimA_varname": "runoff_sima",
+                "SimB_data_type": "stn",
+                "SimB_varname": "runoff_simb",
+            },
+            "Evap": {"SimC_data_type": "stn", "SimC_varname": "evap_simc"},
+        },
+        {
+            "general": {"Runoff_ref_source": "RefA", "Evap_ref_source": "RefB"},
+            "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+            "Evap": {"RefB_data_type": "stn", "RefB_varname": "evap_ref"},
+        },
+        ["Runoff", "Evap"],
+        ["Overall_Score"],
+        [],
+        {},
+    )
+
+    output = (tmp_path / "comparisons" / folder / "scenarios_Overall_Score_comparison.csv").read_text().splitlines()
+    assert output == [
+        "Item\tReference\tSimA\tSimB\tSimC",
+        "Runoff\tRefA\t0.100\t0.200\tN/A",
+        "Evap\tRefB\tN/A\tN/A\t0.300",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "message", "folder"),
+    [
+        ("scenarios_HeatMap_comparison", "HeatMap comparison requires at least one score", "HeatMap"),
+        ("scenarios_RadarMap_comparison", "RadarMap comparison requires at least one score", "RadarMap"),
+    ],
+)
+def test_core_score_comparison_rejects_empty_scores(tmp_path, method_name, message, folder):
+    """Score-only comparison methods should fail clearly instead of creating empty output dirs."""
+    import openbench.core.comparison as comparison_module
+
+    processor = comparison_module.ComparisonProcessing(
+        {
+            "general": {
+                "basename": "case",
+                "basedir": str(tmp_path),
+                "compare_grid_res": 0.5,
+                "compare_tim_res": "Month",
+                "weight": "none",
+            }
+        },
+        [],
+        ["bias"],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        getattr(processor, method_name)(
+            str(tmp_path),
+            {
+                "general": {"Runoff_sim_source": ["SimA"]},
+                "Runoff": {"SimA_data_type": "stn", "SimA_varname": "runoff_sim"},
+            },
+            {
+                "general": {"Runoff_ref_source": "RefA"},
+                "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+            },
+            ["Runoff"],
+            [],
+            ["bias"],
+            {},
+        )
+    assert not (tmp_path / "comparisons" / folder).exists()
 
 
 @pytest.mark.parametrize(

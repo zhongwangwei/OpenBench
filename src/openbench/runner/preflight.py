@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import glob
 import logging
+from itertools import product
 from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 RuntimeInfoBuilder = Callable[[dict[str, Any]], dict[str, Any]]
+_PREFLIGHT_CHUNK_VALUES = 1_000_000
 
 
 def make_phase_error(phase: str, message: str, **details: Any) -> dict[str, Any]:
@@ -135,8 +137,33 @@ def expected_output_paths(
     return expected
 
 
-def output_file_is_readable(path: Path) -> bool:
-    """Return True when an output file exists and is minimally parseable."""
+def _has_finite_data(data: Any) -> bool:
+    """Scan an xarray variable in bounded chunks and stop at the first finite value."""
+    import numpy as np
+
+    if not data.size or any(size == 0 for size in data.shape):
+        return False
+
+    remaining = _PREFLIGHT_CHUNK_VALUES
+    chunk_sizes = []
+    for size in data.shape:
+        chunk = min(int(size), remaining)
+        chunk_sizes.append(max(1, chunk))
+        remaining = max(1, remaining // max(1, chunk))
+
+    ranges = [range(0, int(size), chunk) for size, chunk in zip(data.shape, chunk_sizes)]
+    for starts in product(*ranges):
+        indexers = {
+            dim: slice(start, min(start + chunk, int(size)))
+            for dim, size, chunk, start in zip(data.dims, data.shape, chunk_sizes, starts)
+        }
+        if np.isfinite(np.asarray(data.isel(indexers).values)).any():
+            return True
+    return False
+
+
+def output_file_is_readable(path: Path, required_variable: str | None = None) -> bool:
+    """Return True when an output file exists and contains finite requested data."""
     if not path.is_file():
         return False
     try:
@@ -152,12 +179,32 @@ def output_file_is_readable(path: Path) -> bool:
         if suffix in {".nc", ".nc4", ".cdf"}:
             import xarray as xr
 
-            with xr.open_dataset(path):
+            with xr.open_dataset(path) as ds:
+                if required_variable is not None:
+                    if required_variable in ds.data_vars:
+                        data = ds[required_variable]
+                    else:
+                        logger.warning("Evaluation output %s is missing variable %s", path, required_variable)
+                        return False
+                elif len(ds.data_vars) == 1:
+                    data = next(iter(ds.data_vars.values()))
+                else:
+                    return any(_has_finite_data(data) for data in ds.data_vars.values())
+                if not _has_finite_data(data):
+                    logger.warning(
+                        "Evaluation output %s has no finite data for %s",
+                        path,
+                        required_variable or data.name,
+                    )
+                    return False
                 return True
         if suffix == ".csv":
             import pandas as pd
 
-            pd.read_csv(path, nrows=1)
+            df = pd.read_csv(path, nrows=1)
+            if required_variable is not None and required_variable not in df.columns:
+                logger.warning("Evaluation output %s is missing column %s", path, required_variable)
+                return False
             return True
     except Exception as exc:
         logger.warning("Evaluation output is unreadable: %s (%s)", path, exc)
@@ -191,14 +238,37 @@ def station_outputs_missing_required_columns(
         if not required_columns or not path.is_file():
             continue
         try:
+            import numpy as np
             import pandas as pd
 
-            columns = set(pd.read_csv(path, nrows=0).columns)
-        except Exception:
+            columns = list(pd.read_csv(path, nrows=0).columns)
+        except Exception as exc:
+            logger.warning("Station output is unreadable: %s (%s)", path, exc)
+            missing.append(path)
             continue
         absent = [column for column in required_columns if column not in columns]
-        if absent:
-            logger.warning("Station output %s is missing requested columns: %s", path, absent)
+        finite = {column: False for column in required_columns if column in columns}
+        if finite:
+            try:
+                for chunk in pd.read_csv(path, usecols=list(finite), chunksize=100_000):
+                    for column in finite:
+                        if not finite[column]:
+                            values = pd.to_numeric(chunk[column], errors="coerce").to_numpy(dtype=float)
+                            finite[column] = bool(np.isfinite(values).any())
+                    if all(finite.values()):
+                        break
+            except Exception as exc:
+                logger.warning("Station output is unreadable: %s (%s)", path, exc)
+                missing.append(path)
+                continue
+        no_finite = [column for column, present in finite.items() if not present]
+        if absent or no_finite:
+            logger.warning(
+                "Station output %s is missing/empty for requested columns: missing=%s no_finite=%s",
+                path,
+                absent,
+                no_finite,
+            )
             missing.append(path)
     return missing
 
@@ -210,12 +280,23 @@ def missing_expected_outputs(
     build_runtime_info_fn: RuntimeInfoBuilder | None = None,
 ) -> list[Path]:
     """Return requested outputs that are absent or unreadable."""
+    metric_vars = task_output_requirement(task, "metrics")
+    score_vars = task_output_requirement(task, "scores")
     expected = expected_output_paths(output_dir, task, build_runtime_info_fn=build_runtime_info_fn)
     if not expected:
         existing_outputs = find_existing_outputs(output_dir, task)
         return [] if any(output_file_is_readable(path) for path in existing_outputs) else [output_dir]
 
-    missing = [path for path in expected if not output_file_is_readable(path)]
+    required_by_path: dict[Path, str] = {}
+    for name, path in zip(metric_vars, expected[: len(metric_vars)]):
+        required_by_path[path] = name
+    for name, path in zip(score_vars, expected[len(metric_vars) :]):
+        required_by_path[path] = name
+    missing = [
+        path
+        for path in expected
+        if not output_file_is_readable(path, required_by_path.get(path) if path.suffix.lower() != ".csv" else None)
+    ]
     missing.extend(
         station_outputs_missing_required_columns(output_dir, task, build_runtime_info_fn=build_runtime_info_fn)
     )
