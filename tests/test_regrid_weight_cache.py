@@ -437,10 +437,12 @@ def test_xesmf_weight_cache_key_includes_mask_bounds_method_and_versions(tmp_pat
     target = xr.Dataset(coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]})
 
     base = xesmf_cache._cache_path(source, target, "conservative", cache_dir=tmp_path, periodic=False)
-    changed_mask = source.copy(deep=True)
-    changed_mask["mask"].values[0, 0] = 0
-    changed_bounds = source.copy(deep=True)
-    changed_bounds["lat_vertices"].values[0] = -1.0
+    mask = source["mask"].to_numpy().copy()
+    mask[0, 0] = 0
+    changed_mask = source.assign(mask=(source["mask"].dims, mask))
+    bounds = source["lat_vertices"].to_numpy().copy()
+    bounds[0] = -1.0
+    changed_bounds = source.assign_coords(lat_vertices=("lat_vertices", bounds))
 
     assert xesmf_cache._cache_path(changed_mask, target, "conservative", cache_dir=tmp_path, periodic=False) != base
     assert xesmf_cache._cache_path(changed_bounds, target, "conservative", cache_dir=tmp_path, periodic=False) != base
@@ -461,8 +463,9 @@ def test_xesmf_weight_cache_key_recognizes_cf_units(tmp_path, monkeypatch):
             "yc": (("y", "x"), [[0.0, 0.0], [1.0, 1.0]], {"units": "degrees_north"}),
         }
     )
-    changed = source.copy(deep=True)
-    changed["xc"].values[0, 0] = 9.0
+    xc = source["xc"].to_numpy().copy()
+    xc[0, 0] = 9.0
+    changed = source.assign_coords(xc=source["xc"].copy(data=xc))
 
     assert xesmf_cache._cache_path(
         source, source, "conservative", cache_dir=tmp_path, periodic=False
