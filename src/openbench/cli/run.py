@@ -243,7 +243,7 @@ def _arm_exit_watchdog(exit_code: int, timeout: float = 20.0) -> None:
 def _expand_path_value(value):
     if value is None:
         return None
-    return os.path.expandvars(os.path.expanduser(str(value)))
+    return os.path.normpath(os.path.expandvars(os.path.expanduser(str(value))))
 
 
 def _expand_config_paths(cfg):
