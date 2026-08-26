@@ -113,7 +113,16 @@ class GridRegridMixin:
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
         import xesmf as xe
 
-        regridder = xe.Regridder(data, new_grid, "conservative")
+        from openbench.data.regrid.xesmf_cache import cached_regridder, default_weight_cache_dir
+
+        regridder = cached_regridder(
+            xe,
+            data,
+            new_grid,
+            "conservative",
+            cache_dir=default_weight_cache_dir(self),
+            periodic=False,
+        )
         return regridder(data)
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
