@@ -31,13 +31,14 @@ from PySide6.QtCore import Qt
 from openbench import __version__
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.localization import CHINESE, get_language_manager
-from openbench.gui.widgets._ssh_worker import execute_responsive
+from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.controller import WizardController
 from openbench.gui.widgets.remote_config import RemoteFileBrowser
 from openbench.gui.widgets.sync_status import SyncStatusWidget
 from openbench.remote.storage import LocalStorage, RemoteStorage
 from openbench.gui.path_utils import (
     get_openbench_root,
+    get_remote_ssh_manager,
     to_absolute_path,
     convert_paths_in_dict,
     validate_paths_in_dict,
@@ -115,7 +116,7 @@ class MainWindow(QMainWindow):
         # === Sidebar ===
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(220)
+        sidebar.setMinimumWidth(180)
         sidebar.setStyleSheet("QWidget#sidebar { background-color: #2d2d2d; }")
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
@@ -251,6 +252,8 @@ class MainWindow(QMainWindow):
 
         # Set splitter sizes (sidebar: 220px, content: rest)
         splitter.setSizes([220, 980])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 
@@ -409,6 +412,7 @@ class MainWindow(QMainWindow):
         self.language_manager.apply(dialog)
         self._about_dialog = dialog
         dialog.exec()
+        self._about_dialog = None
 
     def closeEvent(self, event):
         """Stop any running evaluation before closing.
@@ -461,7 +465,9 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
 
-        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True)
+        if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True):
+            event.ignore()
+            return
         super().closeEvent(event)
 
     def _runner_is_active(self) -> bool:
@@ -478,6 +484,10 @@ class MainWindow(QMainWindow):
         # Show Rerun button only on run_monitor page
         self.btn_rerun.setVisible(self.controller.current_page == "run_monitor")
         self.btn_rerun.setEnabled(not runner_active)
+        for button_name in ("btn_load", "btn_new"):
+            button = getattr(self, button_name, None)
+            if button is not None:
+                button.setEnabled(not runner_active)
 
         next_page = self.controller.next_page()
         if next_page is None:
@@ -636,6 +646,9 @@ class MainWindow(QMainWindow):
 
     def _on_load_clicked(self):
         """Handle Load Config button click."""
+        if self._runner_is_active():
+            QMessageBox.warning(self, "Evaluation Running", "Stop the running evaluation before loading a config.")
+            return
         # Check if using remote storage (not config, since storage type is authoritative)
         if isinstance(self.controller.storage, RemoteStorage):
             file_path = self._browse_remote_config_file()
@@ -675,11 +688,7 @@ class MainWindow(QMainWindow):
 
     def _get_remote_ssh_manager(self):
         """Get SSH manager from the runtime page."""
-        if "runtime" in self.pages:
-            runtime_page = self.pages["runtime"]
-            if hasattr(runtime_page, "remote_config_widget"):
-                return runtime_page.remote_config_widget.get_ssh_manager()
-        return None
+        return get_remote_ssh_manager(self.controller)
 
     def _browse_remote_config_file(self) -> str:
         """Browse remote server for config file."""
@@ -744,6 +753,8 @@ class MainWindow(QMainWindow):
                 project_root = self._find_project_root(config_dir)
 
             self.controller.project_root = project_root
+            if not is_remote:
+                self.controller.storage = LocalStorage(project_root)
 
             # Start with default config
             new_config = self.controller._default_config()
@@ -1112,6 +1123,9 @@ class MainWindow(QMainWindow):
 
     def _on_new_clicked(self):
         """Handle New Config button click."""
+        if self._runner_is_active():
+            QMessageBox.warning(self, "Evaluation Running", "Stop the running evaluation before creating a new config.")
+            return
         reply = QMessageBox.question(
             self,
             "New Configuration",
@@ -1148,24 +1162,58 @@ class MainWindow(QMainWindow):
             return sync_engine
         return getattr(storage, "_sync", None) or getattr(storage, "_sync_engine", None)
 
-    def _cleanup_remote_storage(self, *, sync_pending: bool, disconnect_ssh: bool) -> None:
-        """Flush and stop active remote storage before replacing/closing it."""
+    def _cleanup_remote_storage(self, *, sync_pending: bool, disconnect_ssh: bool) -> bool:
+        """Flush and stop remote storage without discarding unsynced changes."""
         sync_engine = self._current_sync_engine()
         if sync_engine is not None:
+            try:
+                stopped = call_responsive(sync_engine.stop_background_sync)
+                if stopped is False:
+                    QMessageBox.warning(
+                        self,
+                        "Remote Sync Busy",
+                        "The remote sync worker is still stopping. The current storage was kept; retry shortly.",
+                    )
+                    return False
+            except Exception as exc:
+                logger.warning("Remote background sync stop failed during cleanup: %s", exc)
+                QMessageBox.warning(
+                    self,
+                    "Remote Sync Busy",
+                    f"The remote sync worker could not be stopped:\n{exc}\n\nThe current storage was kept.",
+                )
+                return False
+            if sync_pending:
+                try:
+                    if not call_responsive(sync_engine.sync_all):
+                        try:
+                            sync_engine.start_background_sync()
+                        except Exception as restart_exc:
+                            logger.warning("Remote background sync restart failed after cleanup error: %s", restart_exc)
+                        QMessageBox.warning(
+                            self,
+                            "Remote Sync Failed",
+                            "Pending remote configuration changes could not be synchronized. "
+                            "The current connection and storage were kept so you can retry.",
+                        )
+                        return False
+                except Exception as exc:
+                    logger.warning("Remote sync_all failed during cleanup: %s", exc)
+                    try:
+                        sync_engine.start_background_sync()
+                    except Exception as restart_exc:
+                        logger.warning("Remote background sync restart failed after cleanup error: %s", restart_exc)
+                    QMessageBox.warning(
+                        self,
+                        "Remote Sync Failed",
+                        f"Pending remote configuration changes could not be synchronized:\n{exc}\n\n"
+                        "The current connection and storage were kept so you can retry.",
+                    )
+                    return False
             try:
                 sync_engine._on_status_changed = None
             except Exception:
                 pass
-            if sync_pending:
-                try:
-                    if not sync_engine.sync_all():
-                        logger.warning("Remote sync_all reported pending sync failures during cleanup")
-                except Exception as exc:
-                    logger.warning("Remote sync_all failed during cleanup: %s", exc)
-            try:
-                sync_engine.stop_background_sync()
-            except Exception as exc:
-                logger.warning("Remote background sync stop failed during cleanup: %s", exc)
 
         if disconnect_ssh:
             ssh_manager = getattr(self.controller, "ssh_manager", None)
@@ -1178,6 +1226,7 @@ class MainWindow(QMainWindow):
                     logger.warning("Remote SSH disconnect failed during cleanup: %s", exc)
             if hasattr(self.controller, "ssh_manager"):
                 self.controller.ssh_manager = None
+        return True
 
     def setup_remote_storage(self, ssh_manager, remote_project_dir: str):
         """Setup remote storage when user connects via Runtime Environment page.
@@ -1194,7 +1243,8 @@ class MainWindow(QMainWindow):
         # sync thread or a replaced SSH manager alive against a stale path.
         old_sync_engine = self._current_sync_engine()
         old_ssh_manager = getattr(old_sync_engine, "_ssh", None) if old_sync_engine is not None else None
-        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=False)
+        if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=False):
+            return False
         if old_ssh_manager is not None and old_ssh_manager is not ssh_manager:
             try:
                 old_ssh_manager.disconnect()
@@ -1211,6 +1261,7 @@ class MainWindow(QMainWindow):
 
         # Start background sync
         sync_engine.start_background_sync()
+        return True
 
     def setup_local_storage(self, project_dir: str):
         """Setup local storage when user switches to local mode.
@@ -1220,7 +1271,8 @@ class MainWindow(QMainWindow):
         Args:
             project_dir: Local project directory path
         """
-        self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True)
+        if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True):
+            return False
 
         self.controller.storage = LocalStorage(project_dir)
         self.controller.project_root = project_dir
@@ -1231,6 +1283,7 @@ class MainWindow(QMainWindow):
             self._sync_status.setParent(None)
             self._sync_status.deleteLater()
             self._sync_status = None
+        return True
 
     def _setup_sync_status(self, sync_engine):
         """Setup sync status widget for remote mode."""

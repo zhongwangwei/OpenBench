@@ -245,7 +245,7 @@ class metrics:
             correlation: correlation coefficient
         """
         s, o = self._validate_inputs(s, o)
-        return xr.corr(s, o, dim=["time"]) ** 2
+        return (xr.corr(s, o, dim=["time"]) ** 2).clip(min=0, max=1)
 
     def NSE(self, s, o):
         """
@@ -328,15 +328,22 @@ class metrics:
             o_flat = o_values[mask]
             if s_flat.size == 0:
                 return np.nan
-            if not np.all(s_flat == np.floor(s_flat)) or not np.all(o_flat == np.floor(o_flat)):
+            s_rounded = np.rint(s_flat)
+            o_rounded = np.rint(o_flat)
+            if not np.allclose(s_flat, s_rounded, rtol=0.0, atol=1e-8) or not np.allclose(
+                o_flat, o_rounded, rtol=0.0, atol=1e-8
+            ):
                 raise ValueError("kappa_coeff requires integer-coded categorical labels")
-            s_flat = s_flat.astype(int)
-            o_flat = o_flat.astype(int)
+            s_flat = s_rounded.astype(int)
+            o_flat = o_rounded.astype(int)
             unique_data = np.unique(np.concatenate([s_flat, o_flat]))
-            kappa_mat = np.zeros((len(unique_data), len(unique_data)), dtype=float)
-            index = {value: idx for idx, value in enumerate(unique_data)}
-            for sv, ov in zip(s_flat, o_flat):
-                kappa_mat[index[sv], index[ov]] += 1
+            category_count = len(unique_data)
+            s_codes = np.searchsorted(unique_data, s_flat)
+            o_codes = np.searchsorted(unique_data, o_flat)
+            kappa_mat = np.bincount(
+                s_codes * category_count + o_codes,
+                minlength=category_count**2,
+            ).reshape(category_count, category_count)
             total = kappa_mat.sum()
             if total == 0:
                 return np.nan
@@ -453,6 +460,7 @@ class metrics:
         #   * ubKGE: with mean-zero inputs, KGE's beta = mean_s / mean_o
         #     becomes 0/0, so ubKGE uses an explicit 2-component
         #     (cc, alpha) reformulation.
+        s, o = self._validate_inputs(s, o)
         return s - s.mean(dim="time"), o - o.mean(dim="time")
 
     def pc_max(self, s, o):
@@ -729,9 +737,9 @@ class metrics:
             xr.DataArray: An array containing the CP values for each time step.
         """
 
-        # Align on the overlapping timestamps; missing pairs remain NaN and
-        # are skipped by xarray reductions below.
-        data_array, obs_array = self._validate_inputs(data_array, obs_array)
+        if not isinstance(data_array, xr.DataArray) or not isinstance(obs_array, xr.DataArray):
+            raise TypeError("Inputs must be xarray DataArrays")
+        data_array, obs_array = xr.align(data_array, obs_array, join="inner")
 
         # Apply transformation function
         if fun is not None:

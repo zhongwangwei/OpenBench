@@ -11,6 +11,22 @@ import pandas as pd
 import xarray as xr
 
 
+def _has_one_sample_per_calendar_month(ds: xr.Dataset) -> bool:
+    """True only for an explicit 12-point Jan-Dec monthly climatology axis."""
+    if "time" not in ds.coords or ds.sizes.get("time", 0) != 12:
+        return False
+    try:
+        months = pd.Index(ds["time"].dt.month.values)
+    except Exception:
+        return False
+    return months.is_unique and set(months) == set(range(1, 13))
+
+
+def _order_by_calendar_month(ds: xr.Dataset) -> xr.Dataset:
+    """Order a validated 12-point climatology by month identity, not timestamp year."""
+    return ds.isel(time=ds["time"].dt.month.values.argsort())
+
+
 def _time_weights(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.DataArray | None:
     """Return weights for averaging over time.
 
@@ -93,17 +109,28 @@ class ClimatologyProcessor:
             "ubcorrelation",  # Unbiased correlation
             "ubcorrelation_R2",  # Unbiased correlation R-squared
             "NSE",  # Nash-Sutcliffe Efficiency
+            "L",  # likelihood needs non-degenerate temporal error distribution
+            "ubRMSE",  # single-point anomaly RMSE is always zero after mean removal
+            "ubNSE",  # single-point unbiased NSE loses variance denominator
             "KGE",  # Kling-Gupta Efficiency
             "KGESS",  # KGE with multiple components
             "mKGE",  # Modified KGE
             "nKGE",  # Normalized KGE
             "pc_ampli",  # Phase and amplitude require temporal variation
-            "pc_max",  # Temporal phase
-            "pc_min",  # Temporal phase
             "CRMSD",  # Centered RMSD uses std(dim='time') and correlation
             "rv",  # Relative variability requires std(dim='time')
             "cp",  # Coefficient of Persistence uses .diff(dim='time')
             "br2",  # R-squared × slope requires correlation
+            "dr",  # refined index needs temporal error distribution
+            "MFM_omega",  # MFM components need multi-point temporal signatures
+            "MFM_varphi",
+            "MFM_eta",
+            "MFM",
+            "index_agreement",  # a single point cannot define agreement around an observed mean
+            "nBiasScore",  # annual single point lacks variability denominator
+            "nRMSEScore",  # annual single point lacks variability denominator
+            "nSeasonalityScore",  # seasonality needs month cycle
+            "Overall_Score",  # includes phase/IAV components; annual climatology has one point
         ]
 
     def is_climatology_mode(self, compare_tim_res: str) -> bool:
@@ -196,15 +223,16 @@ class ClimatologyProcessor:
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Set single time point to {annual_time}")
-            elif time_size == 12:
-                # 12 time points - set to syear's 12 months, then average to annual
+            elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
+                # 12 monthly representative values - average to annual.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
-                ds = ds.assign_coords(time=monthly_times)
-                # Average to annual climatology
+                ds = _order_by_calendar_month(ds).assign_coords(time=monthly_times)
                 ds = _weighted_time_mean(ds, source_tim_res).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
-                logging.info(f"Reference: Averaged 12 months to annual climatology at {annual_time}")
+                logging.info(
+                    f"Reference: Averaged 12 monthly climatology points to annual climatology at {annual_time}"
+                )
             else:
                 # Multiple time points (e.g., daily data) - average to annual climatology
                 logging.info(f"Reference: Processing {time_size} time points to annual climatology")
@@ -217,11 +245,11 @@ class ClimatologyProcessor:
             # Monthly climatology processing
             if not has_time_dim or time_size == 0:
                 raise ValueError("Monthly climatology requires time dimension with data")
-            elif time_size == 12:
-                # 12 time points - set to syear's 12 months as monthly climatology
+            elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
+                # 12 explicit monthly representative values - normalize labels to the comparison year.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
-                ds = ds.assign_coords(time=monthly_times)
-                logging.info(f"Reference: Set 12 time points to monthly climatology for year {syear}")
+                ds = _order_by_calendar_month(ds).assign_coords(time=monthly_times)
+                logging.info(f"Reference: Set 12 monthly climatology points to comparison year {syear}")
             else:
                 # Multiple time points - calculate monthly climatology via groupby
                 try:
@@ -294,6 +322,13 @@ class ClimatologyProcessor:
                 # Reorder to ensure months are in order (1-12)
                 ds_monthly = ds_monthly.sortby("month")
 
+                if len(ds_monthly.month) != 12:
+                    missing_months = set(range(1, 13)) - set(ds_monthly.month.values)
+                    raise ValueError(
+                        f"Monthly simulation climatology requires all 12 months; "
+                        f"missing months: {sorted(missing_months)}"
+                    )
+
                 # Drop the month coordinate and create new time dimension
                 ds_mean = ds_monthly.rename({"month": "time"})
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
@@ -302,7 +337,7 @@ class ClimatologyProcessor:
                 logging.info(f"Calculated monthly climatology from simulation data for year {syear}")
             except Exception as e:
                 logging.error(f"Error calculating monthly climatology: {e}")
-                return ds
+                raise
         else:
             logging.warning(f"Unknown climatology type: {clim_type}")
             return ds
@@ -382,7 +417,7 @@ class ClimatologyProcessor:
                 return False
         except Exception as e:
             logging.warning(f"Could not compare time coordinates: {e}")
-            # If we can't compare, assume they match and let downstream validation catch issues
+            return False
 
         return True
 
@@ -444,7 +479,7 @@ def process_climatology_evaluation(
         sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type, syear, source_tim_res=sim_tim_res)
     except Exception as e:
         logging.error(f"Failed to prepare climatology datasets: {e}")
-        return None, None, []
+        raise ValueError(f"Failed to prepare {clim_type} climatology datasets: {e}") from e
 
     # Validate compatibility
     if not processor.validate_climatology_compatibility(ref_processed, sim_processed):

@@ -104,6 +104,42 @@ def test_resource_usage_updates_from_local_process_tree(qapp, monkeypatch):
     assert dashboard.mem_label.text() == "10%"
 
 
+def test_process_cpu_sampler_is_reused_after_psutil_priming(qapp, monkeypatch):
+    class FakeProcess:
+        pid = 1
+
+        def __init__(self):
+            self.samples = 0
+
+        def children(self, recursive=True):
+            return []
+
+        def cpu_percent(self, interval=None):
+            self.samples += 1
+            return 0 if self.samples == 1 else 40
+
+        def memory_info(self):
+            return SimpleNamespace(rss=4)
+
+    fake_psutil = SimpleNamespace(
+        Process=lambda pid: FakeProcess(),
+        cpu_count=lambda: 4,
+        virtual_memory=lambda: SimpleNamespace(total=1000),
+        NoSuchProcess=RuntimeError,
+        AccessDenied=PermissionError,
+        ZombieProcess=ChildProcessError,
+    )
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    dashboard = ProgressDashboard()
+    dashboard.monitor_process_tree(lambda: 1)
+
+    dashboard._update_resource_usage()
+    dashboard._update_resource_usage()
+
+    assert dashboard.cpu_label.text() == "10%"
+    assert dashboard.mem_label.text() == "0.4%"
+
+
 def test_remote_resource_mode_is_explicitly_unavailable(qapp, monkeypatch):
     fake_psutil = SimpleNamespace(
         cpu_percent=lambda: 99,

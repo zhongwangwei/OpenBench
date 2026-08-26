@@ -5,14 +5,39 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from openbench.config.schema import OpenBenchConfig
+from openbench.data._system_resources import effective_cpu_count
 
 logger = logging.getLogger(__name__)
+
+
+def _remove_stale_rerun_outputs(output_dir: Path, tasks: list[dict[str, Any]], expected_paths) -> None:
+    """Remove artifacts that could otherwise be mistaken for the current rerun."""
+
+    def ignore_disappeared_entries(_func, _path, exc_info):
+        if not isinstance(exc_info[1], FileNotFoundError):
+            raise exc_info[1]
+
+    try:
+        for task in tasks:
+            for path in expected_paths(output_dir, task):
+                path.unlink(missing_ok=True)
+        for subdir in ("comparisons", "reports"):
+            path = output_dir / subdir
+            if path.exists():
+                shutil.rmtree(path, onerror=ignore_disappeared_entries)
+            path.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        locked_path = exc.filename or output_dir
+        raise RuntimeError(
+            f"Cannot clear stale output {locked_path}; close any open report or figure and retry"
+        ) from exc
 
 
 def _manifest_data(value: Any) -> Any:
@@ -111,6 +136,7 @@ def run_evaluation_impl(
     _collect_cached_results = _local_runner._collect_cached_results
     _dask_distributed_requested = _local_runner._dask_distributed_requested
     _evaluate_ready_tasks = _local_runner._evaluate_ready_tasks
+    _expected_output_paths = _local_runner._expected_output_paths
     _group_tasks_by_variable = _local_runner._group_tasks_by_variable
     _has_complete_outputs = _local_runner._has_complete_outputs
     _make_phase_error = _local_runner._make_phase_error
@@ -153,9 +179,10 @@ def run_evaluation_impl(
     # Currently unused at variable level — parallelism lives inside
     # DatasetProcessing (station processing, yearly combination).
     # Reserved for future variable-level parallel dispatch.
-    num_cores: int = max(1, os.cpu_count() or 1)
+    available_cores = effective_cpu_count(os.cpu_count() or 1)
+    num_cores: int = available_cores
     if hasattr(cfg, "project") and cfg.project is not None:
-        num_cores = getattr(cfg.project, "num_cores", 0) or num_cores
+        num_cores = min(available_cores, getattr(cfg.project, "num_cores", 0) or num_cores)
 
     # Also honour force flag from cfg.project if not passed directly
     if not force and hasattr(cfg, "project") and cfg.project is not None:
@@ -294,7 +321,17 @@ def run_evaluation_impl(
         unified_mask=bool(unified_mask),
     )
 
+    # Do not let a failed rerun leave prior metrics or an old polished report
+    # looking like results from the current run manifest.
+    rerun_tasks = [task for task in tasks if not task.get("cache_skipped")]
+    if rerun_tasks and not comparison_only and not only_drawing:
+        _remove_stale_rerun_outputs(output_dir, rerun_tasks, _expected_output_paths)
+
     time_alignment = cfg.project.time_alignment  # "intersection", "per_pair", "strict"
+    if dask_distributed_active is None:
+        dask_active_for_tasks = _dask_distributed_requested(_project_dask_config(cfg)) and not comparison_only
+    else:
+        dask_active_for_tasks = bool(dask_distributed_active) and not comparison_only
 
     # Dispatch preprocessing + evaluation (skip preprocessing in comparison-only
     # and only_drawing modes).
@@ -318,6 +355,7 @@ def run_evaluation_impl(
                         var_tasks[vn],
                         unified_mask=bool(unified_mask),
                         time_alignment=time_alignment,
+                        max_workers=1 if dask_active_for_tasks else None,
                     )
                 )
 
@@ -325,10 +363,6 @@ def run_evaluation_impl(
 
         raw_results: list[dict[str, Any]] = list(cached_results)
         task_level_num_cores = getattr(cfg.project, "num_cores", 1) if getattr(cfg, "project", None) else 1
-        if dask_distributed_active is None:
-            dask_active_for_tasks = _dask_distributed_requested(_project_dask_config(cfg)) and not comparison_only
-        else:
-            dask_active_for_tasks = bool(dask_distributed_active) and not comparison_only
         try:
             raw_results.extend(
                 _evaluate_ready_tasks(

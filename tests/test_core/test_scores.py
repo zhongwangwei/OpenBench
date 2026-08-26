@@ -174,3 +174,15 @@ def test_nphase_score_returns_nan_for_flat_seasonal_cycles():
     result = scorer.nPhaseScore(sim, obs)
 
     assert np.isnan(float(result))
+
+
+def test_seasonal_scores_require_all_twelve_months():
+    from openbench.core.scores import scores
+
+    scorer = scores()
+    times = pd.date_range("2000-01-01", periods=2, freq="MS")
+    obs = xr.DataArray([1.0, 2.0], dims="time", coords={"time": times})
+    sim = obs.copy()
+
+    assert np.isnan(float(scorer.nPhaseScore(sim, obs)))
+    assert np.isnan(float(scorer.nSeasonalityScore(sim, obs)))

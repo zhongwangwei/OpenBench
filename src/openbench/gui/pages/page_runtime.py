@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QThread, Signal
 
 from openbench.config.schema import DEFAULT_NUM_CORES
+from openbench.data._system_resources import effective_cpu_count
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets.remote_config import RemoteConfigWidget, _InstallProgressDialog
 
@@ -163,12 +164,12 @@ class PageRuntime(BasePage):
         cores_layout = QHBoxLayout()
         self.num_cores_spin = NoScrollSpinBox()
         self.num_cores_spin.setRange(1, 128)
-        self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
+        self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, effective_cpu_count(os.cpu_count() or 1)))
         self.num_cores_spin.setMinimumWidth(80)
         self.num_cores_spin.setToolTip("Number of CPU cores to use for parallel processing")
         self.num_cores_spin.valueChanged.connect(self._on_config_changed)
         cores_layout.addWidget(self.num_cores_spin)
-        self.cpu_available_label = QLabel(f"(Available: {os.cpu_count() or 'N/A'})")
+        self.cpu_available_label = QLabel(f"(Available: {effective_cpu_count(os.cpu_count() or 1)})")
         cores_layout.addWidget(self.cpu_available_label)
         cores_layout.addStretch()
         parallel_layout.addRow("CPU Cores:", cores_layout)
@@ -262,24 +263,23 @@ class PageRuntime(BasePage):
 
     def _on_execution_mode_changed(self, checked: bool):
         """Handle execution mode change."""
-        if self.radio_local.isChecked():
-            self.parallel_group.show()
-            self.local_env_group.show()
-            self.remote_config_widget.hide()
-            # Reset CPU available label to local
-            self.cpu_available_label.setText(f"(Available: {os.cpu_count() or 'N/A'})")
+        if getattr(self, "_loading_config", False):
+            self._apply_execution_mode_visibility("local" if self.radio_local.isChecked() else "remote")
+            return
 
+        if self.radio_local.isChecked():
             # Flush pending remote writes before disconnecting the SSH session.
-            self._switch_to_local_storage()
+            if not self._switch_to_local_storage():
+                self._set_execution_mode("remote")
+                return
+            self._apply_execution_mode_visibility("local")
             if self.remote_config_widget.get_ssh_manager() is not None:
                 self.remote_config_widget.disconnect()
 
             # Clear remote config when switching to local
             self.remote_config_widget.reset_to_defaults()
         else:
-            self.parallel_group.hide()  # Parallel Processing is inside RemoteConfigWidget
-            self.local_env_group.hide()
-            self.remote_config_widget.show()
+            self._apply_execution_mode_visibility("remote")
 
             # Clear local config when switching to remote
             self.local_openbench_input.clear()
@@ -288,6 +288,8 @@ class PageRuntime(BasePage):
 
     def _on_config_changed(self):
         """Handle any configuration change."""
+        if getattr(self, "_loading_config", False):
+            return
         self.save_to_config()
         # Auto-save to default path for next startup
         self._auto_save_settings()
@@ -301,21 +303,42 @@ class PageRuntime(BasePage):
 
             # Automatically switch to remote mode when connected
             if not self.radio_remote.isChecked():
-                self.radio_remote.blockSignals(True)
-                self.radio_remote.setChecked(True)
-                self.radio_local.setChecked(False)
-                self.radio_remote.blockSignals(False)
-                # Update UI visibility
-                self.parallel_group.hide()
-                self.local_env_group.hide()
-                self.remote_config_widget.show()
+                self._set_execution_mode("remote")
 
             # Switch to remote storage
-            self._switch_to_remote_storage()
+            if not self._switch_to_remote_storage():
+                self._set_execution_mode("local")
+                self._on_config_changed()
+                return
+            self._on_config_changed()
         else:
             # Clear ssh_manager when disconnected
             self.controller.ssh_manager = None
             logger.debug("SSH manager cleared from controller")
+
+    def _apply_execution_mode_visibility(self, mode: str):
+        """Apply local/remote widget visibility without changing storage."""
+        if mode == "local":
+            self.parallel_group.show()
+            self.local_env_group.show()
+            self.remote_config_widget.hide()
+            self.cpu_available_label.setText(f"(Available: {effective_cpu_count(os.cpu_count() or 1)})")
+        else:
+            self.parallel_group.hide()  # Parallel Processing is inside RemoteConfigWidget
+            self.local_env_group.hide()
+            self.remote_config_widget.show()
+
+    def _set_execution_mode(self, mode: str):
+        """Set the execution mode radio buttons and matching visibility atomically."""
+        self.radio_local.blockSignals(True)
+        self.radio_remote.blockSignals(True)
+        try:
+            self.radio_local.setChecked(mode == "local")
+            self.radio_remote.setChecked(mode == "remote")
+        finally:
+            self.radio_remote.blockSignals(False)
+            self.radio_local.blockSignals(False)
+        self._apply_execution_mode_visibility(mode)
 
     def _switch_to_local_storage(self):
         """Switch to local storage mode."""
@@ -327,8 +350,12 @@ class PageRuntime(BasePage):
             project_dir = self.local_openbench_input.text().strip()
             if not project_dir or not os.path.isdir(project_dir):
                 project_dir = get_openbench_root()
-            main_window.setup_local_storage(project_dir)
+            result = main_window.setup_local_storage(project_dir)
+            if result is False:
+                logger.warning("Switch to local storage was rejected; preserving remote configuration")
+                return False
             logger.info(f"Switched to local storage mode: {project_dir}")
+        return True
 
     def _switch_to_remote_storage(self):
         """Switch to remote storage mode."""
@@ -339,13 +366,20 @@ class PageRuntime(BasePage):
             # Use openbench_path as the remote project directory
             remote_project_dir = remote_config.get("openbench_path", "")
             if ssh_manager and remote_project_dir:
-                main_window.setup_remote_storage(ssh_manager, remote_project_dir)
+                result = main_window.setup_remote_storage(ssh_manager, remote_project_dir)
+                if result is False:
+                    logger.warning("Switch to remote storage was rejected; preserving existing storage")
+                    return False
                 logger.info(f"Switched to remote storage mode: {remote_project_dir}")
             elif ssh_manager:
                 # If no project dir configured, use default ~/OpenBench
                 default_dir = "~/OpenBench"
-                main_window.setup_remote_storage(ssh_manager, default_dir)
+                result = main_window.setup_remote_storage(ssh_manager, default_dir)
+                if result is False:
+                    logger.warning("Switch to remote storage was rejected; preserving existing storage")
+                    return False
                 logger.info(f"Switched to remote storage mode with default: {default_dir}")
+        return True
 
     def _get_main_window(self):
         """Get the main window instance."""
@@ -357,7 +391,6 @@ class PageRuntime(BasePage):
 
     def _on_python_changed(self, text):
         """Handle Python path change."""
-        self._refresh_conda()
         self._on_config_changed()
 
     def _on_conda_changed(self, text):
@@ -819,56 +852,63 @@ class PageRuntime(BasePage):
         """Load settings from controller config."""
         config = self.controller.config
         general = config.get("general", {})
+        self._loading_config = True
+        try:
+            # Load execution mode without firing storage switches or clearing
+            # the opposite mode's persisted settings.
+            execution_mode = general.get("execution_mode", "local")
+            self._set_execution_mode("remote" if execution_mode == "remote" else "local")
 
-        # Load execution mode
-        execution_mode = general.get("execution_mode", "local")
-        if execution_mode == "remote":
-            self.radio_remote.setChecked(True)
-            self.parallel_group.hide()
-            self.local_env_group.hide()
-            self.remote_config_widget.show()
-        else:
-            self.radio_local.setChecked(True)
-            self.parallel_group.show()
-            self.local_env_group.show()
-            self.remote_config_widget.hide()
+            # Load num_cores (for local mode)
+            self.num_cores_spin.blockSignals(True)
+            try:
+                self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
+            finally:
+                self.num_cores_spin.blockSignals(False)
 
-        # Load num_cores (for local mode)
-        self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
-
-        # Load Python path
-        python_path = general.get("python_path", "")
-        if python_path:
+            # Load Python path
+            python_path = general.get("python_path", "")
             self.python_combo.blockSignals(True)
-            found = False
-            for i in range(self.python_combo.count()):
-                if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
-                    self.python_combo.setCurrentIndex(i)
-                    found = True
-                    break
-            if not found:
-                self.python_combo.setCurrentText(python_path)
-            self.python_combo.blockSignals(False)
+            try:
+                if python_path:
+                    found = False
+                    for i in range(self.python_combo.count()):
+                        if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
+                            self.python_combo.setCurrentIndex(i)
+                            found = True
+                            break
+                    if not found:
+                        self.python_combo.setCurrentText(python_path)
+            finally:
+                self.python_combo.blockSignals(False)
 
-        # Load conda environment
-        conda_env = general.get("conda_env", "")
-        if conda_env:
+            # Load conda environment
+            conda_env = general.get("conda_env", "")
             self.conda_combo.blockSignals(True)
-            idx = self.conda_combo.findText(conda_env)
-            if idx >= 0:
-                self.conda_combo.setCurrentIndex(idx)
-                self._sync_python_combo_to_conda_selection()
-            self.conda_combo.blockSignals(False)
+            try:
+                if conda_env:
+                    idx = self.conda_combo.findText(conda_env)
+                    if idx >= 0:
+                        self.conda_combo.setCurrentIndex(idx)
+                        self._sync_python_combo_to_conda_selection()
+            finally:
+                self.conda_combo.blockSignals(False)
 
-        # Load local OpenBench path
-        local_openbench_path = general.get("local_openbench_path", "")
-        if local_openbench_path:
-            self.local_openbench_input.setText(local_openbench_path)
+            # Load local OpenBench path
+            local_openbench_path = general.get("local_openbench_path", "")
+            self.local_openbench_input.blockSignals(True)
+            try:
+                if local_openbench_path:
+                    self.local_openbench_input.setText(local_openbench_path)
+            finally:
+                self.local_openbench_input.blockSignals(False)
 
-        # Load remote config
-        remote_config = general.get("remote") or {}
-        if remote_config:
-            self.remote_config_widget.set_config(remote_config)
+            # Load remote config
+            remote_config = general.get("remote") or {}
+            if remote_config:
+                self.remote_config_widget.set_config(remote_config)
+        finally:
+            self._loading_config = False
 
     def save_to_config(self):
         """Save settings to controller config."""
@@ -976,49 +1016,62 @@ class PageRuntime(BasePage):
 
     def _apply_runtime_settings(self, settings: dict):
         """Apply runtime settings from a dictionary."""
-        # Apply execution mode
-        execution_mode = settings.get("execution_mode", "local")
-        if execution_mode == "remote":
-            self.radio_remote.setChecked(True)
-        else:
-            self.radio_local.setChecked(True)
+        self._loading_config = True
+        try:
+            # Apply execution mode without autosaving a half-loaded settings file.
+            execution_mode = settings.get("execution_mode", "local")
+            self._set_execution_mode("remote" if execution_mode == "remote" else "local")
 
-        # Apply num_cores
-        self.num_cores_spin.setValue(settings.get("num_cores", DEFAULT_NUM_CORES))
+            # Apply num_cores
+            self.num_cores_spin.blockSignals(True)
+            try:
+                self.num_cores_spin.setValue(settings.get("num_cores", DEFAULT_NUM_CORES))
+            finally:
+                self.num_cores_spin.blockSignals(False)
 
-        # Apply Python path
-        python_path = settings.get("python_path", "")
-        if python_path:
+            # Apply Python path
+            python_path = settings.get("python_path", "")
             self.python_combo.blockSignals(True)
-            found = False
-            for i in range(self.python_combo.count()):
-                if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
-                    self.python_combo.setCurrentIndex(i)
-                    found = True
-                    break
-            if not found:
-                self.python_combo.setCurrentText(python_path)
-            self.python_combo.blockSignals(False)
+            try:
+                if python_path:
+                    found = False
+                    for i in range(self.python_combo.count()):
+                        if self.python_combo.itemData(i) == python_path or self.python_combo.itemText(i) == python_path:
+                            self.python_combo.setCurrentIndex(i)
+                            found = True
+                            break
+                    if not found:
+                        self.python_combo.setCurrentText(python_path)
+            finally:
+                self.python_combo.blockSignals(False)
 
-        # Apply conda environment
-        conda_env = settings.get("conda_env", "")
-        if conda_env:
+            # Apply conda environment
+            conda_env = settings.get("conda_env", "")
             self.conda_combo.blockSignals(True)
-            idx = self.conda_combo.findText(conda_env)
-            if idx >= 0:
-                self.conda_combo.setCurrentIndex(idx)
-                self._sync_python_combo_to_conda_selection()
-            self.conda_combo.blockSignals(False)
+            try:
+                if conda_env:
+                    idx = self.conda_combo.findText(conda_env)
+                    if idx >= 0:
+                        self.conda_combo.setCurrentIndex(idx)
+                        self._sync_python_combo_to_conda_selection()
+            finally:
+                self.conda_combo.blockSignals(False)
 
-        # Apply local OpenBench path
-        local_openbench_path = settings.get("local_openbench_path", "")
-        if local_openbench_path:
-            self.local_openbench_input.setText(local_openbench_path)
+            # Apply local OpenBench path
+            local_openbench_path = settings.get("local_openbench_path", "")
+            self.local_openbench_input.blockSignals(True)
+            try:
+                if local_openbench_path:
+                    self.local_openbench_input.setText(local_openbench_path)
+            finally:
+                self.local_openbench_input.blockSignals(False)
 
-        # Apply remote config
-        remote_config = settings.get("remote") or {}
-        if remote_config:
-            self.remote_config_widget.set_config(remote_config)
+            # Apply remote config
+            remote_config = settings.get("remote") or {}
+            if remote_config:
+                self.remote_config_widget.set_config(remote_config)
+        finally:
+            self._loading_config = False
 
         # Save to controller config
         self.save_to_config()
@@ -1104,7 +1157,7 @@ class PageRuntime(BasePage):
 
             # Reset UI to defaults
             self.radio_local.setChecked(True)
-            self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
+            self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, effective_cpu_count(os.cpu_count() or 1)))
             self.python_combo.setCurrentIndex(0)
             self.conda_combo.setCurrentIndex(0)
             self.local_openbench_input.clear()

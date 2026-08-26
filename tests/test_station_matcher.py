@@ -265,6 +265,23 @@ def test_station_extraction_manual_fallback_uses_cyclic_longitude_distance():
     assert float(extracted["value"].values[0, 0, 0]) == pytest.approx(42.0)
 
 
+def test_station_extraction_falls_back_to_same_source_coordinates_when_peer_is_missing():
+    from openbench.data._processing_station_extract import StationExtractionMixin
+
+    class Processor(StationExtractionMixin):
+        compare_grid_res = 1.0
+
+    dataset = xr.Dataset(
+        {"value": (("time", "lat", "lon"), np.array([[[42.0]]]))},
+        coords={"time": pd.date_range("2000-01-01", periods=1), "lat": [1.0], "lon": [2.0]},
+    )
+    station = pd.Series({"ID": "A", "sim_lat": 1.0, "sim_lon": 2.0})
+
+    extracted = Processor().extract_single_station_data(dataset, station, "sim")
+
+    assert float(extracted["value"].values[0, 0, 0]) == pytest.approx(42.0)
+
+
 def test_cama_station_matching_treats_negative_999_as_missing(tmp_path):
     from openbench.data.station_matcher import run_station_matching
 
@@ -303,6 +320,43 @@ def test_cama_station_matching_treats_negative_999_as_missing(tmp_path):
 
     assert info.stn_list["use_syear"].tolist() == [2001]
     assert info.stn_list["use_eyear"].tolist() == [2001]
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        np.testing.assert_allclose(station_ds["discharge"].values, [np.nan, 2.0, np.nan], equal_nan=True)
+
+
+def test_direct_station_matching_writes_missing_sentinels_as_nan(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("2000-01-01", periods=3, freq="D")
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["A"], dtype=object)),
+            "lon": ("station", np.array([10.0])),
+            "lat": ("station", np.array([20.0])),
+            "discharge": (("station", "time"), np.array([[10.0, -999.0, 10.0]])),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2000,
+        sim_eyear=2000,
+        syear=2000,
+        eyear=2000,
+        min_year=0,
+        min_lon=-180,
+        max_lon=180,
+        min_lat=-90,
+        max_lat=90,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        np.testing.assert_allclose(station_ds["discharge"].values, [10.0, np.nan, 10.0], equal_nan=True)
 
 
 def test_station_matching_jobs_default_is_conservative(monkeypatch):

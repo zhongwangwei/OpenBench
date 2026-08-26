@@ -646,3 +646,23 @@ def test_generate_config_yaml_preserves_explicit_simulation_source_labels():
     data = yaml.safe_load(ConfigManager().generate_config_yaml(config))
 
     assert {k for k in data["simulation"] if k != "_defaults"} == {"RunA", "RunB"}
+
+
+def test_unified_to_gui_omitted_metrics_scores_show_defaults_but_explicit_empty_stays_empty():
+    base = {
+        "project": {"name": "demo", "output_dir": "/out", "years": [2001, 2002]},
+        "evaluation": {"variables": ["Runoff"]},
+        "reference": {"Runoff": "Ref"},
+        "simulation": {"CaseA": {"model": "CoLM2024", "root_dir": "/sim"}},
+    }
+
+    omitted = ConfigManager().unified_to_gui_config(dict(base))
+    explicit = ConfigManager().unified_to_gui_config({**base, "metrics": [], "scores": []})
+
+    assert omitted["metrics"] == {"bias": True, "RMSE": True, "correlation": True}
+    assert omitted["scores"] == {"Overall_Score": True}
+    assert explicit["metrics"] == {}
+    assert explicit["scores"] == {}
+    exported = yaml.safe_load(ConfigManager().generate_config_yaml(explicit))
+    assert exported["metrics"] == []
+    assert exported["scores"] == []

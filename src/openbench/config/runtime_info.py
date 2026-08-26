@@ -491,8 +491,14 @@ class GeneralInfoReader:
             if np.isnan(slat) or np.isnan(slon):
                 continue
 
-            # Distance in degrees (approximate, fast)
-            dist = np.sqrt((ref_lats - slat) ** 2 + (ref_lons - slon) ** 2)
+            # Great-circle angular distance in degrees. This preserves the
+            # existing threshold units while handling dateline wrap and high latitudes.
+            lat1 = np.radians(slat)
+            lat2 = np.radians(ref_lats)
+            dlat = lat2 - lat1
+            dlon = np.radians((ref_lons - slon + 180.0) % 360.0 - 180.0)
+            hav = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+            dist = np.degrees(2.0 * np.arcsin(np.sqrt(np.clip(hav, 0.0, 1.0))))
             min_idx = np.argmin(dist)
             min_dist = dist[min_idx]
 

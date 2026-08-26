@@ -251,6 +251,13 @@ def _expand_config_paths(cfg):
     cfg.project.output_dir = _expand_path_value(cfg.project.output_dir)
     if cfg.reference.data_root:
         cfg.reference.data_root = _expand_path_value(cfg.reference.data_root)
+    for override in (cfg.reference.overrides or {}).values():
+        for key in ("root_dir", "fulllist"):
+            if override.get(key):
+                override[key] = _expand_path_value(override[key])
+        for variable in (override.get("variables") or {}).values():
+            if isinstance(variable, dict) and variable.get("fulllist"):
+                variable["fulllist"] = _expand_path_value(variable["fulllist"])
     for entry in cfg.simulation.values():
         entry.root_dir = _expand_path_value(entry.root_dir)
         if entry.fulllist:
@@ -366,7 +373,11 @@ def _run_file_logging(cfg):
     log_path = log_dir / "run.log"
 
     root_logger = logging.getLogger()
+    matplotlib_logger = logging.getLogger("matplotlib")
+    xhtml2pdf_logger = logging.getLogger("xhtml2pdf")
     previous_root_level = root_logger.level
+    previous_matplotlib_level = matplotlib_logger.level
+    previous_xhtml2pdf_level = xhtml2pdf_logger.level
     previous_handler_levels = {handler: handler.level for handler in root_logger.handlers}
 
     handler = None
@@ -382,6 +393,8 @@ def _run_file_logging(cfg):
             if existing.level == logging.NOTSET:
                 existing.setLevel(previous_root_level or logging.INFO)
         root_logger.setLevel(logging.DEBUG)
+        matplotlib_logger.setLevel(logging.WARNING)
+        xhtml2pdf_logger.setLevel(logging.WARNING)
         root_logger.addHandler(handler)
         handler_added = True
         logging.getLogger(__name__).debug("Run log started: %s", log_path)
@@ -392,6 +405,8 @@ def _run_file_logging(cfg):
                 root_logger.removeHandler(handler)
             handler.close()
         root_logger.setLevel(previous_root_level)
+        matplotlib_logger.setLevel(previous_matplotlib_level)
+        xhtml2pdf_logger.setLevel(previous_xhtml2pdf_level)
         for existing, level in previous_handler_levels.items():
             existing.setLevel(level)
 

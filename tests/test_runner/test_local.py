@@ -106,11 +106,11 @@ def _write_fake_grid_outputs(
     if metrics:
         (case / "metrics").mkdir(parents=True, exist_ok=True)
         for metric in metrics:
-            _write_fake_netcdf(case / "metrics" / f"{stem}_{metric}.nc")
+            _write_fake_netcdf(case / "metrics" / f"{stem}_{metric}.nc", metric)
     if scores:
         (case / "scores").mkdir(parents=True, exist_ok=True)
         for score in scores:
-            _write_fake_netcdf(case / "scores" / f"{stem}_{score}.nc")
+            _write_fake_netcdf(case / "scores" / f"{stem}_{score}.nc", score)
 
 
 def _write_fake_station_outputs(casedir, var_name, ref_source, sim_source, *, metrics=True, scores=True):
@@ -133,12 +133,12 @@ def _write_fake_station_outputs(casedir, var_name, ref_source, sim_source, *, me
         (case / "scores" / filename).write_text(_csv_text(score_columns))
 
 
-def _write_fake_netcdf(path):
+def _write_fake_netcdf(path, variable="value"):
     """Write a tiny valid NetCDF file for output-readability checks."""
     import numpy as np
     import xarray as xr
 
-    xr.Dataset({"value": ("sample", np.array([1.0]))}).to_netcdf(path)
+    xr.Dataset({variable: ("sample", np.array([1.0]))}).to_netcdf(path)
 
 
 class _ExplodingNamelist:
@@ -170,9 +170,11 @@ def test_runner_declares_bridge_runtime_field_contract():
 
 
 def test_evaluation_task_worker_count_caps_to_cpu_count(monkeypatch):
+    import openbench.runner.evaluation_dispatch as evaluation_dispatch
     import openbench.runner.local as local_runner
 
     monkeypatch.setattr(local_runner.os, "cpu_count", lambda: 2)
+    monkeypatch.setattr(evaluation_dispatch, "effective_cpu_count", lambda count: count)
 
     assert local_runner._evaluation_task_worker_count(64, 10) == 2
     assert local_runner._evaluation_task_worker_count(64, 1) == 1
@@ -328,6 +330,7 @@ def test_failed_tasks_do_not_emit_gui_progress_markers(monkeypatch, capsys):
 
 def test_ready_tasks_parallelize_unified_mask_across_ref_groups(monkeypatch):
     """Unified-mask tasks can parallelize across refs after preprocessing is complete."""
+    import openbench.runner.evaluation_dispatch as evaluation_dispatch
     import openbench.runner.local as local_runner
 
     tasks = [
@@ -367,6 +370,7 @@ def test_ready_tasks_parallelize_unified_mask_across_ref_groups(monkeypatch):
     monkeypatch.setattr(local_runner, "_task_level_parallel_safe", lambda tasks: True)
     monkeypatch.setattr(local_runner, "ProcessPoolExecutor", FakeExecutor)
     monkeypatch.setattr(local_runner.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(evaluation_dispatch, "effective_cpu_count", lambda count: count)
 
     results = local_runner._evaluate_ready_tasks(
         tasks,
@@ -1385,6 +1389,60 @@ def test_comparison_helper_uses_bindings_comparison_context(tmp_path, monkeypatc
     ]
 
 
+def test_runner_score_comparison_with_empty_scores_returns_phase_error(tmp_path):
+    """HeatMap/RadarMap are score comparisons; empty scores must not be logged as completed."""
+    import openbench.config.adapter as adapter_module
+    from openbench.runner.postprocessing import run_comparison
+
+    output_dir = tmp_path / "case"
+    _write_fake_grid_outputs(output_dir, "Runoff", "RefA", "SimA", metrics=("bias",), scores=())
+
+    class Bindings:
+        runner_cfg = type("RunnerCfg", (), {})()
+
+        def build_comparison_context(self):
+            return adapter_module.ComparisonContext(
+                namelists=adapter_module.LegacyNamelists(
+                    main={
+                        "general": {
+                            "basename": "case",
+                            "basedir": str(tmp_path),
+                            "compare_grid_res": 0.5,
+                            "compare_tim_res": "Month",
+                            "weight": "none",
+                        }
+                    },
+                    reference={
+                        "general": {"Runoff_ref_source": "RefA"},
+                        "Runoff": {"RefA_data_type": "grid", "RefA_varname": "runoff_ref"},
+                    },
+                    simulation={
+                        "general": {"Runoff_sim_source": ["SimA"]},
+                        "Runoff": {"SimA_data_type": "grid", "SimA_varname": "runoff_sim"},
+                    },
+                ),
+                evaluation_items=["Runoff"],
+                score_vars=[],
+                metric_vars=["bias"],
+                comparison_fig={"HeatMap": {}},
+            )
+
+    errors = run_comparison(
+        Bindings(),
+        ["HeatMap"],
+        output_dir,
+        make_phase_error_fn=lambda phase, message, **kw: {"phase": phase, "message": message, **kw},
+        bindings_only_drawing_fn=lambda bindings: False,
+        post_phase_preflight_errors_fn=lambda *args, **kwargs: [],
+        filter_evaluation_items_with_outputs_fn=lambda output_dir, items: items,
+    )
+
+    assert len(errors) == 1
+    assert errors[0]["phase"] == "comparison"
+    assert errors[0]["item"] == "HeatMap"
+    assert "requires at least one score" in errors[0]["message"]
+
+
 def test_groupby_helper_uses_bindings_groupby_context(tmp_path, monkeypatch):
     """Groupby helper should get its payload from bindings instead of raw legacy sections."""
     import openbench.config.adapter as adapter_module
@@ -2359,8 +2417,9 @@ def test_task_config_hash_changes_when_runtime_inputs_change(tmp_path, monkeypat
     assert captured[0] != captured[1]
 
 
-def test_task_config_hash_changes_when_shared_unified_mask_peer_sims_change(tmp_path):
-    """intersection/strict unified_mask hashes must include peer sims sharing the ref mask."""
+@pytest.mark.parametrize("unified_mask", [True, False])
+def test_task_config_hash_changes_when_shared_intersection_peer_sims_change(tmp_path, unified_mask):
+    """Intersection hashes include sibling sims even without the optional spatial mask."""
     import openbench.config.adapter as adapter
     import openbench.runner.local as local_runner
     from openbench.runner.cache import EvaluationCache
@@ -2405,10 +2464,10 @@ def test_task_config_hash_changes_when_shared_unified_mask_peer_sims_change(tmp_
     bindings = type("Bindings", (), {"runner_cfg": runner_cfg, "namelists": namelists})()
 
     cfg_one = _make_cfg(tmp_path, comparison_enabled=False)
-    cfg_one.project.unified_mask = True
+    cfg_one.project.unified_mask = unified_mask
     cfg_one.project.time_alignment = "intersection"
     cfg_two = _make_cfg(tmp_path, comparison_enabled=False)
-    cfg_two.project.unified_mask = True
+    cfg_two.project.unified_mask = unified_mask
     cfg_two.project.time_alignment = "intersection"
     cfg_two.simulation["SimB"] = SimulationEntry(model="ModelB", root_dir=str(tmp_path / "sim-b"))
 
@@ -2436,6 +2495,8 @@ def test_task_config_hash_payload_serializes_simulation_entry_as_data(tmp_path):
     import openbench.runner.local as local_runner
 
     cfg = _make_cfg(tmp_path, comparison_enabled=False)
+    cfg.project.io.netcdf_compression = True
+    cfg.project.io.netcdf_compression_level = 3
     runner_cfg = adapter.RunnerConfig(
         basename="case",
         basedir=str(tmp_path),
@@ -2484,6 +2545,22 @@ def test_task_config_hash_payload_serializes_simulation_entry_as_data(tmp_path):
         comparison_vars=[],
         statistic_vars=[],
     )
+
+    postprocess_only_change = local_runner._task_hash_payload(
+        cfg=cfg,
+        bindings=bindings,
+        var_name="Runoff",
+        sim_source="SimA",
+        ref_source="TestRef",
+        metric_vars=["bias"],
+        score_vars=["Overall_Score"],
+        comparison_vars=["HeatMap"],
+        statistic_vars=["Mean"],
+    )
+
+    assert payload == postprocess_only_change
+    assert payload["output_io"] == {"netcdf_compression": True, "netcdf_compression_level": 3}
+    assert {"numpy", "pandas", "xarray", "cftime"} == set(payload["openbench"]["numeric_stack"])
 
     assert payload["simulation"]["config"] == {
         "model": "ModelA",
@@ -2548,6 +2625,29 @@ def test_run_manifest_preserves_hash_evidence_without_mutating_worker_tasks(tmp_
     assert manifest["tasks"][0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
     assert manifest["tasks"][0]["config_hash"] == tasks[0]["config_hash"]
     assert tasks[0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
+
+
+def test_rerun_removes_only_requested_outputs_and_old_postprocessing(tmp_path):
+    from openbench.runner.orchestration import _remove_stale_rerun_outputs
+
+    stale_metric = tmp_path / "metrics" / "rerun.nc"
+    cached_metric = tmp_path / "metrics" / "cached.nc"
+    old_report = tmp_path / "reports" / "old.html"
+    old_comparison = tmp_path / "comparisons" / "old.jpg"
+    for path in (stale_metric, cached_metric, old_report, old_comparison):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("old", encoding="utf-8")
+
+    _remove_stale_rerun_outputs(
+        tmp_path,
+        [{"name": "rerun"}],
+        lambda _output_dir, task: [stale_metric] if task["name"] == "rerun" else [cached_metric],
+    )
+
+    assert not stale_metric.exists()
+    assert cached_metric.exists()
+    assert list((tmp_path / "reports").iterdir()) == []
+    assert list((tmp_path / "comparisons").iterdir()) == []
 
 
 def test_run_continues_and_releases_hash_payload_when_manifest_write_fails(tmp_path, monkeypatch, caplog):
@@ -2846,6 +2946,97 @@ def test_task_config_hash_changes_when_middle_of_large_input_changes_without_mti
     os.utime(sim_file, ns=fixed_time)
 
     assert cache_hash() != first
+
+
+def test_input_file_signature_includes_station_files_listed_outside_root(tmp_path):
+    from openbench.runner.hashing import input_file_signature
+
+    root = tmp_path / "lists"
+    root.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    station_file = external / "site.nc"
+    station_file.write_bytes(b"first")
+    fulllist = root / "stations.csv"
+    fulllist.write_text(f"ID,sim_dir\nS1,{station_file}\n", encoding="utf-8")
+    section = {
+        "SimA_dir": str(root),
+        "SimA_fulllist": str(fulllist),
+        "SimA_data_type": "stn",
+    }
+
+    first = input_file_signature(section, "SimA")
+    station_file.write_bytes(b"second")
+    second = input_file_signature(section, "SimA")
+
+    signed_paths = {entry["path"] for entry in first["files"]}
+    assert str(station_file.resolve()) in signed_paths
+    assert second != first
+
+
+def test_task_hash_algorithm_modules_are_scoped_by_task_kind(tmp_path):
+    import openbench.config.adapter as adapter
+    import openbench.runner.local as local_runner
+
+    cfg = _make_cfg(tmp_path, comparison_enabled=False)
+    runner_cfg = adapter.RunnerConfig(
+        basename="case",
+        basedir=str(tmp_path),
+        evaluation_items={"Runoff": True},
+        metrics=["bias"],
+        scores=["Overall_Score"],
+        comparisons=[],
+        statistics=[],
+        general={
+            "syear": 2000,
+            "eyear": 2001,
+            "min_lat": -90,
+            "max_lat": 90,
+            "min_lon": -180,
+            "max_lon": 180,
+            "compare_tim_res": "Month",
+            "compare_grid_res": 0.5,
+            "compare_tzone": 0,
+            "weight": "area",
+            "unified_mask": False,
+            "time_alignment": "intersection",
+            "regrid_backend": "openbench_conservative",
+            "only_drawing": False,
+        },
+    )
+
+    def payload(ref_type, sim_type):
+        bindings = type(
+            "Bindings",
+            (),
+            {
+                "runner_cfg": runner_cfg,
+                "namelists": adapter.LegacyNamelists(
+                    main={"general": runner_cfg.general},
+                    reference={"Runoff": {"TestRef_varname": "runoff_ref", "TestRef_data_type": ref_type}},
+                    simulation={"Runoff": {"SimA_varname": "runoff_sim", "SimA_data_type": sim_type}},
+                ),
+            },
+        )()
+        return local_runner._task_hash_payload(
+            cfg=cfg,
+            bindings=bindings,
+            var_name="Runoff",
+            sim_source="SimA",
+            ref_source="TestRef",
+            metric_vars=["bias"],
+            score_vars=["Overall_Score"],
+            comparison_vars=[],
+            statistic_vars=[],
+        )
+
+    grid_modules = set(payload("grid", "grid")["openbench"]["source_modules"])
+    station_modules = set(payload("stn", "stn")["openbench"]["source_modules"])
+
+    assert "openbench.data.regrid.methods.conservative" in grid_modules
+    assert "openbench.data.time_utils" in grid_modules
+    assert "openbench.data.station_matcher" not in grid_modules
+    assert "openbench.data.station_matcher" in station_modules
 
 
 def test_task_config_hash_includes_regrid_backend_signature(tmp_path, monkeypatch):
@@ -5200,6 +5391,9 @@ def test_start_optional_dask_client_uses_env_options(monkeypatch):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["client_closed"] = True
 
@@ -5287,6 +5481,9 @@ def test_start_optional_dask_client_can_force_station_tasks(monkeypatch):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["client_closed"] = True
 
@@ -5321,6 +5518,9 @@ def test_start_optional_dask_client_connects_external_scheduler(monkeypatch):
             calls["address"] = address
             calls["kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["closed"] = True
 
@@ -5344,6 +5544,7 @@ def test_start_optional_dask_client_connects_external_scheduler(monkeypatch):
     assert calls == {
         "address": "tcp://scheduler:8786",
         "kwargs": {"set_as_default": True},
+        "worker_function": local_runner._runner_dask_runtime.limit_native_threads,
         "closed": True,
     }
 
@@ -5621,6 +5822,120 @@ def test_unified_mask_strict_rejects_equal_length_mismatched_time(tmp_path):
             "TestRef",
             "SimA",
         )
+
+
+def test_intersection_persists_shared_time_axis_without_spatial_mask(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.local as local_runner
+
+    case_dir = tmp_path / "case"
+    data_dir = case_dir / "data"
+    data_dir.mkdir(parents=True)
+    ref_path = data_dir / "Runoff_ref_TestRef_runoff_ref.nc"
+    sim_path = data_dir / "Runoff_sim_SimA_runoff_sim.nc"
+    ref_time = pd.date_range("2001-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {"runoff_ref": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+        coords={"time": ref_time, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(ref_path)
+    xr.Dataset(
+        {"runoff_sim": (("time", "lat", "lon"), np.ones((1, 1, 1)))},
+        coords={"time": ref_time[:1], "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(sim_path)
+
+    local_runner._apply_unified_mask(
+        {
+            "casedir": str(case_dir),
+            "ref_varname": "runoff_ref",
+            "sim_varname": "runoff_sim",
+            "time_alignment": "intersection",
+        },
+        "Runoff",
+        "TestRef",
+        "SimA",
+        apply_spatial_mask=False,
+    )
+
+    with xr.open_dataset(ref_path) as ds:
+        assert ds.sizes["time"] == 1
+        assert ds["time"].values[0] == ref_time[0]
+
+
+def test_intersection_accumulates_across_sibling_simulations(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.local as local_runner
+
+    data_dir = tmp_path / "case" / "data"
+    data_dir.mkdir(parents=True)
+    ref_time = pd.date_range("2001-01-01", periods=3, freq="D")
+    xr.Dataset(
+        {"runoff_ref": (("time", "lat", "lon"), np.ones((3, 1, 1)))},
+        coords={"time": ref_time, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(data_dir / "Runoff_ref_TestRef_runoff_ref.nc")
+    for sim, times in (("SimA", ref_time[:2]), ("SimB", ref_time[1:])):
+        xr.Dataset(
+            {"runoff_sim": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+            coords={"time": times, "lat": [0.0], "lon": [10.0]},
+        ).to_netcdf(data_dir / f"Runoff_sim_{sim}_runoff_sim.nc")
+        local_runner._apply_unified_mask(
+            {
+                "casedir": str(tmp_path / "case"),
+                "ref_varname": "runoff_ref",
+                "sim_varname": "runoff_sim",
+                "time_alignment": "intersection",
+            },
+            "Runoff",
+            "TestRef",
+            sim,
+            apply_spatial_mask=False,
+        )
+
+    with xr.open_dataset(data_dir / "Runoff_ref_TestRef_runoff_ref.nc") as ds:
+        assert ds.sizes["time"] == 1
+        assert ds["time"].values[0] == ref_time[1]
+
+
+def test_intersection_drops_reindexed_all_nan_sibling_timesteps(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.local as local_runner
+
+    data_dir = tmp_path / "case" / "data"
+    data_dir.mkdir(parents=True)
+    times = pd.date_range("2001-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {"runoff_ref": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+        coords={"time": times, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(data_dir / "Runoff_ref_TestRef_runoff_ref.nc")
+    for sim, values in (("SimA", [1.0, np.nan]), ("SimB", [1.0, 1.0])):
+        xr.Dataset(
+            {"runoff_sim": (("time", "lat", "lon"), np.asarray(values)[:, None, None])},
+            coords={"time": times, "lat": [0.0], "lon": [10.0]},
+        ).to_netcdf(data_dir / f"Runoff_sim_{sim}_runoff_sim.nc")
+        local_runner._apply_unified_mask(
+            {
+                "casedir": str(tmp_path / "case"),
+                "ref_varname": "runoff_ref",
+                "sim_varname": "runoff_sim",
+                "time_alignment": "intersection",
+            },
+            "Runoff",
+            "TestRef",
+            sim,
+            apply_spatial_mask=False,
+        )
+
+    with xr.open_dataset(data_dir / "Runoff_ref_TestRef_runoff_ref.nc") as ds:
+        assert ds.sizes["time"] == 1
+        assert ds["time"].values[0] == times[0]
 
 
 def test_unified_mask_write_failure_preserves_existing_ref_file(tmp_path, monkeypatch):
@@ -5904,12 +6219,51 @@ def test_preprocessing_emits_gui_progress_marker(monkeypatch, capsys):
         "Runoff",
         [task],
         unified_mask=False,
-        time_alignment="intersection",
+        time_alignment="per_pair",
     )
 
     output = capsys.readouterr().out
     assert 'OPENBENCH_PROGRESS {"event":"preprocessing_started"' in output
     assert 'OPENBENCH_PROGRESS {"event":"preprocessing_completed"' in output
+
+
+def test_preprocessing_caps_joblib_workers_when_dask_is_active(monkeypatch):
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    seen_workers = []
+    monkeypatch.setattr(
+        local_runner,
+        "_build_bridge_runtime_info",
+        lambda task: {
+            "casedir": "/tmp/case",
+            "num_cores": 8,
+            "ref_varname": "ref",
+            "sim_varname": "sim",
+            "ref_data_type": "grid",
+            "sim_data_type": "grid",
+        },
+    )
+
+    class Processor:
+        def __init__(self, info):
+            seen_workers.append(info["num_cores"])
+
+        def prepare_source(self, datasource):
+            pass
+
+    monkeypatch.setattr(processing, "DatasetProcessing", Processor)
+    task = {"var_name": "Runoff", "sim_source": "SimA", "ref_source": "RefA"}
+
+    local_runner._preprocess_variable_tasks(
+        "Runoff",
+        [task],
+        unified_mask=False,
+        time_alignment="per_pair",
+        max_workers=1,
+    )
+
+    assert seen_workers == [1]
 
 
 def test_failed_preprocessing_does_not_emit_completion_marker(monkeypatch, capsys):
@@ -7413,6 +7767,120 @@ def test_core_comparison_grid_missing_score_output_raises(tmp_path, monkeypatch,
 
 
 @pytest.mark.parametrize(
+    ("method_name", "plot_func", "folder"),
+    [
+        ("scenarios_HeatMap_comparison", "make_scenarios_scores_comparison_heat_map", "HeatMap"),
+        ("scenarios_RadarMap_comparison", "make_scenarios_comparison_radar_map", "RadarMap"),
+    ],
+)
+def test_core_score_comparison_aligns_rows_to_global_sim_header(tmp_path, monkeypatch, method_name, plot_func, folder):
+    """HeatMap/RadarMap rows must write N/A for sims not used by an item, not shift columns."""
+    import pandas as pd
+
+    import openbench.core.comparison as comparison_module
+
+    scores_dir = tmp_path / "scores"
+    scores_dir.mkdir()
+    for item, ref, sim, value in (
+        ("Runoff", "RefA", "SimA", 0.1),
+        ("Runoff", "RefA", "SimB", 0.2),
+        ("Evap", "RefB", "SimC", 0.3),
+    ):
+        pd.DataFrame([{"ID": "S1", "Overall_Score": value}]).to_csv(
+            scores_dir / f"{item}_stn_{ref}_{sim}_evaluations.csv", index=False
+        )
+
+    processor = comparison_module.ComparisonProcessing(
+        {
+            "general": {
+                "basename": "case",
+                "basedir": str(tmp_path),
+                "compare_grid_res": 0.5,
+                "compare_tim_res": "Month",
+                "weight": "none",
+            }
+        },
+        ["Overall_Score"],
+        [],
+    )
+    monkeypatch.setattr(comparison_module, plot_func, lambda *args, **kwargs: None)
+
+    getattr(processor, method_name)(
+        str(tmp_path),
+        {
+            "general": {"Runoff_sim_source": ["SimA", "SimB"], "Evap_sim_source": ["SimC"]},
+            "Runoff": {
+                "SimA_data_type": "stn",
+                "SimA_varname": "runoff_sima",
+                "SimB_data_type": "stn",
+                "SimB_varname": "runoff_simb",
+            },
+            "Evap": {"SimC_data_type": "stn", "SimC_varname": "evap_simc"},
+        },
+        {
+            "general": {"Runoff_ref_source": "RefA", "Evap_ref_source": "RefB"},
+            "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+            "Evap": {"RefB_data_type": "stn", "RefB_varname": "evap_ref"},
+        },
+        ["Runoff", "Evap"],
+        ["Overall_Score"],
+        [],
+        {},
+    )
+
+    output = (tmp_path / "comparisons" / folder / "scenarios_Overall_Score_comparison.csv").read_text().splitlines()
+    assert output == [
+        "Item,Reference,SimA,SimB,SimC",
+        "Runoff,RefA,0.100,0.200,N/A",
+        "Evap,RefB,N/A,N/A,0.300",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "message", "folder"),
+    [
+        ("scenarios_HeatMap_comparison", "HeatMap comparison requires at least one score", "HeatMap"),
+        ("scenarios_RadarMap_comparison", "RadarMap comparison requires at least one score", "RadarMap"),
+    ],
+)
+def test_core_score_comparison_rejects_empty_scores(tmp_path, method_name, message, folder):
+    """Score-only comparison methods should fail clearly instead of creating empty output dirs."""
+    import openbench.core.comparison as comparison_module
+
+    processor = comparison_module.ComparisonProcessing(
+        {
+            "general": {
+                "basename": "case",
+                "basedir": str(tmp_path),
+                "compare_grid_res": 0.5,
+                "compare_tim_res": "Month",
+                "weight": "none",
+            }
+        },
+        [],
+        ["bias"],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        getattr(processor, method_name)(
+            str(tmp_path),
+            {
+                "general": {"Runoff_sim_source": ["SimA"]},
+                "Runoff": {"SimA_data_type": "stn", "SimA_varname": "runoff_sim"},
+            },
+            {
+                "general": {"Runoff_ref_source": "RefA"},
+                "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+            },
+            ["Runoff"],
+            [],
+            ["bias"],
+            {},
+        )
+    assert not (tmp_path / "comparisons" / folder).exists()
+
+
+@pytest.mark.parametrize(
     ("method_name", "plot_func"),
     [
         ("scenarios_Taylor_Diagram_comparison", "make_scenarios_comparison_Taylor_Diagram"),
@@ -8352,6 +8820,7 @@ def test_partially_cached_variable_with_unified_mask_off_skips_cached_task_prepr
 
     monkeypatch.setattr(adapter, "build_runner_bindings", lambda cfg: bindings)
     monkeypatch.setattr(processing, "DatasetProcessing", FakeProcessor)
+    monkeypatch.setattr(local_runner, "_apply_unified_mask", lambda *args, **kwargs: None)
     monkeypatch.setattr(local_runner, "_evaluate_single", fake_evaluate)
     monkeypatch.setattr(local_runner, "_run_groupby", lambda *args, **kwargs: [])
 
@@ -8466,6 +8935,9 @@ def test_start_optional_dask_client_uses_project_dask_config(monkeypatch):
         def __init__(self, cluster, **kwargs):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
+
+        def run(self, function):
+            calls["worker_function"] = function
 
         def close(self):
             calls["client_closed"] = True

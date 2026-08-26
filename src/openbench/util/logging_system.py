@@ -505,10 +505,12 @@ def performance_logged(operation: Optional[str] = None):
                 raise
             finally:
                 duration = time.time() - start_time
-                manager = get_logging_manager()
-                manager.log_performance(
-                    op_name, duration, success, {"args_count": len(args), "kwargs_count": len(kwargs)}
-                )
+                if _logging_manager is not None:
+                    _logging_manager.log_performance(
+                        op_name, duration, success, {"args_count": len(args), "kwargs_count": len(kwargs)}
+                    )
+                else:
+                    logging.getLogger(__name__).debug("Performance: %s completed in %.3fs", op_name, duration)
 
         return wrapper
 

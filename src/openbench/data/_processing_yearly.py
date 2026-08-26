@@ -46,11 +46,14 @@ class YearlyPreprocessingMixin:
             # Calculate dataset size in GB
             dataset_size_gb = ds.nbytes / (1024**3)
 
-            # Update number of cores based on dataset size
-            optimal_cores = min(self.get_optimal_cores(dataset_size_gb), self.num_cores)
+            years = list(range(use_syear, use_eyear + 1))
+            if not years:
+                raise ValueError(f"No years to split: {use_syear} > {use_eyear}")
+            # More workers than output years only duplicate the lazy dataset graph
+            # and can multiply memory use without creating additional work.
+            optimal_cores = min(self.get_optimal_cores(dataset_size_gb), self.num_cores, len(years))
             logging.debug(f"Using {optimal_cores} cores for splitting years")
 
-            years = range(use_syear, use_eyear + 1)
             _processing_attr("Parallel", Parallel)(n_jobs=optimal_cores)(
                 _processing_attr("delayed", delayed)(save_year)(casedir, suffix, prefix, ds, year) for year in years
             )
@@ -143,14 +146,28 @@ class YearlyPreprocessingMixin:
     ) -> None:
         logging.debug("The dataset groupby is Single --> split it to Year")
         varfile = self._find_single_file(dirx, prefix, suffix, datasource, varname=varname)
-        ds = self.select_var(syear, eyear, tim_res, varfile, varname, datasource)
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        ds = self.select_timerange(ds, self.minyear, self.maxyear)
-        # Use updated varunit from filter if available (filter may have modified it)
-        current_varunit = getattr(self, f"{datasource}_varunit", varunit)
-        ds, varunit = self.process_units(ds, current_varunit)
-        self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
+        source_ds = None
+        try:
+            ds, source_ds = self.select_var(
+                syear,
+                eyear,
+                tim_res,
+                varfile,
+                varname,
+                datasource,
+                load=False,
+                return_source=True,
+            )
+            ds = self.check_coordinate(ds)
+            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
+            ds = self.select_timerange(ds, self.minyear, self.maxyear)
+            # Use updated varunit from filter if available (filter may have modified it)
+            current_varunit = getattr(self, f"{datasource}_varunit", varunit)
+            ds, varunit = self.process_units(ds, current_varunit)
+            self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
+        finally:
+            if source_ds is not None:
+                source_ds.close()
 
     @performance_monitor
     def preprocess_non_yearly_files(
@@ -201,15 +218,37 @@ class YearlyPreprocessingMixin:
         if len(found_files) > 1:
             logging.info(f"Found {len(found_files)} files for year {syear}, merging with open_mfdataset")
         varfiles = found_files[0] if len(found_files) == 1 else found_files
-        ds = self.select_var(syear, eyear, tim_res, varfiles, varname, datasource)
-        ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
-        # Use updated varunit from filter if available (filter may have modified it)
-        current_varunit = getattr(self, f"{datasource}_varunit", varunit)
-        ds, varunit = self.process_units(ds, current_varunit)
-        ds = self.select_timerange(ds, syear, eyear)
-        _write_netcdf_atomic(
-            ds,
-            os.path.join(casedir, "scratch", f"{datasource}_{prefix}{syear}{suffix}.nc"),
-            compression=False,
-        )
+        source_ds = None
+        try:
+            ds, source_ds = self.select_var(
+                syear,
+                eyear,
+                tim_res,
+                varfiles,
+                varname,
+                datasource,
+                load=False,
+                return_source=True,
+            )
+            ds = self.check_coordinate(ds)
+            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
+            # Use updated varunit from filter if available (filter may have modified it)
+            current_varunit = getattr(self, f"{datasource}_varunit", varunit)
+            ds, varunit = self.process_units(ds, current_varunit)
+            ds = self.select_timerange(ds, syear, eyear)
+            if getattr(self, f"{datasource}_data_type", "grid") != "stn" and not self._is_climatology_mode():
+                source_rank = self._frequency_rank(tim_res)
+                target_rank = self._frequency_rank(self.compare_tim_res)
+                if source_rank is not None and target_rank is not None and source_rank < target_rank:
+                    ds = self._resample_to_compare_resolution(ds, f"{datasource} yearly grid data")
+            _write_netcdf_atomic(
+                ds,
+                os.path.join(casedir, "scratch", f"{datasource}_{prefix}{syear}{suffix}.nc"),
+                compression=False,
+            )
+        finally:
+            if source_ds is not None:
+                try:
+                    source_ds.close()
+                except Exception:
+                    pass

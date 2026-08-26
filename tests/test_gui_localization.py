@@ -132,6 +132,11 @@ def test_sidebar_stays_aligned_with_nav_under_theme(qapp):
         assert splitter is not None
         sidebar = splitter.widget(0)
         assert sidebar.width() == window.nav_list.width() == 220
+
+        splitter.setSizes([320, 1280])
+        qapp.processEvents()
+        assert sidebar.width() == window.nav_list.width()
+        assert sidebar.width() > 220
     finally:
         if window is not None:
             window.close()

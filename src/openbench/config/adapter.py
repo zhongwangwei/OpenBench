@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from openbench.config.schema import OpenBenchConfig, is_simple_project_name
+from openbench.data._system_resources import effective_cpu_count
 from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_value_case_insensitive
 
 logger = logging.getLogger(__name__)
@@ -584,6 +585,9 @@ def _apply_reference_override(ref_ds, var_map, var_name: str, override: dict[str
     if not override:
         return ref_ds, var_map
     ds_fields = {k: v for k, v in override.items() if k != "variables" and hasattr(ref_ds, k)}
+    for key in ("root_dir", "fulllist"):
+        if ds_fields.get(key):
+            ds_fields[key] = _resolve_root_relative_path(ds_fields[key], None)
     if ds_fields:
         ref_ds = replace(ref_ds, **ds_fields)
     var_overrides = override.get("variables") if isinstance(override.get("variables"), dict) else {}
@@ -594,6 +598,8 @@ def _apply_reference_override(ref_ds, var_map, var_name: str, override: dict[str
             break
     if var_override and var_map is not None:
         var_fields = {k: v for k, v in var_override.items() if hasattr(var_map, k)}
+        if var_fields.get("fulllist"):
+            var_fields["fulllist"] = _resolve_root_relative_path(var_fields["fulllist"], None)
         if var_fields:
             var_map = replace(var_map, **var_fields)
     return ref_ds, var_map
@@ -656,7 +662,7 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
 
         # Use a context manager so the file handle is released even if
         # data_vars probing or any later step inside this try block raises.
-        with xr.open_dataset(nc_files[0]) as ds:
+        with xr.open_dataset(nc_files[0], decode_timedelta=False) as ds:
             available = {str(name): str(name) for name in ds.data_vars}
 
         # Try primary first
@@ -744,6 +750,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         registry = None
 
     target_ctx = derive_target_resolution_context(cfg, registry)
+    available_cores = effective_cpu_count(os.cpu_count() or 1)
 
     general = {
         "basename": basename,
@@ -755,7 +762,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         "max_lat": cfg.project.lat_range[1],
         "min_lon": cfg.project.lon_range[0],
         "max_lon": cfg.project.lon_range[1],
-        "num_cores": cfg.project.num_cores or max(1, os.cpu_count() or 1),
+        "num_cores": min(available_cores, cfg.project.num_cores or available_cores),
         "evaluation": True,
         "comparison": cfg.comparison.enabled,
         "statistics": cfg.statistics.enabled,
@@ -776,7 +783,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
 
     evaluation_items = {var: True for var in cfg.evaluation.variables}
 
-    if cfg.metrics:
+    if cfg.metrics is not None:
         metrics_dict = {m: True for m in cfg.metrics}
     else:
         metrics_dict = {"bias": True, "RMSE": True, "correlation": True}
@@ -985,7 +992,7 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 data_root = ref_ds.root_dir or cfg.reference.data_root or ""
             else:
                 data_root = (
-                    (source_override.get("root_dir") if source_override else None)
+                    (ref_ds.root_dir if source_override and source_override.get("root_dir") else None)
                     or cfg.reference.data_root
                     or ref_ds.root_dir
                     or ""

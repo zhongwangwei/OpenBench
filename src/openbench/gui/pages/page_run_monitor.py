@@ -13,7 +13,7 @@ import subprocess
 import platform
 
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtWidgets import QMessageBox, QFileDialog
+from PySide6.QtWidgets import QMessageBox, QFileDialog, QProgressDialog
 
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
@@ -143,6 +143,8 @@ class PageRunMonitor(BasePage):
         self._runner = None
         self._download_worker = None
         self._last_ssh_manager_error = ""
+        self._last_run_output_dir = None
+        self._last_run_is_remote = None
         super().__init__(controller, parent)
         # Remove the trailing stretch added by BasePage so dashboard can expand
         self._remove_trailing_stretch()
@@ -194,6 +196,7 @@ class PageRunMonitor(BasePage):
                 "Remote execution is selected, but no remote project connection is active.",
             )
             return
+        run_output_dir = self.controller.get_output_dir()
 
         tasks = []
         for item in selected:
@@ -275,6 +278,9 @@ class PageRunMonitor(BasePage):
             python_path = general.get("python_path", "")
             self._runner = EvaluationRunner(config_path, python_path, self)
             self.dashboard.monitor_process_tree(lambda: self._runner.get_process_pid() if self._runner else None)
+
+        self._last_run_output_dir = run_output_dir
+        self._last_run_is_remote = is_remote
 
         # Configure task counts for accurate progress tracking
         self._runner.set_task_counts(
@@ -517,12 +523,15 @@ class PageRunMonitor(BasePage):
 
     def _open_output(self):
         """Open output directory."""
-        output_dir = self.controller.get_output_dir()
+        output_dir = getattr(self, "_last_run_output_dir", None) or self.controller.get_output_dir()
 
         # Check if in remote mode using storage type
         from openbench.remote.storage import RemoteStorage
 
-        is_remote = isinstance(self.controller.storage, RemoteStorage)
+        last_run_is_remote = getattr(self, "_last_run_is_remote", None)
+        is_remote = (
+            last_run_is_remote if last_run_is_remote is not None else isinstance(self.controller.storage, RemoteStorage)
+        )
 
         if is_remote:
             # In remote mode, open remote file browser
@@ -627,8 +636,12 @@ class PageRunMonitor(BasePage):
 
     def _download_remote_folder(self, ssh_manager, remote_dir: str, parent_dialog):
         """Download entire remote folder to local."""
-        from PySide6.QtWidgets import QFileDialog, QProgressDialog
         from PySide6.QtCore import Qt
+
+        existing_worker = getattr(self, "_download_worker", None)
+        if existing_worker is not None and existing_worker.isRunning():
+            QMessageBox.warning(parent_dialog, "Download in Progress", "A remote folder download is already running.")
+            return
 
         # Ask user where to save
         local_dir = QFileDialog.getExistingDirectory(
@@ -653,6 +666,15 @@ class PageRunMonitor(BasePage):
         self._download_worker = worker
         progress.canceled.connect(worker.stop)
         worker.finished.connect(worker.deleteLater)
+
+        def _stop_worker_on_dialog_close(*_args):
+            if worker.isRunning():
+                worker.stop()
+
+        for signal_name in ("finished", "destroyed"):
+            signal = getattr(parent_dialog, signal_name, None)
+            if signal is not None and hasattr(signal, "connect"):
+                signal.connect(_stop_worker_on_dialog_close)
 
         def _on_progress(done: int, total: int, rel_path: str):
             import shiboken6

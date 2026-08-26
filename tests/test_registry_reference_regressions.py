@@ -211,3 +211,55 @@ def test_matching_nc_files_preserves_path_glob_semantics_case_insensitive(tmp_pa
     assert _matching_nc_files(tmp_path, "*.NC4") == [direct, lower]
     assert _matching_nc_files(tmp_path, "sub/*.nc4") == [child]
     assert _matching_nc_files(tmp_path, "**/*.nc4") == [direct, lower, child]
+
+
+def test_user_reference_mapping_entry_uses_key_as_missing_name(tmp_path: Path):
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "reference_catalog.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "Daily": {
+                    "description": "daily source",
+                    "category": "Water",
+                    "data_type": "grid",
+                    "tim_res": "Day",
+                    "data_groupby": "Year",
+                    "timezone": 0,
+                    "variables": {"Runoff": {"varname": "q", "varunit": "mm"}},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ref = RegistryManager(user_dir=tmp_path).get_reference("Daily")
+
+    assert ref is not None
+    assert ref.name == "Daily"
+
+
+def test_user_reference_dir_mapping_entry_uses_key_as_missing_name(tmp_path: Path):
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "custom.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "MSWEP_MidRes": {
+                    "description": "mapped source",
+                    "category": "Water",
+                    "data_type": "grid",
+                    "tim_res": "Month",
+                    "data_groupby": "Year",
+                    "timezone": 0,
+                    "variables": {"Precipitation": {"varname": "pr", "varunit": "mm"}},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    ref = RegistryManager(user_dir=tmp_path).get_reference("MSWEP_MidRes")
+
+    assert ref is not None
+    assert ref.name == "MSWEP_MidRes"

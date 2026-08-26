@@ -221,6 +221,23 @@ def test_station_fallback_conversion_failure_is_fatal():
         processing.DatasetProcessing.process_single_station_data(processor, ds, 2000, 2000, "sim")
 
 
+def test_external_station_sentinels_are_masked_before_resampling():
+    import openbench.data.processing as processing
+
+    processor = _make_processing_processor(processing)
+    processor.compare_tim_res = "ME"
+    values = np.full(31, 10.0)
+    values[[2, 9]] = [-999.0, -9999.0]
+    ds = xr.Dataset(
+        {"runoff": ("time", values)},
+        coords={"time": pd.date_range("2000-01-01", periods=31, freq="D")},
+    )
+
+    result = processing.DatasetProcessing.process_single_station_data(processor, ds, 2000, 2000, "sim")
+
+    assert float(result.dropna("time").isel(time=0)) == pytest.approx(10.0)
+
+
 def test_merged_station_processing_selects_requested_station_by_id():
     import openbench.data.processing as processing
 
@@ -415,6 +432,46 @@ def test_climatology_unsupported_metric_raises(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="Unsupported climatology metric"):
         processor.make_Evaluation()
+
+
+def test_climatology_resolves_list_variable_names(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+
+    coords = {"time": pd.date_range("2000-01-01", periods=12, freq="ME"), "lat": [0.0], "lon": [0.0]}
+    ref_ds = xr.Dataset({"actual_ref": (("time", "lat", "lon"), np.ones((12, 1, 1)))}, coords=coords)
+    sim_ds = xr.Dataset({"actual_sim": (("time", "lat", "lon"), np.ones((12, 1, 1)))}, coords=coords)
+
+    monkeypatch.setattr(
+        evaluation,
+        "open_dataset_chunked",
+        lambda path: ref_ds.copy() if "_ref_" in str(path) else sim_ds.copy(),
+    )
+    monkeypatch.setattr(evaluation, "_HAS_CLIMATOLOGY", True)
+    monkeypatch.setattr(
+        evaluation,
+        "process_climatology_evaluation",
+        lambda *_args, **_kwargs: (ref_ds, sim_ds, ["bias"]),
+    )
+    monkeypatch.setattr(evaluation.Evaluation_grid, "process_metric", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(evaluation, "make_plot_index_grid", lambda *_args, **_kwargs: None)
+
+    processor = evaluation.Evaluation_grid(
+        {
+            "casedir": str(tmp_path),
+            "item": "Runoff",
+            "ref_source": "RefA",
+            "sim_source": "SimA",
+            "ref_varname": ["missing_ref"],
+            "sim_varname": ["missing_sim"],
+            "metrics": ["bias"],
+            "scores": [],
+            "compare_tim_res": "climatology-month",
+            "syear": 2000,
+        },
+        fig_nml={},
+    )
+
+    processor.make_Evaluation()
 
 
 def test_station_time_alignment_preserves_exact_common_times():

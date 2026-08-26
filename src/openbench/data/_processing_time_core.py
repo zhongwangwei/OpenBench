@@ -75,7 +75,7 @@ class TimeCoreMixin:
 
     def _resample_to_compare_resolution(self, data: xr.Dataset | xr.DataArray, context: str):
         self._guard_against_temporal_upsampling(data, self.compare_tim_res, context)
-        item = str(getattr(self, "item", "") or "").lower()
+        item = re.sub(r"[\s-]+", "_", str(getattr(self, "item", "") or "").lower())
         units = str(getattr(data, "attrs", {}).get("units", "") or "").lower().strip()
         if isinstance(data, xr.Dataset) and not units:
             data_units = {
@@ -85,19 +85,53 @@ class TimeCoreMixin:
             }
             units = next(iter(data_units)) if len(data_units) == 1 else ""
 
+        units = re.sub(r"\s+", " ", units.translate(str.maketrans({"−": "-", "⁻": "-", "²": "2"})))
+
         accumulation_items = {
+            "p",
+            "pr",
+            "prcp",
+            "precip",
             "precipitation",
+            "rain",
+            "rainfall",
             "runoff",
             "snowfall",
+            "streamflow",
             "subsurface_runoff",
             "surface_runoff",
             "total_irrigation_amount",
+            "total_precipitation",
             "total_runoff",
+            "tot_precip",
+        }
+        state_items = {
+            "dam_storage",
+            "dam_water_storage",
+            "depth_of_surface_water",
+            "lake_water_level",
+            "lake_water_volume",
+            "river_water_level",
+            "root_zone_soil_moisture",
+            "snow_depth",
+            "snow_water_equivalent",
+            "soil_moisture",
+            "soil_moisture_lev2",
+            "surface_soil_moisture",
+            "terrestrial_water_storage_change",
+            "total_water_storage",
+            "water_storage_in_aquifer",
+            "water_table_depth",
         }
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)
             return data.resample(time=self.compare_tim_res).sum()
+        if units in accumulation_units and item not in accumulation_items | state_items:
+            raise ValueError(
+                f"{context}: units {units!r} are ambiguous for item {item!r}; use a canonical "
+                "accumulation/state item name or an explicit rate unit"
+            )
         return data.resample(time=self.compare_tim_res).mean()
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
@@ -133,20 +167,7 @@ class TimeCoreMixin:
                 return ds.expand_dims(time=[pd.Timestamp(f"{syear}-01-01")])
             if tim_res_lower == "climatology-month":
                 raise ValueError("Monthly climatology requires a time coordinate with 12 monthly values")
-            logging.warning("The dataset does not contain a 'time' coordinate.")
-            time_index = pd.date_range(start=f"{syear}-01-01T00:00:00", end=f"{eyear}-12-31T23:59:59", freq=tim_res)
-            result = ds.expand_dims(time=time_index)
-            try:
-                result = result.transpose("time", "lat", "lon")
-            except (ValueError, KeyError):
-                try:
-                    result = result.transpose("time", "lon", "lat")
-                except (ValueError, TypeError):
-                    result = result.squeeze()
-            if isinstance(result, xr.Dataset):
-                var_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(result.data_vars), None)
-                return result[var_name] if var_name and var_name in result else next(iter(result.data_vars.values()))
-            return result
+            raise ValueError("Non-climatology data must include a 'time' coordinate; refusing to broadcast static data")
 
         if not hasattr(ds["time"], "dt"):
             try:
@@ -164,6 +185,8 @@ class TimeCoreMixin:
 
         # Check for duplicate time values
         if ds["time"].to_index().has_duplicates:
+            if getattr(self, "time_alignment", "intersection") == "strict":
+                raise ValueError("strict time alignment requires unique time values; duplicate timestamps found")
             logging.warning("Warning: Duplicate time values found. Removing duplicates...")
             # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds["time"], return_index=True)
@@ -178,13 +201,49 @@ class TimeCoreMixin:
             try:
                 result = ds.transpose("time", "lon", "lat")
             except (ValueError, KeyError):
-                result = ds.squeeze()
+                result = ds.squeeze([dim for dim, size in ds.sizes.items() if dim != "time" and size == 1])
         # Ensure we always return a DataArray
         if isinstance(result, xr.Dataset) and var_name and var_name in result:
             return result[var_name]
         elif isinstance(result, xr.Dataset):
             return next(iter(result.data_vars.values()))
         return result
+
+    def _validate_strict_time_coverage(
+        self, ds: xr.Dataset | xr.DataArray, syear: int, eyear: int, tim_res: str
+    ) -> None:
+        """Strict mode rejects missing/extra timestamps before NaN reindexing can hide them."""
+        if getattr(self, "time_alignment", "intersection") != "strict" or "time" not in ds.coords:
+            return
+        text = str(tim_res or "").strip().lower()
+        match = re.match(r"(\d*)\s*([a-zA-Z]+)", text)
+        multiple = int(match.group(1) or 1) if match else 1
+        unit = match.group(2).lower() if match else text
+        if unit in {"m", "me", "mon", "month", "monthly"}:
+            expected = pd.period_range(f"{syear}-01", f"{eyear}-12", freq="M")[::multiple]
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="M")
+            label = f"{multiple}-month" if multiple > 1 else "month"
+        elif unit in {"d", "day", "daily"}:
+            expected = pd.DatetimeIndex(pd.date_range(f"{syear}-01-01", f"{eyear}-12-31 23:59:59", freq=f"{multiple}D"))
+            present = pd.DatetimeIndex(pd.to_datetime(ds["time"].values)).floor("D")
+            label = f"{multiple}-day" if multiple > 1 else "day"
+        elif unit in {"h", "hr", "hour", "hourly"}:
+            expected = pd.DatetimeIndex(pd.date_range(f"{syear}-01-01", f"{eyear}-12-31 23:59:59", freq=f"{multiple}h"))
+            present = pd.DatetimeIndex(pd.to_datetime(ds["time"].values)).floor("h")
+            label = f"{multiple}-hour" if multiple > 1 else "hour"
+        elif unit in {"y", "ye", "yr", "year", "annual", "yearly", "a"}:
+            expected = pd.period_range(str(syear), str(eyear), freq="Y")[::multiple]
+            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="Y")
+            label = f"{multiple}-year" if multiple > 1 else "year"
+        else:
+            return
+        missing = expected.difference(present)
+        extra = present.difference(expected)
+        if len(missing) or len(extra):
+            raise ValueError(
+                f"strict time alignment requires complete {label} coverage for {syear}-{eyear}; "
+                f"missing={list(map(str, missing[:5]))}, extra={list(map(str, extra[:5]))}"
+            )
 
     def check_dataset_time_integrity(
         self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str
@@ -194,11 +253,13 @@ class TimeCoreMixin:
         ds = self.check_time(ds, syear, eyear, tim_res)
         if self._is_climatology_frequency_value(tim_res):
             return ds
-        # Apply model-specific time adjustments
+        # Apply model-specific time adjustments before strict coverage validation;
+        # strict must still run before make_time_integrity fills missing steps.
         if datasource == "stat":
             ds["time"] = pd.DatetimeIndex(ds["time"].values)
         else:
             if getattr(self, f"{datasource}_data_type", "") != "stn":
                 ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
+        self._validate_strict_time_coverage(ds, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds

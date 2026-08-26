@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data._system_resources import effective_cpu_count
+
 
 def stat_anova(self, *variables):
     """
@@ -70,7 +72,7 @@ def stat_anova(self, *variables):
     # Determine number of cores to use.  Respect the configured n_jobs while
     # capping only at the actual host CPU count; do not impose an arbitrary
     # 8-core ceiling on larger machines.
-    cpu_count = max(1, os.cpu_count() or 1)
+    cpu_count = effective_cpu_count(os.cpu_count() or 1)
     # n_jobs == 0 would otherwise leak through as `num_cores = 0` and crash
     # joblib; treat it (along with negative values) as "use all cores".
     num_cores = n_jobs if n_jobs and n_jobs > 0 else cpu_count

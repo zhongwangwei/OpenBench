@@ -379,7 +379,10 @@ def test_station_taylor_comparison_runs_sequential_when_num_cores_is_one(tmp_pat
         {},
     )
 
-    assert (casedir / "comparisons" / "Taylor_Diagram" / "taylor_diagram__Latent_Heat__FLUXCOM_LowRes.csv").exists()
+    summary_path = casedir / "comparisons" / "Taylor_Diagram" / "taylor_diagram__Latent_Heat__FLUXCOM_LowRes.csv"
+    summary = pd.read_csv(summary_path)
+    assert summary.shape == (1, 8)
+    assert "Unnamed: 7" not in summary.columns
 
 
 def test_merge_site_uses_atomic_netcdf_write():
@@ -541,6 +544,18 @@ def test_setup_output_directories_merges_ref_and_sim_fulllists_for_station_pairs
     assert int(row["use_eyear"]) == 2004
 
 
+def test_station_list_spatial_fallback_wraps_dateline():
+    from openbench.config.runtime_info import GeneralInfoReader
+
+    sim = pd.DataFrame([{"ID": "sim", "sim_lat": 70.0, "sim_lon": 179.999}])
+    ref = pd.DataFrame([{"ID": "ref", "ref_lat": 70.0, "ref_lon": -180.001}])
+
+    matched = GeneralInfoReader._match_station_lists(sim, ref)
+
+    assert len(matched) == 1
+    assert matched.iloc[0]["ref_lon"] == -180.001
+
+
 def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_path):
     from openbench.data.processing import BaseDatasetProcessing
 
@@ -623,3 +638,49 @@ def test_station_evaluation_hard_fails_when_all_results_are_nonfinite(tmp_path, 
 
     with pytest.raises(RuntimeError, match="no finite"):
         ev.make_evaluation_P()
+
+
+def test_station_parallel_uses_non_loky_processes(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+    from openbench.core.evaluation import Evaluation_stn
+
+    stnlist = tmp_path / "stn_Ref_Sim_list.txt"
+    pd.DataFrame(
+        [
+            {"ID": "A", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000},
+            {"ID": "B", "sim_lon": 1, "sim_lat": 1, "use_syear": 2000, "use_eyear": 2000},
+        ]
+    ).to_csv(stnlist, index=False)
+
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir, ev.item, ev.ref_source, ev.sim_source = str(tmp_path), "Runoff", "Ref", "Sim"
+    ev.ref_fulllist, ev.num_cores, ev.output_manager = str(stnlist), 2, None
+    ev.metrics, ev.scores = ["bias"], []
+    seen_ids = []
+
+    def fake_eval(station_list, i):
+        seen_ids.append(station_list["ID"][i])
+        return {
+            "KGESS": 1.0,
+            "RMSE": 0.0,
+            "correlation": 1.0,
+            "bias": 0.0,
+        }
+
+    parallel_kwargs = {}
+
+    def fake_parallel_map(func, items, **kwargs):
+        parallel_kwargs.update(kwargs)
+        return [func(i) for i in items]
+
+    ev.make_evaluation_parallel = fake_eval
+    monkeypatch.setattr(evaluation, "_HAS_PARALLEL_ENGINE", True)
+    monkeypatch.setattr(evaluation, "parallel_map", fake_parallel_map)
+    monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
+
+    ev.make_evaluation_P()
+
+    assert seen_ids == ["A", "B"]
+    assert parallel_kwargs["backend"] == "concurrent"
+    saved = pd.read_csv(tmp_path / "metrics" / "Runoff_stn_Ref_Sim_evaluations.csv")
+    assert list(saved["ID"]) == ["A", "B"]

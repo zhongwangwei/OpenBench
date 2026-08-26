@@ -102,6 +102,23 @@ def test_preview_uses_actual_case_output_dir_when_rendering_unified_yaml():
     assert preview.config_preview.content == "project: {}\n"
 
 
+def test_preview_does_not_materialize_station_sources_until_run(monkeypatch):
+    preview = _preview()
+    preview.controller = FakeController()
+    preview.config_manager = RecordingConfigManager()
+    preview.output_dir_label = FakeLabel()
+    preview.config_preview = FakeYamlPreview()
+    calls = []
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_preview._materialize_local_station_sources",
+        lambda *_args: calls.append(True),
+    )
+
+    preview.load_from_config()
+
+    assert calls == []
+
+
 def test_local_station_sources_are_materialized_before_export(monkeypatch, tmp_path):
     root = tmp_path / "stations"
     root.mkdir()

@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data._system_resources import effective_cpu_count, get_system_resources
+
 # Import chunked dataset loader for memory efficiency
 try:
     from openbench.util.dataset_loader import open_dataset as open_dataset_chunked
@@ -97,7 +99,7 @@ except ImportError:
         return ""
 
 
-def _metric_worker_count(num_cores, metric_count: int) -> int:
+def _metric_worker_count(num_cores, metric_count: int, pair_nbytes: int = 0) -> int:
     """Return metric-level workers bounded by configured cores and metric count."""
     if metric_count <= 1:
         return 1
@@ -105,26 +107,27 @@ def _metric_worker_count(num_cores, metric_count: int) -> int:
         requested = int(num_cores) if num_cores is not None else 0
     except (TypeError, ValueError):
         requested = 1
+    available = effective_cpu_count(os.cpu_count() or 1)
     if requested <= 0:
-        requested = max(1, os.cpu_count() or 1)
-    return min(max(1, requested), metric_count)
+        requested = available
+    workers = min(max(1, requested), available, metric_count)
+    if pair_nbytes > 0:
+        available_bytes = get_system_resources()["available_memory_gb"] * 1024**3
+        # Metric reductions commonly need several pair-sized temporaries.
+        memory_workers = max(1, int((available_bytes * 0.25) // (pair_nbytes * 4)))
+        workers = min(workers, memory_workers)
+    return workers
 
 
 def _apply_pairwise_valid_mask(s: xr.DataArray, o: xr.DataArray) -> tuple[xr.DataArray, xr.DataArray]:
-    """Mask sim/ref arrays to their shared non-missing support without eager loads.
-
-    The old implementation used eager NumPy value copies and in-place
-    assignment, which materialized chunked high-resolution grids before metric
-    calculation. ``notnull``/``where`` keeps xarray/dask lazy until the metric
-    result is actually written.
-    """
-    valid = s.notnull() & o.notnull()
+    """Mask sim/ref arrays to their shared finite support without eager loads."""
+    valid = np.isfinite(s) & np.isfinite(o)
     return s.where(valid), o.where(valid)
 
 
 def _has_any_valid_pair(s: xr.DataArray, o: xr.DataArray) -> bool:
     """Return whether sim/ref arrays share at least one finite pair."""
-    valid = s.notnull() & o.notnull()
+    valid = np.isfinite(s) & np.isfinite(o)
     try:
         any_valid = valid.any()
         if hasattr(any_valid, "compute"):
@@ -162,19 +165,36 @@ def _scalar_plot_value(value, *, label: str, station_id: object) -> float:
     return float(np.nanmean(finite))
 
 
+def _grid_output_array(value, template: xr.DataArray, name: str) -> xr.DataArray:
+    """Return a named grid output without squeezing singleton lat/lon axes."""
+    if isinstance(value, xr.DataArray):
+        da = value.rename(name)
+    else:
+        spatial = template
+        drop = {dim: 0 for dim in spatial.dims if dim not in {"lat", "lon"}}
+        if drop:
+            spatial = spatial.isel(drop=True, **drop)
+        data = np.asarray(value)
+        if data.shape == ():
+            da = xr.full_like(spatial, float(data), dtype=float).rename(name)
+        else:
+            da = xr.DataArray(data, coords=[template.lat, template.lon], dims=["lat", "lon"], name=name)
+
+    squeeze_dims = [dim for dim, size in da.sizes.items() if size == 1 and dim not in {"lat", "lon"}]
+    if squeeze_dims:
+        da = da.squeeze(squeeze_dims, drop=True)
+    if "lat" in da.dims and "lon" in da.dims:
+        da = da.transpose("lat", "lon", ...)
+    return da
+
+
 class Evaluation_grid(metrics, scores):
     def _calculate_metric(self, s, o, metric):
         """Helper method for parallel metric calculation."""
-        try:
-            if hasattr(self, metric):
-                self.process_metric(metric, s, o)
-                return metric
-            else:
-                logging.error(f"No such metric: {metric}")
-                return None
-        except Exception as e:
-            logging.error(f"Error calculating metric {metric}: {e}")
-            return None
+        if not hasattr(self, metric):
+            raise ValueError(f"No such metric: {metric}")
+        self.process_metric(metric, s, o)
+        return metric
 
     def __init__(self, info, fig_nml):
         self.name = "Evaluation_grid"
@@ -224,69 +244,58 @@ class Evaluation_grid(metrics, scores):
         return s_aligned, o_aligned
 
     def process_metric(self, metric, s, o, vkey=""):
-        try:
-            pb = getattr(self, metric)(s, o)
-            pb = pb.squeeze()
-            if isinstance(pb, xr.DataArray):
-                pb_da = pb.rename(metric)
-            else:
-                pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=metric)
-            # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
-            pb_da = pb_da.load()
+        pb = getattr(self, metric)(s, o)
+        pb_da = _grid_output_array(pb, o, metric)
+        # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
+        pb_da = pb_da.load()
 
-            # Use output manager if available, otherwise fallback to original method
-            if self.output_manager:
-                filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}"
-                metadata = {
-                    "metric": metric,
-                    "item": self.item,
-                    "ref_source": self.ref_source,
-                    "sim_source": self.sim_source,
-                    "variable_key": vkey,
-                }
-                output_path = self.output_manager.save_data(pb_da, "metrics", filename, "netcdf", metadata)
-            else:
-                # Original method
-                output_path = os.path.join(
-                    self.casedir,
-                    "metrics",
-                    f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc",
-                )
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                _write_netcdf_atomic(pb_da, output_path)
-                logging.info(f"Saved metric {metric} to {output_path}")
-        finally:
-            gc.collect()  # Clean up memory after processing each metric
+        # Use output manager if available, otherwise fallback to original method
+        if self.output_manager:
+            filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}"
+            metadata = {
+                "metric": metric,
+                "item": self.item,
+                "ref_source": self.ref_source,
+                "sim_source": self.sim_source,
+                "variable_key": vkey,
+            }
+            self.output_manager.save_data(pb_da, "metrics", filename, "netcdf", metadata)
+        else:
+            # Original method
+            output_path = os.path.join(
+                self.casedir,
+                "metrics",
+                f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}.nc",
+            )
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            _write_netcdf_atomic(pb_da, output_path)
+            logging.info(f"Saved metric {metric} to {output_path}")
 
     def process_score(self, score, s, o, vkey=""):
-        try:
-            pb = getattr(self, score)(s, o)
-            pb = pb.squeeze()
-            pb_da = xr.DataArray(pb, coords=[o.lat, o.lon], dims=["lat", "lon"], name=score)
-            # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
-            pb_da = pb_da.load()
+        pb = getattr(self, score)(s, o)
+        pb_da = _grid_output_array(pb, o, score)
+        # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
+        pb_da = pb_da.load()
 
-            # Use output manager if available, otherwise fallback to original method
-            if self.output_manager:
-                filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}"
-                metadata = {
-                    "score": score,
-                    "item": self.item,
-                    "ref_source": self.ref_source,
-                    "sim_source": self.sim_source,
-                    "variable_key": vkey,
-                }
-                output_path = self.output_manager.save_data(pb_da, "scores", filename, "netcdf", metadata)
-            else:
-                # Original method
-                output_path = os.path.join(
-                    self.casedir, "scores", f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc"
-                )
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                _write_netcdf_atomic(pb_da, output_path)
-                logging.info(f"Saved score {score} to {output_path}")
-        finally:
-            gc.collect()  # Clean up memory after processing each score
+        # Use output manager if available, otherwise fallback to original method
+        if self.output_manager:
+            filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}"
+            metadata = {
+                "score": score,
+                "item": self.item,
+                "ref_source": self.ref_source,
+                "sim_source": self.sim_source,
+                "variable_key": vkey,
+            }
+            self.output_manager.save_data(pb_da, "scores", filename, "netcdf", metadata)
+        else:
+            # Original method
+            output_path = os.path.join(
+                self.casedir, "scores", f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc"
+            )
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            _write_netcdf_atomic(pb_da, output_path)
+            logging.info(f"Saved score {score} to {output_path}")
 
     def make_Evaluation(self, **kwargs):
         ref_ds = None
@@ -344,8 +353,8 @@ class Evaluation_grid(metrics, scores):
                     logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
                     logging.info("=" * 80)
 
-                    o = o_clim[f"{self.ref_varname}"]
-                    s = s_clim[f"{self.sim_varname}"]
+                    o = select_data_array(o_clim, self.ref_varname, self.item)
+                    s = select_data_array(s_clim, self.sim_varname, self.item)
                     o = Convert_Type.convert_nc(o)
                     s = Convert_Type.convert_nc(s)
 
@@ -390,12 +399,15 @@ class Evaluation_grid(metrics, scores):
                 )
                 return
 
-            s, o = _apply_pairwise_valid_mask(s, o)
             logging.info("=" * 80)
 
             # Parallel processing of metrics if configured and beneficial.
             # Honor project.num_cores instead of the old hard-coded max=4.
-            metric_workers = _metric_worker_count(getattr(self, "num_cores", 1), len(self.metrics))
+            metric_workers = _metric_worker_count(
+                getattr(self, "num_cores", 1),
+                len(self.metrics),
+                int(s.nbytes + o.nbytes),
+            )
             if _HAS_PARALLEL_ENGINE and metric_workers > 1:
                 logging.info("Processing %d metrics in parallel with %d worker(s)", len(self.metrics), metric_workers)
                 from functools import partial
@@ -407,6 +419,7 @@ class Evaluation_grid(metrics, scores):
                     task_name="Calculating metrics",
                     show_progress=False,
                     max_workers=metric_workers,
+                    backend="threading",
                 )
                 # Process results
                 for metric, result in zip(self.metrics, metric_results):
@@ -792,6 +805,7 @@ class Evaluation_stn(metrics, scores):
                         eval_func,
                         station_indices,
                         max_workers=max_workers,
+                        backend="concurrent",
                         task_name="Evaluating stations",
                         show_progress=True,
                     )
@@ -818,12 +832,20 @@ class Evaluation_stn(metrics, scores):
             if not results:
                 raise RuntimeError("Station evaluation produced no station results")
             station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
-            metric_columns = set((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
-            metric_columns.update(["KGESS", "RMSE", "correlation"])
-            present = [col for col in metric_columns if col in station_list.columns]
-            numeric_results = station_list[present].apply(pd.to_numeric, errors="coerce") if present else None
-            if numeric_results is None or not np.isfinite(numeric_results.to_numpy(dtype=float)).any():
-                raise RuntimeError("Station evaluation produced no finite metric/score rows")
+            requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
+            if not requested_columns:
+                requested_columns = ["KGESS", "RMSE", "correlation"]
+            missing_columns = [col for col in requested_columns if col not in station_list.columns]
+            if missing_columns:
+                raise RuntimeError(f"Station evaluation missing requested column(s): {missing_columns}")
+            numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
+            empty_columns = [
+                col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+            ]
+            if empty_columns:
+                raise RuntimeError(
+                    f"Station evaluation produced no finite values for requested column(s): {empty_columns}"
+                )
 
             logging.info("Evaluation finished")
             logging.info("=======================================")

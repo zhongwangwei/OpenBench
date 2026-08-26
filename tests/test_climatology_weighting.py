@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
-from openbench.data.climatology import ClimatologyProcessor
+from openbench.data.climatology import ClimatologyProcessor, process_climatology_evaluation
 
 
 def test_reference_annual_climatology_weights_month_lengths():
@@ -36,3 +37,33 @@ def test_simulation_monthly_climatology_weights_same_month_across_years():
     feb = result.sel(time="2001-02-15")["v"]
     expected_feb = (29.0 * 29 + 28.0 * 28) / (29 + 28)
     assert np.isclose(float(feb), expected_feb)
+
+
+def test_simulation_monthly_climatology_rejects_missing_months():
+    processor = ClimatologyProcessor()
+    times = pd.date_range("2001-01-01", periods=10, freq="MS") + pd.Timedelta(days=14)
+    ds = xr.Dataset({"v": ("time", np.arange(10.0))}, coords={"time": times})
+
+    with pytest.raises(ValueError, match=r"missing months: \[11, 12\]"):
+        processor.prepare_simulation_climatology(ds, processor.MONTHLY_CLIMATOLOGY, 2001)
+
+
+def test_climatology_processing_does_not_fall_back_to_raw_time_series():
+    times = pd.date_range("2001-01-01", periods=10, freq="MS") + pd.Timedelta(days=14)
+    ds = xr.Dataset({"v": ("time", np.arange(10.0))}, coords={"time": times})
+
+    with pytest.raises(ValueError, match="Failed to prepare monthly climatology"):
+        process_climatology_evaluation(
+            ds,
+            ds,
+            ["bias"],
+            compare_tim_res="climatology-month",
+            syear=2001,
+        )
+
+
+def test_climatology_compatibility_fails_closed_for_unparseable_times():
+    processor = ClimatologyProcessor()
+    ds = xr.Dataset({"v": ("time", [1.0])}, coords={"time": ["not-a-date"]})
+
+    assert processor.validate_climatology_compatibility(ds, ds) is False

@@ -7,6 +7,7 @@ signatures, raw-input file signatures, and the final per-task hash payload.
 
 from __future__ import annotations
 
+import csv
 import glob
 import hashlib
 import importlib
@@ -25,8 +26,9 @@ from openbench.config.schema import OpenBenchConfig
 
 logger = logging.getLogger(__name__)
 
-OPENBENCH_ALGORITHM_VERSION = "2026-06-08.algorithm-source-v2"
-ALGORITHM_SOURCE_MODULES = (
+OPENBENCH_ALGORITHM_VERSION = "2026-08-26.cache-signature-v3"
+NUMERIC_STACK_PACKAGES = ("numpy", "pandas", "xarray", "cftime")
+COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.core.evaluation",
     "openbench.core.comparison",
     "openbench.core._comparison_basic",
@@ -73,16 +75,9 @@ ALGORITHM_SOURCE_MODULES = (
     "openbench.data.climatology",
     "openbench.data.coordinates",
     "openbench.data.processing",
-    "openbench.data.regrid",
     "openbench.data._processing_base",
     "openbench.data._processing_config",
-    "openbench.data._processing_grid",
-    "openbench.data._processing_grid_core",
-    "openbench.data._processing_grid_regrid",
     "openbench.data._processing_selection",
-    "openbench.data._processing_station",
-    "openbench.data._processing_station_core",
-    "openbench.data._processing_station_extract",
     "openbench.data._processing_time",
     "openbench.data._processing_time_adjustments",
     "openbench.data._processing_time_core",
@@ -90,6 +85,37 @@ ALGORITHM_SOURCE_MODULES = (
     "openbench.data._processing_transforms",
     "openbench.data._processing_utils",
     "openbench.data._processing_yearly",
+    "openbench.data.time_utils",
+    "openbench.data.unit",
+)
+
+GRID_ALGORITHM_SOURCE_MODULES = (
+    "openbench.data.regrid",
+    "openbench.data.regrid.regrid",
+    "openbench.data.regrid.regrid_wgs84",
+    "openbench.data.regrid.utils",
+    "openbench.data.regrid.methods._shared",
+    "openbench.data.regrid.methods.conservative",
+    "openbench.data.regrid.methods.flox_reduce",
+    "openbench.data.regrid.methods.interp",
+    "openbench.data._processing_grid",
+    "openbench.data._processing_grid_core",
+    "openbench.data._processing_grid_regrid",
+    "openbench.core.landcover_groupby",
+    "openbench.core.climatezone_groupby",
+)
+
+STATION_ALGORITHM_SOURCE_MODULES = (
+    "openbench.data._processing_station",
+    "openbench.data._processing_station_core",
+    "openbench.data._processing_station_extract",
+    "openbench.data.station_matcher",
+    "openbench.data.station_missing",
+    "openbench.data.station_scanner",
+)
+
+ALGORITHM_SOURCE_MODULES = tuple(
+    dict.fromkeys((*COMMON_ALGORITHM_SOURCE_MODULES, *GRID_ALGORITHM_SOURCE_MODULES, *STATION_ALGORITHM_SOURCE_MODULES))
 )
 
 
@@ -157,11 +183,21 @@ def openbench_version() -> str:
     return getattr(openbench, "__version__", "unknown")
 
 
-@lru_cache(maxsize=1)
-def algorithm_source_fingerprint() -> str:
+def algorithm_source_modules_for_task(ref_data_type: str, sim_data_type: str) -> tuple[str, ...]:
+    """Return source modules that can affect one task kind."""
+    modules = list(COMMON_ALGORITHM_SOURCE_MODULES)
+    if ref_data_type != "stn" or sim_data_type != "stn":
+        modules.extend(GRID_ALGORITHM_SOURCE_MODULES)
+    if ref_data_type == "stn" or sim_data_type == "stn":
+        modules.extend(STATION_ALGORITHM_SOURCE_MODULES)
+    return tuple(dict.fromkeys(modules))
+
+
+@lru_cache(maxsize=16)
+def algorithm_source_fingerprint(modules: tuple[str, ...] = ALGORITHM_SOURCE_MODULES) -> str:
     """Return a digest of source modules that define metric/score semantics."""
     digest = hashlib.sha256()
-    for module_name in ALGORITHM_SOURCE_MODULES:
+    for module_name in modules:
         digest.update(module_name.encode("utf-8"))
         try:
             module = importlib.import_module(module_name)
@@ -211,6 +247,56 @@ def configured_regrid_backend(cfg: OpenBenchConfig, general: dict[str, Any]) -> 
     )
 
 
+def _resolve_station_path(raw_path: str, *, list_path: Path, root_path: Path) -> Path:
+    expanded = Path(os.path.expanduser(os.path.expandvars(str(raw_path))))
+    if expanded.is_absolute():
+        return expanded
+
+    csv_relative = (list_path.parent / expanded).resolve()
+    if csv_relative.exists():
+        return csv_relative
+
+    root_relative = (root_path / expanded.name).resolve()
+    if str(root_path) and root_relative.exists():
+        return root_relative
+
+    return csv_relative
+
+
+def _sniff_station_dialect(sample: str) -> csv.Dialect:
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",\t; ")
+    except csv.Error:
+        return csv.excel
+
+
+def _station_fulllist_files(list_path: Path, root_path: Path) -> set[Path]:
+    """Return station data files referenced by a station list CSV/TXT."""
+    try:
+        sample = list_path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as exc:
+        logger.debug("Could not read station list %s for cache signature: %s", list_path, exc)
+        return set()
+
+    dialect = _sniff_station_dialect(sample[:4096])
+    rows = csv.DictReader(sample.splitlines(), dialect=dialect)
+    if not rows.fieldnames:
+        return set()
+
+    path_columns = {
+        name
+        for name in rows.fieldnames
+        if str(name).strip().lower() in {"sim_dir", "ref_dir", "dir", "path", "file", "filename"}
+    }
+    files: set[Path] = set()
+    for row in rows:
+        for column in path_columns:
+            value = row.get(column)
+            if value and str(value).strip():
+                files.add(_resolve_station_path(str(value).strip(), list_path=list_path, root_path=root_path))
+    return files
+
+
 def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]:
     """Return a current file signature for raw inputs referenced by one source."""
     root = str(legacy_source_value(section, source, "dir") or "")
@@ -229,6 +315,7 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
         if not list_path.is_absolute():
             list_path = root_path / list_path
         candidates.add(list_path)
+        candidates.update(_station_fulllist_files(list_path, root_path))
 
     if root_path.exists():
         escaped_prefix = glob.escape(prefix)
@@ -279,6 +366,19 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
 def clear_hashing_caches() -> None:
     """Reset process-stable hashing memoization before planning a new evaluation."""
     algorithm_source_fingerprint.cache_clear()
+    numeric_stack_signature.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def numeric_stack_signature() -> dict[str, str]:
+    """Return versions of libraries that can change numerical/time semantics."""
+    versions = {}
+    for package in NUMERIC_STACK_PACKAGES:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = "unavailable"
+    return versions
 
 
 def stable_hash_data(value: Any) -> Any:
@@ -300,9 +400,11 @@ def shared_mask_peer_payload(
     ref_source: str,
     input_file_signature_fn: Callable[[dict[str, Any], str], dict[str, Any]] = input_file_signature,
 ) -> dict[str, Any] | None:
-    """Return peer simulation inputs that affect a shared unified mask."""
+    """Return peer simulations that affect shared spatial or temporal support."""
     alignment = getattr(cfg.project, "time_alignment", "intersection")
-    if not getattr(cfg.project, "unified_mask", True) or alignment not in {"intersection", "strict"}:
+    shared_spatial_mask = getattr(cfg.project, "unified_mask", True) and alignment in {"intersection", "strict"}
+    shared_time_support = alignment == "intersection"
+    if not (shared_spatial_mask or shared_time_support):
         return None
 
     namelists = getattr(bindings, "namelists", None)
@@ -416,18 +518,27 @@ def task_hash_payload(
 
     sim_entry = cfg.simulation.get(sim_source)
     selected_regrid_backend = configured_regrid_backend(cfg, general)
+    ref_data_type = str(ref_section.get(f"{ref_source}_data_type", "grid"))
+    sim_data_type = str(sim_section.get(f"{sim_source}_data_type", getattr(sim_entry, "data_type", None) or "grid"))
+    source_modules = algorithm_source_modules_for_task(ref_data_type, sim_data_type)
     return {
         "variable": var_name,
         "sim_source": sim_source,
         "ref_source": ref_source,
         "metrics": metric_vars,
         "scores": score_vars,
-        "comparisons": comparison_vars,
-        "statistics": statistic_vars,
         "openbench": {
             "version": openbench_version_fn(),
             "algorithm_version": OPENBENCH_ALGORITHM_VERSION,
-            "source_fingerprint": algorithm_source_fingerprint(),
+            "source_fingerprint": algorithm_source_fingerprint(source_modules),
+            "source_modules": source_modules,
+            "numeric_stack": numeric_stack_signature(),
+        },
+        # Comparison/statistics selections consume evaluation outputs but do
+        # not change them; keeping them out avoids expensive metric reruns.
+        "output_io": {
+            "netcdf_compression": bool(cfg.project.io.netcdf_compression),
+            "netcdf_compression_level": int(cfg.project.io.netcdf_compression_level),
         },
         "general": {key: general.get(key) for key in general_keys},
         "project": {

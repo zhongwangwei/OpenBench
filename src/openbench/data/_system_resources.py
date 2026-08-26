@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -11,6 +13,53 @@ try:
     import psutil
 except ImportError:  # pragma: no cover - optional dependency fallback
     psutil = None
+
+
+def _cgroup_cpu_limit() -> int | None:
+    """Return the Linux cgroup CPU quota when exposed by the current mount."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text(encoding="utf-8").split()[:2]
+        if quota != "max":
+            return max(1, int(float(quota) / float(period)))
+    except (FileNotFoundError, OSError, ValueError):
+        pass
+    try:
+        quota = float(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text(encoding="utf-8"))
+        period = float(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text(encoding="utf-8"))
+        if quota > 0 and period > 0:
+            return max(1, int(quota / period))
+    except (FileNotFoundError, OSError, ValueError):
+        pass
+    return None
+
+
+def effective_cpu_count(host_count: int | None = None) -> int:
+    """Return CPUs available to this process, respecting affinity and cgroups."""
+    counts = [max(1, int(host_count or os.cpu_count() or 1))]
+    try:
+        counts.append(max(1, len(os.sched_getaffinity(0))))
+    except (AttributeError, OSError):
+        pass
+    cgroup_limit = _cgroup_cpu_limit()
+    if cgroup_limit is not None:
+        counts.append(cgroup_limit)
+    return min(counts)
+
+
+_NATIVE_THREAD_LIMITER = None
+
+
+def limit_native_threads() -> None:
+    """Limit BLAS/OpenMP thread pools inside a process worker."""
+    global _NATIVE_THREAD_LIMITER
+    for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
+        os.environ[name] = "1"
+    try:
+        from threadpoolctl import threadpool_limits
+
+        _NATIVE_THREAD_LIMITER = threadpool_limits(limits=1)
+    except ImportError:  # pragma: no cover - scikit-learn normally provides it
+        _NATIVE_THREAD_LIMITER = None
 
 
 def get_system_resources():
@@ -30,37 +79,35 @@ def get_system_resources():
         "cpu_freq_mhz": 0,
     }
 
-    try:
-        # Get memory information - works on all platforms
-        memory_info = psutil.virtual_memory()
-        result["total_memory_gb"] = memory_info.total / (1024**3)
-        result["available_memory_gb"] = memory_info.available / (1024**3)
-    except Exception as e:
-        logging.warning(f"Failed to get memory info: {e}")
-
-    try:
-        # Get CPU count - works on all platforms
-        cpu_count = psutil.cpu_count(logical=False)
-        if cpu_count is not None:
-            result["cpu_count"] = cpu_count
-        else:
-            # Fallback to logical CPU count
-            result["cpu_count"] = psutil.cpu_count(logical=True) or 4
-    except Exception as e:
-        logging.warning(f"Failed to get CPU count: {e}")
-
-    # Get CPU frequency with platform-specific handling
+    # psutil is optional; keep quiet defaults when it is not installed.
     cpu_freq_from_psutil = False
-    try:
-        cpu_freq_info = psutil.cpu_freq()
-        if cpu_freq_info is not None and hasattr(cpu_freq_info, "max") and cpu_freq_info.max:
-            result["cpu_freq_mhz"] = cpu_freq_info.max
-            cpu_freq_from_psutil = True
-        elif cpu_freq_info is not None and hasattr(cpu_freq_info, "current") and cpu_freq_info.current:
-            result["cpu_freq_mhz"] = cpu_freq_info.current
-            cpu_freq_from_psutil = True
-    except Exception as e:
-        logging.debug(f"psutil.cpu_freq() failed: {e}")
+    if psutil is not None:
+        try:
+            memory_info = psutil.virtual_memory()
+            result["total_memory_gb"] = memory_info.total / (1024**3)
+            result["available_memory_gb"] = memory_info.available / (1024**3)
+        except Exception as e:
+            logging.warning(f"Failed to get memory info: {e}")
+
+        try:
+            cpu_count = psutil.cpu_count(logical=False)
+            if cpu_count is not None:
+                result["cpu_count"] = effective_cpu_count(cpu_count)
+            else:
+                result["cpu_count"] = effective_cpu_count(psutil.cpu_count(logical=True) or 4)
+        except Exception as e:
+            logging.warning(f"Failed to get CPU count: {e}")
+
+        try:
+            cpu_freq_info = psutil.cpu_freq()
+            if cpu_freq_info is not None and hasattr(cpu_freq_info, "max") and cpu_freq_info.max:
+                result["cpu_freq_mhz"] = cpu_freq_info.max
+                cpu_freq_from_psutil = True
+            elif cpu_freq_info is not None and hasattr(cpu_freq_info, "current") and cpu_freq_info.current:
+                result["cpu_freq_mhz"] = cpu_freq_info.current
+                cpu_freq_from_psutil = True
+        except Exception as e:
+            logging.debug(f"psutil.cpu_freq() failed: {e}")
 
     # If psutil didn't work, try platform-specific fallbacks
     if not cpu_freq_from_psutil:
@@ -212,6 +259,8 @@ def calculate_optimal_cores(cpu_count: int, available_memory_gb: float, dataset_
 
 __all__ = [
     "get_system_resources",
+    "effective_cpu_count",
+    "limit_native_threads",
     "calculate_optimal_chunk_size",
     "calculate_optimal_cores",
 ]
