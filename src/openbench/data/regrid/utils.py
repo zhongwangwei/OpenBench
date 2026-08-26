@@ -128,8 +128,7 @@ def to_intervalindex(coords: np.ndarray) -> pd.IntervalIndex:
         intervals = pd.IntervalIndex.from_breaks(breaks)
 
     else:
-        # If the target grid has a single point, set search interval to span all space
-        intervals = pd.IntervalIndex.from_breaks([-np.inf, np.inf])
+        raise ValueError("Conservative regridding cannot infer cell bounds from a singleton coordinate")
 
     return intervals
 

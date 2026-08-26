@@ -272,6 +272,8 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
         raise ValueError(
             "Conservative regridding cannot infer finite cell bounds for a non-identical single-point coordinate"
         )
+    if source_coords.size == 1 or target_coords.size == 1:
+        raise ValueError("Conservative regridding requires explicit cell bounds for one-sided singleton coordinates")
     mode = "spherical" if spherical else "linear"
     key = (REGRID_WEIGHT_SCHEMA_VERSION, mode, _coord_cache_token(source_coords), _coord_cache_token(target_coords))
     if _WEIGHTS_CACHE_MAXSIZE:
