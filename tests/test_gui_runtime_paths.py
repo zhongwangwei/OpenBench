@@ -90,6 +90,101 @@ def test_runtime_remote_mode_cannot_continue_without_execution_target(qapp, monk
     assert warnings and warnings[-1][1] == "Remote Connection Required"
 
 
+def test_runtime_load_remote_config_does_not_save_widget_defaults(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    loaded = {
+        "execution_mode": "remote",
+        "python_path": "/local/Python Env/bin/python",
+        "conda_env": "",
+        "local_openbench_path": "/local/OpenBench",
+        "num_cores": 31,
+        "remote": {
+            "host": "alice@example.test",
+            "auth_type": "key",
+            "key_file": "/home/alice/.ssh/id_ed25519",
+            "use_jump": True,
+            "jump_node": "node110",
+            "jump_auth": "key",
+            "node_key_file": "/home/alice/.ssh/node_key",
+            "num_cores": 48,
+            "python_path": "/opt/conda/envs/openbench/bin/python",
+            "conda_env": "",
+            "openbench_path": "/work/alice/OpenBench",
+        },
+    }
+    page.controller.config["general"].update(deepcopy(loaded))
+
+    page.load_from_config()
+
+    for key, value in loaded.items():
+        assert page.controller.config["general"][key] == value
+    remote = page.remote_config_widget.get_config()
+    assert remote["host"] == loaded["remote"]["host"]
+    assert remote["python_path"] == loaded["remote"]["python_path"]
+    assert remote["openbench_path"] == loaded["remote"]["openbench_path"]
+    assert remote["num_cores"] == loaded["remote"]["num_cores"]
+
+
+def test_runtime_apply_settings_does_not_autosave_partial_remote_defaults(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    autosaves = []
+    page._auto_save_settings = lambda: autosaves.append(deepcopy(page._collect_runtime_settings()))
+    settings = {
+        "execution_mode": "remote",
+        "python_path": "/local/Python Env/bin/python",
+        "local_openbench_path": "/local/OpenBench",
+        "num_cores": 8,
+        "remote": {
+            "host": "alice@example.test",
+            "num_cores": 40,
+            "python_path": "/opt/conda/envs/openbench/bin/python",
+            "openbench_path": "/work/alice/OpenBench",
+        },
+    }
+
+    page._apply_runtime_settings(settings)
+
+    assert autosaves == []
+    assert page.controller.config["general"]["remote"]["host"] == "alice@example.test"
+    assert page.controller.config["general"]["remote"]["python_path"] == "/opt/conda/envs/openbench/bin/python"
+    assert page.controller.config["general"]["num_cores"] == 40
+
+
+def test_switching_local_aborts_when_storage_switch_fails(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    page.radio_remote.setChecked(True)
+    page.remote_config_widget.host_input.setText("alice@example.test")
+    page.remote_config_widget.openbench_input.setText("/work/alice/OpenBench")
+    page.remote_config_widget.get_ssh_manager = lambda: object()
+    page.remote_config_widget.disconnect = lambda: events.append("disconnect")
+    page.remote_config_widget.reset_to_defaults = lambda: events.append("reset")
+    page._switch_to_local_storage = lambda: False
+    page._auto_save_settings = lambda: events.append("save")
+
+    page.radio_local.setChecked(True)
+
+    assert page.radio_remote.isChecked()
+    assert page.remote_config_widget.host_input.text() == "alice@example.test"
+    assert "disconnect" not in events
+    assert "reset" not in events
+
+
+def test_connection_success_switches_to_remote_and_saves(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    page.remote_config_widget.host_input.setText("alice@example.test")
+    page.remote_config_widget.openbench_input.setText("/work/alice/OpenBench")
+    page.remote_config_widget.get_ssh_manager = lambda: SimpleNamespace(is_connected=True)
+    page._switch_to_remote_storage = lambda: True
+
+    page._on_connection_status_changed(True)
+
+    assert page.radio_remote.isChecked()
+    assert page.controller.config["general"]["execution_mode"] == "remote"
+    assert page.controller.config["general"]["remote"]["host"] == "alice@example.test"
+    assert page.controller.config["general"]["remote"]["openbench_path"] == "/work/alice/OpenBench"
+
+
 def test_switching_local_flushes_storage_before_widget_disconnect():
     events = []
     page = PageRuntime.__new__(PageRuntime)
@@ -103,7 +198,7 @@ def test_switching_local_flushes_storage_before_widget_disconnect():
         disconnect=lambda: events.append("disconnect"),
         reset_to_defaults=lambda: events.append("reset"),
     )
-    page._switch_to_local_storage = lambda: events.append("flush-and-switch")
+    page._switch_to_local_storage = lambda: events.append("flush-and-switch") or True
     page._on_config_changed = lambda: events.append("save")
 
     page._on_execution_mode_changed(True)

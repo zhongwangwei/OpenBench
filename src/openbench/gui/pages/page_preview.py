@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox
 from PySide6.QtCore import Signal
 
 from openbench.gui.remote_python import quote_remote_path
-from openbench.gui.widgets._ssh_worker import execute_responsive
+from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import YamlPreview
 from openbench.gui.config_manager import ConfigManager
@@ -154,13 +154,6 @@ class PagePreview(BasePage):
         if isinstance(self.controller.storage, RemoteStorage):
             remote_path_base = self.controller.remote_settings().get("openbench_path", "") or output_dir
             generate_kwargs["path_transform"] = lambda path: self._resolve_path_for_remote(path, remote_path_base)
-        else:
-            try:
-                _materialize_local_station_sources(config, output_dir)
-            except Exception as exc:
-                logger.exception("Could not prepare station simulation data")
-                self.config_preview.set_content(f"# Station preparation failed\n# {exc}\n")
-                return
 
         config_yaml = self.config_manager.generate_config_yaml(config, **generate_kwargs)
         self.config_preview.set_content(config_yaml)
@@ -182,19 +175,26 @@ class PagePreview(BasePage):
         # Use the controller's output directory
         output_dir = self.controller.get_output_dir()
 
-        # Validate first
-        errors = self.config_manager.validate(self.controller.config)
-        if errors:
-            error_msg = "Cannot run with validation errors:\n\n" + "\n".join(f"• {e}" for e in errors)
-            QMessageBox.warning(self, "Validation Failed", error_msg)
-            return False
-
         # Execution mode is authoritative. Storage can still be local while a
         # saved remote config is disconnected; silently running locally would
         # execute on the wrong machine.
         from openbench.remote.storage import RemoteStorage
 
         is_remote = self.controller.config.get("general", {}).get("execution_mode") == "remote"
+
+        if not is_remote:
+            try:
+                call_responsive(lambda: _materialize_local_station_sources(self.controller.config, output_dir))
+            except Exception as exc:
+                logger.exception("Could not prepare station simulation data")
+                QMessageBox.critical(self, "Station Preparation Failed", str(exc))
+                return False
+
+        errors = self.config_manager.validate(self.controller.config)
+        if errors:
+            error_msg = "Cannot run with validation errors:\n\n" + "\n".join(f"• {e}" for e in errors)
+            QMessageBox.warning(self, "Validation Failed", error_msg)
+            return False
 
         if is_remote:
             if not isinstance(self.controller.storage, RemoteStorage):
@@ -217,7 +217,6 @@ class PagePreview(BasePage):
 
         try:
             openbench_root = self._get_openbench_root()
-            _materialize_local_station_sources(self.controller.config, output_dir)
             files = self.config_manager.export_all(self.controller.config, output_dir, openbench_root=openbench_root)
 
             # Navigate to run page

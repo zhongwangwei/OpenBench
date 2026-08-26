@@ -319,6 +319,47 @@ def enrich_selected_remote_variants(
     return [refreshed.get(variant.registry_name, variant) for variant in variants]
 
 
+def enrich_local_variant_metadata(groups) -> None:
+    """Precompute registration metadata in the scan worker thread."""
+    from openbench.data.registry import scanner as scanner_module
+
+    for group in groups:
+        variants = getattr(group, "variants", None)
+        if not variants:
+            continue
+        for variant in variants.values():
+            inspections = dict(getattr(variant, "nc_inspections", None) or {})
+            for var_name, sub_dir in variant.variables.items():
+                if var_name in inspections:
+                    continue
+                dataset_path = scanner_module._expand_path(variant.root_dir) / sub_dir
+                if dataset_path.is_dir():
+                    file_glob = getattr(variant, "file_globs", {}).get(var_name)
+                    inspections[var_name] = scanner_module._inspect_nc_file(dataset_path, file_glob=file_glob)
+            variant.nc_inspections = inspections
+            if not getattr(variant, "detected_data_groupby", ""):
+                variant.detected_data_groupby = scanner_module._detect_data_groupby(variant)
+
+
+class RegisterScannedDatasetsWorker(QThread):
+    """Register selected scanned datasets off the Qt main thread."""
+
+    finished_with_result = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, datasets, parent=None):
+        super().__init__(parent)
+        self._datasets = list(datasets)
+
+    def run(self) -> None:  # pragma: no cover - exercised through GUI integration
+        try:
+            from openbench.data.registry.scanner import register_scanned_datasets_batch
+
+            self.finished_with_result.emit(register_scanned_datasets_batch(self._datasets))
+        except Exception as exc:
+            self.failed.emit(f"{type(exc).__name__}: {exc}")
+
+
 class FindDatasetsWorker(QThread):
     """Run registry discovery off the Qt main thread."""
 
@@ -360,6 +401,7 @@ class FindDatasetsWorker(QThread):
 
                 skipped = []
                 result = scan_reference_directory(self._data_root, on_skip=skipped.append)
+                enrich_local_variant_metadata(result)
             self.finished_with_result.emit((result, skipped))
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")

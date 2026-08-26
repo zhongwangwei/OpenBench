@@ -51,6 +51,7 @@ class ProgressDashboard(QWidget):
         self._progress_value = 0.0
         self._resource_mode = "system"
         self._resource_pid_provider: Optional[Callable[[], int | None]] = None
+        self._resource_processes = {}
         self._setup_ui()
 
         # Timer for updating resource usage
@@ -216,18 +217,21 @@ class ProgressDashboard(QWidget):
         """Show host-wide resources (legacy/default standalone behavior)."""
         self._resource_mode = "system"
         self._resource_pid_provider = None
+        self._resource_processes.clear()
         self.resource_group.setTitle("Resources")
 
     def monitor_process_tree(self, pid_provider: Callable[[], int | None]):
         """Show resources used by the local OpenBench subprocess tree."""
         self._resource_mode = "process"
         self._resource_pid_provider = pid_provider
+        self._resource_processes.clear()
         self.resource_group.setTitle("Resources (OpenBench local)")
 
     def show_resource_unavailable(self, title: str = "Resources (remote N/A)"):
         """Make resource labels explicit when the GUI is not measuring the run host."""
         self._resource_mode = "unavailable"
         self._resource_pid_provider = None
+        self._resource_processes.clear()
         self.resource_group.setTitle(title)
         self._set_resource_labels_unavailable()
 
@@ -258,8 +262,10 @@ class ProgressDashboard(QWidget):
 
         errors = self._psutil_process_errors(psutil)
         try:
-            root = psutil.Process(pid)
-            processes = [root] + list(root.children(recursive=True))
+            root = self._resource_processes.get(pid) or psutil.Process(pid)
+            discovered = [root] + list(root.children(recursive=True))
+            processes = [self._resource_processes.get(process.pid, process) for process in discovered]
+            self._resource_processes = {process.pid: process for process in processes}
         except errors:
             self._set_resource_labels_unavailable()
             return
@@ -292,7 +298,7 @@ class ProgressDashboard(QWidget):
         self.cpu_bar.setValue(cpu_value)
         self.mem_bar.setValue(mem_value)
         self.cpu_label.setText(f"{cpu_value}%")
-        self.mem_label.setText(f"{mem_value}%")
+        self.mem_label.setText(f"{mem_percent:.1f}%" if 0 < mem_percent < 1 else f"{mem_value}%")
 
     def _update_resource_usage(self):
         """Update resource usage display."""

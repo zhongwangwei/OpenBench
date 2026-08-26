@@ -73,6 +73,25 @@ def test_glob_rejects_shell_metacharacters():
         sync.glob("bad; touch /tmp/openbench_pwn")
 
 
+def test_glob_allows_relative_pattern_with_spaces():
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+
+    sync.glob("nml/my case/**/*.yaml")
+
+    assert r"for f in nml/my\ case/**/*.yaml;" in ssh.commands[-1]
+
+
+def test_exists_requires_exact_success_sentinel():
+    class NoisyMissingSSH(FakeSSH):
+        def execute(self, command, timeout=30):
+            self.commands.append(command)
+            return "not exists\n", "", 1
+
+    sync = SyncEngine(NoisyMissingSSH(), "/remote/project")
+
+    assert sync.exists("nml/main.yaml") is False
+
 def test_mark_synced_replaces_stale_pending_cache_without_remote_read():
     ssh = FakeSSH()
     sync = SyncEngine(ssh, "/remote/project")
@@ -305,3 +324,17 @@ def test_glob_raises_remote_diagnostics_on_nonzero_exit():
 
     with pytest.raises(IOError, match="permission denied"):
         sync.glob("nml/**/*.yaml")
+
+
+def test_stop_background_sync_reports_thread_that_did_not_exit():
+    class StuckThread:
+        def join(self, timeout=None):
+            assert timeout == 5
+
+        def is_alive(self):
+            return True
+
+    sync = SyncEngine(FakeSSH(), "/remote/project")
+    sync._sync_thread = StuckThread()
+
+    assert sync.stop_background_sync() is False

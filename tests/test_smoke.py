@@ -55,7 +55,7 @@ def test_cli_version_option():
 
 
 def test_gui_import_guard():
-    """Verify that GUI import guard gives a helpful error when PySide6 is missing."""
+    """Verify that GUI import guard gives a helpful error when a dependency is missing."""
     from openbench.gui import _check_gui_deps
 
     # This test passes if PySide6 IS installed (no error),
@@ -64,6 +64,28 @@ def test_gui_import_guard():
         _check_gui_deps()
     except ImportError as e:
         assert "colm-openbench[gui]" in str(e)
+
+
+def test_gui_import_guard_reports_all_missing_runtime_dependencies(monkeypatch):
+    import openbench.gui as gui_package
+
+    real_import = gui_package.import_module
+
+    def fake_import(name):
+        if name in {"psutil", "paramiko"}:
+            raise ImportError(name)
+        return real_import(name)
+
+    monkeypatch.setattr(gui_package, "import_module", fake_import)
+
+    try:
+        gui_package._check_gui_deps()
+    except ImportError as exc:
+        message = str(exc)
+        assert "psutil, paramiko" in message
+        assert "colm-openbench[gui]" in message
+    else:
+        raise AssertionError("expected missing GUI dependencies to be reported")
 
 
 def test_smoke_test_refuses_non_empty_work_dir(tmp_path):

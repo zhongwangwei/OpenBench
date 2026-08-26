@@ -193,6 +193,12 @@ class EvaluationRunner(QThread):
             ]:
                 env.pop(var, None)
 
+            # GUI config is authoritative; inherited shell Dask toggles must not
+            # override an unchecked checkbox in the generated config.
+            for var in list(env):
+                if var.startswith("OPENBENCH_DASK"):
+                    env.pop(var, None)
+
             # Force UTF-8 encoding for Python subprocess (fixes Unicode errors on Windows)
             env["PYTHONIOENCODING"] = "utf-8"
             # Disable output buffering to ensure real-time log display
@@ -202,7 +208,7 @@ class EvaluationRunner(QThread):
             progress = 0
             for index, cmd in enumerate(commands):
                 checking = index == 0
-                output_tail = deque(maxlen=None if checking else 5)
+                output_tail = deque(maxlen=1000 if checking else 5)
                 saw_partial_completion = False
                 if not checking:
                     progress = 0
@@ -533,7 +539,8 @@ class EvaluationRunner(QThread):
         self._completed_statistics_tasks = set()
 
     def _emit_progress(self, status: RunnerStatus, progress: float, task: str, variable: str, stage: str, message: str):
-        """Emit progress signal."""
+        """Emit progress signal without moving the visible bar backwards."""
+        progress = 100 if status is RunnerStatus.COMPLETED else max(float(progress), self._last_progress)
         self._last_progress = progress
         self.progress_updated.emit(
             RunnerProgress(

@@ -157,6 +157,8 @@ def _config_findings(cfg) -> tuple[list[str], list[str]]:
     score_values, score_type_errors = _validate_string_list(cfg.scores, "scores")
     errors.extend(metric_type_errors)
     errors.extend(score_type_errors)
+    if cfg.metrics == [] and cfg.scores == []:
+        errors.append("metrics and scores cannot both be empty; select at least one evaluation output")
     if metric_values:
         from openbench.core.registry import IMPLEMENTED_METRICS
 

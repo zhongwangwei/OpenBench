@@ -245,7 +245,7 @@ class metrics:
             correlation: correlation coefficient
         """
         s, o = self._validate_inputs(s, o)
-        return xr.corr(s, o, dim=["time"]) ** 2
+        return (xr.corr(s, o, dim=["time"]) ** 2).clip(min=0, max=1)
 
     def NSE(self, s, o):
         """

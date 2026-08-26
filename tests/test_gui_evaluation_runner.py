@@ -68,6 +68,23 @@ def test_local_runner_nonzero_exit_includes_recent_output_tail(tmp_path, monkeyp
     assert "line 1" not in message
 
 
+def test_local_runner_bounds_configuration_check_output_tail(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    process = FakeProcess([f"check line {i}\n" for i in range(1100)], 2)
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: process)
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    runner.run()
+
+    message = finished[-1][1]
+    assert "check line 1099" in message
+    assert "check line 0" not in message
+
+
 def test_local_runner_partial_exit_emits_partial_status(tmp_path, monkeypatch):
     process = FakeProcess(
         [
@@ -144,21 +161,43 @@ def test_local_runner_checks_before_run(tmp_path, monkeypatch):
     assert finished[-1][0] is True
 
 
-def test_local_runner_resets_progress_between_check_and_run(tmp_path, monkeypatch):
+def test_local_runner_strips_inherited_dask_environment(tmp_path, monkeypatch):
     config = tmp_path / "openbench.yaml"
     config.write_text("project: {}\n", encoding="utf-8")
     runner = EvaluationRunner(str(config), python_path="/fake/python")
-    runner.set_task_counts(1, 1, 1, 1, 0, 0, 0)
     monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
-    processes = iter([FakeProcess(["Config validation\n"], 0), FakeProcess(["Processing Runoff\n"], 0)])
-    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: next(processes))
-    progress = []
-    runner.progress_updated.connect(progress.append)
+    monkeypatch.setenv("OPENBENCH_DASK", "1")
+    monkeypatch.setenv("OPENBENCH_DASK_DISTRIBUTED", "1")
+    monkeypatch.setenv("OPENBENCH_DASK_SCHEDULER", "tcp://scheduler:8786")
+    environments = []
+    processes = iter([FakeProcess(["check passed\n"], 0), FakeProcess(["Evaluation complete\n"], 0)])
+
+    def fake_popen(_command, **kwargs):
+        environments.append(kwargs["env"])
+        return next(processes)
+
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", fake_popen)
 
     runner.run()
 
-    run_start = next(item for item in progress if item.message == "Starting OpenBench evaluation...")
-    assert run_start.progress == 0
+    assert all(not key.startswith("OPENBENCH_DASK") for env in environments for key in env)
+
+
+def test_local_runner_progress_is_monotonic_across_check_and_run(tmp_path, monkeypatch):
+    config = tmp_path / "openbench.yaml"
+    config.write_text("project: {}\n", encoding="utf-8")
+    runner = EvaluationRunner(str(config), python_path="/fake/python")
+    monkeypatch.setattr(runner, "_find_python_interpreter", lambda: "/fake/python")
+    processes = iter([FakeProcess(["Comparison\n"], 0), FakeProcess(["Processing Runoff\n"], 0)])
+    monkeypatch.setattr("openbench.gui.runner.subprocess.Popen", lambda *args, **kwargs: next(processes))
+    updates = []
+    runner.progress_updated.connect(updates.append)
+
+    runner.run()
+
+    values = [item.progress for item in updates]
+    assert values == sorted(values)
+    assert values[-1] == 100
 
 
 def test_local_runner_counts_groupby_without_comparison(tmp_path):

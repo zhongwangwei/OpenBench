@@ -481,6 +481,8 @@ try:
                 # If time conversion fails, skip time check
                 result["time_error"] = str(e)
             break
+    else:
+        result["time_missing"] = True
 
     # Find lat/lon dimensions
     lat_dims = ['lat', 'latitude', 'Lat', 'LAT', 'y']
@@ -590,13 +592,16 @@ except Exception as e:
         if not result.get("success"):
             return ValidationCheck("time_range", False, "Remote time check failed")
 
+        if result.get("time_missing"):
+            return ValidationCheck("time_range", False, f"Time dimension not found, tried: {LocalNetCDFValidator.TIME_DIMS}")
+
         # Check for time conversion error
         if "time_error" in result:
             return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
 
         time_range = result.get("time_range")
         if time_range is None:
-            return ValidationCheck("time_range", True, "Time check skipped (no time dimension)")
+            return ValidationCheck("time_range", False, "Remote time check failed: no time range")
 
         data_syear, data_eyear = time_range
         if data_syear <= syear and data_eyear >= eyear:

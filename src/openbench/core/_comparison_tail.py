@@ -300,6 +300,9 @@ class TailComparisonMixin:
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
+            if not scores:
+                raise ValueError("RadarMap comparison requires at least one score")
+
             dir_path = os.path.join(casedir, "comparisons", "RadarMap")
             os.makedirs(dir_path, exist_ok=True)
 
@@ -332,12 +335,12 @@ class TailComparisonMixin:
                         for ref_source in ref_sources:
                             output_file.write(f"{evaluation_item}\t")
                             output_file.write(f"{ref_source}\t")
-                            sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                            if isinstance(sim_sources, str):
-                                sim_sources = [sim_sources]
-
                             values = []
-                            for sim_source in sim_sources:
+                            for sim_source in all_sim_sources:
+                                if sim_source not in sim_sources:
+                                    values.append("N/A")
+                                    continue
+
                                 ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                                 ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]

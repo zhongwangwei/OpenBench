@@ -623,3 +623,46 @@ def test_station_evaluation_hard_fails_when_all_results_are_nonfinite(tmp_path, 
 
     with pytest.raises(RuntimeError, match="no finite"):
         ev.make_evaluation_P()
+
+
+def test_station_parallel_plots_in_parent_after_workers(tmp_path, monkeypatch):
+    import openbench.core.evaluation as evaluation
+    from openbench.core.evaluation import Evaluation_stn
+
+    stnlist = tmp_path / "stn_Ref_Sim_list.txt"
+    pd.DataFrame(
+        [
+            {"ID": "A", "sim_lon": 0, "sim_lat": 0, "use_syear": 2000, "use_eyear": 2000},
+            {"ID": "B", "sim_lon": 1, "sim_lat": 1, "use_syear": 2000, "use_eyear": 2000},
+        ]
+    ).to_csv(stnlist, index=False)
+
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir, ev.item, ev.ref_source, ev.sim_source = str(tmp_path), "Runoff", "Ref", "Sim"
+    ev.ref_fulllist, ev.num_cores, ev.output_manager = str(stnlist), 2, None
+    ev.metrics, ev.scores = ["bias"], []
+    seen_plot_flags = []
+
+    def fake_eval(station_list, i, plot=True):
+        seen_plot_flags.append(plot)
+        return {
+            "KGESS": 1.0,
+            "RMSE": 0.0,
+            "correlation": 1.0,
+            "bias": 0.0,
+            "__plot_payload": ("sim", "obs", station_list["ID"][i], ["q"], 0.0, 1.0, 1.0, [0, 0]),
+        }
+
+    plotted = []
+    ev.make_evaluation_parallel = fake_eval
+    monkeypatch.setattr(evaluation, "_HAS_PARALLEL_ENGINE", True)
+    monkeypatch.setattr(evaluation, "parallel_map", lambda func, items, **kwargs: [func(i) for i in items])
+    monkeypatch.setattr(evaluation, "plot_stn", lambda self, *payload: plotted.append(payload[2]))
+    monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
+
+    ev.make_evaluation_P()
+
+    assert seen_plot_flags == [False, False]
+    assert plotted == ["A", "B"]
+    saved = pd.read_csv(tmp_path / "metrics" / "Runoff_stn_Ref_Sim_evaluations.csv")
+    assert "__plot_payload" not in saved.columns

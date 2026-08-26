@@ -199,8 +199,10 @@ class ConfigManager:
 
         variables = list(evaluation.get("variables") or [])
         evaluation_items = {var: True for var in variables}
-        metrics = {name: True for name in (config.get("metrics") or [])}
-        scores = {name: True for name in (config.get("scores") or [])}
+        metric_names = config["metrics"] if "metrics" in config else ["bias", "RMSE", "correlation"]
+        score_names = config["scores"] if "scores" in config else ["Overall_Score"]
+        metrics = {name: True for name in (metric_names or [])}
+        scores = {name: True for name in (score_names or [])}
         comparisons = {name: True for name in ((config.get("comparison") or {}).get("items") or [])}
         statistics = {name: True for name in ((config.get("statistics") or {}).get("items") or [])}
 
@@ -958,10 +960,8 @@ class ConfigManager:
             "reference": reference,
             "simulation": simulation,
         }
-        if metrics_list:
-            output["metrics"] = metrics_list
-        if scores_list:
-            output["scores"] = scores_list
+        output["metrics"] = metrics_list
+        output["scores"] = scores_list
         if comparison:
             output["comparison"] = comparison
         if stats_section:

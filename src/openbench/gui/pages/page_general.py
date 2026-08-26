@@ -394,13 +394,9 @@ class PageGeneral(BasePage):
 
     def _get_remote_ssh_manager(self):
         """Get SSH manager from the runtime page."""
-        # Access the main window to get the runtime page
-        main_window = self.window()
-        if hasattr(main_window, "pages") and "runtime" in main_window.pages:
-            runtime_page = main_window.pages["runtime"]
-            if hasattr(runtime_page, "remote_config_widget"):
-                return runtime_page.remote_config_widget.get_ssh_manager()
-        return None
+        from openbench.gui.path_utils import get_remote_ssh_manager
+
+        return get_remote_ssh_manager(self.controller)
 
     def _on_project_name_changed(self, text):
         """Handle project name changes.

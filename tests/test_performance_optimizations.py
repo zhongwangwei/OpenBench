@@ -121,7 +121,7 @@ def test_processing_uses_chunked_open_mfdataset_wrapper():
 
     assert "src_ds = xr.open_mfdataset" not in processing_source
     assert "with xr.open_mfdataset" not in processing_source
-    assert 'open_mfdataset_chunked(VarFile, combine="by_coords")' in selection_source
+    assert 'open_mfdataset_chunked(VarFile, combine="by_coords"' in selection_source
     assert "write_mfdataset_chunked_atomic(" in grid_source
     assert "OPENBENCH_MFDATASET_BATCH_SIZE" not in combined_source
 

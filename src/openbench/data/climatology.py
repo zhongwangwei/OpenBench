@@ -93,17 +93,28 @@ class ClimatologyProcessor:
             "ubcorrelation",  # Unbiased correlation
             "ubcorrelation_R2",  # Unbiased correlation R-squared
             "NSE",  # Nash-Sutcliffe Efficiency
+            "L",  # likelihood needs non-degenerate temporal error distribution
+            "ubRMSE",  # single-point anomaly RMSE is always zero after mean removal
+            "ubNSE",  # single-point unbiased NSE loses variance denominator
             "KGE",  # Kling-Gupta Efficiency
             "KGESS",  # KGE with multiple components
             "mKGE",  # Modified KGE
             "nKGE",  # Normalized KGE
             "pc_ampli",  # Phase and amplitude require temporal variation
-            "pc_max",  # Temporal phase
-            "pc_min",  # Temporal phase
             "CRMSD",  # Centered RMSD uses std(dim='time') and correlation
             "rv",  # Relative variability requires std(dim='time')
             "cp",  # Coefficient of Persistence uses .diff(dim='time')
             "br2",  # R-squared × slope requires correlation
+            "dr",  # refined index needs temporal error distribution
+            "MFM_omega",  # MFM components need multi-point temporal signatures
+            "MFM_varphi",
+            "MFM_eta",
+            "MFM",
+            "index_agreement",  # a single point cannot define agreement around an observed mean
+            "nBiasScore",  # annual single point lacks variability denominator
+            "nRMSEScore",  # annual single point lacks variability denominator
+            "nSeasonalityScore",  # seasonality needs month cycle
+            "Overall_Score",  # includes phase/IAV components; annual climatology has one point
         ]
 
     def is_climatology_mode(self, compare_tim_res: str) -> bool:

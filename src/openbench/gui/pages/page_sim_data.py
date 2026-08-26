@@ -1161,9 +1161,18 @@ class PageSimData(BasePage):
             return
         issues = []
         from openbench.remote.storage import RemoteStorage
+        from openbench.gui.data_validator import FilePathGenerator, LocalNetCDFValidator, RemoteNetCDFValidator
 
         is_remote = isinstance(self.controller.storage, RemoteStorage)
         ssh_manager = get_remote_ssh_manager(self.controller) if is_remote else None
+        general = self.controller.config.get("general", {}) if getattr(self.controller, "config", None) else {}
+        syear = int(general.get("syear", 2000))
+        eyear = int(general.get("eyear", 2020))
+        remote_openbench_root = ""
+        remote_settings = getattr(self.controller, "remote_settings", None)
+        if callable(remote_settings):
+            remote_openbench_root = remote_settings().get("openbench_path", "")
+        file_checker = RemoteNetCDFValidator(ssh_manager) if is_remote else LocalNetCDFValidator()
         for c in cases:
             if is_remote:
                 if not ssh_manager or not ssh_manager.is_connected:
@@ -1176,11 +1185,54 @@ class PageSimData(BasePage):
                     continue
                 if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
+                    continue
             else:
                 if not os.path.isdir(c["nc_dir"]):
                     issues.append(f"{c['label']}: directory not found ({c['nc_dir']})")
-                elif not _find_nc_dir(c["nc_dir"]):
+                    continue
+                nc_dir = _find_nc_dir(c["nc_dir"])
+                if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
+                    continue
+
+            variable_patterns = [
+                (name, override)
+                for name, override in (c.get("variables") or {}).items()
+                if isinstance(override, dict) and ("prefix" in override or "suffix" in override)
+            ]
+            patterns = variable_patterns or [("", {})]
+            for variable_name, override in patterns:
+                path_gen = FilePathGenerator(
+                    root_dir=nc_dir,
+                    sub_dir="",
+                    prefix=override.get("prefix", c.get("prefix", "")),
+                    suffix=override.get("suffix", c.get("suffix", "")),
+                    data_groupby=override.get("data_groupby") or c.get("data_groupby") or "Year",
+                    syear=syear,
+                    eyear=eyear,
+                    is_remote=is_remote,
+                    ssh_manager=ssh_manager,
+                    remote_openbench_root=remote_openbench_root,
+                )
+                sample_paths = path_gen.get_sample_paths()
+                issue_label = f"{c['label']} ({variable_name})" if variable_name else c["label"]
+                if not sample_paths:
+                    pattern = path_gen.describe_pattern()
+                    message = getattr(path_gen, "last_error", None) or (
+                        f"No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
+                    )
+                    issues.append(f"{issue_label}: {message}")
+                    continue
+
+                file_checks = [file_checker.check_file_exists(path) for path in sample_paths]
+                if not any(check.passed for check in file_checks):
+                    pattern = path_gen.describe_pattern()
+                    issues.append(
+                        f"{issue_label}: No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
+                    )
+                elif any(not check.passed for check in file_checks):
+                    failed = next(check for check in file_checks if not check.passed)
+                    issues.append(f"{issue_label}: {failed.message}")
         if issues:
             QMessageBox.warning(self, "Validation Issues", "\n".join(issues))
         else:

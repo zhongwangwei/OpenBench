@@ -121,6 +121,17 @@ def test_progress_parser_advances_report_stage_without_backtracking():
     assert done > progress > 90
 
 
+
+def test_progress_parser_treats_evaluation_report_artifact_as_report_stage():
+    state = _state(total_tasks=0)
+
+    progress, _var, stage = parse_progress_line("Saved evaluation_report.html", 40, state, CONSTANTS)
+
+    assert stage == "Report"
+    assert progress > 40
+    assert state["completed_eval_tasks"] == set()
+
+
 def test_progress_parser_counts_actual_comparison_completion_line():
     state = _state(total_tasks=1)
 
@@ -205,3 +216,19 @@ def test_progress_parser_preserves_spaces_in_structured_source_names():
     assert variable == "Runoff Basin"
     assert stage == "Evaluation"
     assert ("Runoff Basin", "GLDAS Comparison 2", "ERA5 Land") in state["completed_eval_tasks"]
+
+
+def test_progress_parser_does_not_count_partial_summary_as_completed_eval():
+    state = _state(
+        total_tasks=2,
+        current_variable="Runoff",
+        current_ref="RefA",
+        current_sim="SimA",
+    )
+
+    progress, variable, stage = parse_progress_line("✗ Evaluation completed with errors", 5, state, CONSTANTS)
+
+    assert progress == 5
+    assert variable == "Runoff"
+    assert stage == "Evaluation"
+    assert state["completed_eval_tasks"] == set()

@@ -183,6 +183,64 @@ def test_validate_data_requires_local_netcdf_files(monkeypatch, tmp_path):
     assert "no NetCDF files found" in warnings[0][2]
 
 
+def test_validate_data_requires_configured_file_pattern(monkeypatch, tmp_path):
+    (tmp_path / "other.nc").touch()
+    warnings = []
+    infos = []
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *args: warnings.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: infos.append(args))
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object(), config={"general": {"syear": 2001, "eyear": 2001}}),
+        get_selected_cases=lambda: [
+            {
+                "label": "CaseA",
+                "nc_dir": str(tmp_path),
+                "model": "CoLM2024",
+                "prefix": "missing_",
+                "suffix": ".nc",
+                "data_groupby": "Year",
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert not infos
+    assert warnings
+    assert "No files found matching pattern" in warnings[0][2]
+    assert "missing_*.nc" in warnings[0][2]
+
+
+def test_validate_data_checks_each_variable_file_pattern(monkeypatch, tmp_path):
+    (tmp_path / "runoff_2001.nc").touch()
+    warnings = []
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *args: warnings.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: None)
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object(), config={"general": {"syear": 2001, "eyear": 2001}}),
+        get_selected_cases=lambda: [
+            {
+                "label": "CaseA",
+                "nc_dir": str(tmp_path),
+                "model": "CoLM2024",
+                "prefix": "",
+                "suffix": "",
+                "data_groupby": "Year",
+                "variables": {
+                    "Runoff": {"prefix": "runoff_", "suffix": ".nc"},
+                    "Latent_Heat": {"prefix": "heat_", "suffix": ".nc"},
+                },
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert warnings
+    assert "CaseA (Latent_Heat)" in warnings[0][2]
+    assert "heat_*.nc" in warnings[0][2]
+
+
 def test_save_to_config_only_assigns_variables_to_supporting_cases(monkeypatch):
     controller = _Controller()
     controller.config["evaluation_items"] = {"Runoff": True, "Latent_Heat": True}

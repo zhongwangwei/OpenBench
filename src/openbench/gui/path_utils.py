@@ -356,6 +356,18 @@ def get_remote_ssh_manager(controller):
     if not isinstance(controller.storage, RemoteStorage):
         return None
     manager = controller.ssh_manager
+    if manager is None:
+        return None
+    try:
+        parent = controller.parent() if callable(getattr(controller, "parent", None)) else None
+    except RuntimeError:
+        parent = None
+    runtime_page = getattr(parent, "pages", {}).get("runtime") if parent is not None else None
+    remote_widget = getattr(runtime_page, "remote_config_widget", None)
+    if remote_widget is not None:
+        if not remote_widget.is_connected():
+            return None
+        manager = remote_widget.get_ssh_manager()
     if manager is None or not getattr(manager, "is_connected", False):
         return None
     get_active_client = getattr(manager, "get_active_client", None)
