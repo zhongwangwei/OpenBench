@@ -103,7 +103,7 @@ def apply_unified_mask(
                 raise ValueError(f"Unified mask: no overlapping timestamps for {var_name}")
 
         finite_pairs = np.isfinite(s_aligned) & np.isfinite(o_aligned)
-        if time_alignment == "intersection" and "time" in finite_pairs.dims:
+        if apply_spatial_mask and time_alignment == "intersection" and "time" in finite_pairs.dims:
             non_time_dims = [dim for dim in finite_pairs.dims if dim != "time"]
             valid_times = finite_pairs.any(dim=non_time_dims) if non_time_dims else finite_pairs
             if hasattr(valid_times, "compute"):

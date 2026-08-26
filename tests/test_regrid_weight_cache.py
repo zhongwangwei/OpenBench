@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 
 def test_conservative_regrid_reuses_weight_matrices(monkeypatch):
@@ -210,13 +211,13 @@ def test_conservative_regrid_skipna_is_intensive_not_extensive_total():
     import openbench.data.regrid  # noqa: F401  register accessor
 
     source = xr.Dataset({"flux": ("x", [1.0, np.nan])}, coords={"x": [0.5, 1.5]})
-    target = xr.Dataset(coords={"x": [1.0]})
+    target = xr.Dataset(coords={"x": [1.0, 3.0]})
 
     default_result = source.regrid.conservative(target, latitude_coord=None, time_dim=None, nan_threshold=1.0)
     strict_result = source.regrid.conservative(target, latitude_coord=None, time_dim=None, nan_threshold=0.0)
 
-    assert float(default_result["flux"].item()) == 1.0
-    assert np.isnan(float(strict_result["flux"].item()))
+    assert float(default_result["flux"].isel(x=0).item()) == 1.0
+    assert np.isnan(float(strict_result["flux"].isel(x=0).item()))
 
 
 def test_normalize_overlap_keeps_zero_overlap_columns_zero():
@@ -346,12 +347,21 @@ def test_conservative_regrid_preserves_single_identical_cell():
 
 
 def test_conservative_regrid_rejects_nonidentical_single_points():
-    import pytest
-
     from openbench.data.regrid.methods import conservative
 
     with pytest.raises(ValueError, match="cannot infer finite cell bounds"):
         conservative.get_weights(np.array([0.0]), np.array([1.0]))
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [([0.0], [-1.0, 1.0]), ([-1.0, 1.0], [0.0])],
+)
+def test_conservative_regrid_rejects_one_sided_single_points(source, target):
+    from openbench.data.regrid.methods import conservative
+
+    with pytest.raises(ValueError, match="explicit cell bounds"):
+        conservative.get_weights(np.asarray(source), np.asarray(target))
 
 
 def test_weight_disk_cache_rejects_missing_schema_version(tmp_path, monkeypatch):
