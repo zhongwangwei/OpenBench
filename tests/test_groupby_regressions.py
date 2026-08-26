@@ -31,6 +31,15 @@ def test_groupby_metric_clip_skips_all_nan_quantiles_without_warning():
             assert clip(ds, "bias")["bias"].isnull().all()
 
 
+def test_groupby_metric_clip_keeps_small_classes():
+    from openbench.core.climatezone_groupby import _clip_metric_quantiles as clip_climate
+    from openbench.core.landcover_groupby import _clip_metric_quantiles as clip_landcover
+
+    ds = xr.Dataset({"bias": (("lat", "lon"), [[0.0, 100.0]])})
+    for clip in (clip_climate, clip_landcover):
+        np.testing.assert_allclose(clip(ds, "bias")["bias"], ds["bias"])
+
+
 def test_groupby_metric_loops_clip_each_class_after_masking():
     lc_source = Path("src/openbench/core/landcover_groupby.py").read_text(encoding="utf-8")
     cz_source = Path("src/openbench/core/climatezone_groupby.py").read_text(encoding="utf-8")

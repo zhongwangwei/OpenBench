@@ -1,10 +1,11 @@
 import numpy as np
+import pytest
 import xarray as xr
 
 from openbench.data.processing import DatasetProcessing
 
 
-def test_check_time_expands_2d_data_without_time_to_full_time_index():
+def test_check_time_rejects_2d_data_without_time_for_regular_series():
     processor = object.__new__(DatasetProcessing)
     data = xr.DataArray(
         np.array([[1.0, 2.0], [3.0, 4.0]]),
@@ -13,12 +14,8 @@ def test_check_time_expands_2d_data_without_time_to_full_time_index():
         name="Runoff",
     )
 
-    out = processor.check_time(data, 2000, 2000, "D")
-
-    assert out.dims == ("time", "lat", "lon")
-    assert out.sizes["time"] == 366
-    assert np.allclose(out.isel(time=0).values, data.values)
-    assert np.allclose(out.isel(time=-1).values, data.values)
+    with pytest.raises(ValueError, match="must include a 'time' coordinate"):
+        processor.check_time(data, 2000, 2000, "D")
 
 
 def test_check_time_accepts_pandas_ye_alias_and_reindexes_all_missing_years():

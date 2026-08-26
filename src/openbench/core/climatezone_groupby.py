@@ -89,6 +89,11 @@ def _clip_metric_quantiles(ds: xr.Dataset, metric: str) -> xr.Dataset:
         has_finite = has_finite.compute()
     if not bool(has_finite.item()):
         return ds
+    finite_count = np.isfinite(ds[metric]).sum()
+    if hasattr(finite_count.data, "compute"):
+        finite_count = finite_count.compute()
+    if int(finite_count.item()) < 20:
+        return ds
     q_value = ds[metric].quantile([0.05, 0.95], dim=dims, skipna=True)
     lower = q_value.sel(quantile=0.05)
     upper = q_value.sel(quantile=0.95)

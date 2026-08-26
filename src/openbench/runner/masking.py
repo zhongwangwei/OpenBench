@@ -20,6 +20,7 @@ def apply_unified_mask(
     ref_override: str | None = None,
     *,
     write_netcdf_atomic_fn: NetcdfWriter,
+    apply_spatial_mask: bool = True,
 ) -> None:
     """Apply unified mask: set ref to NaN wherever sim is NaN.
 
@@ -103,12 +104,17 @@ def apply_unified_mask(
 
         # Keep the mask lazy so chunked/dask-backed inputs are not materialized
         # twice in memory before the NetCDF writer gets a chance to stream them.
-        invalid_overlap = ~(np.isfinite(s_aligned) & np.isfinite(o_aligned))
-        if same_values:
-            o_data = o.where(~invalid_overlap)
+        invalid_overlap = ~(np.isfinite(s_aligned) & np.isfinite(o_aligned)) if apply_spatial_mask else None
+        if time_alignment == "intersection":
+            # Persist the exact shared time support. Repeating this for each
+            # sibling simulation makes the reference time axis the global,
+            # order-independent intersection used by every model.
+            o_data = o_aligned.where(~invalid_overlap) if invalid_overlap is not None else o_aligned
+        elif same_values:
+            o_data = o.where(~invalid_overlap) if invalid_overlap is not None else o
         else:
-            invalid_full = invalid_overlap.reindex_like(o, fill_value=False)
-            o_data = o.where(~invalid_full)
+            invalid_full = invalid_overlap.reindex_like(o, fill_value=False) if invalid_overlap is not None else None
+            o_data = o.where(~invalid_full) if invalid_full is not None else o
 
         # Write to a sibling staging target while the lazy source datasets are
         # open, then close them before replacing the original. Windows refuses

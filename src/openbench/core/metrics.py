@@ -460,6 +460,7 @@ class metrics:
         #   * ubKGE: with mean-zero inputs, KGE's beta = mean_s / mean_o
         #     becomes 0/0, so ubKGE uses an explicit 2-component
         #     (cc, alpha) reformulation.
+        s, o = self._validate_inputs(s, o)
         return s - s.mean(dim="time"), o - o.mean(dim="time")
 
     def pc_max(self, s, o):

@@ -585,6 +585,9 @@ def _apply_reference_override(ref_ds, var_map, var_name: str, override: dict[str
     if not override:
         return ref_ds, var_map
     ds_fields = {k: v for k, v in override.items() if k != "variables" and hasattr(ref_ds, k)}
+    for key in ("root_dir", "fulllist"):
+        if ds_fields.get(key):
+            ds_fields[key] = _resolve_root_relative_path(ds_fields[key], None)
     if ds_fields:
         ref_ds = replace(ref_ds, **ds_fields)
     var_overrides = override.get("variables") if isinstance(override.get("variables"), dict) else {}
@@ -595,6 +598,8 @@ def _apply_reference_override(ref_ds, var_map, var_name: str, override: dict[str
             break
     if var_override and var_map is not None:
         var_fields = {k: v for k, v in var_override.items() if hasattr(var_map, k)}
+        if var_fields.get("fulllist"):
+            var_fields["fulllist"] = _resolve_root_relative_path(var_fields["fulllist"], None)
         if var_fields:
             var_map = replace(var_map, **var_fields)
     return ref_ds, var_map
@@ -987,7 +992,7 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 data_root = ref_ds.root_dir or cfg.reference.data_root or ""
             else:
                 data_root = (
-                    (source_override.get("root_dir") if source_override else None)
+                    (ref_ds.root_dir if source_override and source_override.get("root_dir") else None)
                     or cfg.reference.data_root
                     or ref_ds.root_dir
                     or ""

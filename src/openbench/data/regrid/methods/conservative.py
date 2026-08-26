@@ -10,6 +10,7 @@ from collections.abc import Hashable
 from typing import overload
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 try:
@@ -19,19 +20,18 @@ except ImportError:
 
 from .. import utils
 
+REGRID_WEIGHT_SCHEMA_VERSION = 2
+_WEIGHT_KEY = tuple[int, str, tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]]
+
 _WEIGHTS_CACHE_LOCK = threading.Lock()
-_WEIGHTS_CACHE: OrderedDict[tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]], np.ndarray] = (
-    OrderedDict()
-)
+_WEIGHTS_CACHE: OrderedDict[_WEIGHT_KEY, np.ndarray] = OrderedDict()
 _WEIGHTS_CACHE_MAXSIZE = max(0, int(os.environ.get("OPENBENCH_REGRID_WEIGHT_CACHE_SIZE", "64")))
 _WEIGHTS_DISK_CACHE_DIR = os.environ.get("OPENBENCH_REGRID_WEIGHT_CACHE_DIR")
 _WEIGHTS_DISK_CACHE_MAX_MB_ENV = "OPENBENCH_REGRID_WEIGHT_CACHE_MAX_MB"
 _WEIGHTS_DISK_CACHE_TTL_SECONDS_ENV = "OPENBENCH_REGRID_WEIGHT_CACHE_TTL_SECONDS"
 _WEIGHTS_DISK_CACHE_TTL_DAYS_ENV = "OPENBENCH_REGRID_WEIGHT_CACHE_TTL_DAYS"
 _SPHERICAL_CORRECTION_CACHE_LOCK = threading.Lock()
-_SPHERICAL_CORRECTION_CACHE: OrderedDict[
-    tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]], np.ndarray
-] = OrderedDict()
+_SPHERICAL_CORRECTION_CACHE: OrderedDict[_WEIGHT_KEY, np.ndarray] = OrderedDict()
 _SPHERICAL_CORRECTION_CACHE_MAXSIZE = max(0, int(os.environ.get("OPENBENCH_REGRID_SPHERICAL_CACHE_SIZE", "64")))
 
 
@@ -154,7 +154,10 @@ def conservative_regrid_dataset(
     for coord in coords:
         target_coords = coords[coord].to_numpy()
         source_coords = data[coord].to_numpy()
-        nd_weights = get_weights(source_coords, target_coords)
+        if coord == latitude_coord:
+            nd_weights = get_weights(source_coords, target_coords, spherical=True)
+        else:
+            nd_weights = get_weights(source_coords, target_coords)
 
         raw_weights = utils.create_dot_dataarray(nd_weights, str(coord), target_coords, source_coords)
 
@@ -163,12 +166,7 @@ def conservative_regrid_dataset(
         if target_dim in coverage.dims:
             coverage = coverage.rename({target_dim: coord})
         covered[coord] = coverage
-
-        da_weights = raw_weights
-        # Modify weights to correct for latitude distortion
-        if coord == latitude_coord:
-            da_weights = apply_spherical_correction(da_weights, latitude_coord)
-        weights[coord] = da_weights
+        weights[coord] = raw_weights
 
     # Apply the weights, using a unique set that matches chunking of each array
     for array in data_vars.keys():
@@ -254,7 +252,7 @@ def get_valid_threshold(nan_threshold: float) -> float:
     return valid_threshold
 
 
-def get_weights(source_coords: np.ndarray, target_coords: np.ndarray) -> np.ndarray:
+def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spherical: bool = False) -> np.ndarray:
     """Determine the weights to map from the old coordinates to the new coordinates.
 
     Args:
@@ -266,7 +264,8 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray) -> np.ndar
     """
     source_coords = np.asarray(source_coords)
     target_coords = np.asarray(target_coords)
-    key = (_coord_cache_token(source_coords), _coord_cache_token(target_coords))
+    mode = "spherical" if spherical else "linear"
+    key = (REGRID_WEIGHT_SCHEMA_VERSION, mode, _coord_cache_token(source_coords), _coord_cache_token(target_coords))
     if _WEIGHTS_CACHE_MAXSIZE:
         with _WEIGHTS_CACHE_LOCK:
             cached = _WEIGHTS_CACHE.get(key)
@@ -279,15 +278,56 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray) -> np.ndar
         _remember_weight(key, disk_cached)
         return disk_cached
 
-    target_intervals = utils.to_intervalindex(target_coords)
-    source_intervals = utils.to_intervalindex(source_coords)
-
-    overlap = utils.overlap(source_intervals, target_intervals)
-    weights = utils.normalize_overlap(overlap)
+    if source_coords.size == target_coords.size == 1 and np.isclose(source_coords[0], target_coords[0]):
+        weights = np.array([[1.0]], dtype=float)
+    else:
+        target_intervals = utils.to_intervalindex(target_coords)
+        source_intervals = utils.to_intervalindex(source_coords)
+        if spherical:
+            overlap = spherical_overlap(source_intervals, target_intervals)
+        else:
+            overlap = utils.overlap(source_intervals, target_intervals)
+        weights = utils.normalize_overlap(overlap)
     weights.setflags(write=False)
     _store_weights_to_disk(key, weights)
     existing = _remember_weight(key, weights)
     return existing if existing is not None else weights
+
+
+def spherical_overlap(a: pd.IntervalIndex, b: pd.IntervalIndex) -> np.ndarray:
+    """Spherical latitude overlap area, proportional to sin(phi_hi)-sin(phi_lo)."""
+    a_left = a.left.to_numpy()
+    a_right = a.right.to_numpy()
+    b_left = b.left.to_numpy()
+    b_right = b.right.to_numpy()
+    result = np.zeros((len(a), len(b)), dtype=float)
+    if (
+        a.is_non_overlapping_monotonic
+        and b.is_non_overlapping_monotonic
+        and a.is_monotonic_increasing
+        and b.is_monotonic_increasing
+    ):
+        source = target = 0
+        while source < len(a) and target < len(b):
+            lower = np.clip(max(a_left[source], b_left[target]), -90.0, 90.0)
+            source_right = a_right[source]
+            target_right = b_right[target]
+            upper = np.clip(min(source_right, target_right), -90.0, 90.0)
+            if upper > lower:
+                result[source, target] = np.sin(np.radians(upper)) - np.sin(np.radians(lower))
+            if source_right <= target_right:
+                source += 1
+            if target_right <= source_right:
+                target += 1
+        return result
+
+    for column, (left, right) in enumerate(zip(b_left, b_right)):
+        lower = np.clip(np.maximum(a_left, left), -90.0, 90.0)
+        upper = np.clip(np.minimum(a_right, right), -90.0, 90.0)
+        values = result[:, column]
+        np.subtract(np.sin(np.radians(upper)), np.sin(np.radians(lower)), out=values)
+        np.maximum(values, 0, out=values)
+    return result
 
 
 def _coord_cache_token(coords: np.ndarray) -> tuple[str, tuple[int, ...], str]:
@@ -297,10 +337,7 @@ def _coord_cache_token(coords: np.ndarray) -> tuple[str, tuple[int, ...], str]:
     return contiguous.dtype.str, tuple(contiguous.shape), digest
 
 
-def _remember_weight(
-    key: tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]],
-    weights: np.ndarray,
-) -> np.ndarray | None:
+def _remember_weight(key: _WEIGHT_KEY, weights: np.ndarray) -> np.ndarray | None:
     if not _WEIGHTS_CACHE_MAXSIZE:
         return None
     with _WEIGHTS_CACHE_LOCK:
@@ -437,9 +474,7 @@ def _weights_disk_cache_dir() -> str | None:
     return os.environ.get("OPENBENCH_REGRID_WEIGHT_CACHE_DIR") or _WEIGHTS_DISK_CACHE_DIR
 
 
-def _weights_disk_cache_path(
-    key: tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]],
-) -> str | None:
+def _weights_disk_cache_path(key: _WEIGHT_KEY) -> str | None:
     cache_dir = _weights_disk_cache_dir()
     if not cache_dir:
         return None
@@ -447,9 +482,7 @@ def _weights_disk_cache_path(
     return os.path.join(cache_dir, f"weights-{digest}.npz")
 
 
-def _load_weights_from_disk(
-    key: tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]],
-) -> np.ndarray | None:
+def _load_weights_from_disk(key: _WEIGHT_KEY) -> np.ndarray | None:
     path = _weights_disk_cache_path(key)
     if path is None or not os.path.exists(path):
         return None
@@ -463,7 +496,17 @@ def _load_weights_from_disk(
             return None
     try:
         with np.load(path, allow_pickle=False) as data:
+            if (
+                "schema_version" not in data.files
+                or int(np.asarray(data["schema_version"])) != REGRID_WEIGHT_SCHEMA_VERSION
+            ):
+                return None
             weights = np.asarray(data["weights"])
+        if weights.shape != (key[2][1][0], key[3][1][0]) or not np.isfinite(weights).all():
+            return None
+        column_sums = weights.sum(axis=0)
+        if not np.all((np.isclose(column_sums, 1.0)) | (np.isclose(column_sums, 0.0))):
+            return None
         weights.setflags(write=False)
         return weights
     except Exception:
@@ -474,10 +517,7 @@ def _load_weights_from_disk(
         return None
 
 
-def _store_weights_to_disk(
-    key: tuple[tuple[str, tuple[int, ...], str], tuple[str, tuple[int, ...], str]],
-    weights: np.ndarray,
-) -> None:
+def _store_weights_to_disk(key: _WEIGHT_KEY, weights: np.ndarray) -> None:
     path = _weights_disk_cache_path(key)
     if path is None:
         return
@@ -485,7 +525,7 @@ def _store_weights_to_disk(
     fd, tmp_path = tempfile.mkstemp(prefix=".weights-", suffix=".npz", dir=os.path.dirname(path))
     try:
         with os.fdopen(fd, "wb") as handle:
-            np.savez_compressed(handle, weights=weights)
+            np.savez_compressed(handle, weights=weights, schema_version=np.array(REGRID_WEIGHT_SCHEMA_VERSION))
         os.replace(tmp_path, path)
         prune_weight_disk_cache(os.path.dirname(path))
     except Exception:
