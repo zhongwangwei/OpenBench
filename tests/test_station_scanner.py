@@ -379,7 +379,10 @@ def test_station_taylor_comparison_runs_sequential_when_num_cores_is_one(tmp_pat
         {},
     )
 
-    assert (casedir / "comparisons" / "Taylor_Diagram" / "taylor_diagram__Latent_Heat__FLUXCOM_LowRes.csv").exists()
+    summary_path = casedir / "comparisons" / "Taylor_Diagram" / "taylor_diagram__Latent_Heat__FLUXCOM_LowRes.csv"
+    summary = pd.read_csv(summary_path)
+    assert summary.shape == (1, 8)
+    assert "Unnamed: 7" not in summary.columns
 
 
 def test_merge_site_uses_atomic_netcdf_write():
@@ -539,6 +542,18 @@ def test_setup_output_directories_merges_ref_and_sim_fulllists_for_station_pairs
     assert row["ref_dir"] == str(ref_file)
     assert int(row["use_syear"]) == 2002
     assert int(row["use_eyear"]) == 2004
+
+
+def test_station_list_spatial_fallback_wraps_dateline():
+    from openbench.config.runtime_info import GeneralInfoReader
+
+    sim = pd.DataFrame([{"ID": "sim", "sim_lat": 70.0, "sim_lon": 179.999}])
+    ref = pd.DataFrame([{"ID": "ref", "ref_lat": 70.0, "ref_lon": -180.001}])
+
+    matched = GeneralInfoReader._match_station_lists(sim, ref)
+
+    assert len(matched) == 1
+    assert matched.iloc[0]["ref_lon"] == -180.001
 
 
 def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_path):

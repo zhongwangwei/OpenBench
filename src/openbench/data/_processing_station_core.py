@@ -13,6 +13,7 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data.station_missing import mask_station_missing
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_xarray_key_case_insensitive
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
@@ -115,6 +116,7 @@ class StationProcessingCoreMixin:
     def process_single_station_data(
         self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str
     ) -> xr.Dataset:
+        stn_data = mask_station_missing(stn_data)
         var_attr = self.ref_varname if datasource == "ref" else self.sim_varname
         var_attr_is_list = isinstance(var_attr, list)
 
@@ -270,7 +272,7 @@ class StationProcessingCoreMixin:
             if original_varname:
                 ds.attrs["_original_varname"] = original_varname
 
-            return ds  # .where((ds > -1e20) & (ds < 1e20), np.nan)
+            return ds
         finally:
             # Restore the canonical variable definition and transient fallback
             # state so per-station fallback decisions do not leak into the next

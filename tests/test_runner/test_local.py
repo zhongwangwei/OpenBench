@@ -171,9 +171,11 @@ def test_runner_declares_bridge_runtime_field_contract():
 
 
 def test_evaluation_task_worker_count_caps_to_cpu_count(monkeypatch):
+    import openbench.runner.evaluation_dispatch as evaluation_dispatch
     import openbench.runner.local as local_runner
 
     monkeypatch.setattr(local_runner.os, "cpu_count", lambda: 2)
+    monkeypatch.setattr(evaluation_dispatch, "effective_cpu_count", lambda count: count)
 
     assert local_runner._evaluation_task_worker_count(64, 10) == 2
     assert local_runner._evaluation_task_worker_count(64, 1) == 1
@@ -329,6 +331,7 @@ def test_failed_tasks_do_not_emit_gui_progress_markers(monkeypatch, capsys):
 
 def test_ready_tasks_parallelize_unified_mask_across_ref_groups(monkeypatch):
     """Unified-mask tasks can parallelize across refs after preprocessing is complete."""
+    import openbench.runner.evaluation_dispatch as evaluation_dispatch
     import openbench.runner.local as local_runner
 
     tasks = [
@@ -368,6 +371,7 @@ def test_ready_tasks_parallelize_unified_mask_across_ref_groups(monkeypatch):
     monkeypatch.setattr(local_runner, "_task_level_parallel_safe", lambda tasks: True)
     monkeypatch.setattr(local_runner, "ProcessPoolExecutor", FakeExecutor)
     monkeypatch.setattr(local_runner.os, "cpu_count", lambda: 8)
+    monkeypatch.setattr(evaluation_dispatch, "effective_cpu_count", lambda count: count)
 
     results = local_runner._evaluate_ready_tasks(
         tasks,
@@ -2620,6 +2624,29 @@ def test_run_manifest_preserves_hash_evidence_without_mutating_worker_tasks(tmp_
     assert manifest["tasks"][0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
     assert manifest["tasks"][0]["config_hash"] == tasks[0]["config_hash"]
     assert tasks[0]["hash_payload"]["inputs"][0]["sha256"] == "abc"
+
+
+def test_rerun_removes_only_requested_outputs_and_old_postprocessing(tmp_path):
+    from openbench.runner.orchestration import _remove_stale_rerun_outputs
+
+    stale_metric = tmp_path / "metrics" / "rerun.nc"
+    cached_metric = tmp_path / "metrics" / "cached.nc"
+    old_report = tmp_path / "reports" / "old.html"
+    old_comparison = tmp_path / "comparisons" / "old.jpg"
+    for path in (stale_metric, cached_metric, old_report, old_comparison):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("old", encoding="utf-8")
+
+    _remove_stale_rerun_outputs(
+        tmp_path,
+        [{"name": "rerun"}],
+        lambda _output_dir, task: [stale_metric] if task["name"] == "rerun" else [cached_metric],
+    )
+
+    assert not stale_metric.exists()
+    assert cached_metric.exists()
+    assert list((tmp_path / "reports").iterdir()) == []
+    assert list((tmp_path / "comparisons").iterdir()) == []
 
 
 def test_run_continues_and_releases_hash_payload_when_manifest_write_fails(tmp_path, monkeypatch, caplog):
@@ -5272,6 +5299,9 @@ def test_start_optional_dask_client_uses_env_options(monkeypatch):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["client_closed"] = True
 
@@ -5359,6 +5389,9 @@ def test_start_optional_dask_client_can_force_station_tasks(monkeypatch):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["client_closed"] = True
 
@@ -5393,6 +5426,9 @@ def test_start_optional_dask_client_connects_external_scheduler(monkeypatch):
             calls["address"] = address
             calls["kwargs"] = kwargs
 
+        def run(self, function):
+            calls["worker_function"] = function
+
         def close(self):
             calls["closed"] = True
 
@@ -5416,6 +5452,7 @@ def test_start_optional_dask_client_connects_external_scheduler(monkeypatch):
     assert calls == {
         "address": "tcp://scheduler:8786",
         "kwargs": {"set_as_default": True},
+        "worker_function": local_runner._runner_dask_runtime.limit_native_threads,
         "closed": True,
     }
 
@@ -7548,9 +7585,9 @@ def test_core_score_comparison_aligns_rows_to_global_sim_header(tmp_path, monkey
 
     output = (tmp_path / "comparisons" / folder / "scenarios_Overall_Score_comparison.csv").read_text().splitlines()
     assert output == [
-        "Item\tReference\tSimA\tSimB\tSimC",
-        "Runoff\tRefA\t0.100\t0.200\tN/A",
-        "Evap\tRefB\tN/A\tN/A\t0.300",
+        "Item,Reference,SimA,SimB,SimC",
+        "Runoff,RefA,0.100,0.200,N/A",
+        "Evap,RefB,N/A,N/A,0.300",
     ]
 
 
@@ -8652,6 +8689,9 @@ def test_start_optional_dask_client_uses_project_dask_config(monkeypatch):
         def __init__(self, cluster, **kwargs):
             calls["client_cluster"] = cluster
             calls["client_kwargs"] = kwargs
+
+        def run(self, function):
+            calls["worker_function"] = function
 
         def close(self):
             calls["client_closed"] = True

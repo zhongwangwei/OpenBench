@@ -110,7 +110,7 @@ Install from PyPI:
 # legacy migration). Best for HPC/servers.
 pip install colm-openbench
 
-# Optional: graphical configuration wizard (PySide6/Qt)
+# Optional: graphical wizard, local resource monitor, and remote SSH controls
 pip install "colm-openbench[gui]"
 
 # Optional: remote SSH execution (paramiko)
@@ -627,7 +627,7 @@ old and new result sets.
 - Python 3.10 or newer
 - Core dependencies: xarray, numpy, scipy, pandas, netCDF4, matplotlib,
   cartopy, dask, joblib, flox, PyYAML, Jinja2, click, tqdm, packaging
-- Optional extras: `gui` (PySide6), `remote` (paramiko), `report` (xhtml2pdf),
+- Optional extras: `gui` (PySide6, psutil, and remote SSH dependencies), `remote` (paramiko), `report` (xhtml2pdf),
   `migration` (f90nml)
 - See [`pyproject.toml`](pyproject.toml) for the full pinned dependency list
 

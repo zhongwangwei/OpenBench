@@ -75,7 +75,7 @@ class TimeCoreMixin:
 
     def _resample_to_compare_resolution(self, data: xr.Dataset | xr.DataArray, context: str):
         self._guard_against_temporal_upsampling(data, self.compare_tim_res, context)
-        item = str(getattr(self, "item", "") or "").lower()
+        item = re.sub(r"[\s-]+", "_", str(getattr(self, "item", "") or "").lower())
         units = str(getattr(data, "attrs", {}).get("units", "") or "").lower().strip()
         if isinstance(data, xr.Dataset) and not units:
             data_units = {
@@ -85,19 +85,53 @@ class TimeCoreMixin:
             }
             units = next(iter(data_units)) if len(data_units) == 1 else ""
 
+        units = re.sub(r"\s+", " ", units.translate(str.maketrans({"−": "-", "⁻": "-", "²": "2"})))
+
         accumulation_items = {
+            "p",
+            "pr",
+            "prcp",
+            "precip",
             "precipitation",
+            "rain",
+            "rainfall",
             "runoff",
             "snowfall",
+            "streamflow",
             "subsurface_runoff",
             "surface_runoff",
             "total_irrigation_amount",
+            "total_precipitation",
             "total_runoff",
+            "tot_precip",
+        }
+        state_items = {
+            "dam_storage",
+            "dam_water_storage",
+            "depth_of_surface_water",
+            "lake_water_level",
+            "lake_water_volume",
+            "river_water_level",
+            "root_zone_soil_moisture",
+            "snow_depth",
+            "snow_water_equivalent",
+            "soil_moisture",
+            "soil_moisture_lev2",
+            "surface_soil_moisture",
+            "terrestrial_water_storage_change",
+            "total_water_storage",
+            "water_storage_in_aquifer",
+            "water_table_depth",
         }
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)
             return data.resample(time=self.compare_tim_res).sum()
+        if units in accumulation_units and item not in accumulation_items | state_items:
+            raise ValueError(
+                f"{context}: units {units!r} are ambiguous for item {item!r}; use a canonical "
+                "accumulation/state item name or an explicit rate unit"
+            )
         return data.resample(time=self.compare_tim_res).mean()
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
@@ -142,7 +176,7 @@ class TimeCoreMixin:
                 try:
                     result = result.transpose("time", "lon", "lat")
                 except (ValueError, TypeError):
-                    result = result.squeeze()
+                    result = result.squeeze([dim for dim, size in result.sizes.items() if dim != "time" and size == 1])
             if isinstance(result, xr.Dataset):
                 var_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(result.data_vars), None)
                 return result[var_name] if var_name and var_name in result else next(iter(result.data_vars.values()))
@@ -178,7 +212,7 @@ class TimeCoreMixin:
             try:
                 result = ds.transpose("time", "lon", "lat")
             except (ValueError, KeyError):
-                result = ds.squeeze()
+                result = ds.squeeze([dim for dim, size in ds.sizes.items() if dim != "time" and size == 1])
         # Ensure we always return a DataArray
         if isinstance(result, xr.Dataset) and var_name and var_name in result:
             return result[var_name]

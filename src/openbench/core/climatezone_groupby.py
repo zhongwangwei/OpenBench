@@ -84,6 +84,11 @@ def _clip_metric_quantiles(ds: xr.Dataset, metric: str) -> xr.Dataset:
     dims = [dim for dim in ("lat", "lon") if dim in ds[metric].dims]
     if not dims:
         return ds
+    has_finite = np.isfinite(ds[metric]).any()
+    if hasattr(has_finite.data, "compute"):
+        has_finite = has_finite.compute()
+    if not bool(has_finite.item()):
+        return ds
     q_value = ds[metric].quantile([0.05, 0.95], dim=dims, skipna=True)
     lower = q_value.sel(quantile=0.05)
     upper = q_value.sel(quantile=0.95)

@@ -903,7 +903,9 @@ class PageRegistry(BasePage):
     def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
         registry = _get_registry()
         for variant in variants:
-            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
             existing_vars = existing.variables if existing is not None else {}
             inspections = getattr(variant, "nc_inspections", None)
             if inspections is None:
@@ -929,7 +931,9 @@ class PageRegistry(BasePage):
     def _choose_first_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
         registry = _get_registry()
         for variant in variants:
-            existing = registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
             existing_vars = existing.variables if existing is not None else {}
             inspections = getattr(variant, "nc_inspections", None)
             if inspections is None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import gc
 import logging
 import os
@@ -122,12 +123,8 @@ def _taylor_grid_summary_statistics(
     )
 
 
-def _write_taylor_summary(output_file, stds, cors, RMSs, index: int, summary: TaylorSummaryStatistics) -> None:
-    output_file.write(f"{summary.std_sim}\t")
-    output_file.write(f"{summary.cor_sim}\t")
-    output_file.write(f"{summary.diagram_crmsd}\t")
-    output_file.write(f"{summary.mean_crmsd}\t")
-    output_file.write(f"{summary.std_ref}\t")
+def _write_taylor_summary(row, stds, cors, RMSs, index: int, summary: TaylorSummaryStatistics) -> None:
+    row.extend(summary)
     stds[index] = summary.std_sim
     cors[index] = summary.cor_sim
     RMSs[index] = summary.diagram_crmsd
@@ -166,19 +163,19 @@ class TaylorDiagramComparisonMixin:
                                 f"{join_filename_components('taylor_diagram', evaluation_item, ref_source)}.csv",
                             )
                             with _atomic_text_writer(output_file_path) as output_file:
-                                output_file.write("Item\t")
-                                output_file.write("Reference\t")
+                                header = ["Item", "Reference"]
                                 for sim_source in sim_sources:
-                                    output_file.write(f"{sim_source}_std\t")
-                                    output_file.write(f"{sim_source}_COR\t")
-                                    output_file.write(f"{sim_source}_RMS\t")
-                                    output_file.write(f"{sim_source}_RMS_mean\t")
-                                    output_file.write(f"{sim_source}_std_ref\t")
-
-                                output_file.write("Reference_std\t")
-                                output_file.write("\n")  # Move "All" to the first line
-                                output_file.write(f"{evaluation_item}\t")
-                                output_file.write(f"{ref_source}\t")
+                                    header.extend(
+                                        [
+                                            f"{sim_source}_std",
+                                            f"{sim_source}_COR",
+                                            f"{sim_source}_RMS",
+                                            f"{sim_source}_RMS_mean",
+                                            f"{sim_source}_std_ref",
+                                        ]
+                                    )
+                                header.append("Reference_std")
+                                row = [evaluation_item, ref_source]
                                 stds = np.zeros(len(sim_sources) + 1)
                                 cors = np.zeros(len(sim_sources) + 1)
                                 RMSs = np.zeros(len(sim_sources) + 1)
@@ -383,11 +380,13 @@ class TaylorDiagramComparisonMixin:
                                                     stds[0],
                                                 ),
                                             )
-                                        _write_taylor_summary(output_file, stds, cors, RMSs, i + 1, summary)
+                                        _write_taylor_summary(row, stds, cors, RMSs, i + 1, summary)
                                     finally:
                                         pass  # Memory cleanup handled at method level
-                                output_file.write(f"{stds[0]}\t")
-                                output_file.write("\n")
+                                row.append(stds[0])
+                                writer = csv.writer(output_file, lineterminator="\n")
+                                writer.writerow(header)
+                                writer.writerow(row)
                             try:
                                 _comparison_callable("make_scenarios_comparison_Taylor_Diagram")(
                                     casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option

@@ -153,6 +153,7 @@ def test_run_cli_help_mentions_performance_configuration():
 def test_metric_worker_count_honors_configured_cores(monkeypatch):
     import openbench.core.evaluation as evaluation
 
+    monkeypatch.setattr(evaluation, "effective_cpu_count", lambda count: count)
     assert evaluation._metric_worker_count(1, 6) == 1
     assert evaluation._metric_worker_count(2, 6) == 2
     assert evaluation._metric_worker_count(16, 6) == 6

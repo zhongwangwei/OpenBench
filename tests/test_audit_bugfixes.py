@@ -103,6 +103,26 @@ def test_cp_uses_same_pairwise_nan_mask_for_numerator_and_denominator():
     assert float(value) == pytest.approx(1.0)
 
 
+def test_cp_does_not_discard_observed_lag_when_previous_simulation_is_missing():
+    from openbench.core.metrics import metrics
+
+    time = pd.date_range("2000-01-01", periods=3)
+    obs = xr.DataArray([1.0, 2.0, 4.0], dims="time", coords={"time": time})
+    sim = xr.DataArray([np.nan, 3.0, 4.0], dims="time", coords={"time": time})
+
+    assert float(metrics().cp(sim, obs)) == pytest.approx(0.8)
+
+
+def test_kappa_accepts_roundoff_noise_in_integer_labels():
+    from openbench.core.metrics import metrics
+
+    time = pd.date_range("2000-01-01", periods=4)
+    obs = xr.DataArray([0.0, 1.0, 1.0, 2.0], dims="time", coords={"time": time})
+    sim = xr.DataArray([0.0, 1.0 + 1e-10, 2.0, 2.0 - 1e-10], dims="time", coords={"time": time})
+
+    assert float(metrics().kappa_coeff(sim, obs)) == pytest.approx(0.6363636363636364)
+
+
 def test_station_csv_and_pair_ref_regressions_are_source_guarded():
     config_source = Path("src/openbench/data/_processing_config.py").read_text(encoding="utf-8")
     evaluation_source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
@@ -223,6 +243,60 @@ def test_accumulated_runoff_resamples_with_sum():
     result = Processor()._resample_to_compare_resolution(data, "test runoff")
 
     np.testing.assert_allclose(result.values, [3.0, 7.0])
+
+
+def test_accumulated_precip_alias_and_unicode_units_resample_with_sum():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "pr"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 2.0, 3.0, 4.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=4, freq="D")},
+        attrs={"units": "kg m−2"},
+    )
+
+    result = Processor()._resample_to_compare_resolution(data, "test precip alias")
+
+    np.testing.assert_allclose(result.values, [3.0, 7.0])
+
+
+def test_ambiguous_accumulation_units_fail_instead_of_silently_averaging():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "custom_water"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 2.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=2, freq="D")},
+        attrs={"units": "mm"},
+    )
+
+    with pytest.raises(ValueError, match="units 'mm' are ambiguous"):
+        Processor()._resample_to_compare_resolution(data, "custom data")
+
+
+def test_known_state_in_millimetres_resamples_with_mean():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "Surface Soil Moisture"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 3.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=2, freq="D")},
+        attrs={"units": "mm"},
+    )
+
+    np.testing.assert_allclose(Processor()._resample_to_compare_resolution(data, "soil moisture"), [2.0])
 
 
 def test_open_dataset_decode_false_fallback_decodes_nonstandard_time(tmp_path, monkeypatch):

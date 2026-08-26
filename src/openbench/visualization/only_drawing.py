@@ -753,7 +753,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             stds = np.zeros(len(sim_sources) + 1)
                             cors = np.zeros(len(sim_sources) + 1)
                             RMSs = np.zeros(len(sim_sources) + 1)
-                            summary = pd.read_csv(output_file_path, sep="\t").iloc[0]
+                            summary = pd.read_csv(output_file_path, sep=None, engine="python").iloc[0]
                             if "Reference_std" in summary and pd.notna(summary["Reference_std"]):
                                 stds[0] = float(summary["Reference_std"])
                             else:

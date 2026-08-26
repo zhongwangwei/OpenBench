@@ -184,8 +184,9 @@ def test_adapter_declares_legacy_general_key_contract():
     }
 
 
-def test_full_config_adapter():
+def test_full_config_adapter(monkeypatch):
     """Convert full config with all options."""
+    monkeypatch.setattr(adapter_module, "effective_cpu_count", lambda count: count)
     cfg = OpenBenchConfig(
         project=ProjectConfig(
             name="full",

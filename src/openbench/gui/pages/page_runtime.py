@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QThread, Signal
 
 from openbench.config.schema import DEFAULT_NUM_CORES
+from openbench.data._system_resources import effective_cpu_count
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets.remote_config import RemoteConfigWidget, _InstallProgressDialog
 
@@ -163,12 +164,12 @@ class PageRuntime(BasePage):
         cores_layout = QHBoxLayout()
         self.num_cores_spin = NoScrollSpinBox()
         self.num_cores_spin.setRange(1, 128)
-        self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
+        self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, effective_cpu_count(os.cpu_count() or 1)))
         self.num_cores_spin.setMinimumWidth(80)
         self.num_cores_spin.setToolTip("Number of CPU cores to use for parallel processing")
         self.num_cores_spin.valueChanged.connect(self._on_config_changed)
         cores_layout.addWidget(self.num_cores_spin)
-        self.cpu_available_label = QLabel(f"(Available: {os.cpu_count() or 'N/A'})")
+        self.cpu_available_label = QLabel(f"(Available: {effective_cpu_count(os.cpu_count() or 1)})")
         cores_layout.addWidget(self.cpu_available_label)
         cores_layout.addStretch()
         parallel_layout.addRow("CPU Cores:", cores_layout)
@@ -321,7 +322,7 @@ class PageRuntime(BasePage):
             self.parallel_group.show()
             self.local_env_group.show()
             self.remote_config_widget.hide()
-            self.cpu_available_label.setText(f"(Available: {os.cpu_count() or 'N/A'})")
+            self.cpu_available_label.setText(f"(Available: {effective_cpu_count(os.cpu_count() or 1)})")
         else:
             self.parallel_group.hide()  # Parallel Processing is inside RemoteConfigWidget
             self.local_env_group.hide()
@@ -390,7 +391,6 @@ class PageRuntime(BasePage):
 
     def _on_python_changed(self, text):
         """Handle Python path change."""
-        self._refresh_conda()
         self._on_config_changed()
 
     def _on_conda_changed(self, text):
@@ -1157,7 +1157,7 @@ class PageRuntime(BasePage):
 
             # Reset UI to defaults
             self.radio_local.setChecked(True)
-            self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, os.cpu_count() or DEFAULT_NUM_CORES))
+            self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, effective_cpu_count(os.cpu_count() or 1)))
             self.python_combo.setCurrentIndex(0)
             self.conda_combo.setCurrentIndex(0)
             self.local_openbench_input.clear()

@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data._system_resources import effective_cpu_count
+
 # Import chunked dataset loader for memory efficiency
 try:
     from openbench.util.dataset_loader import open_dataset as open_dataset_chunked
@@ -105,9 +107,10 @@ def _metric_worker_count(num_cores, metric_count: int) -> int:
         requested = int(num_cores) if num_cores is not None else 0
     except (TypeError, ValueError):
         requested = 1
+    available = effective_cpu_count(os.cpu_count() or 1)
     if requested <= 0:
-        requested = max(1, os.cpu_count() or 1)
-    return min(max(1, requested), metric_count)
+        requested = available
+    return min(max(1, requested), available, metric_count)
 
 
 def _apply_pairwise_valid_mask(s: xr.DataArray, o: xr.DataArray) -> tuple[xr.DataArray, xr.DataArray]:
@@ -344,8 +347,8 @@ class Evaluation_grid(metrics, scores):
                     logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
                     logging.info("=" * 80)
 
-                    o = o_clim[f"{self.ref_varname}"]
-                    s = s_clim[f"{self.sim_varname}"]
+                    o = select_data_array(o_clim, self.ref_varname, self.item)
+                    s = select_data_array(s_clim, self.sim_varname, self.item)
                     o = Convert_Type.convert_nc(o)
                     s = Convert_Type.convert_nc(s)
 
@@ -792,12 +795,12 @@ class Evaluation_stn(metrics, scores):
                 raise RuntimeError(f"Station evaluation missing requested column(s): {missing_columns}")
             numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
             empty_columns = [
-                col
-                for col in requested_columns
-                if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
             ]
             if empty_columns:
-                raise RuntimeError(f"Station evaluation produced no finite values for requested column(s): {empty_columns}")
+                raise RuntimeError(
+                    f"Station evaluation produced no finite values for requested column(s): {empty_columns}"
+                )
 
             logging.info("Evaluation finished")
             logging.info("=======================================")

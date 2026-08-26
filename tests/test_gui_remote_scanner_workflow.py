@@ -1043,6 +1043,7 @@ def test_model_editor_inplace_save_expands_tilde_remote_path(qapp, monkeypatch):
     assert '> "$HOME"/OpenBench/nml/Mod/CoLM.yaml' in commands[0]
     assert "'~/" not in commands[0]
 
+
 def test_ref_scan_registers_selected_datasets_in_worker(monkeypatch):
     from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
     from openbench.gui.pages import page_ref_data

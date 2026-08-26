@@ -212,6 +212,7 @@ def test_matching_nc_files_preserves_path_glob_semantics_case_insensitive(tmp_pa
     assert _matching_nc_files(tmp_path, "sub/*.nc4") == [child]
     assert _matching_nc_files(tmp_path, "**/*.nc4") == [direct, lower, child]
 
+
 def test_user_reference_mapping_entry_uses_key_as_missing_name(tmp_path: Path):
     refs = tmp_path / "references"
     refs.mkdir()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import gc
 import os
 import sys
@@ -36,6 +37,7 @@ class HeatMapComparisonMixin:
             for score in scores:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
                 with _atomic_text_writer(output_file_path) as output_file:
+                    writer = csv.writer(output_file, lineterminator="\n")
                     # Collect all unique sim_sources across all evaluation items
                     all_sim_sources = []
                     for evaluation_item in evaluation_items:
@@ -45,15 +47,13 @@ class HeatMapComparisonMixin:
                                 all_sim_sources.append(s)
                     # Write header without trailing tab
                     header = ["Item", "Reference"] + all_sim_sources
-                    output_file.write("\t".join(header) + "\n")
+                    writer.writerow(header)
 
                     for evaluation_item in evaluation_items:
                         sim_sources = _as_list(sim_nml["general"][f"{evaluation_item}_sim_source"])
                         ref_sources = _as_list(ref_nml["general"][f"{evaluation_item}_ref_source"])
 
                         for ref_source in ref_sources:
-                            output_file.write(f"{evaluation_item}\t")
-                            output_file.write(f"{ref_source}\t")
                             values = []
                             for sim_source in all_sim_sources:
                                 if sim_source not in sim_sources:
@@ -76,7 +76,7 @@ class HeatMapComparisonMixin:
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 values.append(overall_mean_str)
                             # Write values without trailing tab
-                            output_file.write("\t".join(values) + "\n")
+                            writer.writerow([evaluation_item, ref_source, *values])
 
                 _comparison_callable("make_scenarios_scores_comparison_heat_map")(output_file_path, score, option)
         finally:

@@ -211,7 +211,9 @@ def parse_progress_line(
         elif stage == "Report":
             report_inc = P_INC * (4 if "completed" in line_lower or "success" in line_lower else 2)
             current_progress = min(current_progress + report_inc, P_MAX)
-        elif not evaluation_failure_summary and (task_completed or stage or "complete" in line_lower or "done" in line_lower):
+        elif not evaluation_failure_summary and (
+            task_completed or stage or "complete" in line_lower or "done" in line_lower
+        ):
             current_progress = min(current_progress + P_INC * 2, P_MAX)
 
     if stage == "Report":

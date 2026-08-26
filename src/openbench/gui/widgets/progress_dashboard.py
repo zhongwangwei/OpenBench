@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, QTimer
 
+from openbench.data._system_resources import effective_cpu_count
+
 
 class TaskStatus(Enum):
     """Task status enum."""
@@ -282,7 +284,7 @@ class ProgressDashboard(QWidget):
         # psutil's per-process percentage can exceed 100 on multi-core hosts.
         # Normalize it to a whole-machine 0..100 scale to match the progress bar.
         try:
-            logical_cpus = max(1, int(psutil.cpu_count() or 1))
+            logical_cpus = effective_cpu_count(psutil.cpu_count() or 1)
         except (AttributeError, TypeError, ValueError):
             logical_cpus = 1
         cpu_percent /= logical_cpus

@@ -305,6 +305,13 @@ class ClimatologyProcessor:
                 # Reorder to ensure months are in order (1-12)
                 ds_monthly = ds_monthly.sortby("month")
 
+                if len(ds_monthly.month) != 12:
+                    missing_months = set(range(1, 13)) - set(ds_monthly.month.values)
+                    raise ValueError(
+                        f"Monthly simulation climatology requires all 12 months; "
+                        f"missing months: {sorted(missing_months)}"
+                    )
+
                 # Drop the month coordinate and create new time dimension
                 ds_mean = ds_monthly.rename({"month": "time"})
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
@@ -313,7 +320,7 @@ class ClimatologyProcessor:
                 logging.info(f"Calculated monthly climatology from simulation data for year {syear}")
             except Exception as e:
                 logging.error(f"Error calculating monthly climatology: {e}")
-                return ds
+                raise
         else:
             logging.warning(f"Unknown climatology type: {clim_type}")
             return ds
@@ -393,7 +400,7 @@ class ClimatologyProcessor:
                 return False
         except Exception as e:
             logging.warning(f"Could not compare time coordinates: {e}")
-            # If we can't compare, assume they match and let downstream validation catch issues
+            return False
 
         return True
 
@@ -455,7 +462,7 @@ def process_climatology_evaluation(
         sim_processed = processor.prepare_simulation_climatology(sim_ds, clim_type, syear, source_tim_res=sim_tim_res)
     except Exception as e:
         logging.error(f"Failed to prepare climatology datasets: {e}")
-        return None, None, []
+        raise ValueError(f"Failed to prepare {clim_type} climatology datasets: {e}") from e
 
     # Validate compatibility
     if not processor.validate_climatology_compatibility(ref_processed, sim_processed):

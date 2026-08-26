@@ -35,6 +35,16 @@ def test_runtime_python_combo_uses_item_data_for_paths_with_spaces(qapp, monkeyp
     assert page._collect_runtime_settings()["python_path"] == python_path
 
 
+def test_typing_python_path_does_not_run_conda_subprocess(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    refreshes = []
+    page._refresh_conda = lambda: refreshes.append(True)
+
+    page._on_python_changed(r"C:\Python\python.exe")
+
+    assert refreshes == []
+
+
 def test_runtime_typed_legacy_python_display_suffix_preserves_spaced_path(qapp, monkeypatch):
     page = _runtime_page(qapp, monkeypatch)
     python_path = "/tmp/Open Bench Env/bin/python"
