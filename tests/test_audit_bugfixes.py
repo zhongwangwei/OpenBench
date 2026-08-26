@@ -354,9 +354,9 @@ def test_curvilinear_xesmf_defaults_to_conservative(monkeypatch):
     methods = []
 
     class FakeRegridder:
-        def __init__(self, _source, target_grid, method):
+        def __init__(self, _source, target_grid, method, *, periodic=False):
             self.target_grid = target_grid
-            methods.append(method)
+            methods.append((method, periodic))
 
         def __call__(self, _data):
             return xr.DataArray(
@@ -375,7 +375,7 @@ def test_curvilinear_xesmf_defaults_to_conservative(monkeypatch):
 
     convert_to_wgs84_xesmf(ds, resolution=1.0)
 
-    assert methods == ["conservative"]
+    assert methods == [("conservative", False)]
 
 
 def test_unified_mask_non_strict_uses_overlapping_times(tmp_path):

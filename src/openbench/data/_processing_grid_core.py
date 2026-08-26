@@ -291,8 +291,9 @@ class GridProcessingCoreMixin:
         if data["lon"].ndim == 2 and data["lat"].ndim == 2:
             try:
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
+                from openbench.data.regrid.xesmf_cache import default_weight_cache_dir
 
-                data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
+                data = convert_to_wgs84_xesmf(data, self.compare_grid_res, cache_dir=default_weight_cache_dir(self))
             except (ImportError, ValueError, RuntimeError) as e:
                 logging.debug(f"xesmf regridding failed, falling back to scipy: {e}")
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_scipy

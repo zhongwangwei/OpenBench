@@ -73,7 +73,13 @@ def convert_to_wgs84_scipy(ds: xr.Dataset, resolution=0.1) -> xr.Dataset:
     return new_ds
 
 
-def convert_to_wgs84_xesmf(ds: xr.Dataset, resolution=0.1, method: str = "conservative") -> xr.Dataset:
+def convert_to_wgs84_xesmf(
+    ds: xr.Dataset,
+    resolution=0.1,
+    method: str = "conservative",
+    *,
+    cache_dir: str | None = None,
+) -> xr.Dataset:
     # Step 2: Create a new regular lon-lat grid (WGS84)
     import xesmf as xe
 
@@ -92,7 +98,16 @@ def convert_to_wgs84_xesmf(ds: xr.Dataset, resolution=0.1, method: str = "conser
     )
 
     # Create the regridder
-    regridder = xe.Regridder(ds, target_grid, method)
+    from openbench.data.regrid.xesmf_cache import cached_regridder, default_weight_cache_dir
+
+    regridder = cached_regridder(
+        xe,
+        ds,
+        target_grid,
+        method,
+        cache_dir=cache_dir or default_weight_cache_dir(),
+        periodic=False,
+    )
 
     # Step 3: Perform the regridding
     new_data_vars = {}
