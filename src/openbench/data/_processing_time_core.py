@@ -216,24 +216,25 @@ class TimeCoreMixin:
         if getattr(self, "time_alignment", "intersection") != "strict" or "time" not in ds.coords:
             return
         text = str(tim_res or "").strip().lower()
-        match = re.match(r"\d*\s*([a-zA-Z]+)", text)
-        unit = match.group(1).lower() if match else text
+        match = re.match(r"(\d*)\s*([a-zA-Z]+)", text)
+        multiple = int(match.group(1) or 1) if match else 1
+        unit = match.group(2).lower() if match else text
         if unit in {"m", "me", "mon", "month", "monthly"}:
-            expected = pd.period_range(f"{syear}-01", f"{eyear}-12", freq="M")
+            expected = pd.period_range(f"{syear}-01", f"{eyear}-12", freq="M")[::multiple]
             present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="M")
-            label = "month"
+            label = f"{multiple}-month" if multiple > 1 else "month"
         elif unit in {"d", "day", "daily"}:
-            expected = pd.period_range(f"{syear}-01-01", f"{eyear}-12-31", freq="D")
-            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="D")
-            label = "day"
+            expected = pd.DatetimeIndex(pd.date_range(f"{syear}-01-01", f"{eyear}-12-31 23:59:59", freq=f"{multiple}D"))
+            present = pd.DatetimeIndex(pd.to_datetime(ds["time"].values)).floor("D")
+            label = f"{multiple}-day" if multiple > 1 else "day"
         elif unit in {"h", "hr", "hour", "hourly"}:
-            expected = pd.period_range(f"{syear}-01-01 00:00:00", f"{eyear}-12-31 23:00:00", freq="h")
-            present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="h")
-            label = "hour"
+            expected = pd.DatetimeIndex(pd.date_range(f"{syear}-01-01", f"{eyear}-12-31 23:59:59", freq=f"{multiple}h"))
+            present = pd.DatetimeIndex(pd.to_datetime(ds["time"].values)).floor("h")
+            label = f"{multiple}-hour" if multiple > 1 else "hour"
         elif unit in {"y", "ye", "yr", "year", "annual", "yearly", "a"}:
-            expected = pd.period_range(str(syear), str(eyear), freq="Y")
+            expected = pd.period_range(str(syear), str(eyear), freq="Y")[::multiple]
             present = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="Y")
-            label = "year"
+            label = f"{multiple}-year" if multiple > 1 else "year"
         else:
             return
         missing = expected.difference(present)

@@ -28,6 +28,24 @@ def test_strict_time_integrity_rejects_missing_month_before_reindexing():
         processor.check_dataset_time_integrity(data, 2001, 2001, "Month", "stat")
 
 
+def test_strict_time_integrity_accepts_complete_three_month_axis():
+    processor = object.__new__(DatasetProcessing)
+    processor.time_alignment = "strict"
+    time = pd.to_datetime(["2001-01-31", "2001-04-30", "2001-07-31", "2001-10-31"])
+    data = xr.DataArray(np.ones(len(time)), dims="time", coords={"time": time}, name="v")
+
+    processor._validate_strict_time_coverage(data, 2001, 2001, "3ME")
+
+
+def test_strict_time_integrity_accepts_complete_six_hour_axis():
+    processor = object.__new__(DatasetProcessing)
+    processor.time_alignment = "strict"
+    time = pd.date_range("2001-01-01", "2001-12-31 23:59:59", freq="6h")
+    data = xr.DataArray(np.ones(len(time)), dims="time", coords={"time": time}, name="v")
+
+    processor._validate_strict_time_coverage(data, 2001, 2001, "6h")
+
+
 def test_monthly_reference_climatology_rejects_twelve_daily_samples():
     processor = ClimatologyProcessor()
     ds = xr.Dataset(
@@ -43,7 +61,7 @@ def test_monthly_reference_climatology_accepts_one_sample_per_month():
     processor = ClimatologyProcessor()
     ds = xr.Dataset(
         {"v": ("time", np.arange(12.0))},
-        coords={"time": pd.date_range("1999-01-15", periods=12, freq="MS") + pd.Timedelta(days=14)},
+        coords={"time": pd.date_range("1999-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)},
     )
 
     out = processor.prepare_reference_climatology(ds, processor.MONTHLY_CLIMATOLOGY, 2001)
@@ -51,6 +69,18 @@ def test_monthly_reference_climatology_accepts_one_sample_per_month():
     assert out.sizes["time"] == 12
     assert list(pd.to_datetime(out.time.values).month) == list(range(1, 13))
     np.testing.assert_allclose(out["v"].values, np.arange(12.0))
+
+
+def test_monthly_reference_climatology_orders_values_by_month_identity():
+    processor = ClimatologyProcessor()
+    ds = xr.Dataset(
+        {"v": ("time", np.array(list(range(2, 13)) + [1]))},
+        coords={"time": pd.date_range("2001-02-01", periods=12, freq="MS")},
+    )
+
+    out = processor.prepare_reference_climatology(ds, processor.MONTHLY_CLIMATOLOGY, 2001)
+
+    np.testing.assert_array_equal(out["v"].values, np.arange(1, 13))
 
 
 def test_non_climatology_missing_time_coordinate_is_rejected():

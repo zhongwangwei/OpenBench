@@ -16,10 +16,15 @@ def _has_one_sample_per_calendar_month(ds: xr.Dataset) -> bool:
     if "time" not in ds.coords or ds.sizes.get("time", 0) != 12:
         return False
     try:
-        months = pd.Index(pd.to_datetime(ds["time"].values).month)
+        months = pd.Index(ds["time"].dt.month.values)
     except Exception:
         return False
     return months.is_unique and set(months) == set(range(1, 13))
+
+
+def _order_by_calendar_month(ds: xr.Dataset) -> xr.Dataset:
+    """Order a validated 12-point climatology by month identity, not timestamp year."""
+    return ds.isel(time=ds["time"].dt.month.values.argsort())
 
 
 def _time_weights(ds: xr.Dataset, source_tim_res: str | None = None) -> xr.DataArray | None:
@@ -221,7 +226,7 @@ class ClimatologyProcessor:
             elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
                 # 12 monthly representative values - average to annual.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
-                ds = ds.assign_coords(time=monthly_times)
+                ds = _order_by_calendar_month(ds).assign_coords(time=monthly_times)
                 ds = _weighted_time_mean(ds, source_tim_res).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
@@ -243,7 +248,7 @@ class ClimatologyProcessor:
             elif time_size == 12 and _has_one_sample_per_calendar_month(ds):
                 # 12 explicit monthly representative values - normalize labels to the comparison year.
                 monthly_times = pd.date_range(f"{syear}-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)
-                ds = ds.sortby("time").assign_coords(time=monthly_times)
+                ds = _order_by_calendar_month(ds).assign_coords(time=monthly_times)
                 logging.info(f"Reference: Set 12 monthly climatology points to comparison year {syear}")
             else:
                 # Multiple time points - calculate monthly climatology via groupby

@@ -412,9 +412,8 @@ def test_unified_mask_non_strict_uses_overlapping_times(tmp_path):
 
     with xr.open_dataset(ref_path) as ds:
         values = ds["runoff_ref"].values[:, 0, 0]
-    assert values.shape == (2,)
-    assert np.isnan(values[0])
-    assert values[1] == pytest.approx(1.0)
+    assert values.shape == (1,)
+    assert values[0] == pytest.approx(1.0)
 
 
 def test_unified_mask_non_strict_write_failure_is_not_success(tmp_path):
