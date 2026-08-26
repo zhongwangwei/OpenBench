@@ -1,5 +1,34 @@
 # Changelog
 
+## [3.0.0b15] - 2026-08-26
+
+Beta release over 3.0.0b14 for GUI/runtime reliability, truthful reporting,
+station evaluation fixes, and preprocessing performance.
+
+### Added
+- Content-addressed xESMF weight caching to reuse identical regridding weights.
+- GUI progress events and bounded report summaries for safer long-running local
+  and remote evaluations.
+
+### Changed
+- Local Dask evaluation avoids distributed NetCDF/HDF5 worker writes and keeps
+  scanned simulation case cards readable.
+- Shared preprocessing, reference masking, MFM component work, and multi-model
+  comparisons reuse expensive intermediate work where results are equivalent.
+
+### Fixed
+- GUI local and remote workflows now fail truthfully instead of silently falling
+  back, stalling, or running on the wrong target.
+- Reference and simulation scanning preserve requested datasets, station lists,
+  paths, and inline metadata more reliably.
+- Time alignment, finite-observation masks, singleton conservative regrids, and
+  station missing-value handling no longer silently alter scientific results.
+- Large NetCDF/CSV reports remain bounded and avoid fabricated or incomplete
+  summaries.
+- Windows path normalization, environment discovery, CPU quota handling, and CI
+  formatting stability.
+- Station evaluation process updates from PRs #167 and #170.
+
 ## [3.0.0b14] - 2026-08-22
 
 Beta release over 3.0.0b13 for actionable GUI preflight diagnostics.
