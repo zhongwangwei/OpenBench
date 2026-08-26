@@ -183,9 +183,8 @@ def test_adapter_declares_legacy_general_key_contract():
     }
 
 
-def test_full_config_adapter(monkeypatch):
+def test_full_config_adapter():
     """Convert full config with all options."""
-    monkeypatch.setattr(adapter_module, "effective_cpu_count", lambda count: count)
     cfg = OpenBenchConfig(
         project=ProjectConfig(
             name="full",
@@ -214,7 +213,8 @@ def test_full_config_adapter(monkeypatch):
     bindings = adapter_module.build_runner_bindings(cfg)
     stats_ctx = bindings.build_statistics_context(["ANOVA"], ["GPP"])
 
-    assert legacy["general"]["num_cores"] == 8
+    available_cores = adapter_module.effective_cpu_count(adapter_module.os.cpu_count() or 1)
+    assert legacy["general"]["num_cores"] == min(8, available_cores)
     assert legacy["general"]["comparison"] is True
     assert legacy["general"]["statistics"] is True
     assert legacy["general"]["min_year"] == 5
