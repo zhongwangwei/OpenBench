@@ -345,6 +345,15 @@ def test_conservative_regrid_preserves_single_identical_cell():
     assert float(result["v"].item()) == 7.0
 
 
+def test_conservative_regrid_rejects_nonidentical_single_points():
+    import pytest
+
+    from openbench.data.regrid.methods import conservative
+
+    with pytest.raises(ValueError, match="cannot infer finite cell bounds"):
+        conservative.get_weights(np.array([0.0]), np.array([1.0]))
+
+
 def test_weight_disk_cache_rejects_missing_schema_version(tmp_path, monkeypatch):
     from openbench.data.regrid.methods import conservative
 

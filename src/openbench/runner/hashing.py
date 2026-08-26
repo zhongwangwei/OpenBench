@@ -400,9 +400,11 @@ def shared_mask_peer_payload(
     ref_source: str,
     input_file_signature_fn: Callable[[dict[str, Any], str], dict[str, Any]] = input_file_signature,
 ) -> dict[str, Any] | None:
-    """Return peer simulation inputs that affect a shared unified mask."""
+    """Return peer simulations that affect shared spatial or temporal support."""
     alignment = getattr(cfg.project, "time_alignment", "intersection")
-    if not getattr(cfg.project, "unified_mask", True) or alignment not in {"intersection", "strict"}:
+    shared_spatial_mask = getattr(cfg.project, "unified_mask", True) and alignment in {"intersection", "strict"}
+    shared_time_support = alignment == "intersection"
+    if not (shared_spatial_mask or shared_time_support):
         return None
 
     namelists = getattr(bindings, "namelists", None)

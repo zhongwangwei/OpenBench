@@ -102,9 +102,21 @@ def apply_unified_mask(
             if o_aligned.sizes.get("time", 0) == 0:
                 raise ValueError(f"Unified mask: no overlapping timestamps for {var_name}")
 
-        # Keep the mask lazy so chunked/dask-backed inputs are not materialized
-        # twice in memory before the NetCDF writer gets a chance to stream them.
-        invalid_overlap = ~(np.isfinite(s_aligned) & np.isfinite(o_aligned)) if apply_spatial_mask else None
+        finite_pairs = np.isfinite(s_aligned) & np.isfinite(o_aligned)
+        if time_alignment == "intersection" and "time" in finite_pairs.dims:
+            non_time_dims = [dim for dim in finite_pairs.dims if dim != "time"]
+            valid_times = finite_pairs.any(dim=non_time_dims) if non_time_dims else finite_pairs
+            if hasattr(valid_times, "compute"):
+                valid_times = valid_times.compute()
+            if not bool(valid_times.any().item()):
+                raise ValueError(f"Unified mask: no overlapping finite timestamps for {var_name}")
+            o_aligned = o_aligned.where(valid_times, drop=True)
+            s_aligned = s_aligned.where(valid_times, drop=True)
+            finite_pairs = np.isfinite(s_aligned) & np.isfinite(o_aligned)
+
+        # Keep the spatial mask lazy so chunked/dask-backed inputs are not
+        # materialized twice before the NetCDF writer streams them.
+        invalid_overlap = ~finite_pairs if apply_spatial_mask else None
         if time_alignment == "intersection":
             # Persist the exact shared time support. Repeating this for each
             # sibling simulation makes the reference time axis the global,

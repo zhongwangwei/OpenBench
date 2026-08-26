@@ -264,6 +264,14 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
     """
     source_coords = np.asarray(source_coords)
     target_coords = np.asarray(target_coords)
+    if source_coords.size == 0 or target_coords.size == 0:
+        raise ValueError("Conservative regridding requires non-empty source and target coordinates")
+    if source_coords.size == target_coords.size == 1:
+        if np.isclose(source_coords[0], target_coords[0]):
+            return np.array([[1.0]], dtype=float)
+        raise ValueError(
+            "Conservative regridding cannot infer finite cell bounds for a non-identical single-point coordinate"
+        )
     mode = "spherical" if spherical else "linear"
     key = (REGRID_WEIGHT_SCHEMA_VERSION, mode, _coord_cache_token(source_coords), _coord_cache_token(target_coords))
     if _WEIGHTS_CACHE_MAXSIZE:
@@ -278,16 +286,13 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
         _remember_weight(key, disk_cached)
         return disk_cached
 
-    if source_coords.size == target_coords.size == 1 and np.isclose(source_coords[0], target_coords[0]):
-        weights = np.array([[1.0]], dtype=float)
+    target_intervals = utils.to_intervalindex(target_coords)
+    source_intervals = utils.to_intervalindex(source_coords)
+    if spherical:
+        overlap = spherical_overlap(source_intervals, target_intervals)
     else:
-        target_intervals = utils.to_intervalindex(target_coords)
-        source_intervals = utils.to_intervalindex(source_coords)
-        if spherical:
-            overlap = spherical_overlap(source_intervals, target_intervals)
-        else:
-            overlap = utils.overlap(source_intervals, target_intervals)
-        weights = utils.normalize_overlap(overlap)
+        overlap = utils.overlap(source_intervals, target_intervals)
+    weights = utils.normalize_overlap(overlap)
     weights.setflags(write=False)
     _store_weights_to_disk(key, weights)
     existing = _remember_weight(key, weights)

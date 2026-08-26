@@ -209,7 +209,6 @@ def test_unified_mask_missing_inputs_raise(tmp_path):
 
 def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch):
     import dask.array as da
-    import numpy as np
     import xarray as xr
     from dask.base import is_dask_collection
 
@@ -275,5 +274,5 @@ def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch
     assert observed["lazy"] is True
     assert open_calls == [{"chunks": "auto"}, {"chunks": "auto"}]
     assert ref_path.read_bytes() == b"masked"
+    assert observed["values"].shape == (1, 1, 1)
     assert observed["values"][0, 0, 0] == 1.0
-    assert np.isnan(observed["values"][1, 0, 0])

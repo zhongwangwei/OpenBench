@@ -2417,8 +2417,9 @@ def test_task_config_hash_changes_when_runtime_inputs_change(tmp_path, monkeypat
     assert captured[0] != captured[1]
 
 
-def test_task_config_hash_changes_when_shared_unified_mask_peer_sims_change(tmp_path):
-    """intersection/strict unified_mask hashes must include peer sims sharing the ref mask."""
+@pytest.mark.parametrize("unified_mask", [True, False])
+def test_task_config_hash_changes_when_shared_intersection_peer_sims_change(tmp_path, unified_mask):
+    """Intersection hashes include sibling sims even without the optional spatial mask."""
     import openbench.config.adapter as adapter
     import openbench.runner.local as local_runner
     from openbench.runner.cache import EvaluationCache
@@ -2463,10 +2464,10 @@ def test_task_config_hash_changes_when_shared_unified_mask_peer_sims_change(tmp_
     bindings = type("Bindings", (), {"runner_cfg": runner_cfg, "namelists": namelists})()
 
     cfg_one = _make_cfg(tmp_path, comparison_enabled=False)
-    cfg_one.project.unified_mask = True
+    cfg_one.project.unified_mask = unified_mask
     cfg_one.project.time_alignment = "intersection"
     cfg_two = _make_cfg(tmp_path, comparison_enabled=False)
-    cfg_two.project.unified_mask = True
+    cfg_two.project.unified_mask = unified_mask
     cfg_two.project.time_alignment = "intersection"
     cfg_two.simulation["SimB"] = SimulationEntry(model="ModelB", root_dir=str(tmp_path / "sim-b"))
 
@@ -5898,6 +5899,43 @@ def test_intersection_accumulates_across_sibling_simulations(tmp_path):
     with xr.open_dataset(data_dir / "Runoff_ref_TestRef_runoff_ref.nc") as ds:
         assert ds.sizes["time"] == 1
         assert ds["time"].values[0] == ref_time[1]
+
+
+def test_intersection_drops_reindexed_all_nan_sibling_timesteps(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.local as local_runner
+
+    data_dir = tmp_path / "case" / "data"
+    data_dir.mkdir(parents=True)
+    times = pd.date_range("2001-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {"runoff_ref": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+        coords={"time": times, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(data_dir / "Runoff_ref_TestRef_runoff_ref.nc")
+    for sim, values in (("SimA", [1.0, np.nan]), ("SimB", [1.0, 1.0])):
+        xr.Dataset(
+            {"runoff_sim": (("time", "lat", "lon"), np.asarray(values)[:, None, None])},
+            coords={"time": times, "lat": [0.0], "lon": [10.0]},
+        ).to_netcdf(data_dir / f"Runoff_sim_{sim}_runoff_sim.nc")
+        local_runner._apply_unified_mask(
+            {
+                "casedir": str(tmp_path / "case"),
+                "ref_varname": "runoff_ref",
+                "sim_varname": "runoff_sim",
+                "time_alignment": "intersection",
+            },
+            "Runoff",
+            "TestRef",
+            sim,
+            apply_spatial_mask=False,
+        )
+
+    with xr.open_dataset(data_dir / "Runoff_ref_TestRef_runoff_ref.nc") as ds:
+        assert ds.sizes["time"] == 1
+        assert ds["time"].values[0] == times[0]
 
 
 def test_unified_mask_write_failure_preserves_existing_ref_file(tmp_path, monkeypatch):
