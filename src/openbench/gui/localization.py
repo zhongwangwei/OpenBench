@@ -293,6 +293,18 @@ ZH_CN = {
     "Case": "案例",
     "Path": "路径",
     "Model": "模型",
+    "Model required": "需要选择模型",
+    "No Models": "没有可用模型",
+    "Register a model in Data Registry first.": "请先在数据注册表中注册模型。",
+    "Select Model": "选择模型",
+    "Model:": "模型：",
+    "Select Model...": "选择模型...",
+    "Change Model...": "更换模型...",
+    "Model Settings": "模型设置",
+    "Data Type:": "数据类型：",
+    "File Matching (Advanced)": "文件匹配规则（高级）",
+    "Prefix:": "前缀：",
+    "Suffix:": "后缀：",
     "Variable Name in File": "文件中的变量名",
     "Units": "单位",
     "Dimensions": "维度",
@@ -373,6 +385,9 @@ def translate_text(text: str, language: str = ENGLISH) -> str:
     match = re.fullmatch(r"Version (.+)", text)
     if match:
         return f"版本 {match.group(1)}"
+    match = re.fullmatch(r"Model: (.+)", text)
+    if match:
+        return f"模型：{match.group(1)}"
     match = re.fullmatch(r"Selected: (\d+)(?: / (\d+))?", text)
     if match:
         suffix = f" / {match.group(2)}" if match.group(2) else ""

@@ -328,6 +328,20 @@ def test_general_load_from_config_does_not_write_stale_defaults(qapp, tmp_path):
     assert page.num_cores_spin.value() == 7
 
 
+def test_general_project_fields_expand_cross_platform(qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QFormLayout, QGroupBox, QSizePolicy
+
+    controller = WizardController()
+    page = PageGeneral(controller)
+    project_group = next(group for group in page.findChildren(QGroupBox) if group.title() == "Project Information")
+    layout = project_group.layout()
+
+    assert layout.fieldGrowthPolicy() == QFormLayout.AllNonFixedFieldsGrow
+    assert layout.labelAlignment() & Qt.AlignLeft
+    assert page.basedir_input.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+
+
 def test_checkbox_group_set_selection_clears_items_not_in_selection(qapp):
     group = CheckboxGroup({"Group": ["a", "b", "c"]})
     group.set_selection({"a": True, "b": True, "c": True})
