@@ -5901,7 +5901,7 @@ def test_intersection_accumulates_across_sibling_simulations(tmp_path):
         assert ds["time"].values[0] == ref_time[1]
 
 
-def test_intersection_drops_reindexed_all_nan_sibling_timesteps(tmp_path):
+def test_intersection_preserves_nan_sibling_timesteps_without_unified_mask(tmp_path):
     import numpy as np
     import pandas as pd
     import xarray as xr
@@ -5934,7 +5934,7 @@ def test_intersection_drops_reindexed_all_nan_sibling_timesteps(tmp_path):
         )
 
     with xr.open_dataset(data_dir / "Runoff_ref_TestRef_runoff_ref.nc") as ds:
-        assert ds.sizes["time"] == 1
+        assert ds.sizes["time"] == 2
         assert ds["time"].values[0] == times[0]
 
 
