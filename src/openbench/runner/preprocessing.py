@@ -54,9 +54,8 @@ def preprocess_variable(
     # ref_source -> flat ref NC path (only valid while a grid-only path lives there)
     ref_flat_paths: dict[str, str] = {}
     sim_flat_paths: dict[str, str] = {}
-    # ref_source -> temporary backup of the current flat ref NC. This is
-    # refreshed whenever shared unified_mask mutates the flat file, so a
-    # later station extraction can delete the flat without losing masks.
+    # Temporary copies let mixed station/grid preprocessing restore flat files
+    # consumed by station extraction before the final shared mask is written.
     ref_flat_backups: dict[str, str] = {}
     sim_flat_backups: dict[str, str] = {}
     temp_backup_paths: set[str] = set()
@@ -77,6 +76,19 @@ def preprocess_variable(
         ref: {task["sim_source"] for task in vtasks if task["ref_source"] == ref}
         for ref in {task["ref_source"] for task in vtasks}
     }
+    pending_shared_masks: dict[str, dict[str, Any]] = {}
+    failed_shared_mask_refs: set[str] = set()
+
+    def _shared_mask_group(ref_source: str) -> dict[str, Any]:
+        return pending_shared_masks.setdefault(ref_source, {"info": None, "sims": [], "tasks": []})
+
+    def _mark_shared_mask_group_failed(ref_source: str, message: str) -> None:
+        failed_shared_mask_refs.add(ref_source)
+        group = pending_shared_masks.get(ref_source)
+        group_tasks = group["tasks"] if group else [task for task in vtasks if task["ref_source"] == ref_source]
+        for group_task in group_tasks:
+            group_task["preprocess_failed"] = True
+        phase_errors.append(make_phase_error_fn("preprocess", message, variable=var_name, ref=ref_source))
 
     def _backup_flat_ref(ref_source: str) -> None:
         flat_path = ref_flat_paths.get(ref_source)
@@ -138,6 +150,9 @@ def preprocess_variable(
                 continue
             ref_source = task["ref_source"]
             sim_source = task["sim_source"]
+            ref_dtype = None
+            sim_dtype = None
+            defer_completion = False
             emit_gui_preprocessing_started(task)
             try:
                 info = build_bridge_runtime_info_fn(task)
@@ -276,20 +291,23 @@ def preprocess_variable(
                             # Record per-pair ref path so evaluation uses this copy
                             task["ref_file_override"] = pair_ref
                         elif time_alignment != "per_pair":
-                            # intersection/strict: mask accumulates across sims onto shared ref
-                            _restore_flat_ref_if_missing(ref_source)
-                            apply_unified_mask_fn(
-                                info,
-                                var_name,
-                                ref_source,
-                                sim_source,
-                                apply_spatial_mask=bool(unified_mask),
-                            )
-                            _backup_flat_ref(ref_source)
+                            # intersection/strict: apply once per shared ref after all sibling sims are ready.
+                            group = _shared_mask_group(ref_source)
+                            group["info"] = group["info"] or dict(info)
+                            group["sims"].append((sim_source, info.get("sim_varname", "")))
+                            group["tasks"].append(task)
+                            defer_completion = True
 
                 task["ref_preprocessed"] = True
 
             except Exception as exc:
+                if (
+                    ref_dtype != "stn"
+                    and sim_dtype != "stn"
+                    and time_alignment != "per_pair"
+                    and (unified_mask or (time_alignment == "intersection" and len(sibling_sims[ref_source]) > 1))
+                ):
+                    failed_shared_mask_refs.add(ref_source)
                 task["preprocess_failed"] = True
                 phase_errors.append(
                     make_phase_error_fn(
@@ -312,7 +330,8 @@ def preprocess_variable(
                 else:
                     logger.exception("Preprocessing failed: %s (sim=%s, ref=%s)", var_name, sim_source, ref_source)
             else:
-                emit_gui_preprocessing_completion(task)
+                if not defer_completion:
+                    emit_gui_preprocessing_completion(task)
 
         # End-of-loop flat-NC restoration:
         # If a ref had any stn-involved prep AND any grid×grid task in this
@@ -320,8 +339,7 @@ def preprocess_variable(
         # the shared flat NC at data/<var>_ref_<ref>_<varname>.nc. The
         # downstream grid evaluation reads that exact path and would crash
         # with FileNotFoundError. Prefer restoring the last backed-up flat
-        # ref, which preserves accumulated unified_mask edits; fall back to
-        # re-running grid prep only if no backup is available.
+        # ref; fall back to re-running grid prep only if no backup is available.
         refs_needing_restore = refs_with_stn_prep & refs_with_grid_tasks
         for ref_to_restore in sorted(refs_needing_restore):
             if _restore_flat_ref_if_missing(ref_to_restore):
@@ -392,6 +410,35 @@ def preprocess_variable(
                     var_name,
                     sim_to_restore,
                 )
+
+        # Apply shared grid masks only after every sibling sim for the ref is preprocessed.
+        # A later failure leaves the original flat ref untouched and blocks the whole group.
+        for ref_source, group in pending_shared_masks.items():
+            if ref_source in failed_shared_mask_refs:
+                _mark_shared_mask_group_failed(
+                    ref_source,
+                    "shared unified-mask preprocessing skipped because a sibling task failed",
+                )
+                continue
+            try:
+                _restore_flat_ref_if_missing(ref_source)
+                apply_unified_mask_fn(
+                    group["info"],
+                    var_name,
+                    ref_source,
+                    group["sims"],
+                    apply_spatial_mask=bool(unified_mask),
+                )
+            except Exception as exc:
+                logger.exception("Shared unified mask failed: %s (ref=%s)", var_name, ref_source)
+                _mark_shared_mask_group_failed(
+                    ref_source,
+                    f"shared unified-mask preprocessing failed: {exc}",
+                )
+            else:
+                for group_task in group["tasks"]:
+                    if not group_task.get("preprocess_failed"):
+                        emit_gui_preprocessing_completion(group_task)
 
     finally:
         _cleanup_flat_backups()

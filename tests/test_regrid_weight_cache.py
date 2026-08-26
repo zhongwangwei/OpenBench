@@ -382,3 +382,267 @@ def test_weight_disk_cache_rejects_missing_schema_version(tmp_path, monkeypatch)
     np.savez_compressed(path, weights=np.ones((2, 2)))
 
     assert conservative._load_weights_from_disk(key) is None
+
+
+def test_xesmf_weight_cache_reuses_existing_file(tmp_path, monkeypatch):
+    import xarray as xr
+
+    from openbench.data.regrid import xesmf_cache
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "test", "ESMF": "test", "esmpy": None})
+    calls = []
+
+    class FakeRegridder:
+        def __init__(self, _source, _target, method, *, periodic=False, weights=None):
+            calls.append({"method": method, "periodic": periodic, "weights": weights})
+            self.weights = weights
+
+        def to_netcdf(self, filename):
+            assert self.weights is None
+            with open(filename, "wb") as handle:
+                handle.write(b"weights")
+
+    xe = type("FakeXe", (), {"Regridder": FakeRegridder})
+    source = xr.Dataset(coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]})
+    target = xr.Dataset(coords={"lat": [0.0, 0.5, 1.0], "lon": [10.0, 10.5, 11.0]})
+
+    xesmf_cache.cached_regridder(xe, source, target, "conservative", cache_dir=tmp_path, periodic=False)
+    files = list(tmp_path.glob("xesmf-weights-*.nc"))
+    assert len(files) == 1
+
+    xesmf_cache.cached_regridder(xe, source.copy(), target.copy(), "conservative", cache_dir=tmp_path, periodic=False)
+
+    assert calls == [
+        {"method": "conservative", "periodic": False, "weights": None},
+        {"method": "conservative", "periodic": False, "weights": str(files[0])},
+    ]
+
+
+def test_xesmf_weight_cache_key_includes_mask_bounds_method_and_versions(tmp_path, monkeypatch):
+    import xarray as xr
+
+    from openbench.data.regrid import xesmf_cache
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "1", "ESMF": "1", "esmpy": None})
+    source = xr.Dataset(
+        {
+            "lat_vertices": ("lat_vertices", [-0.5, 0.5, 1.5]),
+            "lon_vertices": ("lon_vertices", [9.5, 10.5, 11.5]),
+            "mask": (("lat", "lon"), [[1, 1], [1, 0]]),
+        },
+        coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+    )
+    source["lat"].attrs["bounds"] = "lat_vertices"
+    source["lon"].attrs["bounds"] = "lon_vertices"
+    target = xr.Dataset(coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]})
+
+    base = xesmf_cache._cache_path(source, target, "conservative", cache_dir=tmp_path, periodic=False)
+    mask = source["mask"].to_numpy().copy()
+    mask[0, 0] = 0
+    changed_mask = source.assign(mask=(source["mask"].dims, mask))
+    bounds = source["lat_vertices"].to_numpy().copy()
+    bounds[0] = -1.0
+    changed_bounds = source.assign_coords(lat_vertices=("lat_vertices", bounds))
+
+    assert xesmf_cache._cache_path(changed_mask, target, "conservative", cache_dir=tmp_path, periodic=False) != base
+    assert xesmf_cache._cache_path(changed_bounds, target, "conservative", cache_dir=tmp_path, periodic=False) != base
+    assert xesmf_cache._cache_path(source, target, "bilinear", cache_dir=tmp_path, periodic=False) != base
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "2", "ESMF": "1", "esmpy": None})
+    assert xesmf_cache._cache_path(source, target, "conservative", cache_dir=tmp_path, periodic=False) != base
+
+
+def test_xesmf_weight_cache_key_recognizes_cf_units(tmp_path, monkeypatch):
+    import xarray as xr
+
+    from openbench.data.regrid import xesmf_cache
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "1", "ESMF": "1", "esmpy": None})
+    source = xr.Dataset(
+        coords={
+            "xc": (("y", "x"), [[10.0, 11.0], [10.0, 11.0]], {"units": "degrees_east"}),
+            "yc": (("y", "x"), [[0.0, 0.0], [1.0, 1.0]], {"units": "degrees_north"}),
+        }
+    )
+    xc = source["xc"].to_numpy().copy()
+    xc[0, 0] = 9.0
+    changed = source.assign_coords(xc=source["xc"].copy(data=xc))
+
+    assert xesmf_cache._cache_path(
+        source, source, "conservative", cache_dir=tmp_path, periodic=False
+    ) != xesmf_cache._cache_path(changed, source, "conservative", cache_dir=tmp_path, periodic=False)
+
+
+def test_processing_xesmf_uses_case_weight_cache(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    import xarray as xr
+
+    from openbench.data._processing_grid_regrid import GridRegridMixin
+    from openbench.data.regrid import xesmf_cache
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "test", "ESMF": "test", "esmpy": None})
+    calls = []
+
+    class FakeRegridder:
+        def __init__(self, _source, _target, _method, *, periodic=False, weights=None):
+            calls.append((periodic, weights))
+            self.weights = weights
+
+        def to_netcdf(self, filename):
+            with open(filename, "wb") as handle:
+                handle.write(b"weights")
+
+        def __call__(self, data):
+            return data
+
+    class Processor(GridRegridMixin):
+        casedir = str(tmp_path)
+
+    monkeypatch.setitem(sys.modules, "xesmf", types.SimpleNamespace(Regridder=FakeRegridder))
+    data = xr.Dataset(
+        {"value": (("lat", "lon"), [[1.0, 2.0], [3.0, 4.0]])},
+        coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+    )
+    target = xr.Dataset(coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]})
+
+    Processor().remap_xesmf(data, target)
+    Processor().remap_xesmf(data, target)
+
+    files = list((tmp_path / "scratch" / "xesmf_weights").glob("xesmf-weights-*.nc"))
+    assert len(files) == 1
+    assert calls == [(False, None), (False, str(files[0]))]
+
+
+def test_xesmf_weight_cache_ignores_legacy_conservative_env(tmp_path, monkeypatch):
+    from openbench.data.regrid.xesmf_cache import default_weight_cache_dir
+
+    monkeypatch.delenv("OPENBENCH_XESMF_WEIGHT_CACHE_DIR", raising=False)
+    monkeypatch.setenv("OPENBENCH_REGRID_WEIGHT_CACHE_DIR", str(tmp_path / "legacy"))
+
+    assert default_weight_cache_dir() is None
+
+
+def test_convert_to_wgs84_xesmf_accepts_explicit_cache_dir(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    import xarray as xr
+
+    from openbench.data.regrid import xesmf_cache
+    from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "test", "ESMF": "test", "esmpy": None})
+    calls = []
+
+    class FakeRegridder:
+        def __init__(self, _source, target_grid, _method, *, periodic=False, weights=None):
+            calls.append((periodic, weights))
+            self.target_grid = target_grid
+            self.weights = weights
+
+        def to_netcdf(self, filename):
+            with open(filename, "wb") as handle:
+                handle.write(b"weights")
+
+        def __call__(self, _data):
+            return xr.DataArray(
+                np.zeros((self.target_grid.sizes["lat"], self.target_grid.sizes["lon"])),
+                dims=("lat", "lon"),
+            )
+
+    monkeypatch.setitem(sys.modules, "xesmf", types.SimpleNamespace(Regridder=FakeRegridder))
+    ds = xr.Dataset(
+        {"flux": (("y", "x"), np.ones((2, 2)))},
+        coords={
+            "lat": (("y", "x"), np.array([[0.0, 0.0], [1.0, 1.0]])),
+            "lon": (("y", "x"), np.array([[10.0, 11.0], [10.0, 11.0]])),
+        },
+    )
+
+    convert_to_wgs84_xesmf(ds, resolution=1.0, cache_dir=str(tmp_path))
+    convert_to_wgs84_xesmf(ds, resolution=1.0, cache_dir=str(tmp_path))
+
+    files = list(tmp_path.glob("xesmf-weights-*.nc"))
+    assert len(files) == 1
+    assert calls == [(False, None), (False, str(files[0]))]
+
+
+def test_core_curvilinear_preprocess_passes_case_local_xesmf_cache(tmp_path, monkeypatch):
+    import xarray as xr
+
+    from openbench.data._processing_grid_core import GridProcessingCoreMixin
+
+    seen = []
+
+    def fake_convert(data, resolution, *, cache_dir=None):
+        seen.append((resolution, cache_dir))
+        return xr.Dataset(
+            {"flux": (("lat", "lon"), np.ones((2, 2)))},
+            coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+        )
+
+    class Processor(GridProcessingCoreMixin):
+        casedir = str(tmp_path)
+        compare_grid_res = 1.0
+
+        def check_coordinate(self, data):
+            return data
+
+        def _normalize_longitude_axis(self, data):
+            return data
+
+    monkeypatch.setattr("openbench.data.regrid.regrid_wgs84.convert_to_wgs84_xesmf", fake_convert)
+    data = xr.Dataset(
+        {"flux": (("y", "x"), np.ones((2, 2)))},
+        coords={
+            "lat": (("y", "x"), np.array([[0.0, 0.0], [1.0, 1.0]])),
+            "lon": (("y", "x"), np.array([[10.0, 11.0], [10.0, 11.0]])),
+        },
+    )
+
+    Processor().preprocess_grid_data(data)
+
+    assert seen == [(1.0, str(tmp_path / "scratch" / "xesmf_weights"))]
+
+
+def test_statistics_xesmf_uses_output_dir_weight_cache(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    import xarray as xr
+
+    from openbench.core.statistics.Mod_Statistics import BasicProcessing, Convert_Type
+    from openbench.data.regrid import xesmf_cache
+
+    monkeypatch.setattr(xesmf_cache, "_versions", lambda: {"xesmf": "test", "ESMF": "test", "esmpy": None})
+    calls = []
+
+    class FakeRegridder:
+        def __init__(self, _source, _target, _method, *, periodic=False, weights=None):
+            calls.append((periodic, weights))
+            self.weights = weights
+
+        def to_netcdf(self, filename):
+            with open(filename, "wb") as handle:
+                handle.write(b"weights")
+
+        def __call__(self, data):
+            return data
+
+    monkeypatch.setitem(sys.modules, "xesmf", types.SimpleNamespace(Regridder=FakeRegridder))
+    monkeypatch.setattr(Convert_Type, "convert_nc", staticmethod(lambda value: value))
+    processor = object.__new__(BasicProcessing)
+    processor.output_dir = str(tmp_path / "out")
+    data = xr.Dataset(
+        {"value": (("lat", "lon"), [[1.0, 2.0], [3.0, 4.0]])},
+        coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+    )
+    target = xr.Dataset(coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]})
+
+    BasicProcessing.remap_xesmf(processor, data, target)
+    BasicProcessing.remap_xesmf(processor, data, target)
+
+    files = list((tmp_path / "out" / "xesmf_weights").glob("xesmf-weights-*.nc"))
+    assert len(files) == 1
+    assert calls == [(False, None), (False, str(files[0]))]

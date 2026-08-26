@@ -9145,3 +9145,220 @@ def test_task_config_hash_includes_selected_regrid_backend(tmp_path):
     runner_cfg.general["regrid_backend"] = "xesmf_conservative"
 
     assert cache_hash() != first
+
+
+def test_preprocess_shared_mask_failure_keeps_ref_and_fails_group(tmp_path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.data.processing as processing_module
+    import openbench.runner.preprocessing as preprocessing_module
+    from openbench.runner.masking import apply_unified_mask
+    from openbench.util.netcdf import write_netcdf_atomic
+
+    case_dir = tmp_path / "case"
+    data_dir = case_dir / "data"
+    data_dir.mkdir(parents=True)
+    times = pd.date_range("2001-01-01", periods=2, freq="D")
+    ref_path = data_dir / "Runoff_ref_Ref_ref.nc"
+    xr.Dataset(
+        {"ref": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+        coords={"time": times, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(ref_path)
+    sim_a_values = np.ones((2, 1, 1))
+    sim_a_values[1, 0, 0] = np.nan
+    xr.Dataset(
+        {"sim": (("time", "lat", "lon"), sim_a_values)},
+        coords={"time": times, "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(data_dir / "Runoff_sim_SimA_sim.nc")
+    xr.Dataset(
+        {"sim": (("time", "lat", "lon"), np.ones((2, 1, 1)))},
+        coords={"time": pd.date_range("2001-01-02", periods=2, freq="D"), "lat": [0.0], "lon": [10.0]},
+    ).to_netcdf(data_dir / "Runoff_sim_SimB_sim.nc")
+
+    class NoopProcessing:
+        def __init__(self, _info):
+            pass
+
+        def prepare_source(self, _kind):
+            pass
+
+    monkeypatch.setattr(processing_module, "DatasetProcessing", NoopProcessing)
+    completed = []
+    monkeypatch.setattr(preprocessing_module, "emit_gui_preprocessing_started", lambda _task: None)
+    monkeypatch.setattr(
+        preprocessing_module,
+        "emit_gui_preprocessing_completion",
+        lambda task: completed.append(task["sim_source"]),
+    )
+
+    tasks = [{"ref_source": "Ref", "sim_source": "SimA"}, {"ref_source": "Ref", "sim_source": "SimB"}]
+
+    def build_info(task):
+        return {
+            "casedir": str(case_dir),
+            "ref_varname": "ref",
+            "sim_varname": "sim",
+            "ref_data_type": "grid",
+            "sim_data_type": "grid",
+            "time_alignment": "strict",
+        }
+
+    errors = preprocessing_module.preprocess_variable(
+        "Runoff",
+        tasks,
+        unified_mask=True,
+        time_alignment="strict",
+        build_bridge_runtime_info_fn=build_info,
+        make_phase_error_fn=lambda phase, message, **kw: {"phase": phase, "message": message, **kw},
+        clone_or_link_ref_for_pair_fn=lambda source, target: "copy2",
+        apply_unified_mask_fn=lambda *args, **kwargs: apply_unified_mask(
+            *args, **kwargs, write_netcdf_atomic_fn=write_netcdf_atomic
+        ),
+    )
+
+    assert {task["sim_source"] for task in tasks if task.get("preprocess_failed")} == {"SimA", "SimB"}
+    assert completed == []
+    assert any("shared unified-mask preprocessing failed" in error["message"] for error in errors)
+    with xr.open_dataset(ref_path) as ds:
+        np.testing.assert_allclose(ds["ref"].values, np.ones((2, 1, 1)))
+
+
+def test_preprocess_intersection_batches_shared_ref_mask_after_sim_restore(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+
+    import openbench.data.processing as processing_module
+    import openbench.runner.preprocessing as preprocessing_module
+
+    class NoopProcessing:
+        def __init__(self, info):
+            self.info = info
+
+        def prepare_source(self, kind):
+            data_dir = Path(self.info["casedir"]) / "data"
+            if kind == "sim":
+                sim_path = data_dir / f"Runoff_sim_{self.info['sim_source']}_{self.info['sim_varname']}.nc"
+                sim_path.write_bytes(b"sim")
+                if self.info["ref_source"] == "RefStn":
+                    os.remove(data_dir / "Runoff_sim_SimA_simA.nc")
+
+    monkeypatch.setattr(processing_module, "DatasetProcessing", NoopProcessing)
+    monkeypatch.setattr(preprocessing_module, "emit_gui_preprocessing_started", lambda _task: None)
+    completed = []
+    monkeypatch.setattr(
+        preprocessing_module,
+        "emit_gui_preprocessing_completion",
+        lambda task: completed.append((task["ref_source"], task["sim_source"])),
+    )
+    data_dir = tmp_path / "case" / "data"
+    data_dir.mkdir(parents=True)
+    for ref in ("RefGrid", "RefStn"):
+        (data_dir / f"Runoff_ref_{ref}_ref.nc").write_bytes(b"ref")
+    for sim in ("A", "B", "C", "D"):
+        (data_dir / f"Runoff_sim_Sim{sim}_sim{sim}.nc").write_bytes(b"sim")
+
+    tasks = [
+        {"ref_source": "RefGrid", "sim_source": "SimA"},
+        {"ref_source": "RefStn", "sim_source": "SimA"},
+        {"ref_source": "RefGrid", "sim_source": "SimB"},
+        {"ref_source": "RefGrid", "sim_source": "SimC"},
+        {"ref_source": "RefGrid", "sim_source": "SimD"},
+    ]
+    calls = []
+
+    def build_info(task):
+        return {
+            "casedir": str(tmp_path / "case"),
+            "ref_varname": "ref",
+            "sim_varname": task["sim_source"].replace("Sim", "sim"),
+            "ref_data_type": "stn" if task["ref_source"] == "RefStn" else "grid",
+            "sim_data_type": "grid",
+            "time_alignment": "intersection",
+            "ref_source": task["ref_source"],
+            "sim_source": task["sim_source"],
+        }
+
+    def apply_mask(info, var_name, ref_source, sim_sources, **kwargs):
+        calls.append((info["ref_varname"], var_name, ref_source, sim_sources, kwargs))
+
+    errors = preprocessing_module.preprocess_variable(
+        "Runoff",
+        tasks,
+        unified_mask=True,
+        time_alignment="intersection",
+        build_bridge_runtime_info_fn=build_info,
+        make_phase_error_fn=lambda phase, message, **kw: {"phase": phase, "message": message, **kw},
+        clone_or_link_ref_for_pair_fn=lambda source, target: "copy2",
+        apply_unified_mask_fn=apply_mask,
+    )
+
+    assert errors == []
+    assert len(calls) == 1
+    assert calls[0][2:] == (
+        "RefGrid",
+        [("SimA", "simA"), ("SimB", "simB"), ("SimC", "simC"), ("SimD", "simD")],
+        {"apply_spatial_mask": True},
+    )
+    assert (data_dir / "Runoff_sim_SimA_simA.nc").exists()
+    assert completed[-4:] == [
+        ("RefGrid", "SimA"),
+        ("RefGrid", "SimB"),
+        ("RefGrid", "SimC"),
+        ("RefGrid", "SimD"),
+    ]
+
+
+def test_preprocess_per_pair_still_masks_each_pair(tmp_path, monkeypatch):
+    import shutil
+
+    import openbench.data.processing as processing_module
+    import openbench.runner.preprocessing as preprocessing_module
+
+    class NoopProcessing:
+        def __init__(self, _info):
+            pass
+
+        def prepare_source(self, _kind):
+            pass
+
+    monkeypatch.setattr(processing_module, "DatasetProcessing", NoopProcessing)
+    monkeypatch.setattr(preprocessing_module, "emit_gui_preprocessing_started", lambda _task: None)
+    monkeypatch.setattr(preprocessing_module, "emit_gui_preprocessing_completion", lambda _task: None)
+    data_dir = tmp_path / "case" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "Runoff_ref_Ref_ref.nc").write_bytes(b"ref")
+    for sim in ("A", "B"):
+        (data_dir / f"Runoff_sim_Sim{sim}_sim.nc").write_bytes(b"sim")
+
+    tasks = [{"ref_source": "Ref", "sim_source": "SimA"}, {"ref_source": "Ref", "sim_source": "SimB"}]
+    calls = []
+
+    def build_info(_task):
+        return {
+            "casedir": str(tmp_path / "case"),
+            "ref_varname": "ref",
+            "sim_varname": "sim",
+            "ref_data_type": "grid",
+            "sim_data_type": "grid",
+            "time_alignment": "per_pair",
+        }
+
+    def clone(source, target):
+        shutil.copy2(source, target)
+        return "copy2"
+
+    preprocessing_module.preprocess_variable(
+        "Runoff",
+        tasks,
+        unified_mask=True,
+        time_alignment="per_pair",
+        build_bridge_runtime_info_fn=build_info,
+        make_phase_error_fn=lambda phase, message, **kw: {"phase": phase, "message": message, **kw},
+        clone_or_link_ref_for_pair_fn=clone,
+        apply_unified_mask_fn=lambda _info, _var, _ref, sim, **kwargs: calls.append((sim, kwargs["ref_override"])),
+    )
+
+    assert [call[0] for call in calls] == ["SimA", "SimB"]
+    assert all(task.get("ref_file_override") for task in tasks)
