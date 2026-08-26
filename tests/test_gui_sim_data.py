@@ -275,3 +275,65 @@ def test_save_to_config_only_assigns_variables_to_supporting_cases(monkeypatch):
     general = controller.updated[1]["general"]
     assert general["Runoff_sim_source"] == ["RunoffCase"]
     assert general["Latent_Heat_sim_source"] == ["ManualHeatCase"]
+
+
+def test_simulation_case_uses_readable_card_layout(qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QFormLayout, QGroupBox, QSizePolicy
+
+    from openbench.gui.controller import WizardController
+    from openbench.gui.pages.page_sim_data import PageSimData
+
+    page = PageSimData(WizardController())
+    page._model_names = ["CLM5"]
+    path = r"G:\Cases_for_openbench\Simulation\LSMs\CLM5"
+    page._add_case_row(
+        "CLM5",
+        path,
+        "prefix_",
+        model_name="CLM5",
+        suffix=".nc",
+        scan_metadata={"data_type": "grid", "tim_res": "Month", "grid_res": 1.8947},
+    )
+
+    scan_group = next(group for group in page.findChildren(QGroupBox) if group.title() == "Scan for Cases")
+    case = page._cases[0]
+
+    assert PageSimData.CONTENT_EXPAND is True
+    assert scan_group.layout().fieldGrowthPolicy() == QFormLayout.AllNonFixedFieldsGrow
+    assert page._case_scroll.minimumHeight() >= 220
+    assert page._case_layout.alignment() & Qt.AlignTop
+    assert case["path_input"].text() == path
+    assert case["path_input"].isReadOnly()
+    assert case["path_input"].sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
+    assert case["status_label"].text() == "Model: CLM5"
+    assert case["model_combo"].isHidden()
+    assert case["pattern_widget"].isHidden()
+
+
+def test_simulation_case_model_picker_updates_hidden_state(qapp, monkeypatch):
+    from openbench.gui.controller import WizardController
+    from openbench.gui.pages.page_sim_data import PageSimData
+
+    page = PageSimData(WizardController())
+    page._model_names = ["CLM5", "CoLM2024"]
+    page._add_case_row(
+        "CaseA",
+        "/sim/CaseA",
+        "hist_",
+        model_name="CLM5",
+        scan_metadata={"data_type": "grid", "tim_res": "Month", "grid_res": 1.0},
+    )
+    case = page._cases[0]
+
+    monkeypatch.setattr(
+        page_sim_data.QInputDialog,
+        "getItem",
+        lambda *args: ("CoLM2024", True),
+    )
+
+    page._choose_case_model(case)
+
+    assert case["model_combo"].currentData() == "CoLM2024"
+    assert case["status_label"].text() == "Model: CoLM2024"
+    assert page.get_selected_cases()[0]["model"] == "CoLM2024"

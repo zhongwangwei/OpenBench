@@ -247,6 +247,70 @@ def test_netcdf_compression_is_opt_in_by_environment(tmp_path, monkeypatch):
     assert "encoding" not in captured
 
 
+@pytest.mark.parametrize("kind", ["dataset", "dataarray"])
+def test_distributed_netcdf_write_uses_local_serial_scheduler_for_lazy_data(tmp_path, monkeypatch, kind):
+    import openbench.util.netcdf as netcdf
+
+    array = xr.DataArray(
+        da.from_array(np.ones((2, 2)), chunks=(1, 1)),
+        dims=("lat", "lon"),
+        coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+        name="metric",
+    )
+    lazy = array.to_dataset() if kind == "dataset" else array
+    captured = {}
+
+    class FakeDelayed:
+        def compute(self, **kwargs):
+            captured["compute"] = kwargs
+
+    def fake_to_netcdf(self, path, *args, **kwargs):
+        captured["compute_false"] = kwargs.get("compute") is False
+        captured["lazy"] = hasattr(self["metric"].data if isinstance(self, xr.Dataset) else self.data, "compute")
+        return FakeDelayed()
+
+    monkeypatch.setattr(netcdf, "_distributed_client_active", lambda: True)
+    monkeypatch.setattr(type(lazy), "to_netcdf", fake_to_netcdf)
+
+    netcdf.write_netcdf_atomic(lazy, tmp_path / "out.nc")
+
+    assert hasattr(lazy["metric"].data if kind == "dataset" else lazy.data, "compute")
+    assert captured == {
+        "compute_false": True,
+        "lazy": True,
+        "compute": {"scheduler": "threads", "num_workers": 1},
+    }
+
+
+def test_distributed_netcdf_write_rejects_persisted_futures(tmp_path, monkeypatch):
+    import openbench.util.netcdf as netcdf
+
+    lazy = xr.Dataset({"metric": ("x", da.ones(2, chunks=1))})
+    monkeypatch.setattr(netcdf, "_distributed_client_active", lambda: True)
+    monkeypatch.setattr(netcdf, "_has_distributed_futures", lambda _data: True)
+
+    with pytest.raises(ValueError, match="unpersisted lazy Dataset or DataArray"):
+        netcdf.write_netcdf_atomic(lazy, tmp_path / "out.nc")
+
+    assert not (tmp_path / "out.nc").exists()
+
+
+def test_netcdf_write_without_distributed_client_keeps_normal_path(tmp_path, monkeypatch):
+    import openbench.util.netcdf as netcdf
+
+    captured = {}
+
+    def fake_to_netcdf(self, path, *args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(netcdf, "_distributed_client_active", lambda: False)
+    monkeypatch.setattr(xr.Dataset, "to_netcdf", fake_to_netcdf)
+
+    netcdf.write_netcdf_atomic(_grid_dataset("metric", 1.0), tmp_path / "out.nc")
+
+    assert "compute" not in captured
+
+
 def test_netcdf_compression_defaults_to_level_one_for_numeric_variables(tmp_path, monkeypatch):
     from openbench.util.netcdf import write_netcdf_atomic
 

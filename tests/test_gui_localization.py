@@ -30,6 +30,8 @@ def test_language_switch_is_reversible_and_persistent(qapp, tmp_path):
     assert (title.text(), next_button.text(), count.text()) == ("General Settings", "Next", "Selected: 3 / 5")
     assert LanguageManager(user_dir=tmp_path).language == ENGLISH
     assert translate_text("Step 3 of 12", CHINESE) == "第 3 步，共 12 步"
+    assert translate_text("Model: CLM5", CHINESE) == "模型：CLM5"
+    assert translate_text("Select Model", CHINESE) == "选择模型"
 
 
 def test_show_event_respects_i18n_skip(qapp):

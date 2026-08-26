@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFrame,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -29,11 +30,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 from PySide6.QtCore import Qt, Signal
 
+from openbench.gui.localization import get_language_manager, translate_text
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.pages.base_page import BasePage
@@ -392,6 +395,8 @@ class PageSimData(BasePage):
         # === Scan section ===
         scan_group = QGroupBox("Scan for Cases")
         scan_form = QFormLayout(scan_group)
+        scan_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        scan_form.setLabelAlignment(Qt.AlignLeft)
 
         root_row = QHBoxLayout()
         self._root_input = QLineEdit()
@@ -415,10 +420,13 @@ class PageSimData(BasePage):
         # === Case list (scrollable) ===
         self._case_scroll = QScrollArea()
         self._case_scroll.setWidgetResizable(True)
+        self._case_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._case_scroll.setMinimumHeight(240)
         self._case_widget = QWidget()
         self._case_layout = QVBoxLayout(self._case_widget)
         self._case_layout.setContentsMargins(4, 4, 4, 4)
         self._case_layout.setSpacing(4)
+        self._case_layout.setAlignment(Qt.AlignTop)
         self._case_scroll.setWidget(self._case_widget)
         self.content_layout.addWidget(self._case_scroll, 1)
 
@@ -673,51 +681,81 @@ class PageSimData(BasePage):
         multi_stream: bool = False,
         scan_metadata: Dict[str, Any] = None,
     ):
-        """Add one case row: [checkbox] label  path  [model combo]"""
-        row = QWidget()
-        row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(2, 2, 2, 2)
+        """Add a readable case card without squeezing paths and controls into one row."""
+        row = QFrame()
+        row.setFrameShape(QFrame.StyledPanel)
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(10, 8, 10, 8)
+        row_layout.setSpacing(8)
+
+        header_layout = QHBoxLayout()
 
         cb = QCheckBox(label)
         cb.setChecked(checked)
         cb.toggled.connect(self._on_selection_changed)
-        row_layout.addWidget(cb)
+        header_layout.addWidget(cb)
 
-        path_label = QLabel(nc_dir)
-        path_label.setStyleSheet("color: #888; font-size: 11px;")
-        path_label.setToolTip(nc_dir)
-        row_layout.addWidget(path_label, 1)
+        status_label = QLabel()
+        header_layout.addWidget(status_label)
+        header_layout.addStretch()
+
+        model_button = QPushButton()
+        header_layout.addWidget(model_button)
+
+        gear_btn = QPushButton("Model Settings")
+        gear_btn.setToolTip("Manage models in Data Registry")
+        gear_btn.clicked.connect(lambda: self.controller.go_to_page("registry"))
+        header_layout.addWidget(gear_btn)
+        row_layout.addLayout(header_layout)
+
+        path_layout = QHBoxLayout()
+        path_layout.addWidget(QLabel("Path:"))
+        path_input = QLineEdit(nc_dir)
+        path_input.setReadOnly(True)
+        path_input.setCursorPosition(0)
+        path_input.setToolTip(nc_dir)
+        path_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        path_layout.addWidget(path_input, 1)
+        row_layout.addLayout(path_layout)
 
         metadata = dict(scan_metadata or {})
-        detected = [
-            str(value)
-            for value in (metadata.get("data_type"), metadata.get("tim_res"), metadata.get("grid_res"))
-            if value not in (None, "")
-        ]
-        metadata_label = QLabel(" / ".join(detected) if detected else "metadata unresolved")
-        metadata_label.setStyleSheet("color: #777; font-size: 10px;")
-        metadata_label.setToolTip("Detected data_type / tim_res / grid_res")
-        row_layout.addWidget(metadata_label)
+        metadata_layout = QHBoxLayout()
+        metadata_layout.addWidget(QLabel("Data Type:"))
+        metadata_layout.addWidget(QLabel(str(metadata.get("data_type") or "—")))
+        metadata_layout.addSpacing(18)
+        metadata_layout.addWidget(QLabel("Time Resolution:"))
+        metadata_layout.addWidget(QLabel(str(metadata.get("tim_res") or "—")))
+        metadata_layout.addSpacing(18)
+        metadata_layout.addWidget(QLabel("Grid Resolution:"))
+        grid_res = metadata.get("grid_res")
+        metadata_layout.addWidget(QLabel(f"{grid_res:g}°" if isinstance(grid_res, (int, float)) else "—"))
+        metadata_layout.addStretch()
+        row_layout.addLayout(metadata_layout)
+
+        pattern_toggle = QPushButton("File Matching (Advanced)")
+        pattern_toggle.setCheckable(True)
+        row_layout.addWidget(pattern_toggle, alignment=Qt.AlignLeft)
+
+        pattern_widget = QWidget()
+        pattern_layout = QHBoxLayout(pattern_widget)
+        pattern_layout.setContentsMargins(0, 0, 0, 0)
 
         prefix_input = QLineEdit(prefix)
         prefix_input.setPlaceholderText("prefix")
-        prefix_input.setMaximumWidth(240)
         if multi_stream:
             prefix_input.setToolTip(
                 "One file per variable detected — per-variable file patterns "
                 "are exported instead of a single case prefix."
             )
-        row_layout.addWidget(QLabel("prefix:"))
-        row_layout.addWidget(prefix_input)
+        pattern_layout.addWidget(QLabel("Prefix:"))
+        pattern_layout.addWidget(prefix_input, 1)
 
         suffix_input = QLineEdit(suffix)
         suffix_input.setPlaceholderText("suffix")
-        suffix_input.setMaximumWidth(120)
-        row_layout.addWidget(QLabel("suffix:"))
-        row_layout.addWidget(suffix_input)
+        pattern_layout.addWidget(QLabel("Suffix:"))
+        pattern_layout.addWidget(suffix_input, 1)
 
         model_combo = QComboBox()
-        model_combo.setMinimumWidth(150)
         model_combo.addItem("Select model...", "")
         for mn in self._model_names:
             model_combo.addItem(mn, mn)
@@ -725,24 +763,24 @@ class PageSimData(BasePage):
             idx = model_combo.findData(model_name)
             if idx >= 0:
                 model_combo.setCurrentIndex(idx)
-        row_layout.addWidget(model_combo)
+        model_combo.hide()
 
         patterns_btn = QPushButton("Variables...")
         patterns_btn.setToolTip("Edit per-variable varname, unit, prefix, and suffix")
-        row_layout.addWidget(patterns_btn)
-
-        gear_btn = QPushButton("⚙")
-        gear_btn.setFixedWidth(30)
-        gear_btn.setToolTip("Manage models in Data Registry")
-        gear_btn.clicked.connect(lambda: self.controller.go_to_page("registry"))
-        row_layout.addWidget(gear_btn)
+        pattern_layout.addWidget(patterns_btn)
+        pattern_widget.hide()
+        pattern_toggle.toggled.connect(pattern_widget.setVisible)
+        row_layout.addWidget(pattern_widget)
 
         self._case_layout.addWidget(row)
         case = {
             "checkbox": cb,
             "model_combo": model_combo,
+            "model_button": model_button,
+            "status_label": status_label,
             "label": label,
             "nc_dir": nc_dir,
+            "path_input": path_input,
             "auto_prefix": prefix,
             "auto_suffix": suffix,
             "prefix_input": prefix_input,
@@ -753,12 +791,50 @@ class PageSimData(BasePage):
             "multi_stream": multi_stream,
             "scan_metadata": metadata,
             "row_widget": row,
+            "pattern_widget": pattern_widget,
         }
         prefix_input.textEdited.connect(lambda _text, c=case: self._on_case_pattern_changed(c))
         suffix_input.textEdited.connect(lambda _text, c=case: self._on_case_pattern_changed(c))
         model_combo.currentIndexChanged.connect(lambda _index, c=case: self._on_case_model_changed(c))
+        model_button.clicked.connect(lambda _checked=False, c=case: self._choose_case_model(c))
         patterns_btn.clicked.connect(lambda _checked=False, c=case: self._edit_variable_pattern(c))
+        self._update_case_model_summary(case)
         self._cases.append(case)
+
+    def _choose_case_model(self, case: Dict[str, Any]):
+        language = get_language_manager().language
+        if not self._model_names:
+            QMessageBox.information(
+                self,
+                translate_text("No Models", language),
+                translate_text("Register a model in Data Registry first.", language),
+            )
+            return
+        combo = case["model_combo"]
+        current = self._model_names.index(combo.currentData()) if combo.currentData() in self._model_names else 0
+        model_name, accepted = QInputDialog.getItem(
+            self,
+            translate_text("Select Model", language),
+            translate_text("Model:", language),
+            self._model_names,
+            current,
+            False,
+        )
+        if accepted and model_name:
+            combo.setCurrentIndex(combo.findData(model_name))
+
+    def _update_case_model_summary(self, case: Dict[str, Any]):
+        model_name = case["model_combo"].currentData() or ""
+        if not model_name:
+            case["status_label"].setText("Model required")
+            case["status_label"].setStyleSheet("color: #b45309;")
+            case["model_button"].setText("Select Model...")
+        else:
+            case["status_label"].setText(f"Model: {model_name}")
+            case["status_label"].setStyleSheet("color: #15803d;")
+            case["model_button"].setText("Change Model...")
+        if case["row_widget"].isVisible():
+            get_language_manager().apply(case["row_widget"])
 
     def _on_case_pattern_changed(self, case: Dict[str, Any]):
         case["case_pattern_edited"] = True
@@ -800,6 +876,7 @@ class PageSimData(BasePage):
         Only possible when the scan captured the case's file list; rows
         restored from a saved config keep their stored overrides.
         """
+        self._update_case_model_summary(case)
         if case.get("files"):
             from openbench.remote.storage import RemoteStorage
 
