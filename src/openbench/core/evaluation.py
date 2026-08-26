@@ -870,7 +870,9 @@ class Evaluation_stn(metrics, scores):
             missing_columns = [col for col in requested_columns if col not in station_list.columns]
             if missing_columns:
                 raise RuntimeError(f"Station evaluation missing requested column(s): {missing_columns}")
-            # station_list[requested_columns] = station_list[requested_columns].map(lambda value: value.item() if isinstance(value, np.ndarray) and value.ndim == 0 else value)
+            station_list[requested_columns] = station_list[requested_columns].map(
+                lambda value: value.item() if isinstance(value, np.ndarray) and value.ndim == 0 else value
+            )
             numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
             empty_columns = [
                 col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
