@@ -99,6 +99,14 @@ except ImportError:
         return ""
 
 
+_MFM_METRIC_NAMES = {"MFM", "MFM_omega", "MFM_varphi", "MFM_eta"}
+
+
+def _mfm_shared_metric_names(metric_names) -> set[str]:
+    names = {name for name in metric_names if name in _MFM_METRIC_NAMES}
+    return names if "MFM" in names and len(names) > 1 else set()
+
+
 def _metric_worker_count(num_cores, metric_count: int, pair_nbytes: int = 0) -> int:
     """Return metric-level workers bounded by configured cores and metric count."""
     if metric_count <= 1:
@@ -189,11 +197,14 @@ def _grid_output_array(value, template: xr.DataArray, name: str) -> xr.DataArray
 
 
 class Evaluation_grid(metrics, scores):
-    def _calculate_metric(self, s, o, metric):
+    def _calculate_metric(self, s, o, metric, shared_metrics=None):
         """Helper method for parallel metric calculation."""
         if not hasattr(self, metric):
             raise ValueError(f"No such metric: {metric}")
-        self.process_metric(metric, s, o)
+        if shared_metrics is not None and metric in shared_metrics:
+            self._save_metric_array(metric, shared_metrics[metric])
+        else:
+            self.process_metric(metric, s, o)
         return metric
 
     def __init__(self, info, fig_nml):
@@ -243,9 +254,7 @@ class Evaluation_grid(metrics, scores):
         logging.warning("%s; using %d overlapping timestamps", message, o_aligned.sizes.get("time", 0))
         return s_aligned, o_aligned
 
-    def process_metric(self, metric, s, o, vkey=""):
-        pb = getattr(self, metric)(s, o)
-        pb_da = _grid_output_array(pb, o, metric)
+    def _save_metric_array(self, metric, pb_da, vkey=""):
         # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
         pb_da = pb_da.load()
 
@@ -270,6 +279,31 @@ class Evaluation_grid(metrics, scores):
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             _write_netcdf_atomic(pb_da, output_path)
             logging.info(f"Saved metric {metric} to {output_path}")
+
+    def process_metric(self, metric, s, o, vkey=""):
+        pb = getattr(self, metric)(s, o)
+        self._save_metric_array(metric, _grid_output_array(pb, o, metric), vkey)
+
+    def _prepare_mfm_shared_metrics(self, s, o):
+        shared_names = _mfm_shared_metric_names(self.metrics)
+        if not shared_names:
+            return None
+        shared = self._MFM_shared_components(s, o)
+        return xr.Dataset({name: _grid_output_array(shared[name], o, name) for name in shared_names}).load()
+
+    def _process_metrics_in_order(self, s, o, shared_ds=None):
+        if shared_ds is None:
+            shared_ds = self._prepare_mfm_shared_metrics(s, o)
+
+        for metric in self.metrics:
+            if hasattr(self, metric):
+                logging.info(f"Calculating metric: {metric}")
+                if shared_ds is not None and metric in shared_ds:
+                    self._save_metric_array(metric, shared_ds[metric])
+                else:
+                    self.process_metric(metric, s, o)
+            else:
+                logging.error(f"No such metric: {metric}; skipping")
 
     def process_score(self, score, s, o, vkey=""):
         pb = getattr(self, score)(s, o)
@@ -408,11 +442,12 @@ class Evaluation_grid(metrics, scores):
                 len(self.metrics),
                 int(s.nbytes + o.nbytes),
             )
+            shared_metrics = self._prepare_mfm_shared_metrics(s, o)
             if _HAS_PARALLEL_ENGINE and metric_workers > 1:
                 logging.info("Processing %d metrics in parallel with %d worker(s)", len(self.metrics), metric_workers)
                 from functools import partial
 
-                metric_func = partial(self._calculate_metric, s, o)
+                metric_func = partial(self._calculate_metric, s, o, shared_metrics=shared_metrics)
                 metric_results = parallel_map(
                     metric_func,
                     self.metrics,
@@ -429,12 +464,7 @@ class Evaluation_grid(metrics, scores):
                 # Sequential processing — log + skip unknown metrics to
                 # match the parallel path (which never sys.exits). A typo
                 # in one metric name should not abort an entire run.
-                for metric in self.metrics:
-                    if hasattr(self, metric):
-                        logging.info(f"Calculating metric: {metric}")
-                        self.process_metric(metric, s, o)
-                    else:
-                        logging.error(f"No such metric: {metric}; skipping")
+                self._process_metrics_in_order(s, o, shared_metrics)
 
             # Process scores (usually fewer, so sequential is fine)
             for score in self.scores:
@@ -706,6 +736,8 @@ class Evaluation_stn(metrics, scores):
             s, o = _apply_pairwise_valid_mask(s, o)
 
             row = {}
+            shared_mfm_names = _mfm_shared_metric_names(self.metrics)
+            shared_mfm = self._MFM_shared_components(s, o) if shared_mfm_names else {}
             # for based plot
             try:
                 row["KGESS"] = self.KGESS(s, o).values
@@ -730,7 +762,7 @@ class Evaluation_stn(metrics, scores):
                     # Take .values when available, otherwise the result
                     # itself; fall back to NaN for None so the row stays
                     # numeric and downstream pd.concat / mean works.
-                    pb = getattr(self, metric)(s, o)
+                    pb = shared_mfm[metric] if metric in shared_mfm_names else getattr(self, metric)(s, o)
                     if pb is None:
                         row[f"{metric}"] = np.nan
                     elif hasattr(pb, "values"):

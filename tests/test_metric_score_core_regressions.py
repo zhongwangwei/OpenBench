@@ -12,6 +12,7 @@ from openbench.core.evaluation import (
     Evaluation_stn,
     _apply_pairwise_valid_mask,
     _has_any_valid_pair,
+    _mfm_shared_metric_names,
 )
 from openbench.core.metrics import metrics
 from openbench.core.registry import IMPLEMENTED_METRICS, IMPLEMENTED_SCORES
@@ -288,3 +289,144 @@ def test_preflight_station_columns_require_finite_requested_values(tmp_path):
     missing = missing_expected_outputs(out, task)
 
     assert path in missing
+
+
+def test_mfm_shared_detection_uses_unique_metric_names():
+    assert _mfm_shared_metric_names(["MFM", "MFM"]) == set()
+    assert _mfm_shared_metric_names(["MFM", "MFM_eta", "MFM_eta"]) == {"MFM", "MFM_eta"}
+
+
+def test_grid_evaluation_reuses_shared_mfm_components(monkeypatch):
+    ev = Evaluation_grid.__new__(Evaluation_grid)
+    ev.metrics = ["MFM", "MFM_eta", "MFM_omega"]
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.output_manager = None
+    counts = {"omega": 0, "varphi": 0, "eta": 0, "mfm": 0}
+    saved = []
+    arr = xr.DataArray([[1.0]], coords={"lat": [0.0], "lon": [0.0]}, dims=("lat", "lon"))
+
+    def component(name, value):
+        def _inner(_s, _o):
+            counts[name] += 1
+            return arr * value
+
+        return _inner
+
+    ev.MFM_omega = component("omega", 0.8)
+    ev.MFM_varphi = component("varphi", 0.7)
+    ev.MFM_eta = component("eta", 0.6)
+    ev.MFM = component("mfm", 0.1)
+
+    def save_metric(name, da, vkey=""):
+        saved.append((name, float(da.values.squeeze())))
+
+    monkeypatch.setattr(ev, "_save_metric_array", save_metric)
+    template = xr.DataArray(
+        np.ones((4, 1, 1)),
+        coords={"time": pd.date_range("2001-01-01", periods=4), "lat": [0.0], "lon": [0.0]},
+        dims=("time", "lat", "lon"),
+    )
+
+    ev._process_metrics_in_order(template, template)
+
+    assert counts == {"omega": 1, "varphi": 1, "eta": 1, "mfm": 0}
+    assert [name for name, _ in saved] == ev.metrics
+    expected_mfm = 1 - np.sqrt(((1 - 0.8) ** 2 + (1 - 0.7) ** 2 + (1 - 0.6) ** 2) / 3)
+    assert saved[0][1] == pytest.approx(expected_mfm)
+
+
+def test_station_evaluation_reuses_shared_mfm_components(tmp_path, monkeypatch):
+    monkeypatch.setattr("openbench.core.evaluation.plot_stn", lambda *args, **kwargs: None)
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir = str(tmp_path)
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.ref_varname = ["v"]
+    ev.sim_varname = ["v"]
+    ev.metrics = ["MFM", "MFM_eta"]
+    ev.scores = []
+    ev.compare_tim_res = ""
+    counts = {"omega": 0, "varphi": 0, "eta": 0, "mfm": 0}
+
+    def component(name, value):
+        def _inner(_s, _o):
+            counts[name] += 1
+            return xr.DataArray(value)
+
+        return _inner
+
+    ev.MFM_omega = component("omega", 0.8)
+    ev.MFM_varphi = component("varphi", 0.7)
+    ev.MFM_eta = component("eta", 0.6)
+    ev.MFM = component("mfm", 0.1)
+    data_dir = tmp_path / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    time = pd.date_range("2001-01-01", periods=4)
+    ds = xr.Dataset({"v": ("time", np.arange(4.0) + 1)}, coords={"time": time})
+    ds.to_netcdf(data_dir / "Runoff_sim_S1_2001_2001.nc")
+    ds.to_netcdf(data_dir / "Runoff_ref_S1_2001_2001.nc")
+    station_list = {"ID": ["S1"], "use_syear": [2001], "use_eyear": [2001], "ref_lat": [0.0], "ref_lon": [0.0]}
+
+    row = ev.make_evaluation_parallel(station_list, 0)
+
+    assert counts == {"omega": 1, "varphi": 1, "eta": 1, "mfm": 0}
+    assert float(row["MFM_eta"]) == pytest.approx(0.6)
+    expected_mfm = 1 - np.sqrt(((1 - 0.8) ** 2 + (1 - 0.7) ** 2 + (1 - 0.6) ** 2) / 3)
+    assert float(row["MFM"]) == pytest.approx(expected_mfm)
+
+
+def test_parallel_metric_keeps_parallel_map_with_shared_mfm(monkeypatch):
+    calls = []
+    counts = {"omega": 0, "varphi": 0, "eta": 0, "mfm": 0, "other": 0}
+
+    def fake_parallel_map(func, items, **kwargs):
+        calls.append((list(items), kwargs))
+        return [func(item) for item in items]
+
+    monkeypatch.setattr("openbench.core.evaluation._HAS_PARALLEL_ENGINE", True)
+    monkeypatch.setattr("openbench.core.evaluation.parallel_map", fake_parallel_map)
+    monkeypatch.setattr("openbench.core.evaluation.make_plot_index_grid", lambda _self: None)
+    monkeypatch.setattr(
+        "openbench.core.evaluation.open_dataset_chunked",
+        lambda path: xr.Dataset(
+            {"v": (("time", "lat", "lon"), np.ones((4, 1, 1)))},
+            coords={"time": pd.date_range("2001-01-01", periods=4), "lat": [0.0], "lon": [0.0]},
+        ),
+    )
+    monkeypatch.setattr("openbench.util.names.select_data_array", lambda ds, *_args: ds["v"])
+
+    def component(name, value):
+        def _inner(self, _s, _o):
+            counts[name] += 1
+            return xr.DataArray([[value]], coords={"lat": [0.0], "lon": [0.0]}, dims=("lat", "lon"))
+
+        return _inner
+
+    monkeypatch.setattr(Evaluation_grid, "MFM_omega", component("omega", 0.8))
+    monkeypatch.setattr(Evaluation_grid, "MFM_varphi", component("varphi", 0.7))
+    monkeypatch.setattr(Evaluation_grid, "MFM_eta", component("eta", 0.6))
+    monkeypatch.setattr(Evaluation_grid, "MFM", component("mfm", 0.1))
+    monkeypatch.setattr(Evaluation_grid, "other_metric", component("other", 0.2), raising=False)
+    monkeypatch.setattr(Evaluation_grid, "_save_metric_array", lambda *args, **kwargs: None)
+
+    ev = Evaluation_grid.__new__(Evaluation_grid)
+    ev.casedir = "/tmp"
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.ref_varname = "v"
+    ev.sim_varname = "v"
+    ev.metrics = ["MFM", "MFM_eta", "other_metric"]
+    ev.scores = []
+    ev.num_cores = 2
+    ev.output_manager = None
+    ev.compare_tim_res = "Month"
+
+    ev.make_Evaluation()
+
+    assert calls and calls[0][0] == ev.metrics
+    assert calls[0][1]["backend"] == "threading"
+    assert counts == {"omega": 1, "varphi": 1, "eta": 1, "mfm": 0, "other": 1}

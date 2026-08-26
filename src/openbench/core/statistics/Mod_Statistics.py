@@ -178,7 +178,7 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             try:
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
 
-                data = convert_to_wgs84_xesmf(data, self.compare_grid_res)
+                data = convert_to_wgs84_xesmf(data, self.compare_grid_res, cache_dir=self._xesmf_weight_cache_dir())
             except Exception as exc:
                 # Catch Exception (not bare `except:`) so KeyboardInterrupt and
                 # SystemExit can still propagate; log why xesmf failed so the
@@ -236,9 +236,24 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
     def remap_xesmf(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import xesmf as xe
 
-        regridder = xe.Regridder(data, new_grid, "conservative")
+        from openbench.data.regrid.xesmf_cache import cached_regridder
+
+        regridder = cached_regridder(
+            xe,
+            data,
+            new_grid,
+            "conservative",
+            cache_dir=self._xesmf_weight_cache_dir(),
+            periodic=False,
+        )
         ds = regridder(data)
         return list(Convert_Type.convert_nc(ds.data_vars).values())[0]
+
+    def _xesmf_weight_cache_dir(self) -> str | None:
+        output_dir = getattr(self, "output_dir", None)
+        if output_dir:
+            return os.path.join(str(output_dir), "xesmf_weights")
+        return None
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.DataArray:
         import tempfile

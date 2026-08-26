@@ -276,3 +276,145 @@ def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch
     assert ref_path.read_bytes() == b"masked"
     assert observed["values"].shape == (1, 1, 1)
     assert observed["values"][0, 0, 0] == 1.0
+
+
+def test_unified_mask_batches_sibling_sims_into_one_ref_write(tmp_path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.masking as masking_module
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    times = pd.date_range("2001-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {"ref": (("time", "lat", "lon"), np.ones((2, 2, 2)))},
+        coords={"time": times, "lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+    ).to_netcdf(data_dir / "GPP_ref_Ref_ref.nc")
+    nan_cells = [(0, 0, 0), (0, 0, 1), (1, 1, 0), (1, 1, 1)]
+    for idx, cell in enumerate(nan_cells):
+        values = np.ones((2, 2, 2))
+        values[cell] = np.nan
+        xr.Dataset(
+            {f"sim{idx}": (("time", "lat", "lon"), values)},
+            coords={"time": times, "lat": [0.0, 1.0], "lon": [10.0, 11.0]},
+        ).to_netcdf(data_dir / f"GPP_sim_Sim{idx}_sim{idx}.nc")
+
+    writes = []
+
+    def writer(data, path, **_kwargs):
+        writes.append(data.compute().values)
+        Path(path).write_bytes(b"masked")
+
+    masking_module.apply_unified_mask(
+        {"casedir": str(tmp_path), "ref_varname": "ref", "time_alignment": "intersection"},
+        "GPP",
+        "Ref",
+        [(f"Sim{idx}", f"sim{idx}") for idx in range(4)],
+        write_netcdf_atomic_fn=writer,
+    )
+
+    assert len(writes) == 1
+    assert np.isnan(writes[0]).sum() == 4
+
+
+def test_unified_mask_batch_without_spatial_mask_writes_global_time_intersection_once(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.runner.masking as masking_module
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    times = pd.date_range("2001-01-01", periods=4, freq="D")
+    xr.Dataset(
+        {"ref": (("time", "lat", "lon"), np.ones((4, 2, 3)))},
+        coords={"time": times, "lat": [0.0, 1.0], "lon": [10.0, 11.0, 12.0]},
+    ).to_netcdf(data_dir / "GPP_ref_Ref_ref.nc")
+    sim_inputs = {
+        "A": (times[:3], [0.0], [10.0, 11.0]),
+        "B": (times[1:], [1.0], [11.0, 12.0]),
+    }
+    for sim, (sim_times, lat, lon) in sim_inputs.items():
+        xr.Dataset(
+            {"sim": (("time", "lat", "lon"), np.ones((3, len(lat), len(lon))))},
+            coords={"time": sim_times, "lat": lat, "lon": lon},
+        ).to_netcdf(data_dir / f"GPP_sim_Sim{sim}_sim.nc")
+
+    writes = []
+
+    def writer(data, path, **_kwargs):
+        writes.append(data.compute())
+        Path(path).write_bytes(b"masked")
+
+    masking_module.apply_unified_mask(
+        {"casedir": str(tmp_path), "ref_varname": "ref", "sim_varname": "sim", "time_alignment": "intersection"},
+        "GPP",
+        "Ref",
+        ["SimA", "SimB"],
+        write_netcdf_atomic_fn=writer,
+        apply_spatial_mask=False,
+    )
+
+    assert len(writes) == 1
+    assert list(writes[0]["time"].values) == list(times[1:3].values)
+    assert writes[0].sizes == {"time": 2, "lat": 2, "lon": 3}
+
+
+def test_unified_mask_batch_matches_sequential_for_spatial_coordinate_mismatch(tmp_path):
+    import numpy as np
+    import xarray as xr
+
+    import openbench.runner.masking as masking_module
+    from openbench.util.netcdf import write_netcdf_atomic
+
+    coords_ref = {"time": [0], "lat": [0.0, 1.0], "lon": [10.0, 11.0, 12.0]}
+    coords_sim1 = {"time": [0], "lat": [0.0, 1.0], "lon": [10.0, 11.0]}
+    coords_sim2 = {"time": [0], "lat": [1.0], "lon": [11.0, 12.0]}
+
+    def write_inputs(case):
+        data_dir = case / "data"
+        data_dir.mkdir(parents=True)
+        xr.Dataset(
+            {"ref": (("time", "lat", "lon"), np.arange(6.0).reshape(1, 2, 3))},
+            coords=coords_ref,
+        ).to_netcdf(data_dir / "GPP_ref_Ref_ref.nc")
+        xr.Dataset(
+            {"sim": (("time", "lat", "lon"), np.ones((1, 2, 2)))},
+            coords=coords_sim1,
+        ).to_netcdf(data_dir / "GPP_sim_Sim1_sim.nc")
+        xr.Dataset(
+            {"sim": (("time", "lat", "lon"), np.ones((1, 1, 2)))},
+            coords=coords_sim2,
+        ).to_netcdf(data_dir / "GPP_sim_Sim2_sim.nc")
+
+    sequential_case = tmp_path / "sequential"
+    batch_case = tmp_path / "batch"
+    write_inputs(sequential_case)
+    write_inputs(batch_case)
+
+    info = {"ref_varname": "ref", "sim_varname": "sim", "time_alignment": "intersection"}
+    for sim in ("Sim1", "Sim2"):
+        masking_module.apply_unified_mask(
+            {**info, "casedir": str(sequential_case)},
+            "GPP",
+            "Ref",
+            sim,
+            write_netcdf_atomic_fn=write_netcdf_atomic,
+        )
+    masking_module.apply_unified_mask(
+        {**info, "casedir": str(batch_case)},
+        "GPP",
+        "Ref",
+        ["Sim1", "Sim2"],
+        write_netcdf_atomic_fn=write_netcdf_atomic,
+    )
+
+    with xr.open_dataset(sequential_case / "data" / "GPP_ref_Ref_ref.nc") as old_ds:
+        old = old_ds.load()
+    with xr.open_dataset(batch_case / "data" / "GPP_ref_Ref_ref.nc") as new_ds:
+        new = new_ds.load()
+    xr.testing.assert_identical(new, old)
+    assert old.sizes == {"time": 1, "lat": 1, "lon": 1}

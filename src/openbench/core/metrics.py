@@ -876,6 +876,14 @@ class metrics:
 
         return smpi, smpi_lower, smpi_upper
 
+    def _MFM_shared_components(self, s, o):
+        """Return default MFM components plus combined MFM from one component pass."""
+        omega = self.MFM_omega(s, o)
+        varphi = self.MFM_varphi(s, o)
+        eta = self.MFM_eta(s, o)
+        mfm = 1 - np.sqrt(((1 - omega) ** 2 + (1 - varphi) ** 2 + (1 - eta) ** 2) / 3)
+        return {"MFM_omega": omega, "MFM_varphi": varphi, "MFM_eta": eta, "MFM": mfm}
+
     def MFM_omega(self, s, o, p=1, phase_penalty_scaling=4, phase=True):
         """Return MFM's normalized error with phase penalty component (omega).
 

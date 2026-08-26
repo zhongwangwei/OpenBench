@@ -360,3 +360,65 @@ def test_mfm_component_domains_only_require_observed_mean_for_omega():
     assert np.isfinite(float(m.MFM_varphi(sim, obs)))
     assert np.isfinite(float(m.MFM_eta(sim, obs)))
     assert np.isnan(float(m.MFM(sim, obs)))
+
+
+def test_mfm_shared_components_match_public_metrics_edge_cases():
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    cases = [
+        (make_da([1.0, np.nan, 3.0, 4.0, 5.0]), make_da([1.1, 2.0, 2.8, np.nan, 5.2])),
+        (make_da([2.0, 2.0, 2.0, 2.0]), make_da([2.0, 2.0, 2.0, 2.0])),
+        (make_da([1.0, 2.0]), make_da([1.0, 2.0])),
+        (make_da([0.5, 0.0, -0.5]), make_da([-1.0, 0.0, 1.0])),
+    ]
+
+    for sim, obs in cases:
+        shared = m._MFM_shared_components(sim, obs)
+        xr.testing.assert_allclose(shared["MFM_omega"], m.MFM_omega(sim, obs), rtol=0, atol=0)
+        xr.testing.assert_allclose(shared["MFM_varphi"], m.MFM_varphi(sim, obs), rtol=0, atol=0)
+        xr.testing.assert_allclose(shared["MFM_eta"], m.MFM_eta(sim, obs), rtol=0, atol=0)
+        xr.testing.assert_allclose(shared["MFM"], m.MFM(sim, obs), rtol=0, atol=0)
+
+
+def test_mfm_shared_components_lock_degenerate_values():
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+
+    perfect = m._MFM_shared_components(make_da([2.0, 2.0, 2.0, 2.0]), make_da([2.0, 2.0, 2.0, 2.0]))
+    for name in ["MFM_omega", "MFM_varphi", "MFM_eta", "MFM"]:
+        assert float(perfect[name]) == 1.0
+
+    too_short = m._MFM_shared_components(make_da([1.0, 2.0]), make_da([1.0, 2.0]))
+    for name in ["MFM_omega", "MFM_varphi", "MFM_eta", "MFM"]:
+        assert np.isnan(float(too_short[name]))
+
+    zero_mean_obs = m._MFM_shared_components(make_da([0.5, 0.0, -0.5]), make_da([-1.0, 0.0, 1.0]))
+    assert np.isnan(float(zero_mean_obs["MFM_omega"]))
+    assert np.isnan(float(zero_mean_obs["MFM"]))
+    assert np.isfinite(float(zero_mean_obs["MFM_varphi"]))
+    assert np.isfinite(float(zero_mean_obs["MFM_eta"]))
+
+
+def test_mfm_shared_components_match_public_mfm_for_dask():
+    pytest = __import__("pytest")
+    pytest.importorskip("dask.array")
+    from openbench.core.metrics import metrics
+
+    m = metrics()
+    times = pd.date_range("2001-01-01", periods=8)
+    obs = xr.DataArray(
+        np.arange(32.0).reshape(8, 2, 2) + 1,
+        coords={"time": times, "lat": [0.0, 1.0], "lon": [10.0, 20.0]},
+        dims=("time", "lat", "lon"),
+    )
+    sim = obs * 1.05
+    obs_dask = obs.chunk({"time": 4})
+    sim_dask = sim.chunk({"time": 4})
+
+    shared = xr.Dataset(m._MFM_shared_components(sim_dask, obs_dask)).compute()
+    eager = m._MFM_shared_components(sim, obs)
+
+    for name, expected in eager.items():
+        xr.testing.assert_allclose(shared[name], expected, rtol=0, atol=0)
