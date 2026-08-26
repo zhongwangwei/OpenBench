@@ -200,7 +200,7 @@ def test_oneway_anova_all_negative_predictor_is_not_treated_as_empty():
     assert np.isfinite(result["p_value"].values[0, 0])
 
 
-def test_anova_respects_requested_parallelism_without_eight_core_cap(monkeypatch):
+def test_anova_respects_requested_parallelism_and_effective_cpu_limit(monkeypatch):
     import importlib
 
     stat_anova_module = importlib.import_module("openbench.core.statistics.stat_anova")
@@ -228,7 +228,7 @@ def test_anova_respects_requested_parallelism_without_eight_core_cap(monkeypatch
 
     stat_anova(AnovaSelf(), y, x)
 
-    assert captured_n_jobs == [16]
+    assert captured_n_jobs == [min(16, stat_anova_module.effective_cpu_count(32))]
 
 
 def test_statistics_processing_freq_map_uses_non_deprecated_pandas_aliases():

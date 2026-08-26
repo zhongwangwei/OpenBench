@@ -150,16 +150,16 @@ def test_run_cli_help_mentions_performance_configuration():
     assert "OPENBENCH_MFDATASET_BATCH_SIZE" in result.output
 
 
-def test_metric_worker_count_honors_configured_cores(monkeypatch):
+def test_metric_worker_count_honors_configured_and_available_cores(monkeypatch):
     import openbench.core.evaluation as evaluation
 
-    monkeypatch.setattr(evaluation, "effective_cpu_count", lambda count: count)
+    available = evaluation.effective_cpu_count(evaluation.os.cpu_count() or 1)
     assert evaluation._metric_worker_count(1, 6) == 1
-    assert evaluation._metric_worker_count(2, 6) == 2
-    assert evaluation._metric_worker_count(16, 6) == 6
+    assert evaluation._metric_worker_count(2, 6) == min(2, available)
+    assert evaluation._metric_worker_count(16, 6) == min(6, available)
     assert evaluation._metric_worker_count(None, 1) == 1
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
-    assert evaluation._metric_worker_count(0, 6) == 6
+    assert evaluation._metric_worker_count(0, 6) == min(6, evaluation.effective_cpu_count(8))
 
     monkeypatch.setattr(evaluation, "get_system_resources", lambda: {"available_memory_gb": 1})
     assert evaluation._metric_worker_count(4, 4, pair_nbytes=128 * 1024**2) == 1

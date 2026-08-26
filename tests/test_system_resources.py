@@ -33,7 +33,7 @@ def test_get_system_resources_uses_psutil_when_available(monkeypatch):
 
     assert resources["total_memory_gb"] == 16
     assert resources["available_memory_gb"] == 10
-    assert resources["cpu_count"] == 6
+    assert resources["cpu_count"] == resource_module.effective_cpu_count(6)
     assert resources["cpu_freq_mhz"] == 3200
 
 
