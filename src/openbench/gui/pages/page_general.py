@@ -5,6 +5,7 @@ General settings page.
 
 import logging
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QLineEdit,
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
 )
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import execute_responsive
@@ -40,9 +42,12 @@ class PageGeneral(BasePage):
         # === Project Info ===
         project_group = QGroupBox("Project Information")
         project_layout = QFormLayout(project_group)
+        project_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        project_layout.setLabelAlignment(Qt.AlignLeft)
 
         # Output directory first
         self.basedir_input = PathSelector(mode="directory", placeholder="Output directory")
+        self.basedir_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.basedir_input.path_changed.connect(self._on_basedir_changed)
         self.basedir_input.set_custom_browse_handler(self._browse_output_directory)
         project_layout.addRow("Output Directory:", self.basedir_input)
