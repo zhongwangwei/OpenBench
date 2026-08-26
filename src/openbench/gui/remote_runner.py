@@ -33,7 +33,7 @@ def build_remote_run_command(python_path: str, openbench_path: str, config_path:
 
     q_python = quote_remote_path(python_path or "python3")
     q_openbench = quote_remote_path(openbench_path)
-    q_config = shlex.quote(config_path)
+    q_config = quote_remote_path(config_path)
     prefix = f"PYTHONUNBUFFERED=1 OPENBENCH_GUI_PROGRESS=1 {q_python} -u -m openbench"
     invocation = f"{prefix} check {q_config} && {prefix} run {q_config}"
     return wrap_with_conda_env(
@@ -197,6 +197,13 @@ class RemoteRunner(QThread):
             if not self._apply_remote_num_cores_override():
                 return
 
+            # A stop request can arrive while the num_cores patch command is
+            # running. Do not start OpenBench after a successful patch if the
+            # user has already canceled the run.
+            if self._is_stop_requested():
+                self._handle_stop()
+                return
+
             # Step 3: Execute OpenBench on remote server
             self._emit_progress(
                 RunnerStatus.RUNNING, self.PROGRESS_INIT, "Executing", "", "Running", "Starting OpenBench execution..."
@@ -241,7 +248,7 @@ class RemoteRunner(QThread):
 
     def _handle_stop(self):
         """Handle stop request."""
-        self._emit_progress(RunnerStatus.STOPPED, 0, "Stopped", "", "", "Evaluation stopped by user")
+        self._emit_progress(RunnerStatus.STOPPED, self._last_progress, "Stopped", "", "", "Evaluation stopped by user")
         self.finished_signal.emit(False, "Stopped by user")
 
     def _create_remote_temp_dir(self) -> bool:
@@ -375,7 +382,7 @@ class RemoteRunner(QThread):
 import pathlib
 import yaml
 
-path = pathlib.Path({json.dumps(self._remote_config_path)})
+path = pathlib.Path({json.dumps(self._remote_config_path)}).expanduser()
 data = yaml.safe_load(path.read_text(encoding="utf-8")) or {{}}
 if not isinstance(data, dict):
     raise TypeError("OpenBench config root must be a mapping")
@@ -393,13 +400,23 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
                 python_path=self._remote_config.get("python_path", "python3"),
                 conda_env=self._remote_config.get("conda_env", ""),
             )
-            stdout, stderr, exit_code = self._ssh_manager.execute(command, timeout=30)
+            stdout, stderr, exit_code = self._ssh_manager.execute(
+                command,
+                timeout=30,
+                should_abort=self._is_stop_requested,
+            )
             if exit_code != 0:
                 detail = stderr or stdout or "unknown error"
                 self.finished_signal.emit(False, f"Failed to apply remote CPU core count to config: {detail}")
                 return False
             self.log_message.emit(f"Using {num_cores} CPU cores on remote server.")
             return True
+        except SSHConnectionError as exc:
+            if self._is_stop_requested():
+                self._handle_stop()
+            else:
+                self.finished_signal.emit(False, f"Failed to apply remote CPU core count to config: {exc}")
+            return False
         except Exception as exc:
             self.finished_signal.emit(False, f"Failed to apply remote CPU core count to config: {exc}")
             return False
@@ -496,7 +513,14 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
                 return
             # Match only this run's uploaded config path, not every OpenBench
             # run owned by the same shared HPC account.
-            pattern = f"python.*-m openbench (check|run) .*{re.escape(self._remote_config_path)}"
+            config_pattern = re.escape(self._remote_config_path)
+            if self._remote_config_path.startswith("~/"):
+                # The run command expands ~/ to the remote home directory before
+                # it reaches Python argv; match either the literal or expanded
+                # spelling so Stop still finds runs launched from a ~/ project.
+                suffix = re.escape(self._remote_config_path[2:])
+                config_pattern = f"({config_pattern}|/[^[:space:]]+/{suffix})"
+            pattern = f"python.*-m openbench (check|run) .*{config_pattern}"
             self._ssh_manager.execute(
                 f"pkill -f -- {shlex.quote(pattern)} || true",
                 timeout=10,
@@ -634,4 +658,3 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
         """Request stop (thread-safe)."""
         with self._stop_lock:
             self._stop_requested = True
-        self._kill_remote_process()

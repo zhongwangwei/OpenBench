@@ -262,6 +262,22 @@ def test_data_validator_inspect_uses_shared_remote_python_command(monkeypatch):
     assert "~/.bashrc" not in command
 
 
+def test_remote_grid_single_time_check_rejects_missing_time_dimension():
+    from openbench.gui.data_validator import RemoteNetCDFValidator
+
+    validator = RemoteNetCDFValidator(object())
+
+    check = validator.check_time_range(
+        "/remote/ref/runoff.nc",
+        2000,
+        2001,
+        {"success": True, "variables": ["q"], "time_missing": True},
+    )
+
+    assert check.passed is False
+    assert "Time dimension not found" in check.message
+
+
 def _capture_remote_json(monkeypatch, result=None):
     captured = {}
 
@@ -1026,3 +1042,147 @@ def test_model_editor_inplace_save_expands_tilde_remote_path(qapp, monkeypatch):
     assert commands
     assert '> "$HOME"/OpenBench/nml/Mod/CoLM.yaml' in commands[0]
     assert "'~/" not in commands[0]
+
+
+def test_ref_scan_registers_selected_datasets_in_worker(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import page_ref_data
+    from openbench.gui.pages.page_ref_data import PageRefData
+    from tests.gui_fakes import FakeButton
+
+    variant = ScannedDataset("Found", "LowRes", "Water", "grid", "/ref", {"Runoff": "runoff"})
+    variant.nc_inspections = {
+        "Runoff": {
+            "all_data_vars": [
+                {"name": "wrong", "unit": "1"},
+                {"name": "runoff", "unit": "mm"},
+            ]
+        }
+    }
+    group = DatasetGroup("Found", {"LowRes": variant})
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            captured["existing_names"] = existing_names
+
+        def exec(self):
+            return True
+
+        def get_selected(self):
+            return [("Found", "LowRes", variant)]
+
+    class FakeRegisterWorker:
+        def __init__(self, variants):
+            captured["variants"] = variants
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            captured["started"] = True
+
+        def deleteLater(self):
+            pass
+
+    registry = SimpleNamespace(list_references=lambda: [], get_reference=lambda _name: None)
+    monkeypatch.setattr(PageRefData, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.choose_nc_variable", lambda *args: "runoff")
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.RegisterScannedDatasetsWorker", FakeRegisterWorker)
+    monkeypatch.setattr(page_ref_data, "QProgressDialog", FakeProgress)
+
+    page = PageRefData.__new__(PageRefData)
+    page.btn_scan = FakeButton()
+
+    PageRefData._on_scan_data_root_finished(page, ([group], []))
+
+    assert captured["existing_names"] == set()
+    assert captured["variants"] == [variant]
+    assert captured["started"] is True
+    assert page.btn_scan.enabled is False
+    assert variant.nc_inspections["Runoff"]["varname"] == "runoff"
+    assert variant.nc_inspections["Runoff"]["varunit"] == "mm"
+
+
+def test_register_scanned_datasets_worker_runs_off_gui_thread(qapp, monkeypatch):
+    from PySide6.QtCore import QThread
+
+    from openbench.data.registry import scanner as scanner_module
+    from openbench.gui.pages._scan_worker import RegisterScannedDatasetsWorker
+
+    ran_on_gui_thread = []
+
+    def fake_register(datasets):
+        assert datasets == ["demo"]
+        ran_on_gui_thread.append(QThread.currentThread() == qapp.thread())
+        return "/tmp/reference_catalog.yaml"
+
+    monkeypatch.setattr(scanner_module, "register_scanned_datasets_batch", fake_register)
+
+    worker = RegisterScannedDatasetsWorker(["demo"])
+    worker.start()
+    assert worker.wait(3000)
+    worker.deleteLater()
+
+    assert ran_on_gui_thread == [False]
+
+
+def test_registry_scan_registers_selected_datasets_in_worker(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import page_registry
+    from openbench.gui.pages.page_registry import PageRegistry
+
+    variant = ScannedDataset("Found", "LowRes", "Water", "grid", "/ref", {"Runoff": "runoff"})
+    variant.nc_inspections = {
+        "Runoff": {
+            "all_data_vars": [
+                {"name": "wrong", "unit": "1"},
+                {"name": "runoff", "unit": "mm"},
+            ]
+        }
+    }
+    group = DatasetGroup("Found", {"LowRes": variant})
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            captured["existing_names"] = existing_names
+
+        def exec(self):
+            return True
+
+        def get_selected(self):
+            return [("Found", "LowRes", variant)]
+
+    class FakeRegisterWorker:
+        def __init__(self, variants):
+            captured["variants"] = variants
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            captured["started"] = True
+
+        def deleteLater(self):
+            pass
+
+    registry = SimpleNamespace(list_references=lambda: [], get_reference=lambda _name: None)
+    monkeypatch.setattr(PageRegistry, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr(page_registry, "_get_registry", lambda: registry)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.choose_nc_variable", lambda *args: "runoff")
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.RegisterScannedDatasetsWorker", FakeRegisterWorker)
+    monkeypatch.setattr(page_registry, "QProgressDialog", FakeProgress)
+
+    page = PageRegistry.__new__(PageRegistry)
+
+    PageRegistry._on_scan_directory_finished(page, ([group], []))
+
+    assert captured["existing_names"] == set()
+    assert captured["variants"] == [variant]
+    assert captured["started"] is True
+    assert variant.nc_inspections["Runoff"]["varname"] == "runoff"
+    assert variant.nc_inspections["Runoff"]["varunit"] == "mm"

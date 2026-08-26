@@ -128,7 +128,7 @@ class ProcessingConfigMixin:
 
         # Handle compound frequencies like '3M' -> '3ME'
 
-        pattern = r"(\d*)([A-Z])"
+        pattern = r"^(\d*)(M|Y|Q|H|T|S|L|U|N)$"
 
         def replacer(match):
             number = match.group(1)
@@ -208,6 +208,14 @@ class ProcessingConfigMixin:
 
         # Convert to lowercase for case-insensitive matching
         normalized_freq = freq.lower().strip()
+
+        compound = re.fullmatch(
+            r"(\d+)\s*(month|mon|monthly|day|daily|hour|hr|hourly|year|yr|yearly|week|wk|weekly)",
+            normalized_freq,
+        )
+        if compound:
+            number, unit = compound.groups()
+            return number + freq_map[unit]
 
         # Get mapped frequency or use original if no mapping found
         result_freq = freq_map.get(normalized_freq, freq)

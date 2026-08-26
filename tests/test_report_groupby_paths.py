@@ -402,3 +402,379 @@ def test_report_does_not_invent_correlation_for_large_real_result(tmp_path, monk
     assert metric["coverage"] == 75.0
     assert metric["median"] is None
     assert metric["median_omitted"] is True
+
+
+def test_report_summaries_ignore_infinite_values(tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    nc = xr.DataArray([1.0, np.inf, -np.inf, np.nan], dims=["x"])
+    stats = ReportGenerator._summarize_data_array(nc)
+    assert stats is not None
+    assert stats["mean"] == 1.0
+    assert stats["valid_points"] == 1
+
+    csv = tmp_path / "values.csv"
+    pd.DataFrame({"bias": [1.0, np.inf, -np.inf, np.nan]}).to_csv(csv, index=False)
+    _rows, summary = ReportGenerator._summarize_csv(str(csv))
+    assert summary["bias"]["mean"] == 1.0
+    assert summary["bias"]["count"] == 1
+
+
+def test_report_extracts_exact_metric_and_score_names(tmp_path):
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"correlation": True, "correlation_R2": True, "RMSE": True},
+            "scores": {"nRMSEScore": True, "Overall_Score": True},
+        },
+        str(tmp_path / "case"),
+    )
+
+    assert generator._extract_metric_type("Runoff_ref_Ref_sim_Sim_correlation_R2.nc") == "correlation_R2"
+    assert generator._extract_metric_type("Runoff_ref_Ref_sim_Sim_nRMSEScore.nc") == "nRMSEScore"
+    assert (
+        generator._extract_metric_type(
+            f"{join_filename_components('Run/off', 'ref', 'Ref', 'sim', 'Sim', 'Overall_Score')}.nc"
+        )
+        == "Overall_Score"
+    )
+
+    only_short = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"correlation_R2": True},
+            "scores": {},
+        },
+        str(tmp_path / "case2"),
+    )
+    assert only_short._extract_metric_type("Runoff_ref_Ref_sim_Sim_ubcorrelation_R2.nc") == "Unknown"
+
+
+def test_report_reads_v3_source_keys_and_keeps_grid_scores_out_of_metrics(tmp_path):
+    import numpy as np
+    import xarray as xr
+
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    scores_dir = case_dir / "scores"
+    metrics_dir.mkdir(parents=True)
+    scores_dir.mkdir(parents=True)
+
+    item = "Runoff"
+    ref = "RefA"
+    sim = "SimA"
+    xr.Dataset({"bias": (("lat", "lon"), np.array([[1.0, 3.0]]))}).to_netcdf(
+        metrics_dir / f"{join_filename_components(item, 'ref', ref, 'sim', sim, 'bias')}.nc"
+    )
+    xr.Dataset({"Overall_Score": (("lat", "lon"), np.array([[0.2, 0.8]]))}).to_netcdf(
+        scores_dir / f"{join_filename_components(item, 'ref', ref, 'sim', sim, 'Overall_Score')}.nc"
+    )
+    xr.Dataset({"RMSE": (("lat", "lon"), np.array([[99.0, 99.0]]))}).to_netcdf(
+        metrics_dir / f"{join_filename_components(item, 'ref', ref, 'sim', sim, 'RMSE')}.nc"
+    )
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": [item],
+            "metrics": {"bias": True},
+            "scores": {"Overall_Score": True},
+            "ref_nml": {"general": {f"{item}_ref_source": ref}},
+            "sim_nml": {"general": {f"{item}_sim_source": sim}},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+
+    report_data = generator._collect_report_data()
+    item_data = report_data["evaluation_items"][item]
+    assert item_data["metrics"][f"{ref} vs {sim}"]["metrics"] == {
+        "bias": item_data["metrics"][f"{ref} vs {sim}"]["metrics"]["bias"],
+        "use_eyear": item_data["metrics"][f"{ref} vs {sim}"]["metrics"]["use_eyear"],
+        "use_syear": item_data["metrics"][f"{ref} vs {sim}"]["metrics"]["use_syear"],
+    }
+    assert "Overall_Score" not in item_data["metrics"][f"{ref} vs {sim}"]["metrics"]
+    assert "Unknown" not in item_data["metrics"][f"{ref} vs {sim}"]["metrics"]
+    assert item_data["scores"][f"{ref} vs {sim}"]["metrics"]["Overall_Score"]["mean"] == 0.5
+    assert report_data["overall_summary"]["grand_average"] == 0.5
+
+    html = Path(generator._generate_html_report(report_data, "grid_scores")).read_text(encoding="utf-8")
+    assert "Evaluation Scores" in html
+    assert "Overall_Score" in html
+    assert "0.500" in html
+
+
+def test_report_collects_comparison_csv_for_selected_score_and_non_jpg_figures(tmp_path):
+    case_dir = tmp_path / "case"
+    heatmap_dir = case_dir / "comparisons" / "HeatMap"
+    radar_dir = case_dir / "comparisons" / "RadarMap"
+    parallel_dir = case_dir / "comparisons" / "Parallel_Coordinates"
+    for directory in (heatmap_dir, radar_dir, parallel_dir):
+        directory.mkdir(parents=True)
+
+    (heatmap_dir / "scenarios_nRMSEScore_comparison.csv").write_text("item,score\nRunoff,0.9\n", encoding="utf-8")
+    (radar_dir / "scenarios_nRMSEScore_comparison.csv").write_text("item,score\nRunoff,0.8\n", encoding="utf-8")
+    (parallel_dir / "Parallel_Coordinates_evaluations.csv").write_text(
+        "item\tnRMSEScore\nRunoff\t0.7\n", encoding="utf-8"
+    )
+    (heatmap_dir / "case_heatmap.png").write_bytes(b"png")
+    (radar_dir / "case_radarmap.svg").write_bytes(b"svg")
+    (parallel_dir / "case_nRMSEScore.webp").write_bytes(b"webp")
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {},
+            "scores": {"nRMSEScore": True},
+            "comparisons": {"HeatMap": True, "RadarMap": True, "Parallel_Coordinates": True},
+            "general": {"comparison": True},
+        },
+        str(case_dir),
+    )
+
+    data = generator._collect_comparison_data()
+    assert data["heatmap"] == [{"item": "Runoff", "score": 0.9}]
+    assert data["radar"] == [{"item": "Runoff", "score": 0.8}]
+    assert data["parallel_coords"] == [{"item": "Runoff", "nRMSEScore": 0.7}]
+    assert data["score"] == "nRMSEScore"
+    assert data["figures"] == {
+        "heatmap": "HeatMap/case_heatmap.png",
+        "parallel_coords": "Parallel_Coordinates/case_nRMSEScore.webp",
+        "radar": "RadarMap/case_radarmap.svg",
+    }
+
+    html = Path(
+        generator._generate_html_report(
+            {
+                "metadata": generator.metadata,
+                "evaluation_items": {
+                    "Runoff": {
+                        "metrics": {},
+                        "scores": {},
+                        "figures": {
+                            "metrics": [],
+                            "scores": [],
+                            "comparisons": ["HeatMap/case_heatmap.png"],
+                            "igbp_groupby": [],
+                            "pft_groupby": [],
+                            "climate_zone_groupby": [],
+                        },
+                        "statistics": {},
+                    }
+                },
+                "overall_summary": {"total_items": 1},
+                "comparisons": data,
+                "groupby_summary": {"total_groupby_analyses": 0},
+            },
+            "non_jpg_caption",
+        )
+    ).read_text(encoding="utf-8")
+    assert "case heatmap</div>" in html
+    assert "case heatmap.png</div>" not in html
+    assert "nRMSEScore Comparison Heatmap" in html
+
+    generator._copy_figures_to_report_dir()
+    assert (case_dir / "reports" / "figures" / "comparisons" / "HeatMap" / "case_heatmap.png").exists()
+
+
+def test_report_station_csv_metric_and_score_summaries_do_not_cross(tmp_path):
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    scores_dir = case_dir / "scores"
+    metrics_dir.mkdir(parents=True)
+    scores_dir.mkdir(parents=True)
+
+    (metrics_dir / "Runoff_evaluations.csv").write_text(
+        "station,bias,Overall_Score,RMSE,correlation\nA,1,0.2,5,0.9\nB,3,0.8,7,0.8\n",
+        encoding="utf-8",
+    )
+    (scores_dir / "Runoff_evaluations.csv").write_text(
+        "station,bias,Overall_Score,RMSE,correlation\nA,1,0.2,5,0.9\nB,3,0.8,7,0.8\n",
+        encoding="utf-8",
+    )
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Runoff"],
+            "metrics": {"bias": True},
+            "scores": {"Overall_Score": True},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+
+    report_data = generator._collect_report_data()
+    item_data = report_data["evaluation_items"]["Runoff"]
+    assert set(item_data["metrics"]["Runoff"]["summary"]) == {"bias"}
+    assert set(item_data["scores"]["Runoff"]["summary"]) == {"Overall_Score"}
+
+    html = Path(generator._generate_html_report(report_data, "station_no_cross")).read_text(encoding="utf-8")
+    metrics_section = html.split("Evaluation Scores", 1)[0]
+    scores_section = html.split("Evaluation Scores", 1)[1].split("Metric Visualizations", 1)[0]
+    assert "<strong>Overall_Score:</strong>" not in metrics_section
+    assert "<strong>bias:</strong>" not in scores_section
+
+
+def test_report_collects_station_timeseries_for_current_item_only(tmp_path):
+    case_dir = tmp_path / "case"
+    good_dir = case_dir / "data" / "stn_RefA_SimA"
+    nested = good_dir / "nested"
+    nested.mkdir(parents=True)
+    safe_fig = good_dir / f"{join_filename_components('Run/off', 'US-A', 'timeseries')}.jpg"
+    legacy_fig = nested / "Runoff_US-B_timeseries.png"
+    wrong_item = good_dir / "Runoff_US-C_timeseries.jpg"
+    near_prefix = good_dir / "Run_US-D_timeseries.jpg"
+    for path in (safe_fig, legacy_fig, wrong_item, near_prefix):
+        path.write_bytes(b"fake image")
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Run/off", "Runoff"],
+            "metrics": {},
+            "scores": {},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+
+    figures = generator._collect_figures("Run/off")
+    assert figures["station_timeseries"] == [f"data/stn_RefA_SimA/{safe_fig.name}"]
+
+    runoff_figures = generator._collect_figures("Runoff")
+    assert runoff_figures["station_timeseries"] == [
+        "data/stn_RefA_SimA/Runoff_US-C_timeseries.jpg",
+        "data/stn_RefA_SimA/nested/Runoff_US-B_timeseries.png",
+    ]
+
+
+def test_report_copies_verifies_and_renders_station_timeseries(tmp_path):
+    case_dir = tmp_path / "case"
+    data_dir = case_dir / "data" / "stn_RefA_SimA"
+    data_dir.mkdir(parents=True)
+    figure = data_dir / f"{join_filename_components('Run/off', 'Site 1', 'timeseries')}.jpg"
+    figure.write_bytes(b"fake image")
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Run/off"],
+            "metrics": {},
+            "scores": {},
+            "comparisons": {},
+        },
+        str(case_dir),
+    )
+    report_data = generator._collect_report_data()
+
+    generator._copy_figures_to_report_dir()
+    generator._verify_figure_paths(report_data)
+    html_path = generator._generate_html_report(report_data, "station_timeseries")
+
+    copied = case_dir / "reports" / "figures" / "data" / "stn_RefA_SimA" / figure.name
+    assert copied.exists()
+    html = Path(html_path).read_text(encoding="utf-8")
+    assert "Station Time Series" in html
+    assert f"figures/data/stn_RefA_SimA/{figure.name}" not in html
+    assert "Run%252Foff" in html
+
+
+def test_report_ignores_hidden_sidecars_and_replaces_stale_figure_copies(tmp_path):
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    copied_dir = case_dir / "reports" / "figures" / "metrics"
+    metrics_dir.mkdir(parents=True)
+    copied_dir.mkdir(parents=True)
+    (metrics_dir / "Runoff_bias.jpg").write_bytes(b"figure")
+    (metrics_dir / "._Runoff_bias.jpg").write_bytes(b"sidecar")
+    (copied_dir / "stale.jpg").write_bytes(b"stale")
+    (copied_dir / "._stale.jpg").write_bytes(b"sidecar")
+
+    generator = ReportGenerator(
+        {"evaluation_items": ["Runoff"], "metrics": {}, "scores": {}, "comparisons": {}},
+        str(case_dir),
+    )
+    generator._copy_figures_to_report_dir()
+
+    assert (copied_dir / "Runoff_bias.jpg").read_bytes() == b"figure"
+    assert not (copied_dir / "._Runoff_bias.jpg").exists()
+    assert not (copied_dir / "stale.jpg").exists()
+    assert not (copied_dir / "._stale.jpg").exists()
+
+
+def test_report_renders_taylor_and_heatmap_once_without_heatmap_item_duplicate(tmp_path):
+    case_dir = tmp_path / "case"
+    heatmap_dir = case_dir / "comparisons" / "HeatMap"
+    taylor_dir = case_dir / "comparisons" / "Taylor_Diagram"
+    heatmap_dir.mkdir(parents=True)
+    taylor_dir.mkdir(parents=True)
+    heatmap = heatmap_dir / "scenarios_Overall_Score_comparison_heatmap.jpg"
+    taylor = taylor_dir / f"{join_filename_components('Taylor_Diagram', 'Latent_Heat', 'RefA')}.jpg"
+    heatmap.write_bytes(b"heatmap")
+    taylor.write_bytes(b"taylor")
+    (heatmap_dir / "scenarios_Overall_Score_comparison.csv").write_text("item\tscore\nLatent_Heat\t0.9\n")
+
+    generator = ReportGenerator(
+        {
+            "evaluation_items": ["Latent_Heat"],
+            "metrics": {},
+            "scores": {"Overall_Score": True},
+            "comparisons": {"HeatMap": True, "Taylor_Diagram": True},
+            "general": {"comparison": True},
+        },
+        str(case_dir),
+    )
+    report_data = generator._collect_report_data()
+
+    assert report_data["evaluation_items"]["Latent_Heat"]["figures"]["comparisons"] == [f"Taylor_Diagram/{taylor.name}"]
+    assert report_data["comparisons"]["figures"] == {"heatmap": f"HeatMap/{heatmap.name}"}
+
+    generator._copy_figures_to_report_dir()
+    html = Path(generator._generate_html_report(report_data, "comparison_once")).read_text(encoding="utf-8")
+
+    assert html.count("figures/comparisons/HeatMap/") == 1
+    assert html.count("figures/comparisons/Taylor_Diagram/") == 1
+    assert heatmap.name in html
+    assert taylor.name in html
+
+
+def test_report_assigns_station_timeseries_by_configured_varname_alias_and_pair(tmp_path):
+    case_dir = tmp_path / "case"
+    site_dir = case_dir / "data" / join_filename_components("stn", "FLUXNET_PLUMBER2", "Site")
+    other_dir = case_dir / "data" / join_filename_components("stn", "FLUXNET_PLUMBER2", "OtherSite")
+    site_dir.mkdir(parents=True)
+    other_dir.mkdir(parents=True)
+    qle = site_dir / "Qle_cor__IT-Isp__timeseries.jpg"
+    qh = site_dir / "Qh_cor__IT-Isp__timeseries.jpg"
+    wrong_pair = other_dir / "Qle_cor__IT-Isp__timeseries.jpg"
+    for path in (qle, qh, wrong_pair):
+        path.write_bytes(b"fake image")
+
+    config = {
+        "evaluation_items": ["Latent_Heat", "Sensible_Heat"],
+        "metrics": {},
+        "scores": {},
+        "comparisons": {},
+        "ref_nml": {
+            "general": {
+                "Latent_Heat_ref_source": "FLUXNET_PLUMBER2",
+                "Sensible_Heat_ref_source": "FLUXNET_PLUMBER2",
+            },
+            "Latent_Heat": {"FLUXNET_PLUMBER2_varname": "Qle_cor"},
+            "Sensible_Heat": {"FLUXNET_PLUMBER2_varname": "Qh_cor"},
+        },
+        "sim_nml": {
+            "general": {
+                "Latent_Heat_sim_source": ["Site"],
+                "Sensible_Heat_sim_source": ["Site"],
+            },
+            "Latent_Heat": {"Site_varname": "Latent_Heat"},
+            "Sensible_Heat": {"Site_varname": "Sensible_Heat"},
+        },
+    }
+    generator = ReportGenerator(config, str(case_dir))
+
+    latent = generator._collect_figures("Latent_Heat")["station_timeseries"]
+    sensible = generator._collect_figures("Sensible_Heat")["station_timeseries"]
+
+    assert latent == [f"data/{site_dir.name}/{qle.name}"]
+    assert sensible == [f"data/{site_dir.name}/{qh.name}"]

@@ -8,6 +8,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
+from openbench.data._system_resources import effective_cpu_count, limit_native_threads
 from openbench.runner.progress_events import emit_gui_task_completion
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ def _core_budget(num_cores: Any) -> int:
     if requested <= 1:
         return 1
     os_module = _local_attr("os", os)
-    return min(requested, max(1, os_module.cpu_count() or 1))
+    return min(requested, effective_cpu_count(os_module.cpu_count() or 1))
 
 
 def evaluation_task_worker_count(num_cores: Any, task_count: int) -> int:
@@ -122,7 +123,10 @@ def evaluate_ready_tasks(
             group_workers,
             cores_per_worker,
         )
-        with executor_cls(max_workers=group_workers) as executor:
+        executor_kwargs = {"max_workers": group_workers}
+        if executor_cls is ProcessPoolExecutor:
+            executor_kwargs["initializer"] = limit_native_threads
+        with executor_cls(**executor_kwargs) as executor:
             grouped_results = executor.map(evaluate_group, groups)
             results = []
             for group in grouped_results:
@@ -139,7 +143,10 @@ def evaluate_ready_tasks(
         workers,
         cores_per_worker,
     )
-    with executor_cls(max_workers=workers) as executor:
+    executor_kwargs = {"max_workers": workers}
+    if executor_cls is ProcessPoolExecutor:
+        executor_kwargs["initializer"] = limit_native_threads
+    with executor_cls(**executor_kwargs) as executor:
         results = []
         for result in executor.map(evaluate_single, budgeted_tasks):
             emit_gui_task_completion(result)

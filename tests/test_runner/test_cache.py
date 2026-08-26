@@ -47,7 +47,12 @@ def test_cache_clear():
 
 def test_cache_key():
     key = make_cache_key("Evapotranspiration", "CoLM2024", "GLEAM_v4.2a")
-    assert key == "Evapotranspiration__CoLM2024__GLEAM_v4.2a"
+    assert key.startswith("v2:")
+    assert key == make_cache_key("Evapotranspiration", "CoLM2024", "GLEAM_v4.2a")
+
+
+def test_cache_key_is_unambiguous_when_names_contain_separator():
+    assert make_cache_key("A__B", "C", "D") != make_cache_key("A", "B__C", "D")
 
 
 def test_hash_config():
@@ -206,7 +211,6 @@ def test_unified_mask_missing_inputs_raise(tmp_path):
 
 def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch):
     import dask.array as da
-    import numpy as np
     import xarray as xr
     from dask.base import is_dask_collection
 
@@ -272,5 +276,5 @@ def test_unified_mask_keeps_chunked_data_lazy_until_writer(tmp_path, monkeypatch
     assert observed["lazy"] is True
     assert open_calls == [{"chunks": "auto"}, {"chunks": "auto"}]
     assert ref_path.read_bytes() == b"masked"
+    assert observed["values"].shape == (1, 1, 1)
     assert observed["values"][0, 0, 0] == 1.0
-    assert np.isnan(observed["values"][1, 0, 0])

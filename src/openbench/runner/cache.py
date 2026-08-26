@@ -155,7 +155,7 @@ class EvaluationCache:
                     pass
                 raise
         except Exception as e:
-            logger.warning("Failed to save cache: %s", e)
+            logger.warning("Failed to save cache %s: %s", self._cache_file, e)
 
     def is_cached(self, key: str, config_hash: str) -> bool:
         """Check if an evaluation with this config hash is already done."""
@@ -200,4 +200,5 @@ class EvaluationCache:
 
 def make_cache_key(variable: str, sim_source: str, ref_source: str) -> str:
     """Create a cache key for a variable+sim+ref combination."""
-    return f"{variable}__{sim_source}__{ref_source}"
+    payload = json.dumps([variable, sim_source, ref_source], ensure_ascii=False, separators=(",", ":"))
+    return f"v2:{hashlib.sha256(payload.encode()).hexdigest()[:32]}"

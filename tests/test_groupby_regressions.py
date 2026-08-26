@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,26 @@ def test_landcover_metric_clip_operates_on_current_subset():
 
     assert np.nanmin(clipped["bias"].values) > np.nanmin(subset["bias"].values)
     assert np.nanmax(clipped["bias"].values) < np.nanmax(subset["bias"].values)
+
+
+def test_groupby_metric_clip_skips_all_nan_quantiles_without_warning():
+    from openbench.core.climatezone_groupby import _clip_metric_quantiles as clip_climate
+    from openbench.core.landcover_groupby import _clip_metric_quantiles as clip_landcover
+
+    ds = xr.Dataset({"bias": (("lat", "lon"), np.full((2, 2), np.nan))})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        for clip in (clip_climate, clip_landcover):
+            assert clip(ds, "bias")["bias"].isnull().all()
+
+
+def test_groupby_metric_clip_keeps_small_classes():
+    from openbench.core.climatezone_groupby import _clip_metric_quantiles as clip_climate
+    from openbench.core.landcover_groupby import _clip_metric_quantiles as clip_landcover
+
+    ds = xr.Dataset({"bias": (("lat", "lon"), [[0.0, 100.0]])})
+    for clip in (clip_climate, clip_landcover):
+        np.testing.assert_allclose(clip(ds, "bias")["bias"], ds["bias"])
 
 
 def test_groupby_metric_loops_clip_each_class_after_masking():

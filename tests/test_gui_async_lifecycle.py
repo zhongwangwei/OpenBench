@@ -4,6 +4,7 @@ from tests.gui_fakes import FakeButton  # noqa: E402
 
 pytest.importorskip("PySide6")
 
+from openbench.gui.controller import WizardController  # noqa: E402
 from openbench.gui.main_window import MainWindow  # noqa: E402
 from openbench.gui.pages.page_preview import PagePreview  # noqa: E402
 from openbench.gui.widgets.validation_dialog import ValidationWorker  # noqa: E402
@@ -30,6 +31,8 @@ def test_main_window_disables_navigation_while_runner_is_active():
     window.btn_back = FakeButton()
     window.btn_next = FakeButton()
     window.btn_rerun = FakeButton()
+    window.btn_load = FakeButton()
+    window.btn_new = FakeButton()
     window.pages = {"run_monitor": type("RunPage", (), {"_runner": RunningRunner()})()}
 
     window._update_buttons()
@@ -38,6 +41,23 @@ def test_main_window_disables_navigation_while_runner_is_active():
     assert window.btn_next.enabled is False
     assert window.btn_rerun.enabled is False
     assert window.btn_rerun.visible is True
+    assert window.btn_load.enabled is False
+    assert window.btn_new.enabled is False
+
+
+def test_main_window_rejects_load_and_new_while_runner_is_active(monkeypatch):
+    warnings = []
+    window = MainWindow.__new__(MainWindow)
+    window._runner_is_active = lambda: True
+    monkeypatch.setattr(
+        "openbench.gui.main_window.QMessageBox.warning",
+        lambda *_args: warnings.append(True),
+    )
+
+    window._on_load_clicked()
+    window._on_new_clicked()
+
+    assert warnings == [True, True]
 
 
 def test_next_saves_current_page_before_navigation():
@@ -173,11 +193,53 @@ def test_setup_local_storage_flushes_stops_and_disconnects_remote_storage(tmp_pa
     window.controller = Controller()
     window._sync_status = None
 
-    window.setup_local_storage(str(tmp_path))
+    assert window.setup_local_storage(str(tmp_path)) is True
 
-    assert events == ["sync_all", "stop", "disconnect"]
+    assert events == ["stop", "sync_all", "disconnect"]
     assert window.controller.ssh_manager is None
     assert window.controller.project_root == str(tmp_path)
+
+
+def test_setup_local_storage_preserves_remote_storage_when_flush_fails(monkeypatch, tmp_path):
+    from openbench.remote.storage import RemoteStorage
+
+    events = []
+
+    class Sync:
+        _on_status_changed = None
+        _ssh = None
+
+        def sync_all(self):
+            events.append("sync_all")
+            return False
+
+        def stop_background_sync(self):
+            events.append("stop")
+
+        def start_background_sync(self):
+            events.append("start")
+
+    class SSH:
+        def disconnect(self):
+            events.append("disconnect")
+
+    remote_storage = RemoteStorage("/remote/project", Sync())
+
+    class Controller:
+        storage = remote_storage
+        ssh_manager = SSH()
+        project_root = "/old"
+
+    window = MainWindow.__new__(MainWindow)
+    window.controller = Controller()
+    window._sync_status = None
+    monkeypatch.setattr("openbench.gui.main_window.QMessageBox.warning", lambda *args: None)
+
+    assert window.setup_local_storage(str(tmp_path)) is False
+    assert events == ["stop", "sync_all", "start"]
+    assert window.controller.storage is remote_storage
+    assert window.controller.project_root == "/old"
+    assert window.controller.ssh_manager is not None
 
 
 def test_setup_remote_storage_stops_previous_sync_before_replacing(monkeypatch):
@@ -232,7 +294,7 @@ def test_setup_remote_storage_stops_previous_sync_before_replacing(monkeypatch):
 
     window.setup_remote_storage(ssh, "/new")
 
-    assert events[:2] == ["old-sync-all", "old-stop"]
+    assert events[:2] == ["old-stop", "old-sync-all"]
     assert events[2:] == [("new", ssh, "/new"), "new-start"]
 
 
@@ -328,3 +390,28 @@ def test_close_waits_for_remote_download_worker_to_stop(monkeypatch):
 
     assert worker.stopped is True
     assert event.ignored is True
+
+
+def test_load_local_config_rehomes_storage_to_loaded_project(monkeypatch, tmp_path):
+    from openbench.remote.storage import LocalStorage
+
+    project = tmp_path / "loaded_project"
+    project.mkdir()
+    config = tmp_path / "external" / "case.yaml"
+    config.parent.mkdir()
+    config.write_text("general:\n  basename: loaded\n  basedir: ./output\n", encoding="utf-8")
+
+    window = MainWindow.__new__(MainWindow)
+    window.controller = WizardController()
+    window.controller.storage = LocalStorage(str(tmp_path / "old_project"))
+    window.pages = {}
+    window._find_project_root = lambda _start: str(project)
+    window._validate_loaded_paths = lambda _config: None
+    monkeypatch.setattr("openbench.gui.main_window.QMessageBox.information", lambda *args: None)
+
+    window._load_config_file(str(config))
+
+    assert window.controller.project_root == str(project)
+    assert isinstance(window.controller.storage, LocalStorage)
+    assert window.controller.storage.project_dir == str(project)
+    assert window.controller.get_output_dir().startswith(str(project))

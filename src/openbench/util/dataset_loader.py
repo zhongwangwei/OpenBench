@@ -248,7 +248,7 @@ def open_dataset(
         Path to the NetCDF file
     chunks : dict, str, or None
         Chunk sizes for each dimension. Options:
-        - "auto": Use smart defaults based on file size and dimensions
+        - "auto": Use native chunks when available, bounded defaults otherwise
         - dict: Explicit chunk sizes, e.g., {"time": 12, "lat": 500, "lon": 500}
         - None: No chunking (load entirely into memory)
     use_chunking : bool
@@ -282,10 +282,8 @@ def open_dataset(
         logging.debug(f"Loading small file directly: {path} ({file_size / 1024 / 1024:.1f} MB)")
         return _open_dataset_with_fallback(path, **kwargs)
 
-    # Determine chunk sizes
     if chunks == "auto":
         chunks = _get_auto_chunks(path)
-
     logging.debug(f"Loading with chunks: {path} ({file_size / 1024 / 1024:.1f} MB), chunks={chunks}")
     return _open_dataset_with_fallback(path, chunks=chunks, **kwargs)
 
@@ -308,11 +306,15 @@ def _get_auto_chunks(path: str) -> Dict[str, int]:
     try:
         with xr.open_dataset(path) as ds:
             dims = ds.sizes
+            if any(ds[name].encoding.get("chunksizes") for name in ds.data_vars):
+                return {}
     except Exception:
         # Try with decode_times=False
         try:
             with xr.open_dataset(path, decode_times=False) as ds:
                 dims = ds.sizes
+                if any(ds[name].encoding.get("chunksizes") for name in ds.data_vars):
+                    return {}
         except Exception as e:
             logging.warning(f"Could not inspect file for auto-chunking: {e}")
             return DEFAULT_CHUNKS.copy()

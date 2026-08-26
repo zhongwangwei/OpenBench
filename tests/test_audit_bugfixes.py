@@ -103,6 +103,26 @@ def test_cp_uses_same_pairwise_nan_mask_for_numerator_and_denominator():
     assert float(value) == pytest.approx(1.0)
 
 
+def test_cp_does_not_discard_observed_lag_when_previous_simulation_is_missing():
+    from openbench.core.metrics import metrics
+
+    time = pd.date_range("2000-01-01", periods=3)
+    obs = xr.DataArray([1.0, 2.0, 4.0], dims="time", coords={"time": time})
+    sim = xr.DataArray([np.nan, 3.0, 4.0], dims="time", coords={"time": time})
+
+    assert float(metrics().cp(sim, obs)) == pytest.approx(0.8)
+
+
+def test_kappa_accepts_roundoff_noise_in_integer_labels():
+    from openbench.core.metrics import metrics
+
+    time = pd.date_range("2000-01-01", periods=4)
+    obs = xr.DataArray([0.0, 1.0, 1.0, 2.0], dims="time", coords={"time": time})
+    sim = xr.DataArray([0.0, 1.0 + 1e-10, 2.0, 2.0 - 1e-10], dims="time", coords={"time": time})
+
+    assert float(metrics().kappa_coeff(sim, obs)) == pytest.approx(0.6363636363636364)
+
+
 def test_station_csv_and_pair_ref_regressions_are_source_guarded():
     config_source = Path("src/openbench/data/_processing_config.py").read_text(encoding="utf-8")
     evaluation_source = Path("src/openbench/core/evaluation.py").read_text(encoding="utf-8")
@@ -225,6 +245,89 @@ def test_accumulated_runoff_resamples_with_sum():
     np.testing.assert_allclose(result.values, [3.0, 7.0])
 
 
+def test_accumulated_precip_alias_and_unicode_units_resample_with_sum():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "pr"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 2.0, 3.0, 4.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=4, freq="D")},
+        attrs={"units": "kg m−2"},
+    )
+
+    result = Processor()._resample_to_compare_resolution(data, "test precip alias")
+
+    np.testing.assert_allclose(result.values, [3.0, 7.0])
+
+
+def test_ambiguous_accumulation_units_fail_instead_of_silently_averaging():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "custom_water"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 2.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=2, freq="D")},
+        attrs={"units": "mm"},
+    )
+
+    with pytest.raises(ValueError, match="units 'mm' are ambiguous"):
+        Processor()._resample_to_compare_resolution(data, "custom data")
+
+
+def test_known_state_in_millimetres_resamples_with_mean():
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        item = "Surface Soil Moisture"
+        compare_tim_res = "2D"
+
+    data = xr.DataArray(
+        [1.0, 3.0],
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=2, freq="D")},
+        attrs={"units": "mm"},
+    )
+
+    np.testing.assert_allclose(Processor()._resample_to_compare_resolution(data, "soil moisture"), [2.0])
+
+
+def test_cli_expands_reference_override_paths(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from openbench.cli.run import _expand_config_paths
+
+    monkeypatch.setenv("OPENBENCH_TEST_ROOT", str(tmp_path))
+    cfg = SimpleNamespace(
+        project=SimpleNamespace(output_dir="$OPENBENCH_TEST_ROOT/out"),
+        reference=SimpleNamespace(
+            data_root=None,
+            overrides={
+                "RefA": {
+                    "root_dir": "$OPENBENCH_TEST_ROOT/ref",
+                    "fulllist": "$OPENBENCH_TEST_ROOT/stations.csv",
+                    "variables": {"Runoff": {"fulllist": "$OPENBENCH_TEST_ROOT/runoff.csv"}},
+                }
+            },
+        ),
+        simulation={},
+    )
+
+    _expand_config_paths(cfg)
+
+    override = cfg.reference.overrides["RefA"]
+    assert override["root_dir"] == str(tmp_path / "ref")
+    assert override["fulllist"] == str(tmp_path / "stations.csv")
+    assert override["variables"]["Runoff"]["fulllist"] == str(tmp_path / "runoff.csv")
+
+
 def test_open_dataset_decode_false_fallback_decodes_nonstandard_time(tmp_path, monkeypatch):
     from openbench.util import dataset_loader
 
@@ -309,9 +412,8 @@ def test_unified_mask_non_strict_uses_overlapping_times(tmp_path):
 
     with xr.open_dataset(ref_path) as ds:
         values = ds["runoff_ref"].values[:, 0, 0]
+    assert values.shape == (1,)
     assert values[0] == pytest.approx(1.0)
-    assert np.isnan(values[1])
-    assert values[2] == pytest.approx(1.0)
 
 
 def test_unified_mask_non_strict_write_failure_is_not_success(tmp_path):
@@ -452,7 +554,11 @@ def test_task_hash_payload_includes_algorithm_source_fingerprint(tmp_path):
         ReferenceConfig,
         SimulationEntry,
     )
-    from openbench.runner.hashing import algorithm_source_fingerprint, task_hash_payload
+    from openbench.runner.hashing import (
+        algorithm_source_fingerprint,
+        algorithm_source_modules_for_task,
+        task_hash_payload,
+    )
 
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="case", output_dir=str(tmp_path), years=[2000, 2001]),
@@ -495,7 +601,8 @@ def test_task_hash_payload_includes_algorithm_source_fingerprint(tmp_path):
         statistic_vars=[],
     )
 
-    assert payload["openbench"]["source_fingerprint"] == algorithm_source_fingerprint()
+    source_modules = algorithm_source_modules_for_task("grid", "grid")
+    assert payload["openbench"]["source_fingerprint"] == algorithm_source_fingerprint(source_modules)
 
 
 def test_taylor_diagram_uses_population_std_consistent_with_crmsd():

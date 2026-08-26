@@ -415,7 +415,98 @@ class PageRefData(BasePage):
 
     def closeEvent(self, event):
         self._finish_scan_worker(cancel=True)
+        self._finish_register_worker(cancel=True)
         super().closeEvent(event)
+
+    def _finish_register_worker(self, cancel: bool = False):
+        progress = getattr(self, "_register_progress", None)
+        if progress is not None:
+            progress.close()
+            progress.deleteLater()
+        worker = getattr(self, "_register_worker", None)
+        if worker is not None:
+            if cancel:
+                from openbench.gui.widgets._task_worker import safe_disconnect
+
+                safe_disconnect(worker.finished_with_result, worker.failed)
+                if worker.isRunning():
+                    worker.requestInterruption()
+                    worker.quit()
+                    worker.wait(3000)
+            if worker.isRunning():
+                self._detach_scan_worker(worker)
+        self._register_progress = None
+        self._register_worker = None
+        self.btn_scan.setEnabled(True)
+
+    def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
+        from openbench.data.registry.manager import get_registry
+        from openbench.gui.dialogs.data_discovery import choose_nc_variable
+
+        registry = get_registry()
+        for variant in variants:
+            existing = (
+                registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
+            )
+            existing_vars = existing.variables if existing is not None else {}
+            inspections = getattr(variant, "nc_inspections", None)
+            if inspections is None:
+                inspections = {}
+                variant.nc_inspections = inspections
+            for var_name, sub_dir in variant.variables.items():
+                if var_name in existing_vars:
+                    continue
+                nc_info = inspections.setdefault(var_name, {})
+                all_vars = nc_info.get("all_data_vars", [])
+                if len(all_vars) <= 1:
+                    continue
+                chosen = choose_nc_variable(self, var_name, sub_dir, all_vars)
+                if chosen:
+                    nc_info["varname"] = chosen
+                    for item in all_vars:
+                        if item.get("name") == chosen:
+                            nc_info["varunit"] = item.get("unit", "")
+                            break
+
+    def _start_register_worker(self, variants):
+        from openbench.gui.pages._scan_worker import RegisterScannedDatasetsWorker
+
+        progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
+        progress.setWindowTitle("Registering")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
+
+        self.btn_scan.setEnabled(False)
+        worker = RegisterScannedDatasetsWorker(variants)
+        self._register_worker = worker
+        self._register_progress = progress
+        worker.finished_with_result.connect(lambda _path: self._on_register_finished(len(variants)))
+        worker.failed.connect(self._on_register_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+        progress.show()
+
+    def _on_register_failed(self, message: str):
+        self._finish_register_worker()
+        QMessageBox.critical(self, "Scan Failed", f"Error registering scanned datasets: {message}")
+        logger.error("Data scan registration failed: %s", message)
+
+    def _on_register_finished(self, registered: int):
+        self._finish_register_worker()
+        from openbench.data.registry.manager import clear_registry_cache
+
+        clear_registry_cache()
+        self._refresh_registry_after_scan()
+
+        message = f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
+        if getattr(self, "_scan_was_remote", False):
+            from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+            caveats = remote_scan_caveats(getattr(self, "_register_variants", []))
+            if caveats:
+                message += f"\n\n{caveats}"
+        QMessageBox.information(self, "Scan Complete", message)
 
     def _on_scan_data_root_failed(self, message: str):
         self._finish_scan_worker()
@@ -425,9 +516,8 @@ class PageRefData(BasePage):
     def _on_scan_data_root_finished(self, new_groups):
         self._finish_scan_worker()
         try:
-            from openbench.data.registry.manager import clear_registry_cache, get_registry
-            from openbench.data.registry.scanner import register_scanned_datasets_batch
-            from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog, choose_nc_variable
+            from openbench.data.registry.manager import get_registry
+            from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
             from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
 
             new_groups, skipped = unpack_scan_result(new_groups)
@@ -464,28 +554,9 @@ class PageRefData(BasePage):
                         parent=self,
                         **remote_kwargs,
                     )
-                register_scanned_datasets_batch(
-                    variants,
-                    on_multi_var=lambda var_name, sub_dir, all_vars: choose_nc_variable(
-                        self, var_name, sub_dir, all_vars
-                    ),
-                )
-                registered = len(variants)
-
-                # Refresh registry
-                clear_registry_cache()
-                self._refresh_registry_after_scan()
-
-                message = (
-                    f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
-                )
-                if getattr(self, "_scan_was_remote", False):
-                    from openbench.gui.pages._scan_worker import remote_scan_caveats
-
-                    caveats = remote_scan_caveats(variants)
-                    if caveats:
-                        message += f"\n\n{caveats}"
-                QMessageBox.information(self, "Scan Complete", message)
+                self._choose_scanned_nc_variables(variants, existing_names)
+                self._register_variants = list(variants)
+                self._start_register_worker(variants)
             else:
                 self._refresh_registry_after_scan()
 

@@ -840,6 +840,8 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     # --- optional sections ---
     metrics = _validated_optional_string_list(raw.get("metrics"), "metrics")
     scores = _validated_optional_string_list(raw.get("scores"), "scores")
+    if metrics == [] and scores == []:
+        raise ConfigError("metrics and scores cannot both be empty; select at least one evaluation output")
     comparison = _build_comparison(raw.get("comparison", {}))
     statistics = _build_statistics(raw.get("statistics", {}))
     uncertainty = _build_uncertainty(raw.get("uncertainty", {}))

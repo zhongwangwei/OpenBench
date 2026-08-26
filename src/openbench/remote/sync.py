@@ -19,6 +19,10 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+def _has_exact_stdout_line(stdout: str, sentinel: str) -> bool:
+    return any(line.strip() == sentinel for line in stdout.splitlines())
+
+
 def _expand_remote_home(ssh_manager, path: str) -> str:
     """Expand a leading remote ``~`` for APIs that do not invoke a shell.
 
@@ -122,6 +126,20 @@ class SyncEngine:
             raise ValueError(f"unsafe glob pattern escapes remote project directory: {pattern}")
         if re.search(r"[;&|$`'\"()<>\\\r\n]", pattern):
             raise ValueError(f"unsafe glob pattern contains shell metacharacters: {pattern}")
+
+    @staticmethod
+    def _quote_glob_pattern(pattern: str) -> str:
+        """Escape shell word splitting while preserving glob operators."""
+        special = set("*?[]/")
+        out = []
+        for char in pattern:
+            if char in special or char.isalnum() or char in "._-":
+                out.append(char)
+            elif char == " ":
+                out.append("\\ ")
+            else:
+                out.append("\\" + char)
+        return "".join(out)
 
     def read(self, path: str) -> str:
         """
@@ -369,7 +387,7 @@ class SyncEngine:
         stdout, stderr, exit_code = self._ssh.execute(
             f"test -e {quote_remote_path(remote_path)} && echo 'exists'", timeout=10
         )
-        return exit_code == 0 and "exists" in stdout
+        return exit_code == 0 and _has_exact_stdout_line(stdout, "exists")
 
     def glob(self, pattern: str) -> List[str]:
         """Find files matching pattern on remote.
@@ -378,13 +396,14 @@ class SyncEngine:
         """
         self._validate_glob_pattern(pattern)
         base_dir = self._remote_dir
+        quoted_pattern = self._quote_glob_pattern(pattern)
         # base_dir must be quoted (path may contain spaces/specials);
         # pattern is intentionally left literal so bash can expand globs.
         # Wrap the whole inner script with shlex.quote to survive single
         # quotes in base_dir (the previous f"bash -c '{cmd}'" form broke).
         inner = (
             f"cd {quote_remote_path(base_dir)} && shopt -s globstar nullglob && "
-            f'for f in {pattern}; do [ -f "$f" ] && echo "$f"; done'
+            f'for f in {quoted_pattern}; do [ -f "$f" ] && echo "$f"; done'
         )
         stdout, stderr, exit_code = self._ssh.execute(f"bash -c {shlex.quote(inner)}", timeout=30)
         if exit_code != 0:
@@ -447,11 +466,15 @@ class SyncEngine:
         self._sync_thread = threading.Thread(target=self._background_sync_loop, args=(interval,), daemon=True)
         self._sync_thread.start()
 
-    def stop_background_sync(self):
-        """Stop background sync thread."""
+    def stop_background_sync(self) -> bool:
+        """Stop background sync thread and report whether it exited."""
         self._stop_sync.set()
         if self._sync_thread:
             self._sync_thread.join(timeout=5)
+            if self._sync_thread.is_alive():
+                return False
+            self._sync_thread = None
+        return True
 
     def _background_sync_loop(self, interval: float):
         """Background sync loop."""

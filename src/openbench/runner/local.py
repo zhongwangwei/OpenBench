@@ -127,6 +127,7 @@ def _preprocess_variable_tasks(
     *,
     unified_mask: bool,
     time_alignment: str,
+    max_workers: int | None = None,
 ) -> list[dict[str, Any]]:
     """Compatibility wrapper for variable-level preprocessing."""
     return _runner_preprocessing.preprocess_variable(
@@ -134,6 +135,7 @@ def _preprocess_variable_tasks(
         vtasks,
         unified_mask=unified_mask,
         time_alignment=time_alignment,
+        max_workers=max_workers,
         build_bridge_runtime_info_fn=_build_bridge_runtime_info,
         make_phase_error_fn=_local_attr("_make_phase_error"),
         clone_or_link_ref_for_pair_fn=_clone_or_link_ref_for_pair,
@@ -268,6 +270,8 @@ def _apply_unified_mask(
     ref_source: str,
     sim_source: str,
     ref_override: str | None = None,
+    *,
+    apply_spatial_mask: bool = True,
 ) -> None:
     """Compatibility wrapper for runner unified-mask preprocessing."""
     return _runner_masking.apply_unified_mask(
@@ -277,6 +281,7 @@ def _apply_unified_mask(
         sim_source,
         ref_override,
         write_netcdf_atomic_fn=_write_netcdf_atomic,
+        apply_spatial_mask=apply_spatial_mask,
     )
 
 

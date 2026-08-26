@@ -17,9 +17,14 @@ from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
 
 try:
-    from openbench.util.dataset_loader import cached_glob, open_mfdataset as open_mfdataset_chunked
+    from openbench.util.dataset_loader import (
+        cached_glob,
+        open_dataset as open_dataset_chunked,
+        open_mfdataset as open_mfdataset_chunked,
+    )
 except ImportError:  # pragma: no cover - mirrors processing.py fallback
     cached_glob = lambda pattern, **kwargs: sorted(glob.glob(pattern))
+    open_dataset_chunked = xr.open_dataset
 
     def open_mfdataset_chunked(paths, *args, **kwargs):
         return xr.open_mfdataset(paths, *args, **kwargs)
@@ -42,8 +47,19 @@ class SelectionMixin:
     """Variable extraction plus prefix/fallback file discovery."""
 
     def select_var(
-        self, syear: int, eyear: int, tim_res: str, VarFile, varname: List[str], datasource: str
+        self,
+        syear: int,
+        eyear: int,
+        tim_res: str,
+        VarFile,
+        varname: List[str],
+        datasource: str,
+        *,
+        load: bool = True,
+        return_source: bool = False,
     ) -> xr.Dataset:
+        if not load and not return_source:
+            raise ValueError("select_var(load=False) requires return_source=True so the caller can close the dataset")
         # Track the original file-backed dataset separately from the derived
         # `ds` so we can close the source handle before returning. Without
         # this, every call leaks an open NetCDF/HDF5 handle — which under
@@ -53,16 +69,26 @@ class SelectionMixin:
         try:
             if isinstance(VarFile, list):
                 try:
-                    src_ds = open_mfdataset_chunked(VarFile, combine="by_coords")
+                    src_ds = open_mfdataset_chunked(VarFile, combine="by_coords", decode_timedelta=False)
                 except (ValueError, OSError):
-                    src_ds = open_mfdataset_chunked(VarFile, combine="by_coords", decode_times=False)
+                    src_ds = open_mfdataset_chunked(
+                        VarFile, combine="by_coords", decode_times=False, decode_timedelta=False
+                    )
                     source_path = str(VarFile[0]) if VarFile else None
                     src_ds = decode_nonstandard_time(src_ds, source_path=source_path)
             else:
                 try:
-                    src_ds = _xr().open_dataset(VarFile)  # .squeeze()
+                    src_ds = (
+                        _xr().open_dataset(VarFile, decode_timedelta=False)
+                        if load
+                        else open_dataset_chunked(VarFile, decode_timedelta=False)
+                    )
                 except (ValueError, OSError):
-                    src_ds = _xr().open_dataset(VarFile, decode_times=False)  # .squeeze()
+                    src_ds = (
+                        _xr().open_dataset(VarFile, decode_times=False, decode_timedelta=False)
+                        if load
+                        else open_dataset_chunked(VarFile, decode_times=False, decode_timedelta=False)
+                    )
                     src_ds = decode_nonstandard_time(src_ds, source_path=str(VarFile))
             ds = src_ds
         except Exception as e:
@@ -211,14 +237,18 @@ class SelectionMixin:
                 from openbench.data.compute import _validate_expression
                 import numpy as np
 
-                value = ds.values
+                value = ds.values if load else ds.data
                 ns = {"value": value, "np": np}
                 if "full_ds" in locals() and full_ds is not None:
                     for name, data_var in getattr(full_ds, "data_vars", {}).items():
                         if name not in ns:
-                            ns[name] = data_var.values
+                            ns[name] = data_var.values if load else data_var.data
                 _validate_expression(fb_convert, allowed_names=ns.keys())
-                ds.values = eval(fb_convert, {"__builtins__": {}}, ns)  # noqa: S307
+                converted = eval(fb_convert, {"__builtins__": {}}, ns)  # noqa: S307
+                if load:
+                    ds.values = converted
+                else:
+                    ds.data = converted
                 logging.info("Applied fallback conversion: %s", fb_convert)
                 # The expression yields a DERIVED quantity (e.g. NEE from
                 # f_respc and f_assim), but `ds` still carries the source
@@ -240,25 +270,27 @@ class SelectionMixin:
                     f"Fallback conversion {fb_convert!r} failed; refusing to continue with unconverted units"
                 ) from e
 
-        # Materialise data into memory so we can close the source file
-        # handle. Returning a lazy, file-backed Dataset would cause every
-        # caller (preprocess_*_files, Mod_Statistics.process_*) to hold an
-        # open NetCDF descriptor for the lifetime of the result.
-        try:
-            if hasattr(ds, "load"):
-                ds = ds.load()
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to materialize selected variable from {VarFile}; refusing to return a lazy file-backed object"
-            ) from e
-        finally:
-            if src_ds is not None:
-                try:
-                    src_ds.close()
-                except Exception:
-                    pass
+        if load:
+            # Materialise data into memory so we can close the source file
+            # handle. Returning a lazy, file-backed Dataset would cause every
+            # caller (preprocess_*_files, Mod_Statistics.process_*) to hold an
+            # open NetCDF descriptor for the lifetime of the result.
+            try:
+                if hasattr(ds, "load"):
+                    ds = ds.load()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to materialize selected variable from {VarFile}; "
+                    "refusing to return a lazy file-backed object"
+                ) from e
+            finally:
+                if src_ds is not None:
+                    try:
+                        src_ds.close()
+                    except Exception:
+                        pass
 
-        return ds
+        return (ds, src_ds) if return_source else ds
 
     def _get_prefix_fallback_list(self, prefix: str, datasource: str = "sim") -> list:
         """Build list of prefixes to try: primary + fallbacks.

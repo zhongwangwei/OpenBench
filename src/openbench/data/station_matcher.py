@@ -21,6 +21,9 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data._system_resources import effective_cpu_count
+from openbench.data.station_missing import missing_sentinels as _as_missing_sentinels
+from openbench.data.station_missing import valid_station_mask as _valid_flow_mask
 from openbench.util.exceptions import DataProcessingError
 from openbench.util.filenames import station_file_path
 from openbench.util.names import get_xarray_key_case_insensitive
@@ -106,37 +109,6 @@ def _station_time_flow_values(discharge_da: xr.DataArray, *, station_dim: str, t
     return discharge_da.transpose(station_dim_key, time_dim).values
 
 
-def _as_missing_sentinels(attrs: dict | None) -> tuple[float, ...]:
-    """Return numeric missing-value sentinels advertised by a data variable."""
-    sentinels = {-999.0}
-    for key in ("_FillValue", "missing_value"):
-        value = (attrs or {}).get(key)
-        values = np.ravel(value) if isinstance(value, (list, tuple, np.ndarray)) else [value]
-        for item in values:
-            try:
-                numeric = float(item)
-            except (TypeError, ValueError):
-                continue
-            if np.isfinite(numeric):
-                sentinels.add(numeric)
-    return tuple(sentinels)
-
-
-def _valid_flow_mask(flow: np.ndarray, missing_sentinels: tuple[float, ...] = ()) -> np.ndarray:
-    """Mask finite/non-sentinel flow values consistently across matching methods."""
-    values = np.asarray(flow)
-    try:
-        mask = ~np.isnan(values.astype(float, copy=False))
-    except (TypeError, ValueError):
-        mask = np.ones(values.shape, dtype=bool)
-    for sentinel in missing_sentinels:
-        try:
-            mask &= values.astype(float, copy=False) != sentinel
-        except (TypeError, ValueError):
-            mask &= values != sentinel
-    return mask
-
-
 def _normalize_lon_to_range(lon: float, min_lon: float, max_lon: float) -> float:
     """Return an equivalent longitude inside the requested range when possible."""
     lon = float(lon)
@@ -162,7 +134,7 @@ def _station_matching_jobs(n_stations: int, requested: int | None = None) -> int
             return max(1, int(env_value))
         except ValueError:
             logging.warning("Ignoring invalid OPENBENCH_STATION_MATCHER_JOBS=%r", env_value)
-    cpu_count = os.cpu_count() or 1
+    cpu_count = effective_cpu_count(os.cpu_count() or 1)
     return max(1, min(n_stations, cpu_count, 4))
 
 
@@ -233,7 +205,8 @@ def _process_site_cama(
         return None
 
     file_path = station_file_path(scratch_dir, station_id, index=idx, duplicate_ids=duplicate_station_ids)
-    ds_out = xr.Dataset({"discharge": (["time"], flow)}, coords={"time": times})
+    clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
+    ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
     return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
@@ -299,9 +272,11 @@ def _process_site_direct(
     # Build time coordinate
     if time_format == "YYYYMM":
         time_dates = pd.to_datetime([str(int(t)) for t in times], format="%Y%m")
-        ds_out = xr.Dataset({"discharge": xr.DataArray(flow, dims=["time"], coords={"time": time_dates})})
+        clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
+        ds_out = xr.Dataset({"discharge": xr.DataArray(clean_flow, dims=["time"], coords={"time": time_dates})})
     else:
-        ds_out = xr.Dataset({"discharge": (["time"], flow)}, coords={"time": times})
+        clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
+        ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
     return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
@@ -373,7 +348,7 @@ def run_station_matching(
 
         n_stations = len(station_ids)
         discharge_da = ds[discharge_key]
-        missing_sentinels = _as_missing_sentinels(discharge_da.attrs)
+        missing_sentinels = _as_missing_sentinels(discharge_da.attrs, discharge_da.encoding)
         flow_data = _station_time_flow_values(
             discharge_da,
             station_dim=station_dim,

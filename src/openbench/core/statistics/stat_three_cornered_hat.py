@@ -4,6 +4,8 @@ import os
 import numpy as np
 import xarray as xr
 
+from openbench.data._system_resources import effective_cpu_count
+
 _TCH_NEGATIVE_VARIANCE_RTOL = 1e-10
 _TCH_MEAN_ABS_EPS = 1e-10
 
@@ -150,7 +152,7 @@ def stat_three_cornered_hat(self, *variables):
                 return chunk_results
 
             # Split lats into chunks for parallel processing
-            n_jobs = min(os.cpu_count(), 8)  # Limit to avoid excessive memory use
+            n_jobs = min(effective_cpu_count(os.cpu_count() or 1), 8)  # Limit to avoid excessive memory use
             chunk_size = max(1, len(lats) // (n_jobs * 2))
             lat_chunks = [lats[i : i + chunk_size] for i in range(0, len(lats), chunk_size)]
 

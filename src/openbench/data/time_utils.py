@@ -18,28 +18,6 @@ _CFTIME_CALENDARS = {
 }
 
 
-def _cftime_values_to_safe_nptime(values: np.ndarray) -> np.ndarray:
-    """Map cftime objects to valid Gregorian timestamps, clamping invalid days."""
-    arr = np.asarray(values, dtype=object)
-    converted = []
-    for value in arr.ravel():
-        year = int(getattr(value, "year"))
-        month = int(getattr(value, "month"))
-        day = int(getattr(value, "day"))
-        last_day = pd.Timestamp(year=year, month=month, day=1).days_in_month
-        timestamp = pd.Timestamp(
-            year=year,
-            month=month,
-            day=min(day, last_day),
-            hour=int(getattr(value, "hour", 0)),
-            minute=int(getattr(value, "minute", 0)),
-            second=int(getattr(value, "second", 0)),
-            microsecond=int(getattr(value, "microsecond", 0)),
-        )
-        converted.append(timestamp.to_datetime64())
-    return np.asarray(converted, dtype="datetime64[ns]").reshape(arr.shape)
-
-
 def normalize_cftime_axis(
     ds: xr.Dataset,
     *,
@@ -78,31 +56,19 @@ def normalize_cftime_axis(
     # cftime values present — capture the calendar before we convert
     calendar = time_var.encoding.get("calendar") or time_var.attrs.get("calendar") or "unknown"
 
-    # Try to convert via xarray's helper first (handles all cftime types)
+    # Convert only when the calendar can be represented one-to-one as Gregorian
+    # datetimes. Do not clamp impossible dates (for example 360_day Feb 30) —
+    # that creates duplicate timestamps and silently drops samples downstream.
     try:
         from xarray.coding.times import cftime_to_nptime
 
         new_values = cftime_to_nptime(time_var.values)
     except Exception as exc:
-        try:
-            new_values = _cftime_values_to_safe_nptime(time_var.values)
-        except Exception:
-            logging.warning(
-                "Could not convert cftime axis (%s, calendar=%s): %s. "
-                "Downstream time alignment may produce inconsistent results.",
-                source_path or "<dataset>",
-                calendar,
-                exc,
-            )
-            return ds
-        logging.warning(
-            "Converted cftime axis (%s, calendar=%s) by clamping invalid "
-            "non-Gregorian month days to valid Gregorian dates after native "
-            "conversion failed: %s",
-            source_path or "<dataset>",
-            calendar,
-            exc,
-        )
+        raise ValueError(
+            f"Cannot losslessly convert CF calendar {calendar!r} time axis "
+            f"for {source_path or '<dataset>'}; keep a Gregorian-compatible "
+            "calendar or preprocess with an explicit calendar conversion"
+        ) from exc
 
     new_time = xr.DataArray(
         new_values,
@@ -269,6 +235,13 @@ def _parse_ref_date(ref_str: str) -> np.datetime64 | None:
     return None
 
 
+def _require_integral_offsets(offsets: np.ndarray, unit: str, units_str: str) -> np.ndarray:
+    values = np.asarray(offsets, dtype=float)
+    if not np.all(np.isfinite(values)) or not np.allclose(values, np.round(values), rtol=0.0, atol=1e-9):
+        raise ValueError(f"Non-integer {unit} offsets in time units {units_str!r} are ambiguous")
+    return np.round(values).astype(int)
+
+
 def _decode_unit_since(
     units_str: str,
     offsets: np.ndarray,
@@ -295,9 +268,10 @@ def _decode_unit_since(
     if canon == "month":
         if _looks_like_scaled_annual_month_axis(offsets, ref_ts, source_path):
             offsets = np.arange(12, dtype=float)
+        offsets = _require_integral_offsets(offsets, "month", units_str)
         dates = []
         for off in offsets:
-            total = ref_ts.month - 1 + int(off)
+            total = ref_ts.month - 1 + off
             y = ref_ts.year + total // 12
             mo = total % 12 + 1
             # Preserve the day from ref if possible, clamp to month end
@@ -306,9 +280,10 @@ def _decode_unit_since(
         return np.array(dates, dtype="datetime64[ns]")
 
     if canon == "year":
+        offsets = _require_integral_offsets(offsets, "year", units_str)
         dates = []
         for off in offsets:
-            y = ref_ts.year + int(off)
+            y = ref_ts.year + off
             # Preserve month/day from ref
             mo = ref_ts.month
             day = min(ref_ts.day, pd.Timestamp(year=y, month=mo, day=1).days_in_month)
@@ -317,9 +292,10 @@ def _decode_unit_since(
 
     if canon == "season":
         # 1 season = 3 months
+        offsets = _require_integral_offsets(offsets, "season", units_str)
         dates = []
         for off in offsets:
-            total_months = ref_ts.month - 1 + int(off) * 3
+            total_months = ref_ts.month - 1 + off * 3
             y = ref_ts.year + total_months // 12
             mo = total_months % 12 + 1
             dates.append(pd.Timestamp(year=y, month=mo, day=1))

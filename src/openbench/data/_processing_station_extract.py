@@ -12,6 +12,7 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.data.station_missing import mask_station_missing
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 
@@ -60,19 +61,22 @@ class StationExtractionMixin:
             logging.error(f"Dataset is None for station {station['ID']} ({datasource})")
             raise ValueError("Dataset cannot be None when extracting station data")
 
+        # This method receives the gridded side of a grid×station pair, so it
+        # samples that grid at the opposing station source's coordinates.
         if datasource == "ref":
             lat_key, lon_key = "sim_lat", "sim_lon"
+            fallback_lat_key, fallback_lon_key = "ref_lat", "ref_lon"
         elif datasource == "sim":
             lat_key, lon_key = "ref_lat", "ref_lon"
+            fallback_lat_key, fallback_lon_key = "sim_lat", "sim_lon"
         else:
             logging.error(f"Invalid datasource: {datasource}")
             raise ValueError(f"Invalid datasource: {datasource}")
 
-        # Fallback to reference coordinates if simulation coordinates are unavailable
         if lat_key not in station or pd.isna(station.get(lat_key)):
-            lat_key = "ref_lat"
+            lat_key = fallback_lat_key
         if lon_key not in station or pd.isna(station.get(lon_key)):
-            lon_key = "ref_lon"
+            lon_key = fallback_lon_key
 
         target_lat = float(station[lat_key])
         target_lon = float(station[lon_key])
@@ -125,6 +129,7 @@ class StationExtractionMixin:
         return max(grid_res / 2.0, 1e-12)
 
     def process_extracted_data(self, data: xr.Dataset, start_year: int, end_year: int) -> xr.Dataset:
+        data = mask_station_missing(data)
         data = data.sel(time=slice(f"{start_year}-01-01T00:00:00", f"{end_year}-12-31T23:59:59"))
 
         # Check if time dimension is empty after slicing
@@ -132,7 +137,6 @@ class StationExtractionMixin:
             logging.warning(f"No data available in time range {start_year}-{end_year}. Skipping this station.")
             return None
 
-        data = data  # .where((data > -1e20) & (data < 1e20), np.nan)
         # Skip resampling for climatology mode - handled by Mod_Climatology
         if self._is_climatology_mode():
             return data

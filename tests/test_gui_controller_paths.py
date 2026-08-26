@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -244,6 +245,21 @@ def test_browse_remote_directory_warns_with_reconnect_guidance_when_disconnected
 
     assert path_utils.browse_remote_directory(controller, None, "Pick") == ""
     assert warnings and "Runtime Environment" in warnings[0][1]
+
+
+def test_remote_manager_does_not_fall_back_to_login_host_when_target_is_unconfirmed():
+    from openbench.gui.path_utils import get_remote_ssh_manager
+
+    login_manager = FakeBrowseSSH()
+    remote_widget = SimpleNamespace(is_connected=lambda: False, get_ssh_manager=lambda: login_manager)
+    parent = SimpleNamespace(pages={"runtime": SimpleNamespace(remote_config_widget=remote_widget)})
+    controller = SimpleNamespace(
+        storage=RemoteStorage("/remote/project", sync_engine=object()),
+        ssh_manager=login_manager,
+        parent=lambda: parent,
+    )
+
+    assert get_remote_ssh_manager(controller) is None
 
 
 def test_browse_directory_routes_remote_mode_to_remote_browser(monkeypatch):

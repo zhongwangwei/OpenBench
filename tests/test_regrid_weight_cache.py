@@ -99,6 +99,39 @@ def test_spherical_correction_reuses_latitude_weight_cache(monkeypatch):
     np.testing.assert_allclose(second.values, first.values)
 
 
+def test_latitude_correction_uses_nonuniform_cell_bounds_and_keeps_poles_finite():
+    from openbench.data.regrid.methods import conservative
+
+    latitude = np.array([0.0, 30.0, 80.0, 90.0])
+    weights = conservative.lat_weight(latitude, np.median(np.diff(latitude)))
+    bounds = np.array([-15.0, 15.0, 55.0, 85.0, 90.0])
+    widths = np.radians(np.diff(bounds))
+    expected = np.diff(np.sin(np.radians(bounds))) / widths
+
+    np.testing.assert_allclose(weights, expected)
+    assert np.isfinite(weights).all()
+    assert weights[-1] > 0
+
+
+def test_spherical_correction_handles_single_latitude_without_warning():
+    import warnings
+
+    import xarray as xr
+
+    from openbench.data.regrid.methods import conservative
+
+    weights = xr.DataArray(
+        np.array([[1.0]]),
+        dims=["lat", "target_lat"],
+        coords={"lat": [90.0], "target_lat": [90.0]},
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        corrected = conservative.apply_spherical_correction(weights, "lat")
+
+    np.testing.assert_allclose(corrected.values, [[1.0]])
+
+
 def test_conservative_regrid_disk_cache_prunes_by_ttl(tmp_path, monkeypatch):
     from openbench.data.regrid.methods import conservative
 
@@ -254,3 +287,88 @@ def test_format_lon_handles_read_only_padded_coordinate_values(monkeypatch):
     assert result.sizes["lon"] == 362
     assert result["lon"].values[0] == -180.5
     assert result["lon"].values[-1] == 180.5
+
+
+def test_regridding_grid_includes_binary_decimal_endpoint():
+    from openbench.data.regrid import Grid
+
+    grid = Grid(north=89.9, south=-89.9, west=0.1, east=359.9, resolution_lat=0.2, resolution_lon=0.2)
+    ds = grid.create_regridding_dataset()
+
+    assert ds.sizes["lat"] == 900
+    assert ds.sizes["lon"] == 1800
+    np.testing.assert_allclose(ds["lat"].values[[0, -1]], [-89.9, 89.9])
+    np.testing.assert_allclose(ds["lon"].values[[0, -1]], [0.1, 359.9])
+
+
+def test_latitude_weights_use_actual_spherical_overlap():
+    from openbench.data.regrid.methods import conservative
+
+    source = np.array([-60.0, 0.0, 60.0])
+    target = np.array([-30.0, 30.0])
+    weights = conservative.get_weights(source, target, spherical=True)
+
+    # Target -30 spans [-60, 0] and source cells are [-90,-30], [-30,30], [30,90].
+    south_overlap = np.sin(np.radians(-30.0)) - np.sin(np.radians(-60.0))
+    equator_overlap = np.sin(np.radians(0.0)) - np.sin(np.radians(-30.0))
+    expected_first = np.array([south_overlap, equator_overlap, 0.0]) / (south_overlap + equator_overlap)
+    np.testing.assert_allclose(weights[:, 0], expected_first)
+    np.testing.assert_allclose(weights.sum(axis=0), np.ones(target.size))
+
+
+def test_overlap_matches_dense_reference():
+    import pandas as pd
+
+    from openbench.data.regrid import utils
+
+    source = pd.IntervalIndex.from_tuples([(-3.0, -1.0), (-1.0, 2.0), (2.0, 5.0)])
+    target = pd.IntervalIndex.from_tuples([(-2.0, 0.0), (0.0, 4.0)])
+    expected = np.maximum(
+        np.minimum(source.right.to_numpy(), target.right.to_numpy()[:, None])
+        - np.maximum(source.left.to_numpy(), target.left.to_numpy()[:, None]),
+        0,
+    ).T
+
+    np.testing.assert_allclose(utils.overlap(source, target), expected)
+
+
+def test_conservative_regrid_preserves_single_identical_cell():
+    import xarray as xr
+
+    import openbench.data.regrid  # noqa: F401  register accessor
+
+    source = xr.Dataset({"v": (("lat", "lon"), [[7.0]])}, coords={"lat": [0.0], "lon": [0.0]})
+    target = xr.Dataset(coords={"lat": [0.0], "lon": [0.0]})
+
+    result = source.regrid.conservative(target, latitude_coord="lat", time_dim=None)
+
+    assert float(result["v"].item()) == 7.0
+
+
+def test_conservative_regrid_rejects_nonidentical_single_points():
+    import pytest
+
+    from openbench.data.regrid.methods import conservative
+
+    with pytest.raises(ValueError, match="cannot infer finite cell bounds"):
+        conservative.get_weights(np.array([0.0]), np.array([1.0]))
+
+
+def test_weight_disk_cache_rejects_missing_schema_version(tmp_path, monkeypatch):
+    from openbench.data.regrid.methods import conservative
+
+    monkeypatch.setattr(conservative, "_WEIGHTS_DISK_CACHE_DIR", str(tmp_path))
+    conservative.clear_weight_cache(clear_disk=True)
+    source = np.array([0.0, 1.0])
+    target = np.array([0.0, 1.0])
+    key = (
+        conservative.REGRID_WEIGHT_SCHEMA_VERSION,
+        "linear",
+        conservative._coord_cache_token(source),
+        conservative._coord_cache_token(target),
+    )
+    path = conservative._weights_disk_cache_path(key)
+    assert path is not None
+    np.savez_compressed(path, weights=np.ones((2, 2)))
+
+    assert conservative._load_weights_from_disk(key) is None

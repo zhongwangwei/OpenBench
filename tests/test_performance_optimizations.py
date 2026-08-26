@@ -121,7 +121,7 @@ def test_processing_uses_chunked_open_mfdataset_wrapper():
 
     assert "src_ds = xr.open_mfdataset" not in processing_source
     assert "with xr.open_mfdataset" not in processing_source
-    assert 'open_mfdataset_chunked(VarFile, combine="by_coords")' in selection_source
+    assert 'open_mfdataset_chunked(VarFile, combine="by_coords"' in selection_source
     assert "write_mfdataset_chunked_atomic(" in grid_source
     assert "OPENBENCH_MFDATASET_BATCH_SIZE" not in combined_source
 
@@ -150,15 +150,19 @@ def test_run_cli_help_mentions_performance_configuration():
     assert "OPENBENCH_MFDATASET_BATCH_SIZE" in result.output
 
 
-def test_metric_worker_count_honors_configured_cores(monkeypatch):
+def test_metric_worker_count_honors_configured_and_available_cores(monkeypatch):
     import openbench.core.evaluation as evaluation
 
+    available = evaluation.effective_cpu_count(evaluation.os.cpu_count() or 1)
     assert evaluation._metric_worker_count(1, 6) == 1
-    assert evaluation._metric_worker_count(2, 6) == 2
-    assert evaluation._metric_worker_count(16, 6) == 6
+    assert evaluation._metric_worker_count(2, 6) == min(2, available)
+    assert evaluation._metric_worker_count(16, 6) == min(6, available)
     assert evaluation._metric_worker_count(None, 1) == 1
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
-    assert evaluation._metric_worker_count(0, 6) == 6
+    assert evaluation._metric_worker_count(0, 6) == min(6, evaluation.effective_cpu_count(8))
+
+    monkeypatch.setattr(evaluation, "get_system_resources", lambda: {"available_memory_gb": 1})
+    assert evaluation._metric_worker_count(4, 4, pair_nbytes=128 * 1024**2) == 1
 
 
 def test_metric_parallelism_no_longer_uses_hard_coded_worker_cap():
@@ -167,7 +171,7 @@ def test_metric_parallelism_no_longer_uses_hard_coded_worker_cap():
     assert "len(self.metrics) > 3" not in source
     assert "max_workers=min(4, len(self.metrics))" not in source
     assert "max_workers=metric_workers" in source
-    assert '_metric_worker_count(getattr(self, "num_cores", 1), len(self.metrics))' in source
+    assert "int(s.nbytes + o.nbytes)" in source
 
 
 def test_pc_ampli_builds_dask_graph_without_eager_compute():

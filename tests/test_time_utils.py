@@ -39,7 +39,7 @@ def test_legacy_timelib_class_is_removed():
     assert not hasattr(time_utils, "timelib")
 
 
-def test_normalize_cftime_axis_clamps_invalid_360_day_dates():
+def test_normalize_cftime_axis_rejects_invalid_360_day_dates():
     cftime = pytest.importorskip("cftime")
     ds = xr.Dataset(
         {"value": ("time", [1.0, 2.0])},
@@ -52,8 +52,21 @@ def test_normalize_cftime_axis_clamps_invalid_360_day_dates():
     )
     ds["time"].attrs["calendar"] = "360_day"
 
-    decoded = normalize_cftime_axis(ds, source_path="test_360_day.nc")
+    with pytest.raises(ValueError, match="Cannot losslessly convert CF calendar"):
+        normalize_cftime_axis(ds, source_path="test_360_day.nc")
 
-    assert np.issubdtype(decoded.time.dtype, np.datetime64)
-    assert decoded.time.values[0] == np.datetime64("2001-02-28T00:00:00")
-    assert decoded.time.attrs["original_calendar"] == "360_day"
+
+def test_decode_nonstandard_month_offsets_reject_fractional_values():
+    ds = xr.Dataset({"value": (["time"], np.zeros(2))}, coords={"time": [0.0, 1.5]})
+    ds["time"].attrs["units"] = "calendar months since 2000-01-01"
+
+    with pytest.raises(ValueError, match="Non-integer month offsets"):
+        decode_nonstandard_time(ds)
+
+
+def test_decode_nonstandard_year_offsets_reject_fractional_values():
+    ds = xr.Dataset({"value": (["time"], np.zeros(2))}, coords={"time": [0.0, 0.5]})
+    ds["time"].attrs["units"] = "years since 2000-01-01"
+
+    with pytest.raises(ValueError, match="Non-integer year offsets"):
+        decode_nonstandard_time(ds)

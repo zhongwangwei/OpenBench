@@ -483,6 +483,120 @@ def test_detect_python_runs_probes_off_the_gui_thread(qapp, monkeypatch):
     assert widget.python_combo.items == ["/usr/bin/python3"]
 
 
+def test_enabled_compute_node_actions_require_confirmed_target(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+        is_jump_connected = True
+
+        def __init__(self):
+            self.detect_calls = 0
+            self.disconnect_jump_calls = 0
+
+        def detect_python_interpreters(self):
+            self.detect_calls += 1
+            return ["/usr/bin/python3"]
+
+        def disconnect_jump(self):
+            self.is_jump_connected = False
+            self.disconnect_jump_calls += 1
+
+    warnings = []
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", lambda *args: warnings.append(args))
+
+    widget = RemoteConfigWidget()
+    ssh = SSH()
+    widget._ssh_manager = ssh
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget._confirmed_node_config = widget._current_node_config()
+
+    widget.node_input.setText("node002")
+    widget._detect_python()
+
+    assert widget.is_connected() is False
+    assert ssh.disconnect_jump_calls == 1
+    assert ssh.detect_calls == 0
+    assert warnings
+
+
+def test_install_path_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.execute_calls = []
+
+        def execute(self, command, timeout=None):
+            self.execute_calls.append((command, timeout))
+            if command == "which git":
+                return "/usr/bin/git\n", "", 0
+            if command.startswith("test -d /remote/OpenBench"):
+                return "not exists\n", "", 1
+            raise AssertionError(command)
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+
+    assert len(FakeWorker.created) == 1
+    assert (
+        FakeWorker.created[0].command
+        == "git clone --progress git@github.com:zhongwangwei/OpenBench.git /remote/OpenBench 2>&1"
+    )
+    assert all(".git" not in command for command, _timeout in widget._ssh_manager.execute_calls)
+
+
+def test_git_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.execute_calls = []
+
+        def execute(self, command, timeout=None):
+            self.execute_calls.append((command, timeout))
+            if command == "which git":
+                return "/usr/bin/git\n", "", 0
+            if command.startswith("test -d /remote/OpenBench/.git"):
+                return "not is_git\n", "", 1
+            if command.startswith("test -d /remote/OpenBench"):
+                return "exists\n", "", 0
+            if command.startswith("rm -rf /remote/OpenBench"):
+                return "", "", 0
+            raise AssertionError(command)
+
+    questions = []
+
+    def fake_question(*args, **kwargs):
+        questions.append(args[2])
+        return QMessageBox.No
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", fake_question)
+
+    widget._install_openbench()
+
+    assert questions and "is NOT a git repository" in questions[-1]
+    assert FakeWorker.created == []
+
+
 class GuardedInstallSSH:
     is_connected = True
 
