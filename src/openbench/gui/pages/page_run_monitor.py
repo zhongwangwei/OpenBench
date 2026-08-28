@@ -16,6 +16,7 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QMessageBox, QFileDialog, QProgressDialog
 
 from openbench.gui.remote_python import quote_remote_path
+from openbench.remote.ssh import expand_remote_home
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import ProgressDashboard, TaskStatus
@@ -85,6 +86,7 @@ class RemoteFolderDownloadWorker(QThread):
     def run(self):
         try:
             self._raise_if_canceled()
+            self._remote_dir = expand_remote_home(self._ssh_manager, self._remote_dir).replace("\\", "/")
             stdout, stderr, exit_code = self._ssh_manager.execute(
                 f"find {quote_remote_path(self._remote_dir)} -type f",
                 timeout=60,
@@ -565,6 +567,8 @@ class PageRunMonitor(BasePage):
                 message += f"\n\nDetails: {detail}"
             QMessageBox.warning(self, "Not Connected", message)
             return
+
+        output_dir = expand_remote_home(ssh_manager, output_dir).replace("\\", "/")
 
         # Check if directory exists on remote
         try:

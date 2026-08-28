@@ -94,6 +94,7 @@ class SyncEngine:
         self._cache: Dict[str, str] = {}
         self._sync_status: Dict[str, SyncStatus] = {}
         self._sync_errors: Dict[str, str] = {}
+        self._versions: Dict[str, int] = {}
 
         # Thread safety. _fetch_cv shares the underlying RLock so all the
         # `with self._lock:` blocks elsewhere in this class continue to work
@@ -106,6 +107,52 @@ class SyncEngine:
         self._pending_sync: Set[str] = set()
         self._sync_thread: Optional[threading.Thread] = None
         self._stop_sync = threading.Event()
+
+        get_identity = getattr(ssh_manager, "get_active_target_identity", None)
+        self._identity_guard_enabled = callable(get_identity)
+        self._target_identity = get_identity() if self._identity_guard_enabled else None
+        self._frozen = False
+
+    def _current_identity(self):
+        get_identity = getattr(self._ssh, "get_active_target_identity", None)
+        return get_identity() if callable(get_identity) else None
+
+    def _ensure_remote_io_allowed(self) -> None:
+        if self._frozen:
+            raise RuntimeError("sync engine is frozen")
+        if self._identity_guard_enabled and self._current_identity() != self._target_identity:
+            raise RuntimeError("remote target identity changed")
+
+    def is_bound_target_active(self) -> bool:
+        if not self._identity_guard_enabled:
+            return True
+        return self._target_identity is not None and self._current_identity() == self._target_identity
+
+    def freeze(self) -> None:
+        with self._lock:
+            self._frozen = True
+
+    def freeze_if_synced(self) -> bool:
+        with self._lock:
+            if self._pending_sync:
+                return False
+            self._frozen = True
+            return True
+
+    def thaw(self) -> None:
+        with self._lock:
+            self._frozen = False
+
+    def rebind_ssh(self, new_manager) -> None:
+        get_identity = getattr(new_manager, "get_active_target_identity", None)
+        if not callable(get_identity):
+            raise RuntimeError("new SSH manager does not expose target identity")
+        identity = get_identity()
+        if identity is None or identity != self._target_identity:
+            raise RuntimeError("remote target identity changed")
+        with self._lock:
+            self._ssh = new_manager
+            self._frozen = False
 
     def _remote_path(self, path: str) -> str:
         """Get full remote path."""
@@ -156,6 +203,7 @@ class SyncEngine:
         """
         # First check: is it in cache?
         with self._lock:
+            self._ensure_remote_io_allowed()
             if path in self._cache:
                 return self._cache[path]
 
@@ -168,10 +216,15 @@ class SyncEngine:
                 # even if a notify is missed (defensive — notify_all is
                 # always issued by the producing thread).
                 self._fetch_cv.wait(timeout=0.1)
-                if path in self._cache:
-                    return self._cache[path]
+
+            # The engine may have been frozen or rebound while Condition.wait()
+            # released the lock. Never return another target's completed fetch.
+            self._ensure_remote_io_allowed()
+            if path in self._cache:
+                return self._cache[path]
 
             # Mark as being fetched and exit the lock to do I/O unlocked
+            version = self._versions.get(path, 0)
             self._fetching.add(path)
 
         try:
@@ -183,6 +236,7 @@ class SyncEngine:
             # corruption back to the server.
             remote_path = self._remote_path(path)
             try:
+                self._ensure_remote_io_allowed()
                 sftp = self._ssh.open_sftp()
                 with sftp.open(remote_path, "rb") as remote_file:
                     raw = remote_file.read()
@@ -197,6 +251,15 @@ class SyncEngine:
                 ) from e
 
             with self._lock:
+                # Remote I/O ran without the lock; reject data fetched before a
+                # freeze or target switch instead of committing it to the cache.
+                self._ensure_remote_io_allowed()
+                if self._versions.get(path, 0) != version:
+                    self._fetching.discard(path)
+                    self._fetch_cv.notify_all()
+                    if path in self._cache:
+                        return self._cache[path]
+                    raise FileNotFoundError(f"Remote file was deleted while being read: {remote_path}")
                 self._cache[path] = content
                 self._sync_status[path] = SyncStatus.SYNCED
                 self._fetching.discard(path)
@@ -219,6 +282,8 @@ class SyncEngine:
             content: Content to write
         """
         with self._lock:
+            self._ensure_remote_io_allowed()
+            self._versions[path] = self._versions.get(path, 0) + 1
             self._cache[path] = content
             self._sync_status[path] = SyncStatus.PENDING
             self._pending_sync.add(path)
@@ -239,6 +304,8 @@ class SyncEngine:
         overwrite the just-uploaded remote file.
         """
         with self._lock:
+            self._ensure_remote_io_allowed()
+            self._versions[path] = self._versions.get(path, 0) + 1
             self._cache[path] = content
             self._sync_status[path] = SyncStatus.SYNCED
             self._pending_sync.discard(path)
@@ -267,6 +334,9 @@ class SyncEngine:
         """
         with self._lock:
             pending = list(self._pending_sync)
+        if not pending:
+            return True
+        self._ensure_remote_io_allowed()
 
         success = True
         for path in pending:
@@ -286,6 +356,14 @@ class SyncEngine:
             if path not in self._cache:
                 return True
             content = self._cache[path]
+            version = self._versions.get(path, 0)
+            try:
+                self._ensure_remote_io_allowed()
+            except RuntimeError as e:
+                self._sync_status[path] = SyncStatus.ERROR
+                self._sync_errors[path] = str(e)
+                self._notify_status_changed(path, SyncStatus.ERROR)
+                return False
             self._sync_status[path] = SyncStatus.SYNCING
 
         self._notify_status_changed(path, SyncStatus.SYNCING)
@@ -293,6 +371,7 @@ class SyncEngine:
         last_error: Exception | None = None
         for attempt in range(self.MAX_RETRIES + 1):
             try:
+                self._ensure_remote_io_allowed()
                 remote_path = self._remote_path(path)
 
                 # Ensure remote directory exists
@@ -308,20 +387,58 @@ class SyncEngine:
                 # remote shell command.  Shell command strings are bounded by
                 # ARG_MAX and cannot safely carry NUL bytes; SFTP preserves the
                 # exact UTF-8 payload including no trailing newline and NULs.
+                self._ensure_remote_io_allowed()
                 sftp = self._ssh.open_sftp()
                 with sftp.open(remote_path, "wb") as remote_file:
                     remote_file.write(content.encode("utf-8"))
 
                 with self._lock:
-                    self._sync_status[path] = SyncStatus.SYNCED
-                    self._pending_sync.discard(path)
-                    self._sync_errors.pop(path, None)
+                    changed = self._versions.get(path, 0) != version
+                    deleted = path not in self._cache
+                    if not changed:
+                        self._sync_status[path] = SyncStatus.SYNCED
+                        self._pending_sync.discard(path)
+                        self._sync_errors.pop(path, None)
+                    elif not deleted:
+                        self._sync_status[path] = SyncStatus.PENDING
+                        self._pending_sync.add(path)
 
-                self._notify_status_changed(path, SyncStatus.SYNCED)
-                return True
+                if not changed:
+                    self._notify_status_changed(path, SyncStatus.SYNCED)
+                    return True
+
+                if deleted:
+                    self._ensure_remote_io_allowed()
+                    quoted = quote_remote_path(remote_path)
+                    stdout, stderr, exit_code = self._ssh.execute(f"rm -f {quoted}", timeout=10)
+                    if exit_code != 0:
+                        raise OSError(
+                            f"Failed to delete stale uploaded path {remote_path!r}: "
+                            f"{stderr.strip() or stdout.strip() or 'rm exited'} "
+                            f"(exit code {exit_code})"
+                        )
+                    return True
+
+                self._notify_status_changed(path, SyncStatus.PENDING)
+                return False
 
             except Exception as e:
                 last_error = e
+                with self._lock:
+                    changed = self._versions.get(path, 0) != version
+                    deleted = path not in self._cache
+                    if changed:
+                        self._sync_errors.pop(path, None)
+                        if deleted:
+                            self._sync_status.pop(path, None)
+                            self._pending_sync.discard(path)
+                        else:
+                            self._sync_status[path] = SyncStatus.PENDING
+                            self._pending_sync.add(path)
+                if changed:
+                    if not deleted:
+                        self._notify_status_changed(path, SyncStatus.PENDING)
+                    return deleted
                 # Don't burn retries on permission / "command not found" —
                 # these won't change between attempts and only delay the
                 # user seeing the actual failure.
@@ -332,6 +449,8 @@ class SyncEngine:
                     or "operation not permitted" in err_str
                     or "no such file or directory" in err_str
                     or "not a directory" in err_str
+                    or "remote target identity changed" in err_str
+                    or "sync engine is frozen" in err_str
                 )
                 if is_permanent:
                     logger.warning("Sync giving up early on permanent error for %s: %s", path, e)
@@ -364,6 +483,7 @@ class SyncEngine:
                 directory, network error). Previously this returned ``[]``
                 indistinguishably from a genuinely empty directory.
         """
+        self._ensure_remote_io_allowed()
         remote_path = self._remote_path(path)
         # Don't swallow stderr in the shell — surface it on failure so
         # callers can tell "permission denied" / "no such directory" apart
@@ -380,6 +500,7 @@ class SyncEngine:
         """Check if remote path exists."""
         # Check cache first
         with self._lock:
+            self._ensure_remote_io_allowed()
             if path in self._cache:
                 return True
 
@@ -394,6 +515,7 @@ class SyncEngine:
 
         Supports standard glob patterns including ** for recursive matching.
         """
+        self._ensure_remote_io_allowed()
         self._validate_glob_pattern(pattern)
         base_dir = self._remote_dir
         quoted_pattern = self._quote_glob_pattern(pattern)
@@ -415,6 +537,7 @@ class SyncEngine:
 
     def mkdir(self, path: str) -> None:
         """Create remote directory."""
+        self._ensure_remote_io_allowed()
         remote_path = self._remote_path(path)
         _stdout, stderr, exit_code = self._ssh.execute(f"mkdir -p {quote_remote_path(remote_path)}", timeout=10)
         if exit_code != 0:
@@ -432,6 +555,7 @@ class SyncEngine:
         as exceptions rather than silently desynchronising local and remote
         state.
         """
+        self._ensure_remote_io_allowed()
         if path in {"", ".", "./"}:
             raise ValueError("Refusing to delete remote project root")
         remote_path = self._remote_path(path)
@@ -443,6 +567,7 @@ class SyncEngine:
         # like POSIX rm -f) from "could not delete" (permission etc.).
         _, _, exit_code = self._ssh.execute(f"test -e {quoted}", timeout=10)
         if exit_code == 0:
+            self._ensure_remote_io_allowed()
             delete_cmd = f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
             stdout, stderr, exit_code = self._ssh.execute(delete_cmd, timeout=10)
             if exit_code != 0:
@@ -453,6 +578,7 @@ class SyncEngine:
                 )
 
         with self._lock:
+            self._versions[path] = self._versions.get(path, 0) + 1
             self._cache.pop(path, None)
             self._sync_status.pop(path, None)
             self._pending_sync.discard(path)

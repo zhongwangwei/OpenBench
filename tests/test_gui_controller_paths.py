@@ -377,3 +377,102 @@ def test_general_output_browse_routes_through_shared_browse_directory(monkeypatc
 
     assert captured.get("args") == (controller, "Select Output Directory", "/old/output")
     assert page.basedir_input.path() == "/remote/output"
+
+
+def test_remote_storage_setup_expands_tilde_project_dir(monkeypatch):
+    from openbench.gui.main_window import MainWindow
+
+    class SSH:
+        def _get_home_dir(self):
+            return "/home/alice"
+
+    class Sync:
+        def __init__(self, ssh, project_dir):
+            self.project_dir = project_dir
+            self.started = False
+
+        def start_background_sync(self):
+            self.started = True
+
+    window = MainWindow.__new__(MainWindow)
+    window.controller = _controller({"general": {}}, storage=None)
+    window._sync_status = None
+    window._current_sync_engine = lambda: None
+    window._cleanup_remote_storage = lambda sync_pending=True, disconnect_ssh=False: True
+    window._setup_sync_status = lambda sync: None
+    monkeypatch.setattr("openbench.remote.sync.SyncEngine", Sync)
+
+    assert window.setup_remote_storage(SSH(), "~/OpenBench") is True
+    assert window.controller.storage.project_dir == "/home/alice/OpenBench"
+
+
+def test_remote_output_dir_expands_tilde_basedir_with_connected_ssh():
+    class SSH:
+        def _get_home_dir(self):
+            return "/home/alice"
+
+    controller = _controller(
+        {"general": {"basename": "demo", "basedir": "~/runs", "remote": {"openbench_path": "/remote/openbench"}}},
+        storage=RemoteStorage("/remote/project", sync_engine=object()),
+        project_root="/local/source/tree",
+    )
+    controller._ssh_manager = SSH()
+
+    assert controller.get_output_dir() == "/home/alice/runs/demo"
+
+
+def test_remote_output_dir_keeps_dot_relative_basedir_under_openbench_root():
+    controller = _controller(
+        {"general": {"basename": "demo", "basedir": "./runs", "remote": {"openbench_path": "/remote/openbench"}}},
+        storage=RemoteStorage("/remote/project", sync_engine=object()),
+        project_root="/local/source/tree",
+    )
+
+    assert controller.get_output_dir() == "/remote/openbench/runs/demo"
+
+
+def test_remote_namelist_autosync_does_not_mirror_external_absolute_output_under_storage_root():
+    class Sync:
+        def __init__(self):
+            self.calls = []
+
+        def mkdir(self, path):
+            self.calls.append(("mkdir", path))
+
+        def write(self, path, content):
+            self.calls.append(("write", path, content))
+
+    class ConfigManager:
+        def generate_main_nml(self, *args):
+            return "main"
+
+        def generate_ref_nml(self, *args):
+            return "ref"
+
+        def generate_sim_nml(self, *args):
+            return "sim"
+
+        def generate_stats_nml(self, *args):
+            return "stats"
+
+        def generate_figure_nml(self, *args):
+            return "figure"
+
+    sync = Sync()
+    controller = _controller(
+        {
+            "general": {
+                "basename": "demo",
+                "basedir": "/scratch/runs",
+                "remote": {"openbench_path": "/home/alice/OpenBench"},
+            }
+        },
+        storage=RemoteStorage("/home/alice/OpenBench", sync),
+        project_root="/local/source/tree",
+    )
+    controller._config_manager = ConfigManager()
+
+    controller._sync_namelists_with_storage()
+
+    assert controller.get_output_dir() == "/scratch/runs/demo"
+    assert sync.calls == []

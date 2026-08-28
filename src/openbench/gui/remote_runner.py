@@ -272,9 +272,9 @@ class RemoteRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return False
 
-            self._remote_temp_dir = stdout.strip()
+            self._remote_temp_dir = SSHManager._last_absolute_path(stdout)
             if not self._remote_temp_dir:
-                error_msg = "Failed to create remote temp directory: mktemp returned an empty path"
+                error_msg = "Failed to create remote temp directory: mktemp returned no absolute path"
                 self.log_message.emit(error_msg)
                 self.finished_signal.emit(False, error_msg)
                 return False

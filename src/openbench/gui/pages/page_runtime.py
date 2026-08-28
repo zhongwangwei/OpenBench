@@ -248,6 +248,7 @@ class PageRuntime(BasePage):
 
         # === Remote Configuration ===
         self.remote_config_widget = RemoteConfigWidget()
+        self.remote_config_widget.prepare_target_change = self._prepare_remote_target_change
         self.remote_config_widget.config_changed.connect(self._on_config_changed)
         self.remote_config_widget.connection_status_changed.connect(self._on_connection_status_changed)
         self.remote_config_widget.hide()  # Hidden by default (Local mode)
@@ -294,6 +295,42 @@ class PageRuntime(BasePage):
         # Auto-save to default path for next startup
         self._auto_save_settings()
 
+    def _prepare_remote_target_change(self) -> bool:
+        """Guard remote target changes while remote storage has unsynced writes."""
+        main_window = self._get_main_window()
+        if not main_window:
+            return True
+        current_sync = getattr(main_window, "_current_sync_engine", None)
+        sync_engine = current_sync() if callable(current_sync) else None
+        if sync_engine is None:
+            return True
+        freeze = getattr(sync_engine, "freeze_if_synced", None)
+        ready = freeze() if callable(freeze) else getattr(sync_engine, "get_pending_count", lambda: 0)() == 0
+        if not ready:
+            is_bound_target_active = getattr(sync_engine, "is_bound_target_active", None)
+            freeze_pending = getattr(sync_engine, "freeze", None)
+            if callable(is_bound_target_active) and not is_bound_target_active() and callable(freeze_pending):
+                # Preserve the old cache while credentials are repaired.
+                # setup_remote_storage() only rebinds pending writes to the
+                # same target identity, then flushes them before replacement.
+                freeze_pending()
+                return True
+        if not ready:
+            QMessageBox.warning(
+                self,
+                "Remote Sync Pending",
+                "Remote changes are still pending sync. Wait for sync to finish before changing the remote target.",
+            )
+            return False
+        cleanup = getattr(main_window, "_cleanup_remote_storage", None)
+        if callable(cleanup):
+            if cleanup(sync_pending=False, disconnect_ssh=False) is False:
+                thaw = getattr(sync_engine, "thaw", None)
+                if callable(thaw):
+                    thaw()
+                return False
+        return True
+
     def _on_connection_status_changed(self, connected: bool):
         """Handle SSH connection status change."""
         if connected:
@@ -307,7 +344,7 @@ class PageRuntime(BasePage):
 
             # Switch to remote storage
             if not self._switch_to_remote_storage():
-                self._set_execution_mode("local")
+                self.remote_config_widget.disconnect()
                 self._on_config_changed()
                 return
             self._on_config_changed()
@@ -372,13 +409,8 @@ class PageRuntime(BasePage):
                     return False
                 logger.info(f"Switched to remote storage mode: {remote_project_dir}")
             elif ssh_manager:
-                # If no project dir configured, use default ~/OpenBench
-                default_dir = "~/OpenBench"
-                result = main_window.setup_remote_storage(ssh_manager, default_dir)
-                if result is False:
-                    logger.warning("Switch to remote storage was rejected; preserving existing storage")
-                    return False
-                logger.info(f"Switched to remote storage mode with default: {default_dir}")
+                QMessageBox.warning(self, "Remote OpenBench Not Configured", "Set the remote OpenBench path first.")
+                return False
         return True
 
     def _get_main_window(self):

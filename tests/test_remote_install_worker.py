@@ -1039,6 +1039,7 @@ def test_reset_to_defaults_keeps_compute_node_auth_none(qapp):
     widget.reset_to_defaults()
 
     assert widget.radio_node_none.isChecked() is True
+    assert widget.openbench_input.text() == "~/OpenBench"
 
 
 def test_update_remote_cpu_count_ignores_banner_lines(qapp, monkeypatch):
@@ -1082,3 +1083,423 @@ def test_parse_ssh_config_splits_multiple_host_aliases(tmp_path, monkeypatch):
     assert {host["hostname"] for host in hosts} == {"login.example.org"}
     assert {host["user"] for host in hosts} == {"alice"}
     assert {host["port"] for host in hosts} == {"2222"}
+
+
+def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
+    from openbench.gui.widgets.remote_config import RemoteConfigWidget
+
+    class Text:
+        def __init__(self, value=""):
+            self.value = value
+
+        def text(self):
+            return self.value
+
+    class Radio:
+        def __init__(self, checked=False):
+            self.checked = checked
+
+        def isChecked(self):
+            return self.checked
+
+    class Label:
+        def setText(self, value):
+            self.text = value
+
+        def setStyleSheet(self, value):
+            self.style = value
+
+    class Button:
+        def setEnabled(self, value):
+            self.enabled = value
+
+    class Signal:
+        def __init__(self):
+            self.values = []
+
+        def emit(self, *values):
+            self.values.append(values[0] if len(values) == 1 else values)
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.disconnected = 0
+
+        def disconnect(self):
+            self.disconnected += 1
+            self.is_connected = False
+
+    widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
+    widget.host_input = Text("alice@login")
+    widget.password_input = Text("old-secret")
+    widget.key_input = Text("")
+    widget.radio_password = Radio(True)
+    widget.radio_key = Radio(False)
+    widget.node_group = type("NodeGroup", (), {"isChecked": lambda self: False})()
+    widget.status_label = Label()
+    widget.node_status_label = Label()
+    widget.btn_test = Button()
+    widget.btn_disconnect = Button()
+    widget.btn_confirm_node = Button()
+    widget.btn_disconnect_node = Button()
+    widget.connection_status_changed = Signal()
+    widget.config_changed = Signal()
+    ssh = SSH()
+    widget._ssh_manager = ssh
+    widget._confirmed_server_config = widget._current_server_config()
+    widget._confirmed_node_config = None
+
+    widget.password_input.value = "new-secret"
+    widget._on_config_changed()
+
+    assert ssh.disconnected == 1
+    assert widget._ssh_manager is None
+    assert widget.connection_status_changed.values == [False]
+
+
+def test_compute_node_edit_pending_guard_restores_confirmed_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type(
+        "SSH",
+        (), {
+            "is_connected": True,
+            "is_jump_connected": True,
+            "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.prepare_target_change = lambda: False
+    config_changed = []
+    status_changed = []
+    widget.config_changed.connect(lambda: config_changed.append(True))
+    widget.connection_status_changed.connect(status_changed.append)
+    config_changed.clear()
+
+    widget.node_input.setText("node-b")
+
+    assert widget.node_input.text() == "node-a"
+    assert getattr(widget._ssh_manager, "disconnects", 0) == 0
+    assert config_changed == []
+    assert status_changed == []
+
+
+def test_compute_node_edit_without_pending_disconnects_old_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type(
+        "SSH",
+        (), {
+            "is_connected": True,
+            "is_jump_connected": True,
+            "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.prepare_target_change = lambda: True
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget.node_input.setText("node-b")
+
+    assert getattr(widget._ssh_manager, "disconnects", 0) == 1
+    assert widget._confirmed_node_config is None
+    assert status_changed == [False]
+
+
+def test_manual_compute_disconnect_pending_guard_keeps_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type(
+        "SSH",
+        (), {
+            "is_connected": True,
+            "_jump_client": object(),
+            "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.prepare_target_change = lambda: False
+
+    widget._disconnect_node(silent=False)
+
+    assert widget.node_input.text() == "node-a"
+    assert getattr(widget._ssh_manager, "disconnects", 0) == 0
+    assert widget._confirmed_node_config is not None
+
+
+def test_manual_compute_disconnect_falls_back_to_login_target(qapp):
+    class SSH:
+        is_connected = True
+        is_jump_connected = True
+        _jump_client = object()
+
+        def select_main_target(self):
+            self.select_calls = getattr(self, "select_calls", 0) + 1
+            self.is_jump_connected = False
+            self._jump_client = None
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.prepare_target_change = lambda: True
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget._disconnect_node(silent=False)
+
+    assert widget._ssh_manager.select_calls == 1
+    assert widget.node_group.isChecked() is False
+    assert widget._confirmed_node_config == ()
+    assert status_changed == [True]
+
+
+def test_main_server_edit_pending_guard_restores_confirmed_connection(qapp):
+    widget = RemoteConfigWidget()
+    ssh = type(
+        "SSH",
+        (), {
+            "is_connected": True,
+            "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget._ssh_manager = ssh
+    widget.host_input.setText("alice@login")
+    widget.password_input.setText("old")
+    widget._confirmed_server_config = widget._current_server_config()
+    widget.prepare_target_change = lambda: False
+    config_changed = []
+    widget.config_changed.connect(lambda: config_changed.append(True))
+    config_changed.clear()
+
+    widget.password_input.setText("new")
+
+    assert widget.password_input.text() == "old"
+    assert widget._ssh_manager is ssh
+    assert getattr(ssh, "disconnects", 0) == 0
+    assert config_changed == []
+
+
+def test_compute_reconnect_success_emits_connected(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+        is_jump_connected = False
+
+        def connect_with_jump(self, **kwargs):
+            self.kwargs = kwargs
+            self.is_jump_connected = True
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-b")
+    widget._update_remote_cpu_count = lambda: None
+    monkeypatch.setattr(remote_config, "call_responsive", lambda fn: fn())
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget._confirm_node_connection()
+
+    assert status_changed[-1] is True
+    assert widget._confirmed_node_config == widget._current_node_config()
+
+
+def test_cancelled_compute_password_prompt_does_not_prepare_target_change(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": True})()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget.radio_node_password.setChecked(True)
+    widget.node_password_input.setText("old-secret")
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.node_input.blockSignals(True)
+    widget.node_password_input.blockSignals(True)
+    widget.node_input.setText("node-b")
+    widget.node_password_input.clear()
+    widget.node_password_input.blockSignals(False)
+    widget.node_input.blockSignals(False)
+    prepare_calls = []
+    widget.prepare_target_change = lambda: prepare_calls.append(True) or True
+    monkeypatch.setattr(remote_config.QInputDialog, "getText", lambda *args: ("", False))
+
+    widget._confirm_node_connection()
+
+    assert prepare_calls == []
+    assert widget._ssh_manager.is_jump_connected is True
+
+
+def test_manual_server_disconnect_pending_guard_keeps_connection(qapp):
+    widget = RemoteConfigWidget()
+    ssh = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget._ssh_manager = ssh
+    widget.host_input.setText("alice@login")
+    widget._confirmed_server_config = widget._current_server_config()
+    widget.prepare_target_change = lambda: False
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget._disconnect_server()
+
+    assert widget._ssh_manager is ssh
+    assert getattr(ssh, "disconnects", 0) == 0
+    assert status_changed == []
+
+
+def test_pending_guard_restores_node_auth_without_recursive_config_change(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": True})()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget.radio_node_password.setChecked(True)
+    widget.node_password_input.setText("secret")
+    widget._confirmed_node_config = widget._current_node_config()
+    guard_calls = []
+    widget.prepare_target_change = lambda: guard_calls.append(True) or False
+    config_changed = []
+    widget.config_changed.connect(lambda: config_changed.append(True))
+    config_changed.clear()
+
+    widget.radio_node_key.setChecked(True)
+
+    assert widget.radio_node_password.isChecked()
+    assert not widget.radio_node_key.isChecked()
+    assert widget.node_password_input.text() == "secret"
+    assert guard_calls == [True]
+    assert config_changed == []
+
+
+def test_enabled_compute_without_node_is_not_connected(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": False})()
+    widget.node_group.setChecked(True)
+    widget.node_input.clear()
+
+    assert widget.is_connected() is False
+
+
+def test_unchecked_compute_requires_an_active_direct_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "is_jump_connected": False,
+            "get_active_target_identity": lambda self: None,
+        },
+    )()
+
+    assert widget.is_connected() is False
+
+
+def test_disabling_compute_selects_main_target_and_rebuilds_storage(qapp):
+    class SSH:
+        is_connected = True
+        is_jump_connected = True
+
+        def select_main_target(self):
+            self.select_calls = getattr(self, "select_calls", 0) + 1
+            self.is_jump_connected = False
+
+    widget = RemoteConfigWidget()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    widget._ssh_manager = SSH()
+    widget._confirmed_node_config = widget._current_node_config()
+    widget.prepare_target_change = lambda: True
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget.node_group.setChecked(False)
+
+    assert widget._ssh_manager.select_calls == 1
+    assert widget._confirmed_node_config == ()
+    assert status_changed == [True]
+
+
+def test_enabling_compute_pending_guard_restores_direct_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": False})()
+    widget.node_input.setText("node-a")
+    widget._confirmed_node_config = ()
+    widget.prepare_target_change = lambda: False
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget.node_group.setChecked(True)
+
+    assert widget.node_group.isChecked() is False
+    assert widget._confirmed_node_config == ()
+    assert status_changed == []
+
+
+def test_openbench_path_change_rebuilds_storage_on_same_connection(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": False})()
+    widget.openbench_input.setText("/remote/old")
+    widget._confirmed_project_path = "/remote/old"
+    widget.prepare_target_change = lambda: True
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget.openbench_input.setText("/remote/new")
+
+    assert widget._confirmed_project_path == "/remote/new"
+    assert status_changed == [True]
+
+
+def test_openbench_path_change_with_pending_sync_restores_old_path(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type("SSH", (), {"is_connected": True, "is_jump_connected": False})()
+    widget.openbench_input.setText("/remote/old")
+    widget._confirmed_project_path = "/remote/old"
+    widget.prepare_target_change = lambda: False
+    config_changed = []
+    widget.config_changed.connect(lambda: config_changed.append(True))
+    config_changed.clear()
+
+    widget.openbench_input.setText("/remote/new")
+
+    assert widget.openbench_input.text() == "/remote/old"
+    assert widget._confirmed_project_path == "/remote/old"
+    assert config_changed == []
+
+
+def test_openbench_path_change_does_not_rebuild_without_active_target(qapp):
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "is_jump_connected": False,
+            "get_active_target_identity": lambda self: None,
+        },
+    )()
+    widget.openbench_input.setText("/remote/old")
+    widget._confirmed_project_path = "/remote/old"
+    widget.prepare_target_change = lambda: True
+    status_changed = []
+    widget.connection_status_changed.connect(status_changed.append)
+
+    widget.openbench_input.setText("/remote/new")
+
+    assert widget._confirmed_project_path == "/remote/new"
+    assert status_changed == []

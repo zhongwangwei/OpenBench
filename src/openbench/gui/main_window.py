@@ -30,6 +30,7 @@ from PySide6.QtCore import Qt
 
 from openbench import __version__
 from openbench.gui.remote_python import quote_remote_path
+from openbench.remote.ssh import expand_remote_home
 from openbench.gui.localization import CHINESE, get_language_manager
 from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.controller import WizardController
@@ -1239,11 +1240,38 @@ class MainWindow(QMainWindow):
         """
         from openbench.remote.sync import SyncEngine
 
+        get_target_identity = getattr(ssh_manager, "get_active_target_identity", None)
+        if callable(get_target_identity) and get_target_identity() is None:
+            QMessageBox.warning(
+                self,
+                "Remote Target Unavailable",
+                "Connect the selected remote execution target before enabling remote storage.",
+            )
+            return False
+
         # Reconnecting/changing remote roots must not leave the old background
         # sync thread or a replaced SSH manager alive against a stale path.
         old_sync_engine = self._current_sync_engine()
         old_ssh_manager = getattr(old_sync_engine, "_ssh", None) if old_sync_engine is not None else None
-        if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=False):
+        sync_pending = True
+        if old_sync_engine is not None:
+            get_pending_count = getattr(old_sync_engine, "get_pending_count", None)
+            if callable(get_pending_count):
+                sync_pending = get_pending_count() > 0
+                if sync_pending:
+                    rebind_ssh = getattr(old_sync_engine, "rebind_ssh", None)
+                    if callable(rebind_ssh):
+                        try:
+                            rebind_ssh(ssh_manager)
+                        except RuntimeError:
+                            QMessageBox.warning(
+                                self,
+                                "Remote Target Changed",
+                                "Unsynced changes belong to a different remote target. "
+                                "Reconnect that target and finish syncing before switching.",
+                            )
+                            return False
+        if not self._cleanup_remote_storage(sync_pending=sync_pending, disconnect_ssh=False):
             return False
         if old_ssh_manager is not None and old_ssh_manager is not ssh_manager:
             try:
@@ -1251,10 +1279,15 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 logger.warning("Previous remote SSH disconnect failed during replacement: %s", exc)
 
+        remote_project_dir = expand_remote_home(ssh_manager, remote_project_dir).replace("\\", "/")
+
         # Create sync engine and remote storage
         sync_engine = SyncEngine(ssh_manager, remote_project_dir)
         self.controller.storage = RemoteStorage(remote_project_dir, sync_engine)
         self.controller.ssh_manager = ssh_manager
+        from openbench.gui.remote_registry import clear_registry
+
+        clear_registry(self.controller)
 
         # Setup sync status widget
         self._setup_sync_status(sync_engine)

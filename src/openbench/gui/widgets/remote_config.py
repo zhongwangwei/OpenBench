@@ -71,7 +71,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollComboBox
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import QSignalBlocker, Signal, Qt
 from PySide6.QtWidgets import QListWidgetItem
 
 from openbench.gui.widgets._ssh_worker import (
@@ -496,8 +496,8 @@ class RemoteFileBrowser(QWidget):
                     return
                 resolve_cmd = f"readlink -f {quoted_full} 2>/dev/null"
                 stdout, _, exit_code = execute_responsive(self._ssh_manager, resolve_cmd, timeout=5)
-                if exit_code == 0 and stdout.strip():
-                    resolved_path = stdout.strip()
+                resolved_path = SSHManager._last_absolute_path(stdout)
+                if exit_code == 0 and resolved_path:
                     # Emit the resolved path
                     self.file_selected.emit(resolved_path)
                     self.parent().accept() if hasattr(self.parent(), "accept") else None
@@ -622,6 +622,9 @@ class RemoteConfigWidget(QWidget):
         self._conda_create_dialog = None
         self._install_worker = None
         self._confirmed_node_config = None
+        self._confirmed_server_config = None
+        self._confirmed_project_path = None
+        self.prepare_target_change = None
         self._setup_ui()
         self.destroyed.connect(lambda *_: self._cleanup_conda_create_worker(detach=True))
         self.destroyed.connect(lambda *_: self._cleanup_install_worker(detach=True))
@@ -766,6 +769,7 @@ class RemoteConfigWidget(QWidget):
         self.node_auth_group.addButton(self.radio_node_none)
         self.node_auth_group.addButton(self.radio_node_password)
         self.node_auth_group.addButton(self.radio_node_key)
+        self.radio_node_none.toggled.connect(self._on_node_auth_changed)
         self.radio_node_password.toggled.connect(self._on_node_auth_changed)
         self.radio_node_key.toggled.connect(self._on_node_auth_changed)
         node_auth_layout.addWidget(self.radio_node_none)
@@ -884,6 +888,7 @@ class RemoteConfigWidget(QWidget):
         ob_layout.setSpacing(8)
         self.openbench_input = QLineEdit()
         self.openbench_input.setPlaceholderText("/home/user/OpenBench")
+        self.openbench_input.setText("~/OpenBench")
         self.openbench_input.textChanged.connect(self._on_config_changed)
         ob_layout.addWidget(self.openbench_input, 1)
 
@@ -982,6 +987,8 @@ class RemoteConfigWidget(QWidget):
 
     def _on_node_auth_changed(self, checked: bool):
         """Handle node auth type change."""
+        if not checked:
+            return
         self.node_password_input.setVisible(self.radio_node_password.isChecked())
         self.node_key_widget.setVisible(self.radio_node_key.isChecked())
         self._on_config_changed()
@@ -1002,8 +1009,118 @@ class RemoteConfigWidget(QWidget):
             return None, os.path.expanduser(self.node_key_input.text().strip())
         return None, None
 
+    def _current_server_config(self):
+        return (
+            self.host_input.text().strip(),
+            "password" if self.radio_password.isChecked() else "key",
+            self.password_input.text() if self.radio_password.isChecked() else "",
+            self.key_input.text().strip() if self.radio_key.isChecked() else "",
+        )
+
+    def _invalidate_server_connection(self):
+        if self._ssh_manager is not None:
+            try:
+                self._ssh_manager.disconnect()
+            except Exception as exc:
+                logger.warning("Error disconnecting stale SSH target: %s", exc)
+            self._ssh_manager = None
+        self._confirmed_server_config = None
+        self._confirmed_node_config = None
+        self._confirmed_project_path = None
+        self.status_label.setText("Not connected")
+        self.status_label.setStyleSheet("color: #999;")
+        self.btn_test.setEnabled(True)
+        self.btn_disconnect.setEnabled(False)
+        if hasattr(self, "node_status_label"):
+            self.node_status_label.setText("Not connected")
+            self.node_status_label.setStyleSheet("color: #999;")
+            self.btn_confirm_node.setEnabled(True)
+            self.btn_disconnect_node.setEnabled(False)
+        self.connection_status_changed.emit(False)
+
+    def _prepare_target_change(self) -> bool:
+        callback = getattr(self, "prepare_target_change", None)
+        return bool(callback()) if callable(callback) else True
+
+    def _restore_confirmed_server_config(self):
+        config = getattr(self, "_confirmed_server_config", None)
+        if not config:
+            return
+        host, auth_type, password, key_file = config
+        self._restoring_confirmed_config = True
+        blockers = [
+            QSignalBlocker(widget)
+            for widget in (self.host_input, self.radio_password, self.radio_key, self.password_input, self.key_input)
+        ]
+        try:
+            self.host_input.setText(host)
+            self.radio_password.setChecked(auth_type == "password")
+            self.radio_key.setChecked(auth_type == "key")
+            self.password_input.setText(password)
+            self.key_input.setText(key_file)
+            self.password_row_widget.setVisible(auth_type == "password")
+            self.key_row_widget.setVisible(auth_type == "key")
+        finally:
+            blockers.clear()
+            self._restoring_confirmed_config = False
+
+    def _restore_confirmed_project_path(self):
+        path = getattr(self, "_confirmed_project_path", None)
+        if path is None:
+            return
+        blocker = QSignalBlocker(self.openbench_input)
+        self.openbench_input.setText(path)
+        del blocker
+
+    def _restore_confirmed_node_config(self):
+        config = getattr(self, "_confirmed_node_config", None)
+        if config is None:
+            return
+        if config == ():
+            blocker = QSignalBlocker(self.node_group)
+            self.node_group.setChecked(False)
+            del blocker
+            self.node_status_label.setText("Not connected")
+            self.node_status_label.setStyleSheet("color: #999;")
+            self.btn_confirm_node.setEnabled(True)
+            self.btn_disconnect_node.setEnabled(False)
+            return
+        node, auth_type, password, key_file = config
+        self._restoring_confirmed_config = True
+        blockers = [
+            QSignalBlocker(widget)
+            for widget in (
+                self.node_group,
+                self.node_input,
+                self.radio_node_password,
+                self.radio_node_key,
+                self.radio_node_none,
+                self.node_password_input,
+                self.node_key_input,
+            )
+        ]
+        try:
+            self.node_group.setChecked(True)
+            self.node_input.setText(node)
+            self.radio_node_password.setChecked(auth_type == "password")
+            self.radio_node_key.setChecked(auth_type == "key")
+            self.radio_node_none.setChecked(auth_type == "none")
+            self.node_password_input.setText(password)
+            self.node_key_input.setText(key_file)
+            self.node_password_input.setVisible(auth_type == "password")
+            self.node_key_widget.setVisible(auth_type == "key")
+        finally:
+            blockers.clear()
+            self._restoring_confirmed_config = False
+        self.node_status_label.setText(f"✓ Connected to {node}")
+        self.node_status_label.setStyleSheet("color: green; font-weight: bold;")
+        self.btn_confirm_node.setEnabled(False)
+        self.btn_disconnect_node.setEnabled(True)
+
     def _current_node_config(self):
-        if not self.node_group.isChecked() or not self.node_input.text().strip():
+        if not self.node_group.isChecked():
+            return ()
+        if not self.node_input.text().strip():
             return None
         return (
             self.node_input.text().strip(),
@@ -1044,7 +1161,6 @@ class RemoteConfigWidget(QWidget):
         if not node_name:
             QMessageBox.warning(self, "Error", "Please enter the compute node name")
             return
-
         self._handshake_active = True
         try:
             self.btn_confirm_node.setEnabled(False)
@@ -1074,6 +1190,14 @@ class RemoteConfigWidget(QWidget):
                     self.node_status_label.setStyleSheet("color: red;")
                     return
 
+            if (
+                getattr(self, "_confirmed_node_config", None) is not None
+                and self._current_node_config() != self._confirmed_node_config
+                and not self._prepare_target_change()
+            ):
+                self._restore_confirmed_node_config()
+                return
+
             # Connect to compute node through jump (handshake off the GUI
             # thread; host-key prompt marshals back to it)
             manager = self._ssh_manager
@@ -1082,6 +1206,9 @@ class RemoteConfigWidget(QWidget):
                     main_host=node_name, main_password=node_password, main_key_file=node_key_file
                 )
             )
+            get_home = getattr(manager, "_get_home_dir", None)
+            if callable(get_home):
+                call_responsive(get_home)
 
             if self._ssh_manager.is_jump_connected:
                 self.node_status_label.setText(f"✓ Connected to {node_name}")
@@ -1092,6 +1219,7 @@ class RemoteConfigWidget(QWidget):
                 self.btn_disconnect_node.setEnabled(True)
                 # Update CPU count for compute node
                 self._update_remote_cpu_count()
+                self.connection_status_changed.emit(True)
             else:
                 self.node_status_label.setText("✗ Connection failed")
                 self.node_status_label.setStyleSheet("color: red;")
@@ -1119,20 +1247,63 @@ class RemoteConfigWidget(QWidget):
 
     def _on_config_changed(self):
         """Handle any configuration change."""
+        if getattr(self, "_restoring_confirmed_config", False):
+            return
+        if (
+            not getattr(self, "_handshake_active", False)
+            and getattr(self, "_confirmed_server_config", None) is not None
+            and self._current_server_config() != self._confirmed_server_config
+        ):
+            if not self._prepare_target_change():
+                self._restore_confirmed_server_config()
+                return
+            self._invalidate_server_connection()
+        if (
+            getattr(self, "_confirmed_project_path", None) is not None
+            and self.openbench_input.text().strip() != self._confirmed_project_path
+        ):
+            if not self._prepare_target_change():
+                self._restore_confirmed_project_path()
+                return
+            self._confirmed_project_path = self.openbench_input.text().strip()
+            if self.is_connected():
+                self.connection_status_changed.emit(True)
         if (
             getattr(self, "_confirmed_node_config", None) is not None
             and self._current_node_config() != self._confirmed_node_config
         ):
-            self._confirmed_node_config = None
+            if not self._prepare_target_change():
+                self._restore_confirmed_node_config()
+                return
+            requested_config = self._current_node_config()
+            using_main_target = False
             if self._ssh_manager is not None:
                 try:
-                    self._ssh_manager.disconnect_jump()
+                    select_main_target = getattr(self._ssh_manager, "select_main_target", None)
+                    if requested_config == () and callable(select_main_target):
+                        select_main_target()
+                        using_main_target = self._ssh_manager.is_connected
+                    else:
+                        self._ssh_manager.disconnect_jump()
                 except Exception as exc:
                     logger.warning("Error disconnecting stale compute node target: %s", exc)
+            self._confirmed_node_config = () if using_main_target else None
             self.node_status_label.setText("Not connected")
             self.node_status_label.setStyleSheet("color: #999;")
             self.btn_confirm_node.setEnabled(True)
             self.btn_disconnect_node.setEnabled(False)
+            self.connection_status_changed.emit(using_main_target)
+        elif (
+            getattr(self, "_confirmed_node_config", None) is None
+            and self._current_node_config() == ()
+            and self._ssh_manager is not None
+            and self._ssh_manager.is_connected
+        ):
+            select_main_target = getattr(self._ssh_manager, "select_main_target", None)
+            if callable(select_main_target):
+                select_main_target()
+                self._confirmed_node_config = ()
+                self.connection_status_changed.emit(True)
         self.config_changed.emit()
 
     def _on_conda_env_changed(self, index: int):
@@ -1304,6 +1475,10 @@ class RemoteConfigWidget(QWidget):
                 key_file = os.path.expanduser(self.key_input.text().strip())
                 call_responsive(lambda: manager.connect(host, key_file=key_file))
 
+            get_home = getattr(manager, "_get_home_dir", None)
+            if callable(get_home):
+                call_responsive(get_home)
+
             # Test jump connection if enabled
             if node:
                 call_responsive(
@@ -1313,12 +1488,17 @@ class RemoteConfigWidget(QWidget):
                         main_key_file=node_key_file,
                     )
                 )
-                self._confirmed_node_config = self._current_node_config()
+                if callable(get_home):
+                    call_responsive(get_home)
 
             import shiboken6
 
             if not shiboken6.isValid(self):
                 return  # widget destroyed while the handshake event loop ran
+
+            self._confirmed_server_config = self._current_server_config()
+            self._confirmed_node_config = self._current_node_config()
+            self._confirmed_project_path = self.openbench_input.text().strip()
 
             # Update status to connected
             self.status_label.setText("Connected")
@@ -1377,6 +1557,9 @@ class RemoteConfigWidget(QWidget):
 
     def _disconnect_server(self):
         """Disconnect from SSH server."""
+        if getattr(self, "_confirmed_server_config", None) is not None and not self._prepare_target_change():
+            return
+
         # First disconnect compute node if connected
         self._disconnect_node(silent=True)
 
@@ -1389,6 +1572,8 @@ class RemoteConfigWidget(QWidget):
             self._ssh_manager = None
 
         self._confirmed_node_config = None
+        self._confirmed_server_config = None
+        self._confirmed_project_path = None
 
         # Update UI
         self.status_label.setText("Not connected")
@@ -1405,21 +1590,33 @@ class RemoteConfigWidget(QWidget):
         """
         if not self._ssh_manager:
             return
+        if not silent and getattr(self, "_confirmed_node_config", None) is not None and not self._prepare_target_change():
+            self._restore_confirmed_node_config()
+            return
 
-        # Check if jump connection is active
-        if hasattr(self._ssh_manager, "_jump_client") and self._ssh_manager._jump_client:
-            try:
+        using_main_target = False
+        try:
+            if not silent and callable(getattr(self._ssh_manager, "select_main_target", None)):
+                self._ssh_manager.select_main_target()
+                using_main_target = self._ssh_manager.is_connected
+            elif hasattr(self._ssh_manager, "_jump_client") and self._ssh_manager._jump_client:
                 self._ssh_manager.disconnect_jump()
-            except Exception as e:
-                logger.warning(f"Error during node disconnect: {e}")
+        except Exception as e:
+            logger.warning(f"Error during node disconnect: {e}")
 
-        self._confirmed_node_config = None
+        if using_main_target:
+            blocker = QSignalBlocker(self.node_group)
+            self.node_group.setChecked(False)
+            del blocker
+        self._confirmed_node_config = () if using_main_target else None
 
         # Update UI
         self.node_status_label.setText("Not connected")
         self.node_status_label.setStyleSheet("color: #999;")
         self.btn_confirm_node.setEnabled(True)
         self.btn_disconnect_node.setEnabled(False)
+        if not silent:
+            self.connection_status_changed.emit(using_main_target)
 
         if not silent:
             logger.info("Disconnected from compute node")
@@ -2097,8 +2294,16 @@ class RemoteConfigWidget(QWidget):
         """
         if self._ssh_manager is None or not self._ssh_manager.is_connected:
             return False
-        if hasattr(self, "node_group") and self.node_group.isChecked() and self.node_input.text().strip():
-            return self._node_target_confirmed() and self._ssh_manager.is_jump_connected
+        if hasattr(self, "node_group") and self.node_group.isChecked():
+            return (
+                bool(self.node_input.text().strip())
+                and self._node_target_confirmed()
+                and self._ssh_manager.is_jump_connected
+            )
+        get_identity = getattr(self._ssh_manager, "get_active_target_identity", None)
+        if callable(get_identity):
+            identity = get_identity()
+            return bool(identity and identity[0] == "direct")
         return True
 
     def get_config(self) -> Dict[str, Any]:
@@ -2182,7 +2387,7 @@ class RemoteConfigWidget(QWidget):
             self.conda_combo.setCurrentIndex(0)
 
         # Set OpenBench path
-        self.openbench_input.setText(config.get("openbench_path", ""))
+        self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
 
         # Restore signals
         self.blockSignals(False)
@@ -2257,6 +2462,10 @@ class RemoteConfigWidget(QWidget):
                 pass
             self._ssh_manager = None
 
+        self._confirmed_node_config = None
+        self._confirmed_server_config = None
+        self._confirmed_project_path = None
+
         # Update UI - reset all button states
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
@@ -2292,4 +2501,4 @@ class RemoteConfigWidget(QWidget):
         self.conda_combo.addItem("(Not using conda environment)")
         self.conda_combo.setCurrentIndex(0)
         self.python_combo.clear()
-        self.openbench_input.clear()
+        self.openbench_input.setText("~/OpenBench")

@@ -532,3 +532,115 @@ def test_resolve_path_for_remote_rejects_windows_local_data_path():
 
     with pytest.raises(RemoteNamelistSyncError, match="Windows local path cannot be converted"):
         preview._resolve_path_for_remote(r"\\server\share\sim\CaseA", "/remote/openbench")
+
+
+def test_remote_export_expands_tilde_before_sftp_and_run(monkeypatch, tmp_path):
+    from openbench.gui.pages import page_preview as preview_module
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.sftp = FakeSFTP()
+
+        def _get_home_dir(self):
+            return "/home/alice"
+
+        def execute(self, command, timeout=30):
+            return "", "", 0
+
+        def open_sftp(self):
+            return self.sftp
+
+    ssh = SSH()
+
+    class Controller(FakeControllerBase):
+        config = {"general": {"basename": "demo", "remote": {"openbench_path": "~/OpenBench"}}}
+        navigated = []
+
+        def remote_settings(self):
+            return self.config["general"]["remote"]
+
+        def go_to_page(self, page):
+            self.navigated.append(page)
+
+    def export_for_remote(local_dir, output_dir, openbench_root, remote_openbench_path):
+        assert output_dir == "/home/alice/OpenBench/output/demo"
+        assert remote_openbench_path == "/home/alice/OpenBench"
+        nml_dir = os.path.join(local_dir, "nml")
+        os.makedirs(nml_dir, exist_ok=True)
+        main_path = os.path.join(nml_dir, "main-demo.yaml")
+        with open(main_path, "w", encoding="utf-8") as f:
+            f.write("main: true\n")
+        config_path = os.path.join(local_dir, "openbench.yaml")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("project: {}\n")
+        return {"config": config_path}
+
+    monkeypatch.setattr(preview_module, "get_remote_ssh_manager", lambda controller: ssh)
+    preview = _preview()
+    preview.controller = Controller()
+    preview.run_requested = FakeSignal()
+    preview._get_openbench_root = lambda: str(tmp_path)
+    preview._export_for_remote = export_for_remote
+
+    assert preview._export_and_run_remote("~/OpenBench/output/demo") is True
+    assert ssh.sftp.put_calls[-1][1] == "/home/alice/OpenBench/output/demo/openbench.yaml"
+    assert preview.run_requested.emitted == [("/home/alice/OpenBench/output/demo/openbench.yaml",)]
+
+
+def test_resolve_path_for_remote_expands_tilde_source_path_with_ssh():
+    preview = _preview()
+
+    class SSH:
+        def _get_home_dir(self):
+            return "/home/alice"
+
+    assert preview._resolve_path_for_remote("~/Reference", "/home/alice/OpenBench", SSH()) == "/home/alice/Reference"
+
+
+def test_remote_preview_uses_expanded_root_for_output_parent_and_paths(monkeypatch):
+    from openbench.gui.pages import page_preview as preview_module
+    from openbench.remote.storage import RemoteStorage
+
+    class SSH:
+        is_connected = True
+
+        def _get_home_dir(self):
+            return "/home/alice"
+
+        def get_active_client(self):
+            return object()
+
+    class Controller(FakeControllerBase):
+        config = {
+            "general": {"basename": "demo", "remote": {"openbench_path": "~/OpenBench"}},
+            "evaluation_items": {},
+        }
+        storage = RemoteStorage("/home/alice/OpenBench", sync_engine=object())
+        ssh_manager = SSH()
+
+        def parent(self):
+            return None
+
+        def remote_settings(self):
+            return self.config["general"]["remote"]
+
+        def get_output_dir(self):
+            return "~/OpenBench/output/demo"
+
+    monkeypatch.setattr(preview_module, "get_remote_ssh_manager", lambda controller: controller.ssh_manager)
+    preview = _preview()
+    preview.controller = Controller()
+    preview.config_manager = ConfigManager()
+    preview.output_dir_label = FakeLabel()
+    preview.config_preview = FakeYamlPreview()
+
+    preview.load_from_config()
+    data = yaml.safe_load(preview.config_preview.content)
+
+    assert data["project"]["output_dir"] == "/home/alice/OpenBench/output"
+    assert (
+        preview._resolve_path_for_remote("Reference", "~/OpenBench", preview.controller.ssh_manager)
+        == "/home/alice/OpenBench/Reference"
+    )

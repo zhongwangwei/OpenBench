@@ -276,3 +276,25 @@ def test_open_output_uses_saved_run_output_even_if_config_changes(monkeypatch):
     page._open_output()
 
     assert opened == ["/saved/output"]
+
+
+def test_remote_folder_download_worker_expands_tilde_for_relpaths(tmp_path, qapp):
+    class HomeListingSSH(ListingSSH):
+        def _get_home_dir(self):
+            return "/home/alice"
+
+        def execute(self, command, timeout=30, should_abort=None):
+            self.commands.append(command)
+            return "/home/alice/OpenBench/output/a.nc\n", "", 0
+
+    ssh = HomeListingSSH()
+    worker = RemoteFolderDownloadWorker(ssh, "~/OpenBench/output", str(tmp_path / "output"))
+    finished = []
+    worker.finished_signal.connect(
+        lambda success, canceled, message, target: finished.append((success, canceled, message))
+    )
+
+    worker.run()
+
+    assert finished == [(True, False, "Download complete")]
+    assert ssh.sftp.downloads == [("/home/alice/OpenBench/output/a.nc", str(tmp_path / "output" / "a.nc"))]

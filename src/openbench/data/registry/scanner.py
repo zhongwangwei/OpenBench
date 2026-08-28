@@ -2459,6 +2459,14 @@ def _finalize_descriptor(
         if _has_custom_station_filter(scanned.registry_name):
             return
 
+        # Remote-scanned dataset: the CSV was generated on the remote host
+        # (where the station files live) and evaluation runs there too, so
+        # the remote path is authoritative — even when a same-named local
+        # directory with NC files or an existing local fulllist exists.
+        if getattr(scanned, "remote_fulllist", ""):
+            descriptor["fulllist"] = scanned.remote_fulllist
+            return
+
         existing_fulllist = (existing_descriptor or {}).get("fulllist")
         if existing_fulllist and _fulllist_path_exists(
             existing_fulllist,
@@ -2466,14 +2474,6 @@ def _finalize_descriptor(
             (existing_descriptor or {}).get("root_dir"),
         ):
             descriptor["fulllist"] = existing_fulllist
-            return
-
-        # Remote-scanned dataset: the CSV was generated on the remote host
-        # (where the station files live) and evaluation runs there too, so
-        # the remote path is authoritative — even when a same-named local
-        # directory with NC files exists (shared mounts).
-        if getattr(scanned, "remote_fulllist", ""):
-            descriptor["fulllist"] = scanned.remote_fulllist
             return
 
         nc_dir = resolve_station_nc_dir(scanned.root_dir, scanned.variables)

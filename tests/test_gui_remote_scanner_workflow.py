@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -61,6 +62,108 @@ def test_remote_reference_scan_rehydrates_dataset_groups():
     assert "base64 -d" in command
     assert "/opt/openbench/bin/python" in command
     assert timeout == 900
+
+
+def test_remote_reference_scan_rebases_remote_openbench_ref_root_placeholder(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    _capture_remote_json(
+        monkeypatch,
+        result={
+            "groups": [
+                {
+                    "base_name": "GLEAM",
+                    "variants": {
+                        "LowRes": {
+                            "name": "GLEAM",
+                            "resolution": "LowRes",
+                            "category": "Water",
+                            "data_type": "grid",
+                            "root_dir": "${OPENBENCH_REF_ROOT}/Grid/LowRes/Water",
+                            "variables": {"Runoff": "Runoff/GLEAM"},
+                        }
+                    },
+                }
+            ],
+            "skipped": [],
+            "data_root": "/home/remote/ref",
+        },
+    )
+    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: set())
+
+    (group,) = _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref")
+
+    assert group.variants["LowRes"].root_dir == "/home/remote/ref/Grid/LowRes/Water"
+
+
+def test_remote_reference_scan_script_sets_absolute_ref_root(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch, result={"groups": [], "skipped": [], "data_root": "/home/u/Reference"})
+    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: set())
+
+    _scan_worker.scan_reference_datasets_remote(object(), "~/Reference")
+
+    script = captured["script"]
+    assert '_data_root = os.path.abspath(os.path.expanduser("~/Reference"))' in script
+    assert 'os.environ["OPENBENCH_REF_ROOT"] = _data_root' in script
+    assert "groups = _scan_with_skips(scan_fn, _data_root" in script
+    assert '"data_root": _data_root' in script
+    compile(script, "<remote-scan-script>", "exec")
+
+
+def test_register_scanned_datasets_remote_writes_remote_user_registry(monkeypatch):
+    from openbench.data.registry.scanner import ScannedDataset
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(
+        monkeypatch,
+        result={"catalog_path": "/home/u/.openbench/references/reference_catalog.yaml"},
+    )
+    dataset = ScannedDataset("Demo", "LowRes", "Water", "grid", "/remote/ref/Grid/LowRes/Water", {"Runoff": "Demo"})
+
+    result = _scan_worker.register_scanned_datasets_remote(
+        object(),
+        [dataset],
+        "~/Reference",
+        python_path="/remote/python",
+        conda_env="ob",
+        openbench_path="~/OpenBench",
+    )
+
+    script = captured["script"]
+    assert result["catalog_path"].endswith("reference_catalog.yaml")
+    assert "register_scanned_datasets_batch(datasets)" in script
+    assert '_data_root = os.path.abspath(os.path.expanduser("~/Reference"))' in script
+    assert 'os.environ["OPENBENCH_REF_ROOT"] = _data_root' in script
+    assert "remember_reference_root(_data_root)" in script
+    remember_index = script.index("remember_reference_root(_data_root)")
+    register_index = script.index("register_scanned_datasets_batch(datasets)")
+    assert remember_index < register_index
+    assert "/remote/ref/Grid/LowRes/Water" in script
+    assert captured["python_path"] == "/remote/python"
+    assert captured["conda_env"] == "ob"
+    compile(script, "<remote-register-script>", "exec")
+
+
+def test_remote_register_script_payload_decodes_to_dataset_list(monkeypatch):
+    import ast
+    import re
+
+    from openbench.data.registry.scanner import ScannedDataset
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch, result={})
+    dataset = ScannedDataset("Demo", "LowRes", "Water", "grid", "/remote/ref", {"Runoff": "Demo"})
+
+    _scan_worker.register_scanned_datasets_remote(object(), [dataset], "/remote/ref")
+
+    match = re.search(r"for item in json\.loads\((.*)\):", captured["script"])
+    assert match is not None
+    decoded = json.loads(ast.literal_eval(match.group(1)))
+    assert isinstance(decoded, list)
+    assert decoded[0]["name"] == "Demo"
+    assert decoded[0]["root_dir"] == "/remote/ref"
 
 
 def test_nc_importer_variable_rows_shared_between_local_and_remote(qapp):
@@ -238,6 +341,41 @@ def test_remote_python_command_without_env_is_bare_pipe():
     assert cmd.endswith("| base64 -d | python3")
 
 
+def test_run_remote_python_json_uploads_large_scripts_and_cleans_up(monkeypatch):
+    import openbench.gui.remote_python as rp
+
+    monkeypatch.setattr(rp, "_MAX_INLINE_SCRIPT_CHARS", 10)
+
+    class SSH:
+        def __init__(self):
+            self.uploads = []
+            self.commands = []
+
+        def upload_file(self, local_path, remote_path):
+            self.uploads.append((remote_path, Path(local_path).read_text(encoding="utf-8")))
+
+        def execute(self, command, timeout=None):
+            self.commands.append((command, timeout))
+            if command.startswith("rm -f "):
+                return "", "", 0
+            return '{"ok": true}\n', "", 0
+
+    script = "print('x')\n" * 20
+    ssh = SSH()
+
+    assert rp.run_remote_python_json(ssh, script, python_path="~/venv/bin/python", timeout=77) == {"ok": True}
+
+    assert len(ssh.uploads) == 1
+    remote_path, uploaded = ssh.uploads[0]
+    assert remote_path.startswith("/tmp/openbench-python-")
+    assert uploaded == script
+    assert "base64 -d" not in ssh.commands[0][0]
+    assert '"$HOME"/venv/bin/python' in ssh.commands[0][0]
+    assert remote_path in ssh.commands[0][0]
+    assert ssh.commands[0][1] == 77
+    assert ssh.commands[-1][0] == f"rm -f {remote_path}"
+
+
 def test_data_validator_inspect_uses_shared_remote_python_command(monkeypatch):
     from openbench.gui.data_validator import RemoteNetCDFValidator
 
@@ -293,18 +431,17 @@ def _capture_remote_json(monkeypatch, result=None):
     return captured
 
 
-def test_remote_scan_script_bootstraps_openbench_path_and_local_names(monkeypatch):
+def test_remote_scan_script_bootstraps_openbench_path_and_remote_names(monkeypatch):
     from openbench.gui.pages import _scan_worker
 
     captured = _capture_remote_json(monkeypatch)
-    monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: {"Already_LowRes"})
-
     _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_path="/remote/openbench")
 
     script = captured["script"]
     assert "sys.path.insert" in script
     assert '"/remote/openbench/src"' in script
-    assert "Already_LowRes" in script
+    assert "Already_LowRes" not in script
+    assert "registered_names = {ref.name for ref in get_registry().list_references()}" in script
     assert '"existing_names"' in script
     assert captured["timeout"] == 900
 
@@ -398,6 +535,218 @@ def test_gui_reference_scan_skip_message_includes_remediation():
     assert "Grid/LowRes/Water/Bad: unsupported_layout" in message
     assert "Register it manually." in message
 
+
+def test_remote_scan_caveats_keeps_complete_long_station_details():
+    from types import SimpleNamespace
+
+    from openbench.gui.pages._scan_worker import remote_scan_caveats
+
+    variants = [
+        SimpleNamespace(
+            registry_name=f"Station{i}",
+            data_type="stn",
+            remote_fulllist="",
+            remote_fulllist_error="missing station-list API",
+        )
+        for i in range(20)
+    ]
+
+    message = remote_scan_caveats(variants)
+
+    assert "Station fulllist generation was unavailable for:" in message
+    for i in range(20):
+        assert f"• Station{i}: missing station-list API" in message
+    assert "and 12 more" not in message
+    assert "Reason counts" not in message
+
+
+def test_scan_complete_with_details_uses_qmessagebox_details(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = {}
+
+    class FakeBox:
+        Information = "info"
+
+        def __init__(self, parent):
+            captured["parent"] = parent
+
+        def setIcon(self, value):
+            captured["icon"] = value
+
+        def setWindowTitle(self, value):
+            captured["title"] = value
+
+        def setText(self, value):
+            captured["text"] = value
+
+        def setDetailedText(self, value):
+            captured["details"] = value
+
+        def exec(self):
+            captured["exec"] = True
+
+        @staticmethod
+        def information(*_args):
+            captured["information"] = True
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox", FakeBox)
+
+    details = "\n".join(f"Station{i} detail" for i in range(20))
+
+    _scan_worker.show_scan_complete("parent", "Registered/updated 2 dataset(s).", details)
+
+    assert captured == {
+        "parent": "parent",
+        "icon": "info",
+        "title": "Scan Complete",
+        "text": "Registered/updated 2 dataset(s).",
+        "details": details,
+        "exec": True,
+    }
+    assert "Station19 detail" in captured["details"]
+
+
+def test_scan_complete_without_details_keeps_information_shortcut(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = {}
+
+    class FakeBox:
+        Information = "info"
+
+        def __init__(self, *_args):
+            captured["constructed"] = True
+
+        @staticmethod
+        def information(*args):
+            captured["information"] = args
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox", FakeBox)
+
+    _scan_worker.show_scan_complete("parent", "No supported reference datasets found.")
+
+    assert captured == {"information": ("parent", "Scan Complete", "No supported reference datasets found.")}
+
+
+def test_remote_ref_scan_register_worker_receives_remote_context(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import page_ref_data
+    from openbench.gui.pages.page_ref_data import PageRefData
+
+    variant = ScannedDataset("Found", "LowRes", "Water", "grid", "/remote/ref/Grid/LowRes/Water", {"Runoff": "runoff"})
+    group = DatasetGroup("Found", {"LowRes": variant})
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            pass
+
+        def exec(self):
+            return True
+
+        def get_selected(self):
+            return [("Found", "LowRes", variant)]
+
+    class FakeRegisterWorker:
+        def __init__(self, variants, **kwargs):
+            captured["variants"] = variants
+            captured["kwargs"] = kwargs
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            captured["started"] = True
+
+        def deleteLater(self):
+            pass
+
+    registry = SimpleNamespace(list_references=lambda: [], get_reference=lambda _name: None)
+    monkeypatch.setattr(PageRefData, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr("openbench.data.registry.manager.get_registry", lambda: registry)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.RegisterScannedDatasetsWorker", FakeRegisterWorker)
+    monkeypatch.setattr(page_ref_data, "QProgressDialog", FakeProgress)
+
+    page = PageRefData.__new__(PageRefData)
+    page.btn_scan = FakeButton()
+    page._scan_remote_context = (
+        "/remote/ref",
+        {"ssh_manager": "ssh", "python_path": "/py", "conda_env": "ob", "openbench_path": "/ob"},
+    )
+
+    PageRefData._on_scan_data_root_finished(page, ([group], []))
+
+    assert captured["variants"] == [variant]
+    assert captured["kwargs"] == {
+        "data_root": "/remote/ref",
+        "ssh_manager": "ssh",
+        "python_path": "/py",
+        "conda_env": "ob",
+        "openbench_path": "/ob",
+    }
+    assert captured["started"] is True
+
+
+
+def test_remote_registry_scan_register_worker_receives_remote_context(monkeypatch):
+    from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
+    from openbench.gui.pages import page_registry
+    from openbench.gui.pages.page_registry import PageRegistry
+
+    variant = ScannedDataset("Found", "LowRes", "Water", "grid", "/remote/ref/Grid/LowRes/Water", {"Runoff": "runoff"})
+    group = DatasetGroup("Found", {"LowRes": variant})
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, _groups, parent=None, *, existing_names=None):
+            pass
+
+        def exec(self):
+            return True
+
+        def get_selected(self):
+            return [("Found", "LowRes", variant)]
+
+    class FakeRegisterWorker:
+        def __init__(self, variants, **kwargs):
+            captured["variants"] = variants
+            captured["kwargs"] = kwargs
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            captured["started"] = True
+
+        def deleteLater(self):
+            pass
+
+    registry = SimpleNamespace(list_references=lambda: [], get_reference=lambda _name: None)
+    monkeypatch.setattr(PageRegistry, "_finish_scan_worker", lambda _self: None)
+    monkeypatch.setattr(page_registry, "_get_registry", lambda: registry)
+    monkeypatch.setattr("openbench.gui.dialogs.data_discovery.DataDiscoveryDialog", FakeDialog)
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.RegisterScannedDatasetsWorker", FakeRegisterWorker)
+    monkeypatch.setattr(page_registry, "QProgressDialog", FakeProgress)
+
+    page = PageRegistry.__new__(PageRegistry)
+    page._scan_remote_context = (
+        "/remote/ref",
+        {"ssh_manager": "ssh", "python_path": "/py", "conda_env": "ob", "openbench_path": "/ob"},
+    )
+
+    PageRegistry._on_scan_directory_finished(page, ([group], []))
+
+    assert captured["variants"] == [variant]
+    assert captured["kwargs"] == {
+        "data_root": "/remote/ref",
+        "ssh_manager": "ssh",
+        "python_path": "/py",
+        "conda_env": "ob",
+        "openbench_path": "/ob",
+    }
+    assert captured["started"] is True
 
 def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
     from openbench.gui.pages import _scan_worker
@@ -1104,6 +1453,45 @@ def test_ref_scan_registers_selected_datasets_in_worker(monkeypatch):
     assert page.btn_scan.enabled is False
     assert variant.nc_inspections["Runoff"]["varname"] == "runoff"
     assert variant.nc_inspections["Runoff"]["varunit"] == "mm"
+
+
+def test_register_worker_writes_only_remote_registry(qapp, monkeypatch):
+    from openbench.data.registry import scanner as scanner_module
+    from openbench.gui.pages import _scan_worker
+
+    calls = []
+
+    def fake_remote(**kwargs):
+        calls.append(("remote", kwargs))
+
+    def fake_local(datasets):
+        calls.append(("local", list(datasets)))
+        return "/tmp/reference_catalog.yaml"
+
+    def fake_register_remote(*_args, **kwargs):
+        fake_remote(**kwargs)
+        return {"catalog_path": "/remote/.openbench/references/reference_catalog.yaml"}
+
+    monkeypatch.setattr(_scan_worker, "register_scanned_datasets_remote", fake_register_remote)
+    monkeypatch.setattr(scanner_module, "register_scanned_datasets_batch", fake_local)
+
+    worker = _scan_worker.RegisterScannedDatasetsWorker(
+        ["demo"],
+        ssh_manager="ssh",
+        data_root="/remote/ref",
+        python_path="/py",
+        conda_env="ob",
+        openbench_path="/ob",
+    )
+    results = []
+    worker.finished_with_result.connect(results.append)
+
+    worker.run()
+
+    assert calls == [
+        ("remote", {"python_path": "/py", "conda_env": "ob", "openbench_path": "/ob"}),
+    ]
+    assert results == [{"catalog_path": "/remote/.openbench/references/reference_catalog.yaml"}]
 
 
 def test_register_scanned_datasets_worker_runs_off_gui_thread(qapp, monkeypatch):

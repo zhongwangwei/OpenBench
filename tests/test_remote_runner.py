@@ -150,6 +150,39 @@ def test_create_remote_temp_dir_uses_mktemp_unique_path(tmp_path):
     assert ssh.commands == ["mktemp -d /tmp/openbench_wizard_XXXXXXXXXX"]
 
 
+def test_create_remote_temp_dir_ignores_login_banner_paths(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("Welcome\n/home/alice\n/tmp/openbench_wizard_abcd1234\n", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench"},
+    )
+
+    assert runner._create_remote_temp_dir() is True
+
+    assert runner._remote_temp_dir == "/tmp/openbench_wizard_abcd1234"
+
+
+def test_create_remote_temp_dir_rejects_no_absolute_path(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("Welcome only\n", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench"},
+    )
+    finished = []
+    runner.finished_signal.connect(lambda success, message: finished.append((success, message)))
+
+    assert runner._create_remote_temp_dir() is False
+
+    assert runner._remote_temp_dir == ""
+    assert finished == [(False, "Failed to create remote temp directory: mktemp returned no absolute path")]
+
+
 def test_remote_run_command_expands_tilde_config_path():
     command = build_remote_run_command(
         "~/miniconda3/bin/python",

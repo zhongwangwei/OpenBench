@@ -143,6 +143,43 @@ class PageRegistry(BasePage):
     PAGE_SUBTITLE = "Browse and edit registered model profiles and reference datasets"
     CONTENT_EXPAND = True
 
+    def _registry(self):
+        controller = getattr(self, "controller", None)
+        is_remote = getattr(controller, "is_remote_mode", None)
+        if callable(is_remote) and is_remote():
+            from openbench.gui.remote_registry import get_registry
+
+            return get_registry(controller)
+        return _get_registry()
+
+    def _clear_registry_cache(self, *, remote: bool = True):
+        controller = getattr(self, "controller", None)
+        is_remote = getattr(controller, "is_remote_mode", None)
+        if callable(is_remote) and is_remote():
+            if remote:
+                from openbench.gui.remote_registry import clear_registry
+
+                clear_registry(controller)
+        else:
+            _clear_cache()
+
+    def _known_variables(self) -> list[str]:
+        registry = self._registry()
+        names = {name for item in registry.list_models() for name in item.variables}
+        names.update(name for item in registry.list_references() for name in item.variables)
+        return sorted(names)
+
+    def _variable_dialog_kwargs(self) -> dict:
+        controller = getattr(self, "controller", None)
+        is_remote = getattr(controller, "is_remote_mode", None)
+        if callable(is_remote) and is_remote():
+            try:
+                return {"known_variables": self._known_variables()}
+            except Exception as exc:
+                logger.warning("Failed to load remote registry variables: %s", exc)
+                return {"known_variables": []}
+        return {}
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
@@ -286,7 +323,7 @@ class PageRegistry(BasePage):
     def _refresh_model_list(self):
         self.model_list.clear()
         try:
-            models = _get_registry().list_models()
+            models = self._registry().list_models()
             for m in models:
                 n_vars = len(m.variables)
                 item = QListWidgetItem(f"{m.name}  ({n_vars} vars)")
@@ -302,7 +339,7 @@ class PageRegistry(BasePage):
         if item is None:
             return
         name = item.data(Qt.UserRole)
-        model = _get_registry().get_model(name)
+        model = self._registry().get_model(name)
         if model is None:
             return
         self._populate_model_editor(model)
@@ -379,8 +416,8 @@ class PageRegistry(BasePage):
         )
         if reply == QMessageBox.Yes:
             try:
-                _get_registry().delete_model(name)
-                _clear_cache()
+                self._registry().delete_model(name)
+                self._clear_registry_cache(remote=False)
                 self._refresh_model_list()
                 self._new_model()
             except Exception as exc:
@@ -389,7 +426,7 @@ class PageRegistry(BasePage):
     def _model_add_variable(self):
         from openbench.gui.widgets.variable_editor import VariableEditorDialog
 
-        dlg = VariableEditorDialog(mode="model", parent=self)
+        dlg = VariableEditorDialog(mode="model", parent=self, **self._variable_dialog_kwargs())
         if dlg.exec():
             data = dlg.get_data()
             row = self.model_var_table.rowCount()
@@ -427,6 +464,7 @@ class PageRegistry(BasePage):
             compute=compute,
             fallbacks=existing_fallbacks,
             parent=self,
+            **self._variable_dialog_kwargs(),
         )
         if dlg.exec():
             data = dlg.get_data()
@@ -443,7 +481,7 @@ class PageRegistry(BasePage):
         if item is None:
             return
         name = item.data(Qt.UserRole)
-        model = _get_registry().get_model(name)
+        model = self._registry().get_model(name)
         if model:
             self._populate_model_editor(model)
 
@@ -504,8 +542,8 @@ class PageRegistry(BasePage):
         )
 
         try:
-            _get_registry().save_model(name, profile)
-            _clear_cache()
+            self._registry().save_model(name, profile)
+            self._clear_registry_cache(remote=False)
             self._refresh_model_list()
             QMessageBox.information(self, "Saved", f"Model '{name}' saved to registry.")
         except Exception as exc:
@@ -687,7 +725,7 @@ class PageRegistry(BasePage):
         # _ds_group_map: base_name → [(full_name, suffix_label, ref)]
         self._ds_group_map: Dict[str, list] = {}
         try:
-            refs = _get_registry().list_references()
+            refs = self._registry().list_references()
             for r in refs:
                 base, suffix = self._strip_res_suffix(r.name)
                 self._ds_group_map.setdefault(base, []).append((r.name, suffix, r))
@@ -746,7 +784,7 @@ class PageRegistry(BasePage):
         else:
             name = item.data(Qt.UserRole)
 
-        ref = _get_registry().get_reference(name)
+        ref = self._registry().get_reference(name)
         if ref is None:
             return
         self._populate_dataset_editor(ref)
@@ -901,7 +939,7 @@ class PageRegistry(BasePage):
         self._register_worker = None
 
     def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
-        registry = _get_registry()
+        registry = self._registry()
         for variant in variants:
             existing = (
                 registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
@@ -929,7 +967,7 @@ class PageRegistry(BasePage):
                             break
 
     def _choose_first_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
-        registry = _get_registry()
+        registry = self._registry()
         for variant in variants:
             existing = (
                 registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
@@ -951,13 +989,19 @@ class PageRegistry(BasePage):
     def _start_register_worker(self, variants):
         from openbench.gui.pages._scan_worker import RegisterScannedDatasetsWorker
 
+        remote_register_kwargs = {}
+        remote_context = getattr(self, "_scan_remote_context", None)
+        if remote_context:
+            data_root, worker_kwargs = remote_context
+            remote_register_kwargs = {"data_root": data_root, **worker_kwargs}
+
         progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
         progress.setWindowTitle("Registering")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
         progress.setCancelButton(None)
 
-        worker = RegisterScannedDatasetsWorker(variants)
+        worker = RegisterScannedDatasetsWorker(variants, **remote_register_kwargs)
         self._register_worker = worker
         self._register_progress = progress
         worker.finished_with_result.connect(lambda _path: self._on_register_finished(len(variants)))
@@ -973,16 +1017,17 @@ class PageRegistry(BasePage):
 
     def _on_register_finished(self, registered: int):
         self._finish_register_worker()
-        _clear_cache()
+        self._clear_registry_cache()
         self._refresh_dataset_list()
         message = f"Registered/updated {registered} dataset(s)."
+        details = ""
         if getattr(self, "_scan_was_remote", False):
             from openbench.gui.pages._scan_worker import remote_scan_caveats
 
-            caveats = remote_scan_caveats(getattr(self, "_register_variants", []))
-            if caveats:
-                message += f"\n\n{caveats}"
-        QMessageBox.information(self, "Scan Complete", message)
+            details = remote_scan_caveats(getattr(self, "_register_variants", []))
+        from openbench.gui.pages._scan_worker import show_scan_complete
+
+        show_scan_complete(self, message, details)
 
     def _on_scan_directory_failed(self, message: str):
         self._finish_scan_worker()
@@ -1004,7 +1049,7 @@ class PageRegistry(BasePage):
                 return
 
             # Show discovery dialog for user to select which datasets to register
-            existing_names = {ref.name for ref in _get_registry().list_references()}
+            existing_names = {ref.name for ref in self._registry().list_references()}
             try:
                 from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
 
@@ -1057,8 +1102,8 @@ class PageRegistry(BasePage):
         )
         if reply == QMessageBox.Yes:
             try:
-                _get_registry().delete_reference(name)
-                _clear_cache()
+                self._registry().delete_reference(name)
+                self._clear_registry_cache(remote=False)
                 self._refresh_dataset_list()
                 self._new_dataset()
             except Exception as exc:
@@ -1072,7 +1117,7 @@ class PageRegistry(BasePage):
     def _ds_add_variable(self):
         from openbench.gui.widgets.variable_editor import VariableEditorDialog
 
-        dlg = VariableEditorDialog(mode="reference", parent=self)
+        dlg = VariableEditorDialog(mode="reference", parent=self, **self._variable_dialog_kwargs())
         if dlg.exec():
             data = dlg.get_data()
             row = self.ds_var_table.rowCount()
@@ -1113,6 +1158,7 @@ class PageRegistry(BasePage):
             suffix=_cell(5),
             fallbacks=existing_fallbacks,
             parent=self,
+            **self._variable_dialog_kwargs(),
         )
         if dlg.exec():
             data = dlg.get_data()
@@ -1130,7 +1176,7 @@ class PageRegistry(BasePage):
         if item is None:
             return
         name = item.data(Qt.UserRole)
-        ref = _get_registry().get_reference(name)
+        ref = self._registry().get_reference(name)
         if ref:
             self._populate_dataset_editor(ref)
 
@@ -1225,10 +1271,10 @@ class PageRegistry(BasePage):
             item = self.dataset_list.currentItem() if getattr(self, "dataset_list", None) is not None else None
             if item is not None:
                 existing_name = item.data(Qt.UserRole) or name
-            registry = _get_registry()
+            registry = self._registry()
             dataset = _merge_reference_editor_dataset(registry.get_reference(existing_name), dataset)
             registry.save_reference(name, dataset)
-            _clear_cache()
+            self._clear_registry_cache(remote=False)
             self._refresh_dataset_list()
             QMessageBox.information(self, "Saved", f"Dataset '{name}' saved to registry.")
         except Exception as exc:

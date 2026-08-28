@@ -37,6 +37,17 @@ def quote_remote_path(path: str) -> str:
     return shlex.quote(path)
 
 
+def expand_remote_home(ssh_manager, path: str) -> str:
+    """Expand leading ``~`` for non-shell remote APIs such as SFTP."""
+    if path == "~" or path.startswith("~/"):
+        get_home = getattr(ssh_manager, "_get_home_dir", None)
+        if callable(get_home):
+            home = str(get_home()).rstrip("/")
+            if home:
+                return home + ("" if path == "~" else path[1:])
+    return path
+
+
 class _LockedSFTPFile:
     def __init__(self, wrapped, lock: threading.RLock):
         self._wrapped = wrapped
@@ -283,7 +294,9 @@ class SSHManager:
         self._jump_client: Optional[SSHClient] = None
         self._jump_channel = None
         self._jump_required = False
+        self._compute_host = ""
         self._last_detection_errors: list[str] = []
+        self._home_dir_cache: dict[tuple, str] = {}
         # Reentrant lock guarding mutations of self._client / self._sftp /
         # self._jump_* and short reads of the active client. Held only across
         # state changes and channel acquisition, NOT across long-running
@@ -328,30 +341,27 @@ class SSHManager:
             return False
 
     def _parse_host_string(self, host_string: str) -> Tuple[Optional[str], str, int]:
-        """Parse host string in format [user@]host[:port].
-
-        Args:
-            host_string: Host string like "user@192.168.1.100:22"
-
-        Returns:
-            Tuple of (user, host, port)
-        """
+        """Parse host string in format [user@]host[:port]."""
         user = None
         port = 22
 
-        # Extract user if present
         if "@" in host_string:
             user, host_string = host_string.split("@", 1)
 
-        # Extract port if present
-        if ":" in host_string:
-            host, port_str = host_string.rsplit(":", 1)
+        host = host_string
+        if host_string.startswith("["):
+            match = re.match(r"^\[([^\]]+)\](?::(\d+))?$", host_string)
+            if match:
+                host = match.group(1)
+                if match.group(2):
+                    port = int(match.group(2))
+        elif host_string.count(":") == 1:
+            candidate_host, port_str = host_string.rsplit(":", 1)
             try:
                 port = int(port_str)
+                host = candidate_host
             except ValueError:
                 host = host_string
-        else:
-            host = host_string
 
         return user, host, port
 
@@ -375,6 +385,7 @@ class SSHManager:
         """
         user, host, port = self._parse_host_string(host_string)
         self._jump_required = False
+        self._home_dir_cache.clear()
 
         if user is None:
             raise SSHConnectionError("Username is required (format: user@host)")
@@ -408,6 +419,7 @@ class SSHManager:
             self._host = host
             self._user = user
             self._port = port
+            self._compute_host = ""
         except SSHException as e:
             self._safe_close_client()
             raise SSHConnectionError(f"SSH connection failed: {e}") from e
@@ -583,6 +595,7 @@ class SSHManager:
                     allow_agent=True,
                     look_for_keys=True,
                 )
+            self._compute_host = main_host
         except Exception as e:
             try:
                 if self._jump_client:
@@ -628,6 +641,22 @@ class SSHManager:
             except Exception:
                 pass
             self._jump_channel = None
+
+    def select_main_target(self) -> None:
+        """Use the connected login server as the execution target."""
+        with self._state_lock:
+            self.disconnect_jump()
+            self._jump_required = False
+
+    def get_active_target_identity(self) -> tuple | None:
+        """Return the online execution target identity, or None if offline."""
+        if self.is_jump_connected:
+            return ("jump", self._user, self._host, self._port, self._compute_host, 22)
+        if self._jump_required:
+            return None
+        if self.is_connected:
+            return ("direct", self._user, self._host, self._port)
+        return None
 
     def get_active_client(self) -> Optional[SSHClient]:
         """Get the active SSH client (jump or main).
@@ -917,6 +946,10 @@ class SSHManager:
                 self._sftp_proxy = _LockedSFTPClient(self._get_sftp, self._sftp_io_lock)
             return self._sftp_proxy
 
+    def resolve_remote_path(self, path: str) -> str:
+        """Expand leading ``~`` for SFTP/direct remote APIs."""
+        return expand_remote_home(self, path)
+
     def upload_file(self, local_path: str, remote_path: str) -> None:
         """Upload a file to remote server.
 
@@ -924,6 +957,7 @@ class SSHManager:
             local_path: Local file path
             remote_path: Remote destination path (POSIX)
         """
+        remote_path = self.resolve_remote_path(remote_path)
         sftp = self.open_sftp()
         # Use posixpath for remote paths so a Windows client doesn't truncate
         # at a backslash that's actually part of a remote (POSIX) filename.
@@ -939,6 +973,7 @@ class SSHManager:
             remote_path: Remote file path
             local_path: Local destination path
         """
+        remote_path = self.resolve_remote_path(remote_path)
         sftp = self.open_sftp()
         # Ensure local directory exists
         local_dir = os.path.dirname(local_path)
@@ -953,6 +988,7 @@ class SSHManager:
             local_dir: Local directory path
             remote_dir: Remote destination path (POSIX)
         """
+        remote_dir = self.resolve_remote_path(remote_dir)
         sftp = self.open_sftp()
         self._ensure_remote_dir(remote_dir)
 
@@ -980,6 +1016,7 @@ class SSHManager:
         Args:
             remote_dir: Remote directory path
         """
+        remote_dir = self.resolve_remote_path(remote_dir)
         sftp = self.open_sftp()
         normalized = remote_dir.replace("\\", "/").rstrip("/")
         dirs = [part for part in normalized.split("/") if part]
@@ -1013,19 +1050,33 @@ class SSHManager:
             unsafe for unquoted shell interpolation (so that downstream
             ``f"ls -d {home}/..."`` commands cannot be hijacked).
         """
-        stdout, _, _ = self.execute("echo $HOME", timeout=5)
-        candidate = stdout.strip()
+        identity = self.get_active_target_identity()
+        if identity in self._home_dir_cache:
+            return self._home_dir_cache[identity]
+
+        query_succeeded = False
+        try:
+            stdout, _, exit_code = self.execute("echo $HOME", timeout=5)
+            query_succeeded = exit_code == 0
+            candidate = self._last_absolute_path(stdout)
+        except Exception as exc:
+            logger.warning("Could not query remote $HOME: %s", exc)
+            candidate = ""
         fallback = f"/home/{self._user}"
         if not candidate:
-            return fallback
-        if not self._SAFE_HOME_RE.match(candidate):
+            home = fallback
+        elif not self._SAFE_HOME_RE.match(candidate):
             logger.warning(
                 "Remote $HOME contains unsafe characters (%r); falling back to %s",
                 candidate,
                 fallback,
             )
-            return fallback
-        return candidate
+            home = fallback
+        else:
+            home = candidate
+        if identity is not None and query_succeeded:
+            self._home_dir_cache[identity] = home
+        return home
 
     def detect_python_interpreters(self) -> List[str]:
         """Detect available Python interpreters on remote server.

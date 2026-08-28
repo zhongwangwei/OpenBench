@@ -306,3 +306,111 @@ def test_open_sftp_proxy_serializes_cached_client_operations():
         thread.join()
 
     assert sftp.max_active == 1
+
+
+def test_parse_host_string_supports_ipv6_forms():
+    manager = SSHManager(auto_add_host_keys=True)
+
+    assert manager._parse_host_string("alice@[2001:db8::1]:2222") == ("alice", "2001:db8::1", 2222)
+    assert manager._parse_host_string("alice@2001:db8::1") == ("alice", "2001:db8::1", 22)
+    assert manager._parse_host_string("alice@example.org:2200") == ("alice", "example.org", 2200)
+
+
+def test_sftp_operations_expand_tilde_remote_paths(tmp_path):
+    class SFTP(FakeSFTPDirs):
+        def __init__(self):
+            super().__init__()
+            self.put_calls = []
+
+        def put(self, local, remote):
+            self.put_calls.append((local, remote))
+
+    manager = SSHManager(auto_add_host_keys=True)
+    sftp = SFTP()
+    manager._get_sftp = lambda: sftp
+    manager._get_home_dir = lambda: "/home/alice"
+    local_file = tmp_path / "openbench.yaml"
+    local_file.write_text("project: {}\n", encoding="utf-8")
+
+    manager.upload_file(str(local_file), "~/OpenBench/output/openbench.yaml")
+
+    assert sftp.mkdir_calls == ["/home", "/home/alice", "/home/alice/OpenBench", "/home/alice/OpenBench/output"]
+    assert sftp.put_calls == [(str(local_file), "/home/alice/OpenBench/output/openbench.yaml")]
+
+
+def test_download_file_expands_tilde_remote_path(tmp_path):
+    class SFTP:
+        def __init__(self):
+            self.get_calls = []
+
+        def get(self, remote, local):
+            self.get_calls.append((remote, local))
+
+    manager = SSHManager(auto_add_host_keys=True)
+    sftp = SFTP()
+    manager._get_sftp = lambda: sftp
+    manager._get_home_dir = lambda: "/home/alice"
+    local_file = tmp_path / "out" / "openbench.yaml"
+
+    manager.download_file("~/OpenBench/output/openbench.yaml", str(local_file))
+
+    assert sftp.get_calls == [("/home/alice/OpenBench/output/openbench.yaml", str(local_file))]
+    assert local_file.parent.is_dir()
+
+
+def test_active_target_identity_for_direct_connection(monkeypatch):
+    FakeSSHClient.instances = []
+    monkeypatch.setattr(ssh_module.paramiko, "SSHClient", FakeSSHClient)
+    manager = SSHManager(auto_add_host_keys=True)
+
+    manager.connect("alice@login.example:2200", password="secret")
+
+    assert manager.get_active_target_identity() == ("direct", "alice", "login.example", 2200)
+
+
+def test_active_target_identity_for_jump_and_same_reconnect(monkeypatch):
+    FakeSSHClient.instances = []
+    monkeypatch.setattr(ssh_module.paramiko, "SSHClient", FakeSSHClient)
+    manager = SSHManager(auto_add_host_keys=True)
+    manager.connect("alice@login.example", password="secret")
+
+    manager.connect_with_jump("node001", main_password="secret")
+    first = manager.get_active_target_identity()
+    manager.disconnect_jump()
+
+    assert manager.get_active_target_identity() is None
+    manager.connect_with_jump("node001", main_password="secret")
+
+    assert first == ("jump", "alice", "login.example", 22, "node001", 22)
+    assert manager.get_active_target_identity() == first
+
+
+def test_select_main_target_explicitly_restores_login_execution(monkeypatch):
+    FakeSSHClient.instances = []
+    monkeypatch.setattr(ssh_module.paramiko, "SSHClient", FakeSSHClient)
+    manager = SSHManager(auto_add_host_keys=True)
+    manager.connect("alice@login.example", password="secret")
+    manager.connect_with_jump("node001", main_password="secret")
+
+    manager.select_main_target()
+
+    assert manager.get_active_target_identity() == ("direct", "alice", "login.example", 22)
+    assert manager.get_active_client() is manager._client
+
+
+def test_remote_home_query_ignores_banner_and_is_cached_per_target():
+    manager = SSHManager(auto_add_host_keys=True)
+    identity = ("direct", "alice", "login.example", 22)
+    calls = []
+    manager._user = "alice"
+    manager.get_active_target_identity = lambda: identity
+
+    def execute(command, timeout=None):
+        calls.append((command, timeout))
+        return "Welcome to the cluster\n/home/alice\n", "", 0
+
+    manager.execute = execute
+
+    assert manager._get_home_dir() == "/home/alice"
+    assert manager._get_home_dir() == "/home/alice"
+    assert calls == [("echo $HOME", 5)]
