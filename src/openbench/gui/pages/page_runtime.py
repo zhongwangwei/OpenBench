@@ -271,6 +271,9 @@ class PageRuntime(BasePage):
         if self.radio_local.isChecked():
             # Do not call the full target-change guard here: it may flush remote
             # storage, and _switch_to_local_storage() owns that side effect.
+            if self._remote_export_blocks_target_change():
+                self._set_execution_mode("remote")
+                return
             has_setup_flow = getattr(self.remote_config_widget, "has_active_setup_flow", None)
             if callable(has_setup_flow) and has_setup_flow():
                 self._set_execution_mode("remote")
@@ -282,14 +285,8 @@ class PageRuntime(BasePage):
             self._apply_execution_mode_visibility("local")
             if self.remote_config_widget.get_ssh_manager() is not None:
                 self.remote_config_widget.disconnect()
-
-            # Clear remote config when switching to local
-            self.remote_config_widget.reset_to_defaults()
         else:
             self._apply_execution_mode_visibility("remote")
-
-            # Clear local config when switching to remote
-            self.local_openbench_input.clear()
 
         self._on_config_changed()
 
@@ -303,6 +300,8 @@ class PageRuntime(BasePage):
 
     def _prepare_remote_target_change(self) -> bool:
         """Guard remote target changes while remote storage has unsynced writes."""
+        if self._remote_export_blocks_target_change():
+            return False
         main_window = self._get_main_window()
         if not main_window:
             return True
@@ -335,6 +334,21 @@ class PageRuntime(BasePage):
                 if callable(thaw):
                     thaw()
                 return False
+        return True
+
+    def _remote_export_blocks_target_change(self) -> bool:
+        """Warn and block while Preview is exporting to the bound target."""
+        main_window = self._get_main_window()
+        if not main_window:
+            return False
+        preview_page = getattr(main_window, "pages", {}).get("preview")
+        if not getattr(preview_page, "_export_in_progress", False):
+            return False
+        QMessageBox.warning(
+            self,
+            "Remote Export Active",
+            "Remote export is still in progress. Wait for it to finish before changing the remote target.",
+        )
         return True
 
     def _on_connection_status_changed(self, connected: bool):
@@ -963,10 +977,12 @@ class PageRuntime(BasePage):
         general["conda_env"] = self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else ""
         general["local_openbench_path"] = self.local_openbench_input.text().strip()
 
-        # Save remote config if in remote mode
-        if self.radio_remote.isChecked():
+        # Keep an already-configured Remote profile while Local is active.
+        # A fresh Local-only config still stays free of Remote defaults.
+        if self.radio_remote.isChecked() or "remote" in general:
             remote_config = self.remote_config_widget.get_config()
             general["remote"] = remote_config
+        if self.radio_remote.isChecked():
             general["num_cores"] = int(remote_config.get("num_cores") or self.num_cores_spin.value())
         else:
             general["num_cores"] = self.num_cores_spin.value()
@@ -1042,12 +1058,16 @@ class PageRuntime(BasePage):
             "local_openbench_path": self.local_openbench_input.text().strip(),
         }
 
-        # Include remote config if in remote mode
+        # Include Remote settings when active, or preserve an existing saved
+        # profile while Local is active.
         if self.radio_remote.isChecked():
             remote_config = self.remote_config_widget.get_config()
             settings["remote"] = remote_config
             settings["num_cores"] = int(remote_config.get("num_cores") or self.num_cores_spin.value())
         else:
+            remote_config = self.controller.config.get("general", {}).get("remote")
+            if remote_config:
+                settings["remote"] = remote_config
             settings["num_cores"] = self.num_cores_spin.value()
 
         return settings
@@ -1108,6 +1128,7 @@ class PageRuntime(BasePage):
             remote_config = settings.get("remote") or {}
             if remote_config:
                 self.remote_config_widget.set_config(remote_config)
+                self.controller.config.setdefault("general", {})["remote"] = remote_config
         finally:
             self._loading_config = False
 

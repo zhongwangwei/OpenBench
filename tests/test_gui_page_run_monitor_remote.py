@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -114,6 +116,7 @@ class FakeSftp:
     def get(self, remote, local, callback=None):
         if callback is not None:
             callback(1, 1)
+        Path(local).touch()
         self.downloads.append((remote, local))
 
 
@@ -124,7 +127,7 @@ class ListingSSH(FakeSSH):
 
     def execute(self, command, timeout=30, should_abort=None):
         self.commands.append(command)
-        return "/remote/output/a.nc\n/remote/output/sub/b.nc\n", "", 0
+        return "login banner\n__OPENBENCH_FILE_LIST__\0/remote/output/a.nc\0/remote/output/sub/b.nc\0", "", 0
 
     def open_sftp(self):
         return self.sftp
@@ -290,7 +293,7 @@ def test_remote_folder_download_worker_expands_tilde_for_relpaths(tmp_path, qapp
 
         def execute(self, command, timeout=30, should_abort=None):
             self.commands.append(command)
-            return "/home/alice/OpenBench/output/a.nc\n", "", 0
+            return "__OPENBENCH_FILE_LIST__\0/home/alice/OpenBench/output/a.nc\0", "", 0
 
     ssh = HomeListingSSH()
     worker = RemoteFolderDownloadWorker(ssh, "~/OpenBench/output", str(tmp_path / "output"))
@@ -302,7 +305,8 @@ def test_remote_folder_download_worker_expands_tilde_for_relpaths(tmp_path, qapp
     worker.run()
 
     assert finished == [(True, False, "Download complete")]
-    assert ssh.sftp.downloads == [("/home/alice/OpenBench/output/a.nc", str(tmp_path / "output" / "a.nc"))]
+    assert ssh.sftp.downloads[0][0] == "/home/alice/OpenBench/output/a.nc"
+    assert (tmp_path / "output").is_dir()
 
 
 def test_remote_folder_download_worker_rejects_changed_target_after_listing(tmp_path, qapp):
@@ -353,6 +357,54 @@ def test_remote_folder_download_worker_aborts_inside_copy_callback_on_target_cha
         (False, False, "Failed to download files:\nremote target identity changed", str(tmp_path / "output"))
     ]
     assert ssh.sftp.downloads == []
+
+
+def test_remote_folder_download_preserves_filename_whitespace(tmp_path, qapp):
+    class WhitespaceSSH(ListingSSH):
+        def execute(self, command, timeout=30, should_abort=None):
+            self.commands.append(command)
+            return "__OPENBENCH_FILE_LIST__\0/remote/output/ leading.nc\0/remote/output/trailing.nc \0", "", 0
+
+    ssh = WhitespaceSSH()
+    worker = RemoteFolderDownloadWorker(ssh, "/remote/output", str(tmp_path / "output"))
+    finished = []
+    worker.finished_signal.connect(lambda success, canceled, message, target: finished.append((success, canceled)))
+
+    worker.run()
+
+    assert finished == [(True, False)]
+    assert [remote for remote, _local in ssh.sftp.downloads] == [
+        "/remote/output/ leading.nc",
+        "/remote/output/trailing.nc ",
+    ]
+
+
+def test_remote_folder_download_failure_preserves_existing_snapshot(tmp_path, qapp):
+    target = tmp_path / "output"
+    target.mkdir()
+    (target / "old.nc").write_text("old", encoding="utf-8")
+
+    class FailingSftp(FakeSftp):
+        def get(self, remote, local, callback=None):
+            from pathlib import Path
+
+            Path(local).write_text("partial", encoding="utf-8")
+            raise RuntimeError("network lost")
+
+    ssh = ListingSSH()
+    ssh.sftp = FailingSftp()
+    worker = RemoteFolderDownloadWorker(ssh, "/remote/output", str(target))
+    finished = []
+    worker.finished_signal.connect(
+        lambda success, canceled, message, path: finished.append((success, canceled, message))
+    )
+
+    worker.run()
+
+    assert finished == [(False, False, "Failed to download files:\nnetwork lost")]
+    assert (target / "old.nc").read_text(encoding="utf-8") == "old"
+    assert not (target / "a.nc").exists()
+    assert not list(tmp_path.glob(".output.download.*"))
 
 
 def test_open_remote_output_rejects_saved_output_for_changed_target(monkeypatch):

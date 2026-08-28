@@ -22,6 +22,9 @@ from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_partial_completion
 
 
+_REMOTE_PGID_PREFIX = "__OPENBENCH_PGID__="
+
+
 def build_remote_run_command(python_path: str, openbench_path: str, config_path: str, conda_env: str) -> str:
     """Build the remote evaluation invocation with tilde-safe path quoting.
 
@@ -114,6 +117,7 @@ class RemoteRunner(QThread):
         # Remote paths
         self._remote_temp_dir = ""
         self._remote_config_path = config_path if config_already_remote else ""
+        self._remote_process_group: int | None = None
 
         # Progress tracking (same as EvaluationRunner)
         self._total_tasks = 0
@@ -451,6 +455,20 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
 
         self.log_message.emit(f"Executing: {cmd}")
 
+        # Run the CLI in its own process group when `setsid` is available so
+        # Stop can terminate ProcessPool/Dask descendants, not only the parent
+        # `python -m openbench` process. The foreground wrapper preserves the
+        # SSH channel's normal exit-code and streaming behavior.
+        grouped_inner = (
+            f"printf '{_REMOTE_PGID_PREFIX}%s\\n' \"$$\"; "
+            f"exec sh -c {shlex.quote(cmd)}"
+        )
+        stream_cmd = (
+            "if command -v setsid >/dev/null 2>&1; then "
+            f"exec setsid sh -c {shlex.quote(grouped_inner)}; "
+            f"else exec sh -c {shlex.quote(cmd)}; fi"
+        )
+
         # Execute and stream output
         try:
             progress = self.PROGRESS_INIT
@@ -461,7 +479,7 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             # code. We need to capture the StopIteration.value to know
             # whether the remote process succeeded; iterating with `for`
             # discards the return value, so drive the generator manually.
-            stream = self._ssh_manager.execute_stream(cmd, should_abort=self._is_stop_requested)
+            stream = self._ssh_manager.execute_stream(stream_cmd, should_abort=self._is_stop_requested)
             exit_code = 0
             stopped_by_user = False
             try:
@@ -480,6 +498,11 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
 
                     line = line.rstrip("\n\r")
                     if line:
+                        if self._remote_process_group is None and line.startswith(_REMOTE_PGID_PREFIX):
+                            value = line[len(_REMOTE_PGID_PREFIX) :].strip()
+                            if value.isdigit() and int(value) > 1:
+                                self._remote_process_group = int(value)
+                                continue
                         output_tail.append(line)
                         saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
                         self.log_message.emit(line)
@@ -523,6 +546,15 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
     def _kill_remote_process(self):
         """Attempt to kill the remote OpenBench process."""
         try:
+            if self._remote_process_group is not None:
+                pgid = self._remote_process_group
+                self._ssh_manager.execute(
+                    f"kill -TERM -{pgid} 2>/dev/null || true; "
+                    f"sleep 1; kill -KILL -{pgid} 2>/dev/null || true",
+                    timeout=10,
+                )
+                self.log_message.emit("Sent kill signal to remote process group")
+                return
             if not self._remote_config_path:
                 self.log_message.emit("Warning: No remote config path available; skipping remote process kill")
                 return

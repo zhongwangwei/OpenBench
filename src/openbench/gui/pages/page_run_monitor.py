@@ -11,6 +11,9 @@ import logging
 import os
 import subprocess
 import platform
+import shutil
+import tempfile
+from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QMessageBox, QFileDialog, QProgressDialog
@@ -71,6 +74,9 @@ class _RemoteDownloadCanceled(Exception):
     """Internal sentinel for user-canceled remote folder downloads."""
 
 
+_REMOTE_FILE_LIST_MARKER = "__OPENBENCH_FILE_LIST__"
+
+
 class RemoteFolderDownloadWorker(QThread):
     """Download a remote output folder without blocking the GUI thread."""
 
@@ -97,13 +103,22 @@ class RemoteFolderDownloadWorker(QThread):
             raise RuntimeError("remote target identity changed")
 
     def run(self):
+        staging_target: Path | None = None
         try:
             self._raise_if_canceled()
             self._ensure_target_active()
             self._remote_dir = expand_remote_home(self._ssh_manager, self._remote_dir).replace("\\", "/")
+            final_target = Path(self._local_target).expanduser()
+            final_target.parent.mkdir(parents=True, exist_ok=True)
+            if os.path.lexists(final_target) and not final_target.is_dir():
+                raise RuntimeError(f"Local download target is not a directory: {final_target}")
+            staging_target = Path(
+                tempfile.mkdtemp(prefix=f".{final_target.name}.download.", dir=str(final_target.parent))
+            )
             self._ensure_target_active()
             stdout, stderr, exit_code = self._ssh_manager.execute(
-                f"find {quote_remote_path(self._remote_dir)} -type f",
+                f"printf '%s\\0' {_REMOTE_FILE_LIST_MARKER}; "
+                f"find {quote_remote_path(self._remote_dir)} -type f -print0",
                 timeout=60,
                 should_abort=lambda: self._stop_requested,
             )
@@ -112,7 +127,10 @@ class RemoteFolderDownloadWorker(QThread):
                 self.finished_signal.emit(False, False, f"Failed to list remote files:\n{stderr}", self._local_target)
                 return
 
-            files = [f.strip() for f in stdout.strip().split("\n") if f.strip()]
+            marker = f"{_REMOTE_FILE_LIST_MARKER}\0"
+            if marker not in stdout:
+                raise RuntimeError("Remote file listing did not return its expected marker")
+            files = [remote_file for remote_file in stdout.split(marker, 1)[1].split("\0") if remote_file]
             if not files:
                 self.finished_signal.emit(True, False, "No files found in the remote directory.", self._local_target)
                 return
@@ -127,7 +145,7 @@ class RemoteFolderDownloadWorker(QThread):
                 rel_path = PageRunMonitor._remote_download_relpath(remote_file, self._remote_dir)
                 if rel_path is None:
                     raise ValueError(f"Remote file is outside the requested directory: {remote_file}")
-                local_file = os.path.join(self._local_target, rel_path)
+                local_file = os.path.join(str(staging_target), rel_path)
                 os.makedirs(os.path.dirname(local_file), exist_ok=True)
                 self.progress_updated.emit(index, total_files, rel_path)
 
@@ -146,6 +164,11 @@ class RemoteFolderDownloadWorker(QThread):
                 self.progress_updated.emit(index + 1, total_files, rel_path)
 
             self._ensure_target_active()
+            self._raise_if_canceled()
+            from openbench.cli.sim import _replace_directory_preserving_old_on_failure
+
+            _replace_directory_preserving_old_on_failure(staging_target, final_target)
+            staging_target = None
             self.finished_signal.emit(True, False, "Download complete", self._local_target)
         except _RemoteDownloadCanceled:
             self.finished_signal.emit(False, True, "Download canceled", self._local_target)
@@ -154,6 +177,9 @@ class RemoteFolderDownloadWorker(QThread):
                 self.finished_signal.emit(False, True, "Download canceled", self._local_target)
             else:
                 self.finished_signal.emit(False, False, f"Failed to download files:\n{exc}", self._local_target)
+        finally:
+            if staging_target is not None:
+                shutil.rmtree(staging_target, ignore_errors=True)
 
 
 class PageRunMonitor(BasePage):
@@ -702,6 +728,17 @@ class PageRunMonitor(BasePage):
         # Get folder name from remote path
         folder_name = os.path.basename(remote_dir.rstrip("/"))
         local_target = os.path.join(local_dir, folder_name)
+        if os.path.lexists(local_target):
+            reply = QMessageBox.question(
+                parent_dialog,
+                "Replace Existing Download",
+                f"A local folder already exists:\n{local_target}\n\n"
+                "Replace it after the new download completes? The existing folder is preserved if the download fails or is canceled.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
 
         progress = QProgressDialog("Downloading files from remote server...", "Cancel", 0, 100, parent_dialog)
         progress.setWindowTitle("Downloading")
