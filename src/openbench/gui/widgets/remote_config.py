@@ -189,6 +189,8 @@ class ClickableLineEdit(QLineEdit):
 
 # Delimits the resolve/ls/find sections of the combined listing command.
 _SECTION_MARKER = "__OPENBENCH_SECTION__"
+_CONDA_PYTHON_MARKER = "__OPENBENCH_PYTHON__="
+_CONDA_SOURCE_ROOT_MARKER = "__OPENBENCH_SOURCE_ROOT__="
 
 
 def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env_exists, interrupted):
@@ -1321,8 +1323,12 @@ class RemoteConfigWidget(QWidget):
     def _on_conda_env_changed(self, index: int):
         """Handle conda environment selection change.
 
-        Updates the Python path to use the selected conda environment's Python.
+        Update Python and detect an editable/source OpenBench checkout.
         """
+        # Every selection, including "not using conda", invalidates an older
+        # probe that may still be inside execute_responsive's nested event loop.
+        seq = getattr(self, "_conda_env_sync_seq", 0) + 1
+        self._conda_env_sync_seq = seq
         if index <= 0:
             # "(Not using conda environment)" selected, don't change Python path
             return
@@ -1332,48 +1338,74 @@ class RemoteConfigWidget(QWidget):
         if not env_name or not env_path:
             return
 
+        python_path = ""
+        openbench_root = ""
+
         # Get Python path directly from conda
         if self._has_connected_target():
             # A combo change during the in-flight round trip supersedes this
             # query; the stale result must not be applied afterwards.
-            seq = getattr(self, "_conda_env_sync_seq", 0) + 1
-            self._conda_env_sync_seq = seq
+            ssh_manager = self._ssh_manager
+            get_identity = getattr(ssh_manager, "get_active_target_identity", None)
+            identity = get_identity() if callable(get_identity) else None
+            identity = tuple(identity) if identity is not None else None
             try:
-                # Use conda run to get the actual Python path. Build the
-                # inner bash -c argument with shlex.quote on env_name, then
-                # shlex.quote the whole inner command for the outer shell.
-                inner = f"conda run -n {shlex.quote(env_name)} which python 2>/dev/null"
+                probe = f"""from importlib.util import find_spec
+from pathlib import Path
+import sys
+
+print({_CONDA_PYTHON_MARKER!r} + sys.executable)
+spec = find_spec("openbench")
+if spec is not None:
+    for location in spec.submodule_search_locations or ():
+        package_dir = Path(location).resolve()
+        for root in package_dir.parents:
+            if (root / "pyproject.toml").is_file() and (
+                (root / "src" / "openbench").is_dir() or (root / "openbench").is_dir()
+            ):
+                print({_CONDA_SOURCE_ROOT_MARKER!r} + str(root))
+                raise SystemExit
+"""
+                # One remote round trip resolves both values. PYTHONPATH and
+                # the user site are excluded so the selected environment, not
+                # a login-shell override, determines the result.
+                inner = (
+                    "PYTHONPATH= PYTHONNOUSERSITE=1 "
+                    f"conda run -n {shlex.quote(env_name)} python -c {shlex.quote(probe)} 2>/dev/null"
+                )
                 cmd = f"bash -i -l -c {shlex.quote(inner)}"
-                stdout, _, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
+                stdout, _, exit_code = execute_responsive(ssh_manager, cmd, timeout=10)
                 if seq != self._conda_env_sync_seq:
                     return  # superseded by a newer selection
+                if self._ssh_manager is not ssh_manager:
+                    return
+                if callable(get_identity):
+                    current_identity = get_identity()
+                    if current_identity is None or tuple(current_identity) != identity:
+                        return
                 if exit_code == 0 and stdout.strip():
-                    # Pick the last absolute path in the output; `conda run`
-                    # under some shells appends an empty line or `(env) `
-                    # prompt fragment, which `split("\n")[-1]` would return
-                    # instead of the python path.
-                    python_path = ""
                     for line in stdout.splitlines():
                         line = line.strip()
-                        if line.startswith("/"):
-                            python_path = line
-                    if python_path and python_path.startswith("/"):
-                        idx = self.python_combo.findText(python_path)
-                        if idx < 0:
-                            self.python_combo.addItem(python_path)
-                        self.python_combo.setCurrentText(python_path)
-                        return
+                        if line.startswith(_CONDA_PYTHON_MARKER):
+                            python_path = line[len(_CONDA_PYTHON_MARKER) :].strip()
+                        elif line.startswith(_CONDA_SOURCE_ROOT_MARKER):
+                            openbench_root = line[len(_CONDA_SOURCE_ROOT_MARKER) :].strip()
             except Exception:
                 pass
             if seq != self._conda_env_sync_seq:
                 return  # a newer selection owns the fallback too
 
         # Fallback: construct path from env_path
-        python_path = f"{env_path}/bin/python"
+        if not python_path.startswith("/"):
+            python_path = f"{env_path}/bin/python"
         idx = self.python_combo.findText(python_path)
         if idx < 0:
             self.python_combo.addItem(python_path)
         self.python_combo.setCurrentText(python_path)
+        # A wheel-only install resolves inside site-packages, which is not a
+        # writable Remote workspace. Only a verified source root is applied.
+        if openbench_root.startswith("/"):
+            self.openbench_input.setText(openbench_root)
 
     def _update_remote_cpu_count(self):
         """Query remote server for CPU count and update label."""
