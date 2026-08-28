@@ -32,6 +32,14 @@ def _source_list(value) -> list:
     return [value] if value else []
 
 
+def _ssh_target_identity(ssh_manager):
+    getter = getattr(ssh_manager, "get_active_target_identity", None)
+    if not callable(getter):
+        return None
+    identity = getter()
+    return tuple(identity) if identity is not None else None
+
+
 def count_evaluation_tasks(config: dict, selected_variables: list[str]) -> int:
     """Count the per-variable ref/sim pairs that the runner will actually build."""
     ref_data = config.get("ref_data", {}) or {}
@@ -69,11 +77,12 @@ class RemoteFolderDownloadWorker(QThread):
     progress_updated = Signal(int, int, str)
     finished_signal = Signal(bool, bool, str, str)  # success, canceled, message, local_target
 
-    def __init__(self, ssh_manager, remote_dir: str, local_target: str, parent=None):
+    def __init__(self, ssh_manager, remote_dir: str, local_target: str, target_identity=None, parent=None):
         super().__init__(parent)
         self._ssh_manager = ssh_manager
         self._remote_dir = remote_dir
         self._local_target = local_target
+        self._target_identity = tuple(target_identity) if target_identity is not None else None
         self._stop_requested = False
 
     def stop(self):
@@ -83,15 +92,22 @@ class RemoteFolderDownloadWorker(QThread):
         if self._stop_requested:
             raise _RemoteDownloadCanceled()
 
+    def _ensure_target_active(self):
+        if self._target_identity is not None and _ssh_target_identity(self._ssh_manager) != self._target_identity:
+            raise RuntimeError("remote target identity changed")
+
     def run(self):
         try:
             self._raise_if_canceled()
+            self._ensure_target_active()
             self._remote_dir = expand_remote_home(self._ssh_manager, self._remote_dir).replace("\\", "/")
+            self._ensure_target_active()
             stdout, stderr, exit_code = self._ssh_manager.execute(
                 f"find {quote_remote_path(self._remote_dir)} -type f",
                 timeout=60,
                 should_abort=lambda: self._stop_requested,
             )
+            self._ensure_target_active()
             if exit_code != 0:
                 self.finished_signal.emit(False, False, f"Failed to list remote files:\n{stderr}", self._local_target)
                 return
@@ -102,9 +118,12 @@ class RemoteFolderDownloadWorker(QThread):
                 return
 
             total_files = len(files)
+            self._ensure_target_active()
             sftp = self._ssh_manager.open_sftp()
+            self._ensure_target_active()
             for index, remote_file in enumerate(files):
                 self._raise_if_canceled()
+                self._ensure_target_active()
                 rel_path = PageRunMonitor._remote_download_relpath(remote_file, self._remote_dir)
                 if rel_path is None:
                     raise ValueError(f"Remote file is outside the requested directory: {remote_file}")
@@ -113,6 +132,7 @@ class RemoteFolderDownloadWorker(QThread):
                 self.progress_updated.emit(index, total_files, rel_path)
 
                 def _copy_progress(_transferred, _total):
+                    self._ensure_target_active()
                     self._raise_if_canceled()
 
                 try:
@@ -122,8 +142,10 @@ class RemoteFolderDownloadWorker(QThread):
                     # without callback support. Cancellation remains checked
                     # between files in that compatibility path.
                     sftp.get(remote_file, local_file)
+                self._ensure_target_active()
                 self.progress_updated.emit(index + 1, total_files, rel_path)
 
+            self._ensure_target_active()
             self.finished_signal.emit(True, False, "Download complete", self._local_target)
         except _RemoteDownloadCanceled:
             self.finished_signal.emit(False, True, "Download canceled", self._local_target)
@@ -147,6 +169,7 @@ class PageRunMonitor(BasePage):
         self._last_ssh_manager_error = ""
         self._last_run_output_dir = None
         self._last_run_is_remote = None
+        self._last_run_target_identity = None
         super().__init__(controller, parent)
         # Remove the trailing stretch added by BasePage so dashboard can expand
         self._remove_trailing_stretch()
@@ -283,6 +306,9 @@ class PageRunMonitor(BasePage):
 
         self._last_run_output_dir = run_output_dir
         self._last_run_is_remote = is_remote
+        self._last_run_target_identity = (
+            _ssh_target_identity(getattr(self._runner, "_ssh_manager", None)) if is_remote else None
+        )
 
         # Configure task counts for accurate progress tracking
         self._runner.set_task_counts(
@@ -554,6 +580,19 @@ class PageRunMonitor(BasePage):
         else:
             QMessageBox.warning(self, "Directory Not Found", f"Output directory does not exist:\n{output_dir}")
 
+    def _ensure_saved_remote_target_active(self, ssh_manager) -> bool:
+        saved_identity = getattr(self, "_last_run_target_identity", None)
+        if saved_identity is None:
+            return True
+        if _ssh_target_identity(ssh_manager) == tuple(saved_identity):
+            return True
+        QMessageBox.warning(
+            self,
+            "Remote Target Changed",
+            "The saved run output belongs to a different remote target. Reconnect to that target or run again.",
+        )
+        return False
+
     def _open_remote_output(self, output_dir: str):
         """Open remote output directory in file browser with download option."""
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton
@@ -566,6 +605,9 @@ class PageRunMonitor(BasePage):
             if detail:
                 message += f"\n\nDetails: {detail}"
             QMessageBox.warning(self, "Not Connected", message)
+            return
+
+        if not self._ensure_saved_remote_target_active(ssh_manager):
             return
 
         output_dir = expand_remote_home(ssh_manager, output_dir).replace("\\", "/")
@@ -646,6 +688,8 @@ class PageRunMonitor(BasePage):
         if existing_worker is not None and existing_worker.isRunning():
             QMessageBox.warning(parent_dialog, "Download in Progress", "A remote folder download is already running.")
             return
+        if not self._ensure_saved_remote_target_active(ssh_manager):
+            return
 
         # Ask user where to save
         local_dir = QFileDialog.getExistingDirectory(
@@ -666,7 +710,9 @@ class PageRunMonitor(BasePage):
         progress.setValue(0)
         progress.show()
 
-        worker = RemoteFolderDownloadWorker(ssh_manager, remote_dir, local_target)
+        worker = RemoteFolderDownloadWorker(
+            ssh_manager, remote_dir, local_target, getattr(self, "_last_run_target_identity", None)
+        )
         self._download_worker = worker
         progress.canceled.connect(worker.stop)
         worker.finished.connect(worker.deleteLater)

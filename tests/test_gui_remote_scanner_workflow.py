@@ -143,6 +143,7 @@ def test_register_scanned_datasets_remote_writes_remote_user_registry(monkeypatc
     assert "/remote/ref/Grid/LowRes/Water" in script
     assert captured["python_path"] == "/remote/python"
     assert captured["conda_env"] == "ob"
+    assert captured["should_abort"] is None
     compile(script, "<remote-register-script>", "exec")
 
 
@@ -207,6 +208,8 @@ def test_nc_importer_variable_rows_shared_between_local_and_remote(qapp):
         rp.run_remote_python_json = original
 
     assert "def _variable_rows" in monkeyed["script"]
+    assert "remote_path = os.path.expanduser" in monkeyed["script"]
+    assert "xr.open_dataset(remote_path)" in monkeyed["script"]
 
 
 def test_nc_importer_opens_remote_netcdf_metadata(qapp):
@@ -534,6 +537,103 @@ def test_gui_reference_scan_skip_message_includes_remediation():
 
     assert "Grid/LowRes/Water/Bad: unsupported_layout" in message
     assert "Register it manually." in message
+
+def test_show_scan_incomplete_truncates_text_and_keeps_full_details(monkeypatch):
+    from openbench.data.registry.scanner import ScanSkip
+    from openbench.gui.pages import _scan_worker
+
+    captured = {}
+
+    class FakeBox:
+        Warning = "warning"
+
+        def __init__(self, parent):
+            captured["parent"] = parent
+
+        def setIcon(self, value):
+            captured["icon"] = value
+
+        def setWindowTitle(self, value):
+            captured["title"] = value
+
+        def setText(self, value):
+            captured["text"] = value
+
+        def setDetailedText(self, value):
+            captured["details"] = value
+
+        def exec(self):
+            captured["exec"] = True
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox", FakeBox)
+    skipped = [ScanSkip(f"Bad{i}", "unsupported_layout", "Fix manually.") for i in range(25)]
+
+    _scan_worker.show_scan_incomplete("parent", skipped)
+
+    assert "Bad0" not in captured["text"]
+    assert "25 unsupported folder" in captured["text"]
+    assert "Details" in captured["text"]
+    assert "Bad0" in captured["details"]
+    assert "Bad24" in captured["details"]
+    assert captured["exec"] is True
+
+
+def test_enrich_selected_remote_variants_cancel_uses_event(monkeypatch):
+    from types import SimpleNamespace
+
+    from openbench.gui.pages import _scan_worker
+
+    slots = []
+    captured = {}
+
+    class FakeSignal:
+        def connect(self, slot):
+            slots.append(slot)
+
+    class FakeProgress:
+        canceled = FakeSignal()
+
+        def __init__(self, *args, **_kwargs):
+            captured["args"] = args
+
+        def setWindowTitle(self, *_args):
+            pass
+
+        def setWindowModality(self, *_args):
+            pass
+
+        def setMinimumDuration(self, *_args):
+            pass
+
+        def show(self):
+            slots[0]()
+
+        def close(self):
+            captured["closed"] = True
+
+        def deleteLater(self):
+            captured["deleted"] = True
+
+    def fake_scan(*_args, should_abort=None, **_kwargs):
+        assert should_abort is not None and should_abort() is True
+        raise RuntimeError("aborted")
+
+    monkeypatch.setattr("PySide6.QtWidgets.QProgressDialog", FakeProgress)
+    monkeypatch.setattr(_scan_worker, "scan_reference_datasets_remote", fake_scan)
+
+    variant = SimpleNamespace(registry_name="Existing")
+    try:
+        _scan_worker.enrich_selected_remote_variants(
+            object(), "/remote/ref", [variant], existing_names={"Existing"}, parent="parent"
+        )
+    except InterruptedError:
+        pass
+    else:
+        raise AssertionError("cancel should stop enrichment")
+
+    assert captured["args"][1] == "Cancel"
+    assert captured["closed"] is True
+    assert captured["deleted"] is True
 
 
 def test_remote_scan_caveats_keeps_complete_long_station_details():
@@ -1017,6 +1117,48 @@ class FakeProgress:
         pass
 
 
+def test_registration_cancel_button_is_remote_only(monkeypatch):
+    from openbench.gui.pages import page_ref_data, page_registry
+    from openbench.gui.pages.page_ref_data import PageRefData
+    from openbench.gui.pages.page_registry import PageRegistry
+
+    cancel_labels = []
+
+    class Progress(FakeProgress):
+        def __init__(self, _message, cancel_label, *_args):
+            super().__init__()
+            self.canceled = FakeSignal()
+            cancel_labels.append(cancel_label)
+
+    class Worker:
+        def __init__(self, *_args, **_kwargs):
+            self.finished_with_result = FakeSignal()
+            self.failed = FakeSignal()
+            self.finished = FakeSignal()
+
+        def start(self):
+            pass
+
+        def deleteLater(self):
+            pass
+
+    monkeypatch.setattr(page_ref_data, "QProgressDialog", Progress)
+    monkeypatch.setattr(page_registry, "QProgressDialog", Progress)
+    monkeypatch.setattr("openbench.gui.pages._scan_worker.RegisterScannedDatasetsWorker", Worker)
+
+    ref_page = PageRefData.__new__(PageRefData)
+    ref_page.btn_scan = FakeButton()
+    registry_page = PageRegistry.__new__(PageRegistry)
+
+    for page in (ref_page, registry_page):
+        page._scan_remote_context = None
+        page._start_register_worker(["local"])
+        page._scan_remote_context = ("/remote/ref", {"ssh_manager": object()})
+        page._start_register_worker(["remote"])
+
+    assert cancel_labels == [None, "Cancel", None, "Cancel"]
+
+
 def test_ref_scan_starts_remote_worker(monkeypatch):
     from openbench.gui.pages import page_ref_data
     from openbench.gui.pages.page_ref_data import PageRefData
@@ -1455,6 +1597,60 @@ def test_ref_scan_registers_selected_datasets_in_worker(monkeypatch):
     assert variant.nc_inspections["Runoff"]["varunit"] == "mm"
 
 
+def test_register_remote_passes_abort_callback_to_remote_python(monkeypatch):
+    from openbench.data.registry.scanner import ScannedDataset
+    from openbench.gui.pages import _scan_worker
+
+    def aborting():
+        return True
+
+    captured = _capture_remote_json(monkeypatch, result={})
+    dataset = ScannedDataset("Demo", "LowRes", "Water", "grid", "/remote/ref", {"Runoff": "Demo"})
+
+    _scan_worker.register_scanned_datasets_remote(object(), [dataset], "/remote/ref", should_abort=aborting)
+
+    assert captured["should_abort"] is aborting
+
+
+def test_register_worker_remote_pre_cancel_skips_mutation(qapp, monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    calls = []
+    monkeypatch.setattr(_scan_worker, "register_scanned_datasets_remote", lambda *args, **kwargs: calls.append(args))
+
+    worker = _scan_worker.RegisterScannedDatasetsWorker(["demo"], ssh_manager="ssh", data_root="/remote/ref")
+    failures = []
+    worker.failed.connect(failures.append)
+    worker.requestInterruption()
+
+    worker.run()
+
+    assert calls == []
+    assert failures == ["InterruptedError: Cancelled"]
+
+
+def test_register_worker_remote_inflight_cancel_reaches_ssh_runner(qapp, monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = {}
+
+    def fake_register_remote(*_args, **kwargs):
+        captured["should_abort"] = kwargs["should_abort"]
+        worker.requestInterruption()
+        assert captured["should_abort"]() is True
+        raise InterruptedError("Cancelled")
+
+    monkeypatch.setattr(_scan_worker, "register_scanned_datasets_remote", fake_register_remote)
+
+    worker = _scan_worker.RegisterScannedDatasetsWorker(["demo"], ssh_manager="ssh", data_root="/remote/ref")
+    failures = []
+    worker.failed.connect(failures.append)
+
+    worker.run()
+
+    assert failures == ["InterruptedError: Cancelled"]
+
+
 def test_register_worker_writes_only_remote_registry(qapp, monkeypatch):
     from openbench.data.registry import scanner as scanner_module
     from openbench.gui.pages import _scan_worker
@@ -1488,9 +1684,13 @@ def test_register_worker_writes_only_remote_registry(qapp, monkeypatch):
 
     worker.run()
 
-    assert calls == [
-        ("remote", {"python_path": "/py", "conda_env": "ob", "openbench_path": "/ob"}),
-    ]
+    assert len(calls) == 1
+    kind, kwargs = calls[0]
+    assert kind == "remote"
+    assert kwargs["python_path"] == "/py"
+    assert kwargs["conda_env"] == "ob"
+    assert kwargs["openbench_path"] == "/ob"
+    assert callable(kwargs["should_abort"])
     assert results == [{"catalog_path": "/remote/.openbench/references/reference_catalog.yaml"}]
 
 

@@ -137,7 +137,7 @@ class ExecuteKwargsSSH(FakeSSH):
 def test_create_remote_temp_dir_uses_mktemp_unique_path(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
-    ssh = ExecuteSSH(("/tmp/openbench_wizard_abcd1234\n", "", 0))
+    ssh = ExecuteSSH(("__OPENBENCH_TMP__=/tmp/openbench_wizard_abcd1234\n", "", 0))
     runner = RemoteRunner(
         str(config),
         ssh,
@@ -147,13 +147,34 @@ def test_create_remote_temp_dir_uses_mktemp_unique_path(tmp_path):
     assert runner._create_remote_temp_dir() is True
 
     assert runner._remote_temp_dir == "/tmp/openbench_wizard_abcd1234"
-    assert ssh.commands == ["mktemp -d /tmp/openbench_wizard_XXXXXXXXXX"]
+    expected = "tmp=$(mktemp -d /tmp/openbench_wizard_XXXXXXXXXX) && printf '__OPENBENCH_TMP__=%s\\n' \"$tmp\""
+    assert ssh.commands == [expected]
 
 
 def test_create_remote_temp_dir_ignores_login_banner_paths(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
-    ssh = ExecuteSSH(("Welcome\n/home/alice\n/tmp/openbench_wizard_abcd1234\n", "", 0))
+    ssh = ExecuteSSH(("Welcome\n/home/alice\n__OPENBENCH_TMP__=/tmp/openbench_wizard_abcd1234\n", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench"},
+    )
+
+    assert runner._create_remote_temp_dir() is True
+
+    assert runner._remote_temp_dir == "/tmp/openbench_wizard_abcd1234"
+
+
+def test_create_remote_temp_dir_ignores_later_matching_unmarked_path(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH((
+        "__OPENBENCH_TMP__=/tmp/openbench_wizard_abcd1234\n"
+        "/tmp/openbench_wizard_other9999\n",
+        "",
+        0,
+    ))
     runner = RemoteRunner(
         str(config),
         ssh,
@@ -180,7 +201,9 @@ def test_create_remote_temp_dir_rejects_no_absolute_path(tmp_path):
     assert runner._create_remote_temp_dir() is False
 
     assert runner._remote_temp_dir == ""
-    assert finished == [(False, "Failed to create remote temp directory: mktemp returned no absolute path")]
+    assert finished == [
+        (False, "Failed to create remote temp directory: mktemp returned no safe /tmp/openbench_wizard_* path")
+    ]
 
 
 def test_remote_run_command_expands_tilde_config_path():
@@ -230,12 +253,28 @@ def test_cleanup_remote_reports_nonzero_rm_failure(tmp_path):
     config.write_text("x: 1\n", encoding="utf-8")
     ssh = ExecuteSSH(("", "permission denied", 1))
     runner = _runner(config, ssh)
+    runner._remote_temp_dir = "/tmp/openbench_wizard_abcd1234"
     logs = []
     runner.log_message.connect(logs.append)
 
     runner._cleanup_remote()
 
-    assert logs == ["Warning: Could not clean up remote directory /tmp/openbench_test: permission denied"]
+    assert logs == ["Warning: Could not clean up remote directory /tmp/openbench_wizard_abcd1234: permission denied"]
+
+
+def test_cleanup_remote_refuses_untrusted_remote_path(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("", "", 0))
+    runner = _runner(config, ssh)
+    runner._remote_temp_dir = "/home/alice"
+    logs = []
+    runner.log_message.connect(logs.append)
+
+    runner._cleanup_remote()
+
+    assert ssh.commands == []
+    assert logs == ["Warning: Refusing to clean unsafe remote directory: /home/alice"]
 
 
 class StreamSSH(FakeSSH):

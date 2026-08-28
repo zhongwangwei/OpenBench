@@ -369,6 +369,37 @@ def test_mkdir_reports_remote_failure():
         sync.mkdir("dir")
 
 
+def test_write_clears_stale_error_for_replaced_content():
+    ssh = FailingMkdirSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.write("dir/notes.txt", "old")
+    assert sync._sync_file("dir/notes.txt") is False
+    assert sync.get_sync_status("dir/notes.txt") is SyncStatus.ERROR
+    assert "dir/notes.txt" in sync.get_error_files()
+
+    sync.write("dir/notes.txt", "new")
+
+    assert sync.get_sync_status("dir/notes.txt") is SyncStatus.PENDING
+    assert sync.get_error_files() == {}
+    assert sync.get_overall_status() is SyncStatus.PENDING
+
+
+def test_delete_clears_stale_error_after_remote_delete_succeeds():
+    ssh = FailingMkdirSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.write("dir/notes.txt", "old")
+    assert sync._sync_file("dir/notes.txt") is False
+    assert sync.get_sync_status("dir/notes.txt") is SyncStatus.ERROR
+    assert "dir/notes.txt" in sync.get_error_files()
+
+    sync._ssh = FakeSSH()
+    sync.delete("dir/notes.txt")
+
+    assert sync.get_sync_status("dir/notes.txt") is SyncStatus.SYNCED
+    assert sync.get_error_files() == {}
+    assert sync.get_overall_status() is SyncStatus.SYNCED
+
+
 @pytest.mark.parametrize("path", ["", ".", "./"])
 def test_delete_refuses_remote_project_root(path):
     ssh = FakeSSH()
@@ -398,9 +429,24 @@ def test_delete_uses_explicit_file_or_recursive_directory_command():
 
     quoted = shlex.quote("/remote/project/dir/file.txt")
     assert ssh.commands == [
-        f"test -e {quoted}",
-        f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi",
+        f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
     ]
+
+
+def test_delete_permission_failure_preserves_local_cache():
+    class PermissionDeniedSSH(FakeSSH):
+        def execute(self, command, timeout=30):
+            self.commands.append(command)
+            return "", "permission denied", 13
+
+    ssh = PermissionDeniedSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("dir/file.txt", "cached")
+
+    with pytest.raises(OSError, match="permission denied"):
+        sync.delete("dir/file.txt")
+
+    assert sync.read("dir/file.txt") == "cached"
 
 
 def test_sync_engine_commands_expand_tilde_project_dir():
@@ -622,6 +668,31 @@ def test_sync_engine_refuses_sync_after_target_switch_without_retry_or_b_io():
     assert b.sftp.opens == []
 
 
+class SwitchDuringWriteRemoteFile(IdentityRemoteFile):
+    def write(self, data):
+        super().write(data)
+        self.ssh.identity = ("direct", "alice", "login-b", 22)
+
+
+class SwitchDuringWriteSFTP(IdentitySFTP):
+    def open(self, path, mode):
+        self.opens.append((path, mode))
+        return SwitchDuringWriteRemoteFile(self.ssh, path, mode)
+
+
+def test_sync_file_rechecks_target_after_sftp_write_before_marking_synced():
+    ssh = IdentitySSH(("direct", "alice", "login-a", 22))
+    ssh.sftp = SwitchDuringWriteSFTP(ssh)
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.write("nml/main.yaml", "safe: true\n")
+
+    assert sync._sync_file("nml/main.yaml") is False
+
+    assert sync.get_sync_status("nml/main.yaml") is SyncStatus.ERROR
+    assert "remote target identity changed" in sync.get_error_files()["nml/main.yaml"]
+    assert sync.get_pending_count() == 1
+
+
 def test_sync_engine_refuses_write_after_target_switch():
     a = IdentitySSH(("direct", "alice", "login-a", 22))
     b = IdentitySSH(("direct", "alice", "login-b", 22))
@@ -678,6 +749,59 @@ def test_sync_engine_refuses_other_remote_io_after_target_switch(operation):
 
     assert b.commands == []
     assert b.sftp.opens == []
+
+
+class SwitchingExecuteSSH(IdentitySSH):
+    def __init__(self):
+        super().__init__(("direct", "alice", "login-a", 22))
+
+    def execute(self, command, timeout=30):
+        self.commands.append(command)
+        self.identity = ("direct", "alice", "login-b", 22)
+        if command.startswith("ls -1"):
+            return "main.yaml\n", "", 0
+        if "test -e" in command:
+            return "exists\n", "", 0
+        if "bash -c" in command:
+            return "nml/main.yaml\n", "", 0
+        return "", "", 0
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda sync: sync.exists("nml/main.yaml"),
+        lambda sync: sync.list_dir("nml"),
+        lambda sync: sync.glob("nml/*.yaml"),
+        lambda sync: sync.mkdir("nml/new"),
+    ],
+)
+def test_remote_queries_recheck_target_after_execute_before_returning(operation):
+    ssh = SwitchingExecuteSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+
+    with pytest.raises(RuntimeError, match="remote target identity changed"):
+        operation(sync)
+
+    assert ssh.commands
+
+
+def test_delete_rechecks_frozen_after_execute_before_clearing_cache():
+    class FreezingDeleteSSH(FakeSSH):
+        def execute(inner_self, command, timeout=30):
+            inner_self.commands.append(command)
+            sync.freeze()
+            return "", "", 0
+
+    ssh = FreezingDeleteSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("nml/main.yaml", "safe: true\n")
+
+    with pytest.raises(RuntimeError, match="sync engine is frozen"):
+        sync.delete("nml/main.yaml")
+
+    sync.thaw()
+    assert sync.read("nml/main.yaml") == "safe: true\n"
 
 
 def test_freeze_if_synced_atomically_blocks_write_until_thawed():

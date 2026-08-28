@@ -287,6 +287,7 @@ class SyncEngine:
             self._cache[path] = content
             self._sync_status[path] = SyncStatus.PENDING
             self._pending_sync.add(path)
+            self._sync_errors.pop(path, None)
 
         self._notify_status_changed(path, SyncStatus.PENDING)
 
@@ -393,6 +394,7 @@ class SyncEngine:
                     remote_file.write(content.encode("utf-8"))
 
                 with self._lock:
+                    self._ensure_remote_io_allowed()
                     changed = self._versions.get(path, 0) != version
                     deleted = path not in self._cache
                     if not changed:
@@ -489,6 +491,7 @@ class SyncEngine:
         # callers can tell "permission denied" / "no such directory" apart
         # from an empty directory.
         stdout, stderr, exit_code = self._ssh.execute(f"ls -1 {quote_remote_path(remote_path)}", timeout=30)
+        self._ensure_remote_io_allowed()
         if exit_code != 0:
             raise IOError(
                 f"list_dir({remote_path!r}) failed (exit {exit_code}): "
@@ -508,6 +511,7 @@ class SyncEngine:
         stdout, stderr, exit_code = self._ssh.execute(
             f"test -e {quote_remote_path(remote_path)} && echo 'exists'", timeout=10
         )
+        self._ensure_remote_io_allowed()
         return exit_code == 0 and _has_exact_stdout_line(stdout, "exists")
 
     def glob(self, pattern: str) -> List[str]:
@@ -528,6 +532,7 @@ class SyncEngine:
             f'for f in {quoted_pattern}; do [ -f "$f" ] && echo "$f"; done'
         )
         stdout, stderr, exit_code = self._ssh.execute(f"bash -c {shlex.quote(inner)}", timeout=30)
+        self._ensure_remote_io_allowed()
         if exit_code != 0:
             raise IOError(
                 f"glob({pattern!r}) under {base_dir!r} failed (exit {exit_code}): "
@@ -540,6 +545,7 @@ class SyncEngine:
         self._ensure_remote_io_allowed()
         remote_path = self._remote_path(path)
         _stdout, stderr, exit_code = self._ssh.execute(f"mkdir -p {quote_remote_path(remote_path)}", timeout=10)
+        self._ensure_remote_io_allowed()
         if exit_code != 0:
             raise Exception(f"Create remote directory failed: {stderr}")
 
@@ -551,9 +557,8 @@ class SyncEngine:
         permission error or a path-outside-project case would go
         completely undetected and the local cache would be cleared as
         if the delete had succeeded. Use an explicit file-vs-directory
-        command and a separate existence probe so genuine failures surface
-        as exceptions rather than silently desynchronising local and remote
-        state.
+        command whose exit status distinguishes a successful/no-op removal
+        from genuine failures, so local state is only cleared after success.
         """
         self._ensure_remote_io_allowed()
         if path in {"", ".", "./"}:
@@ -563,25 +568,22 @@ class SyncEngine:
         if remote_path == remote_root:
             raise ValueError("Refusing to delete remote project root")
         quoted = quote_remote_path(remote_path)
-        # Probe existence first so we can distinguish "not there" (no-op,
-        # like POSIX rm -f) from "could not delete" (permission etc.).
-        _, _, exit_code = self._ssh.execute(f"test -e {quoted}", timeout=10)
-        if exit_code == 0:
-            self._ensure_remote_io_allowed()
-            delete_cmd = f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
-            stdout, stderr, exit_code = self._ssh.execute(delete_cmd, timeout=10)
-            if exit_code != 0:
-                raise OSError(
-                    f"Failed to delete remote path {remote_path!r}: "
-                    f"{stderr.strip() or stdout.strip() or 'rm exited '}"
-                    f"(exit code {exit_code})"
-                )
+        delete_cmd = f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
+        stdout, stderr, exit_code = self._ssh.execute(delete_cmd, timeout=10)
+        if exit_code != 0:
+            raise OSError(
+                f"Failed to delete remote path {remote_path!r}: "
+                f"{stderr.strip() or stdout.strip() or 'rm exited '}"
+                f"(exit code {exit_code})"
+            )
+        self._ensure_remote_io_allowed()
 
         with self._lock:
             self._versions[path] = self._versions.get(path, 0) + 1
             self._cache.pop(path, None)
             self._sync_status.pop(path, None)
             self._pending_sync.discard(path)
+            self._sync_errors.pop(path, None)
 
     def start_background_sync(self, interval: float = 2.0):
         """Start background sync thread."""

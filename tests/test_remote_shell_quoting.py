@@ -77,6 +77,8 @@ def test_remote_inspect_script_embeds_path_as_json_and_quotes_environment():
     encoded = shlex.split(encoded_arg)[0]
     script = base64.b64decode(encoded).decode("utf-8")
     assert f"safe_open({json.dumps(path)})" in script
+    assert "path = os.path.expanduser(path)" in script
+    assert "xr.open_dataset(path)" in script
     assert f'safe_open("{path}")' not in script
 
 

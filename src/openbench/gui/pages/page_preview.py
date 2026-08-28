@@ -384,7 +384,7 @@ class PagePreview(BasePage):
         files["config"] = config_path
 
         # Sync namelists (source definition files) with remote paths
-        self._sync_namelists_for_remote(config, local_dir, remote_dir, openbench_root)
+        self._sync_namelists_for_remote(config, local_dir, remote_dir, remote_path_base)
 
         return files
 
@@ -438,7 +438,9 @@ class PagePreview(BasePage):
             merged_config = self._merge_source_configs(group_data["configs"], group_data["var_names"])
             dest_path = os.path.join(sim_nml_dir, f"{source_name}.yaml")
             remote_dest_path = remote_join(remote_sim_nml_dir, f"{source_name}.yaml")
-            self._write_source_config_remote(merged_config, dest_path, selected_items, openbench_root, remote_dest_path)
+            self._write_source_config_remote(
+                merged_config, dest_path, selected_items, openbench_root, remote_dest_path, ssh_manager=ssh_manager
+            )
 
         # Copy model definition files for sim (read from remote server)
         # Extract model_namelist paths from source configs. Previously this
@@ -529,7 +531,9 @@ class PagePreview(BasePage):
             merged_config = self._merge_source_configs(group_data["configs"], group_data["var_names"])
             dest_path = os.path.join(ref_nml_dir, f"{source_name}.yaml")
             remote_dest_path = remote_join(remote_ref_nml_dir, f"{source_name}.yaml")
-            self._write_source_config_remote(merged_config, dest_path, selected_items, openbench_root, remote_dest_path)
+            self._write_source_config_remote(
+                merged_config, dest_path, selected_items, openbench_root, remote_dest_path, ssh_manager=ssh_manager
+            )
 
     def _merge_source_configs(self, configs: list, var_names: list) -> dict:
         """Merge multiple source configs into one.
@@ -604,6 +608,8 @@ class PagePreview(BasePage):
         if is_remote:
             # Normalize path separators
             path = to_posix_path(model_path)
+            if path == "~" or path.startswith("~/"):
+                path = to_posix_path(expand_remote_home(ssh_manager, path))
 
             # If it's already an absolute path on the remote server, try it directly first
             if path.startswith("/") and ssh_manager:
@@ -831,7 +837,14 @@ class PagePreview(BasePage):
         return path
 
     def _write_source_config_remote(
-        self, source_data: dict, dest_path: str, selected_items: list, openbench_root: str, remote_dest_path: str = ""
+        self,
+        source_data: dict,
+        dest_path: str,
+        selected_items: list,
+        openbench_root: str,
+        remote_dest_path: str = "",
+        *,
+        ssh_manager=None,
     ):
         """Write source config file for remote execution.
 
@@ -876,7 +889,7 @@ class PagePreview(BasePage):
             # Convert path fields to absolute remote paths
             for field in path_fields:
                 if field in general and general[field]:
-                    general[field] = self._resolve_path_for_remote(general[field], openbench_root)
+                    general[field] = self._resolve_path_for_remote(general[field], openbench_root, ssh_manager)
 
             # Update model_namelist path to point to models subdirectory (consistent with local mode)
             if "model_namelist" in general and general["model_namelist"]:
@@ -917,7 +930,7 @@ class PagePreview(BasePage):
                     # Convert path fields in variable config to absolute remote paths
                     for field in path_fields:
                         if field in var_config and var_config[field]:
-                            var_config[field] = self._resolve_path_for_remote(var_config[field], openbench_root)
+                            var_config[field] = self._resolve_path_for_remote(var_config[field], openbench_root, ssh_manager)
                     if var_config:  # Only add if there's data
                         filtered[item] = var_config
                 elif item_data is not None:

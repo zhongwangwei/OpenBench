@@ -252,6 +252,61 @@ def test_resolve_remote_model_path_returns_empty_when_no_candidate_exists():
     )
 
 
+def test_resolve_remote_model_path_expands_tilde_before_probe():
+    preview = _preview()
+
+    class SSH(FakeSSH):
+        def _get_home_dir(self):
+            return "/home/alice"
+
+    ssh = SSH(responses={"/home/alice/OpenBench/nml/Model.yaml": ("exists\n", "", 0)})
+
+    assert (
+        preview._resolve_model_path("~/OpenBench/nml/Model.nml", "/remote/OpenBench", is_remote=True, ssh_manager=ssh)
+        == "/home/alice/OpenBench/nml/Model.yaml"
+    )
+    assert all("~/" not in command for command in ssh.commands)
+
+
+def test_remote_namelist_sync_uses_remote_root_for_relative_model_probe(monkeypatch, tmp_path):
+    from openbench.gui.pages import page_preview as preview_module
+
+    class SSH(FakeSSH):
+        pass
+
+    ssh = SSH(
+        responses={
+            "cat": ("general: {model: CoLM}\nLatent_Heat: {varname: lh}\n", "", 0),
+            "/remote/OpenBench/nml/user/CoLM.yaml": ("exists\n", "", 0),
+        }
+    )
+    monkeypatch.setattr(preview_module, "get_remote_ssh_manager", lambda controller: ssh)
+
+    preview = _preview()
+    preview.controller = FakeController()
+    config = {
+        "evaluation_items": {"Latent_Heat": True},
+        "sim_data": {
+            "source_configs": {
+                "Latent_Heat::CaseA": {
+                    "general": {"model_namelist": "nml/user/CoLM.nml", "root_dir": "data/sim"},
+                    "Latent_Heat": {"varname": "lh", "fulllist": "lists/case.csv"},
+                }
+            }
+        },
+        "ref_data": {},
+    }
+
+    preview._sync_namelists_for_remote(config, str(tmp_path), "/remote/output", "/remote/OpenBench")
+
+    commands = "\n".join(ssh.commands)
+    assert "/remote/OpenBench/nml/user/CoLM.yaml" in commands
+    assert "/Users/" not in commands
+    exported = yaml.safe_load((tmp_path / "nml" / "sim" / "CaseA.yaml").read_text(encoding="utf-8"))
+    assert exported["general"]["root_dir"] == "/remote/OpenBench/data/sim"
+    assert exported["Latent_Heat"]["fulllist"] == "/remote/OpenBench/lists/case.csv"
+
+
 def test_resolve_path_for_remote_rejects_ambiguous_existing_local_absolute_path(monkeypatch):
     preview = _preview()
     monkeypatch.setattr(

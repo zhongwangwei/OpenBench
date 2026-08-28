@@ -13,6 +13,7 @@ variables are available for evaluation downstream.
 
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QProgressDialog,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -506,6 +508,25 @@ def _get_model_variables(model_name: str, registry=None) -> List[str]:
     return []
 
 
+def _remote_registry_is_offline(controller) -> bool:
+    try:
+        from openbench.gui.path_utils import get_remote_ssh_manager
+
+        ssh = get_remote_ssh_manager(controller) if hasattr(controller, "storage") else getattr(controller, "ssh_manager", None)
+    except Exception:
+        # Only a provably disconnected target may use the offline-preservation
+        # path.  A lookup failure is a real registry error, not evidence that
+        # the target is offline.
+        return False
+    if ssh is None or not getattr(ssh, "is_connected", False):
+        return True
+    try:
+        get_active_target_identity = getattr(ssh, "get_active_target_identity", None)
+        return callable(get_active_target_identity) and get_active_target_identity() is None
+    except Exception:
+        return False
+
+
 def _combo_value(combo) -> str:
     """Return a combo's data value, with text-only test/legacy fallback."""
     if combo is None:
@@ -713,9 +734,22 @@ class PageSimData(BasePage):
 
         self._clear_cases()
 
+        progress = None
+        cancel_event = None
+        if is_remote:
+            progress = QProgressDialog("Scanning simulation cases...", "Cancel", 0, 0, self)
+            progress.setWindowTitle("Scanning")
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            cancel_event = threading.Event()
+            canceled = getattr(progress, "canceled", None)
+            if canceled is not None and hasattr(canceled, "connect"):
+                canceled.connect(cancel_event.set)
+            progress.show()
+
         # Remote SSH calls go through execute_responsive (worker thread +
-        # live event loop), so the window stays painted without manual
-        # event pumping; the wait cursor signals the ongoing scan.
+        # live event loop), so the window stays painted while the progress
+        # dialog can cancel the SSH command.
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             discovered = []
@@ -734,8 +768,11 @@ class PageSimData(BasePage):
                         python_path=remote_settings.get("python_path", ""),
                         conda_env=remote_settings.get("conda_env", ""),
                         openbench_path=remote_settings.get("openbench_path", ""),
+                        should_abort=cancel_event.is_set if cancel_event is not None else None,
                     )
                 except Exception as exc:
+                    if cancel_event is not None and cancel_event.is_set():
+                        return
                     QMessageBox.critical(self, "Error", f"Cannot scan remote simulation data:\n{exc}")
                     return
             else:
@@ -746,6 +783,12 @@ class PageSimData(BasePage):
                     return
         finally:
             QApplication.restoreOverrideCursor()
+            if progress is not None:
+                progress.close()
+                progress.deleteLater()
+
+        if cancel_event is not None and cancel_event.is_set():
+            return
 
         if not discovered:
             QMessageBox.information(self, "No Cases Found", f"No NetCDF simulation cases found under:\n{root}")
@@ -1236,6 +1279,27 @@ class PageSimData(BasePage):
         existing_inner_general = existing_sim_data.get("general", {}) or {}
         general: Dict[str, Any] = {k: v for k, v in existing_inner_general.items() if not k.endswith("_sim_source")}
         model_vars_cache: Dict[str, Set[str]] = {}
+        cases_by_label = {c["label"]: c for c in cases}
+        is_remote_fn = getattr(getattr(self, "controller", None), "is_remote_mode", None)
+        is_remote = callable(is_remote_fn) and bool(is_remote_fn())
+        if not is_remote:
+            try:
+                from openbench.remote.storage import RemoteStorage
+
+                is_remote = isinstance(self.controller.storage, RemoteStorage)
+            except Exception:
+                is_remote = False
+        remote_registry = None
+        remote_registry_unavailable = False
+        if is_remote:
+            try:
+                remote_registry = PageSimData._registry(self)
+            except Exception as exc:
+                if _remote_registry_is_offline(self.controller):
+                    remote_registry_unavailable = True
+                else:
+                    QMessageBox.critical(self, "Remote Registry Error", f"Failed to load remote registry:\n{exc}")
+                    return
         for var_name in selected_vars:
             sources = []
             var_key = str(var_name).casefold()
@@ -1246,13 +1310,35 @@ class PageSimData(BasePage):
                     continue
                 model = c.get("model", "")
                 if model not in model_vars_cache:
-                    model_vars_cache[model] = (
-                        {str(name).casefold() for name in PageSimData._registry_model_variables(self, model)}
-                        if model
-                        else set()
-                    )
+                    if not model or remote_registry_unavailable:
+                        model_vars_cache[model] = set()
+                    elif remote_registry is not None:
+                        try:
+                            profile = remote_registry.get_model(model)
+                            variables = profile.variables.keys() if profile and hasattr(profile, "variables") else []
+                            model_vars_cache[model] = {str(name).casefold() for name in variables}
+                        except Exception as exc:
+                            if _remote_registry_is_offline(self.controller):
+                                remote_registry_unavailable = True
+                                model_vars_cache[model] = set()
+                            else:
+                                QMessageBox.critical(
+                                    self, "Remote Registry Error", f"Failed to read remote model registry:\n{exc}"
+                                )
+                                return
+                    else:
+                        model_vars_cache[model] = {
+                            str(name).casefold() for name in PageSimData._registry_model_variables(self, model)
+                        }
                 if var_key in model_vars_cache[model]:
                     sources.append(c["label"])
+            if remote_registry_unavailable:
+                old_sources = existing_inner_general.get(f"{var_name}_sim_source", [])
+                old_sources = [old_sources] if isinstance(old_sources, str) else list(old_sources or [])
+                for label in old_sources:
+                    case = cases_by_label.get(label)
+                    if case and label not in sources and case.get("model"):
+                        sources.append(label)
             general[f"{var_name}_sim_source"] = sources
 
         sim_data = {

@@ -864,20 +864,22 @@ class PageRegistry(BasePage):
         path = browse_directory(self.controller, self, "Select Directory to Scan")
         if not path:
             return
-        progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
-        progress.setWindowTitle("Scanning")
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
-
         from openbench.gui.pages._scan_worker import FindDatasetsWorker
         from openbench.gui.path_utils import remote_exec_context
 
         worker_kwargs = remote_exec_context(self.controller, self)
         if worker_kwargs is None:
-            progress.close()
-            progress.deleteLater()
             return
+        progress = QProgressDialog(
+            "Scanning reference datasets...", "Cancel" if worker_kwargs else None, 0, 0, self
+        )
+        progress.setWindowTitle("Scanning")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        canceled = getattr(progress, "canceled", None)
+        if worker_kwargs and canceled is not None and hasattr(canceled, "connect"):
+            canceled.connect(lambda: self._finish_scan_worker(cancel=True))
+
         self._scan_was_remote = bool(worker_kwargs)
         self._scan_remote_context = (path, dict(worker_kwargs)) if worker_kwargs else None
 
@@ -995,11 +997,19 @@ class PageRegistry(BasePage):
             data_root, worker_kwargs = remote_context
             remote_register_kwargs = {"data_root": data_root, **worker_kwargs}
 
-        progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
+        progress = QProgressDialog(
+            "Registering selected reference datasets...",
+            "Cancel" if remote_register_kwargs else None,
+            0,
+            0,
+            self,
+        )
         progress.setWindowTitle("Registering")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
+        canceled = getattr(progress, "canceled", None)
+        if remote_register_kwargs and canceled is not None and hasattr(canceled, "connect"):
+            canceled.connect(lambda: self._finish_register_worker(cancel=True))
 
         worker = RegisterScannedDatasetsWorker(variants, **remote_register_kwargs)
         self._register_worker = worker
@@ -1037,11 +1047,11 @@ class PageRegistry(BasePage):
     def _on_scan_directory_finished(self, new_groups):
         self._finish_scan_worker()
         try:
-            from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
+            from openbench.gui.pages._scan_worker import show_scan_incomplete, unpack_scan_result
 
             new_groups, skipped = unpack_scan_result(new_groups)
             if skipped:
-                QMessageBox.warning(self, "Scan Incomplete", format_scan_skips(skipped))
+                show_scan_incomplete(self, skipped)
 
             if not new_groups:
                 if not skipped:
@@ -1084,6 +1094,8 @@ class PageRegistry(BasePage):
 
             self._register_variants = list(variants)
             self._start_register_worker(variants)
+        except InterruptedError:
+            return
         except Exception as exc:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning:\n{exc}")
             logger.exception("Directory scan registration failed")

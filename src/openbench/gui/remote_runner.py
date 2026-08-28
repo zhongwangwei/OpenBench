@@ -43,6 +43,21 @@ def build_remote_run_command(python_path: str, openbench_path: str, config_path:
     )
 
 
+def _is_safe_remote_temp_dir(path: str) -> bool:
+    """Only accept the single /tmp dir shape emitted by our mktemp template."""
+    return bool(re.fullmatch(r"/tmp/openbench_wizard_[A-Za-z0-9_-]+", path or ""))
+
+
+def _marked_remote_temp_dir(stdout: str) -> str:
+    prefix = "__OPENBENCH_TMP__="
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line.startswith(prefix):
+            path = line[len(prefix) :].strip()
+            return path if _is_safe_remote_temp_dir(path) else ""
+    return ""
+
+
 class RemoteRunner(QThread):
     """Thread for running OpenBench evaluation on a remote server.
 
@@ -262,7 +277,7 @@ class RemoteRunner(QThread):
             # collides for concurrent GUI users sharing one HPC account and
             # cleanup can then remove another run's staging directory.
             stdout, stderr, exit_code = self._ssh_manager.execute(
-                "mktemp -d /tmp/openbench_wizard_XXXXXXXXXX",
+                "tmp=$(mktemp -d /tmp/openbench_wizard_XXXXXXXXXX) && printf '__OPENBENCH_TMP__=%s\\n' \"$tmp\"",
                 timeout=30,
             )
 
@@ -272,9 +287,9 @@ class RemoteRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return False
 
-            self._remote_temp_dir = SSHManager._last_absolute_path(stdout)
+            self._remote_temp_dir = _marked_remote_temp_dir(stdout)
             if not self._remote_temp_dir:
-                error_msg = "Failed to create remote temp directory: mktemp returned no absolute path"
+                error_msg = "Failed to create remote temp directory: mktemp returned no safe /tmp/openbench_wizard_* path"
                 self.log_message.emit(error_msg)
                 self.finished_signal.emit(False, error_msg)
                 return False
@@ -533,6 +548,9 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
         """Clean up the remote temporary directory."""
         # Only cleanup if we created a temp directory (not if config was already remote)
         if self._remote_temp_dir and not self._config_already_remote:
+            if not _is_safe_remote_temp_dir(self._remote_temp_dir):
+                self.log_message.emit(f"Warning: Refusing to clean unsafe remote directory: {self._remote_temp_dir}")
+                return
             try:
                 quoted_dir = shlex.quote(self._remote_temp_dir)
                 stdout, stderr, exit_code = self._ssh_manager.execute(f"rm -rf {quoted_dir}", timeout=30)

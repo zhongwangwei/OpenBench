@@ -16,6 +16,77 @@ def test_gui_sim_scan_helpers_find_nc4_history_dir(tmp_path: Path):
     assert page_sim_data._detect_prefix(str(case_dir)) == "hist_"
 
 
+def test_remote_sim_scan_cancel_uses_threading_event(qapp, monkeypatch):
+    from openbench.gui.pages import page_sim_data
+    from tests.gui_fakes import FakeButton
+
+    class RemoteStorage:
+        pass
+
+    class FakeSignal:
+        def __init__(self):
+            self._slot = None
+
+        def connect(self, slot):
+            self._slot = slot
+
+        def emit(self):
+            self._slot()
+
+    class FakeProgress:
+        def __init__(self, *_args, **_kwargs):
+            self.canceled = FakeSignal()
+
+        def setWindowTitle(self, *_args):
+            pass
+
+        def setWindowModality(self, *_args):
+            pass
+
+        def setMinimumDuration(self, *_args):
+            pass
+
+        def show(self):
+            self.canceled.emit()
+
+        def wasCanceled(self):
+            raise AssertionError("worker cancel check must not read QWidget state")
+
+        def close(self):
+            pass
+
+        def deleteLater(self):
+            pass
+
+    ssh = SimpleNamespace(is_connected=True)
+    controller = SimpleNamespace(storage=RemoteStorage(), remote_settings=lambda: {})
+    page = SimpleNamespace(
+        controller=controller,
+        _root_input=_Text("/remote/sim"),
+        _scan_btn=FakeButton(),
+        _scan_in_progress=False,
+        _clear_cases=lambda: None,
+    )
+    page._do_scan_flow = lambda: page_sim_data.PageSimData._do_scan_flow(page)
+
+    def fake_scan(*_args, should_abort=None, **_kwargs):
+        assert should_abort is not None and should_abort() is True
+        return [], {}
+
+    monkeypatch.setattr("openbench.remote.storage.RemoteStorage", RemoteStorage)
+    monkeypatch.setattr(page_sim_data, "get_remote_ssh_manager", lambda _controller: ssh)
+    monkeypatch.setattr(page_sim_data, "_remote_is_dir", lambda *_args: True)
+    monkeypatch.setattr(page_sim_data, "QProgressDialog", FakeProgress)
+    monkeypatch.setattr(page_sim_data, "scan_simulation_cases_remote", fake_scan)
+    monkeypatch.setattr(page_sim_data.QApplication, "setOverrideCursor", lambda *_args: None)
+    monkeypatch.setattr(page_sim_data.QApplication, "restoreOverrideCursor", lambda: None)
+
+    page_sim_data.PageSimData._do_scan(page)
+
+    assert page._scan_in_progress is False
+    assert page._scan_btn.enabled is True
+
+
 def test_remote_sim_scan_helpers_quote_paths_and_find_nc4():
     commands = []
 
@@ -501,6 +572,81 @@ def test_save_to_config_only_assigns_variables_to_supporting_cases(monkeypatch):
     assert general["Latent_Heat_sim_source"] == ["ManualHeatCase"]
 
 
+def test_remote_save_blocks_on_stale_registry_context(monkeypatch):
+    controller = _Controller()
+    controller.is_remote_mode = lambda: True
+    controller.config["evaluation_items"] = {"Runoff": True}
+    controller.config["sim_data"] = {"general": {"Runoff_sim_source": ["CaseA"]}}
+    controller.ssh_manager = SimpleNamespace(
+        is_connected=True,
+        get_active_target_identity=lambda: ("direct", "alice", "login", 22),
+    )
+    errors = []
+
+    page = SimpleNamespace(
+        controller=controller,
+        get_selected_cases=lambda: [
+            {"label": "CaseA", "model": "RemoteModel", "nc_dir": "/remote/sim", "prefix": "", "variables": {}}
+        ],
+        _prefix_input=_Text(""),
+        _data_type_combo=_Text("grid"),
+        _grid_res_input=_Text("0.5"),
+        _tim_res_combo=_Text("Month"),
+        _data_groupby_combo=_Text("Year"),
+        _suffix_input=_Text(".nc"),
+        _root_input=_Text("/remote/sim"),
+    )
+
+    def stale_registry(self):
+        raise RuntimeError("Remote registry target or execution context changed; refresh the controller registry")
+
+    monkeypatch.setattr(page_sim_data.PageSimData, "_registry", stale_registry)
+    monkeypatch.setattr(page_sim_data.QMessageBox, "critical", lambda *args: errors.append(args))
+
+    page_sim_data.PageSimData.save_to_config(page)
+
+    assert controller.updated is None
+    assert errors and errors[0][1] == "Remote Registry Error"
+
+
+def test_remote_save_preserves_sources_only_when_registry_is_offline(monkeypatch):
+    controller = _Controller()
+    controller.is_remote_mode = lambda: True
+    controller.config["evaluation_items"] = {"Runoff": True}
+    controller.config["sim_data"] = {"general": {"Runoff_sim_source": ["CaseA"]}}
+
+    page = SimpleNamespace(
+        controller=controller,
+        get_selected_cases=lambda: [
+            {"label": "CaseA", "model": "RemoteModel", "nc_dir": "/remote/sim", "prefix": "", "variables": {}}
+        ],
+        _prefix_input=_Text(""),
+        _data_type_combo=_Text("grid"),
+        _grid_res_input=_Text("0.5"),
+        _tim_res_combo=_Text("Month"),
+        _data_groupby_combo=_Text("Year"),
+        _suffix_input=_Text(".nc"),
+        _root_input=_Text("/remote/sim"),
+    )
+
+    monkeypatch.setattr(page_sim_data.PageSimData, "_registry", lambda self: (_ for _ in ()).throw(ValueError("boom")))
+
+    page_sim_data.PageSimData.save_to_config(page)
+
+    assert controller.updated[1]["general"]["Runoff_sim_source"] == ["CaseA"]
+
+
+def test_remote_registry_identity_failure_is_not_classified_as_offline():
+    def fail_identity():
+        raise RuntimeError("identity probe failed")
+
+    controller = SimpleNamespace(
+        ssh_manager=SimpleNamespace(is_connected=True, get_active_target_identity=fail_identity)
+    )
+
+    assert page_sim_data._remote_registry_is_offline(controller) is False
+
+
 def test_simulation_case_uses_readable_card_layout(qapp):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QFormLayout, QGroupBox, QSizePolicy
@@ -590,6 +736,8 @@ def test_remote_saved_model_survives_registry_disconnect(qapp):
     page.load_from_config()
 
     assert page._cases[0]["model_combo"].currentData() == "RemoteOnly"
+    page._model_names = ["RemoteOnly"]  # registry was available before the connection dropped
     page.save_to_config()
     assert controller.config["sim_data"]["_scanned_cases"][0]["model"] == "RemoteOnly"
     assert controller.config["sim_data"]["source_configs"]["CaseA"]["general"]["model_namelist"] == "RemoteOnly"
+    assert controller.config["sim_data"]["general"]["Runoff_sim_source"] == ["CaseA"]

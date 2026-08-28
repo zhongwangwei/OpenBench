@@ -338,6 +338,28 @@ def test_scan_confirmation_leaves_unresolved_model_blank(qapp):
 
     assert dialog.get_results()[0]["model"] == ""
 
+def test_scan_confirmation_match_info_is_bounded_scroll_text(qapp):
+    from PySide6.QtWidgets import QPlainTextEdit
+
+    from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
+
+    match_info = "\n".join(f"Case{i}: Model" for i in range(200))
+    dialog = ScanConfirmDialog(
+        discovered=[(f"Case{i}", f"/sim/Case{i}", "") for i in range(200)],
+        model_names=["Model"],
+        auto_model="",
+        match_info=match_info,
+        nc_var_count=10,
+        case_models={f"Case{i}": "Model" for i in range(200)},
+    )
+
+    boxes = dialog.findChildren(QPlainTextEdit)
+    dialog.resize(dialog.sizeHint())
+
+    assert boxes and boxes[0].toPlainText() == match_info
+    assert boxes[0].maximumHeight() <= 160
+    assert dialog.height() <= dialog.maximumHeight()
+
 
 def test_scan_confirmation_does_not_claim_model_is_unresolved_when_case_model_was_detected(qapp):
     from PySide6.QtWidgets import QLabel

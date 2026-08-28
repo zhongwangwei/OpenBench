@@ -453,6 +453,7 @@ class RemoteNetCDFValidator:
     # Python script template for remote execution
     INSPECT_SCRIPT = '''
 import json
+import os
 import sys
 try:
     import xarray as xr
@@ -460,6 +461,7 @@ try:
 
     def safe_open(path):
         """Open dataset, trying decode_times=False if default fails."""
+        path = os.path.expanduser(path)
         try:
             return xr.open_dataset(path)
         except Exception:
