@@ -268,9 +268,7 @@ def test_remote_python_command_uses_conda_sh_when_base_derivable():
 def test_remote_python_command_uses_nonstandard_conda_root():
     from openbench.gui.remote_python import build_remote_python_command
 
-    cmd = build_remote_python_command(
-        "print(1)", python_path="/shared/apps/conda/envs/ob/bin/python", conda_env="ob"
-    )
+    cmd = build_remote_python_command("print(1)", python_path="/shared/apps/conda/envs/ob/bin/python", conda_env="ob")
 
     assert ". /shared/apps/conda/etc/profile.d/conda.sh && conda activate ob && " in cmd
 
@@ -438,7 +436,7 @@ def test_data_validator_inspect_accepts_login_banner_before_json():
 
         def execute(self, command, timeout=None):
             self.commands.append((command, timeout))
-            return "Last login: Fri Aug 28\n{\"success\": true, \"variables\": [\"tas\"]}\n", "", 0
+            return 'Last login: Fri Aug 28\n{"success": true, "variables": ["tas"]}\n', "", 0
 
     validator = RemoteNetCDFValidator(SSH())
 
@@ -595,6 +593,7 @@ def test_gui_reference_scan_skip_message_includes_remediation():
 
     assert "Grid/LowRes/Water/Bad: unsupported_layout" in message
     assert "Register it manually." in message
+
 
 def test_show_scan_incomplete_truncates_text_and_keeps_full_details(monkeypatch):
     from openbench.data.registry.scanner import ScanSkip
@@ -847,7 +846,6 @@ def test_remote_ref_scan_register_worker_receives_remote_context(monkeypatch):
     assert captured["started"] is True
 
 
-
 def test_remote_registry_scan_register_worker_receives_remote_context(monkeypatch):
     from openbench.data.registry.scanner import DatasetGroup, ScannedDataset
     from openbench.gui.pages import page_registry
@@ -905,6 +903,7 @@ def test_remote_registry_scan_register_worker_receives_remote_context(monkeypatc
         "openbench_path": "/ob",
     }
     assert captured["started"] is True
+
 
 def test_remote_scan_script_attaches_remote_inspections(monkeypatch):
     from openbench.gui.pages import _scan_worker

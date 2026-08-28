@@ -169,12 +169,13 @@ def test_create_remote_temp_dir_ignores_login_banner_paths(tmp_path):
 def test_create_remote_temp_dir_ignores_later_matching_unmarked_path(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
-    ssh = ExecuteSSH((
-        "__OPENBENCH_TMP__=/tmp/openbench_wizard_abcd1234\n"
-        "/tmp/openbench_wizard_other9999\n",
-        "",
-        0,
-    ))
+    ssh = ExecuteSSH(
+        (
+            "__OPENBENCH_TMP__=/tmp/openbench_wizard_abcd1234\n/tmp/openbench_wizard_other9999\n",
+            "",
+            0,
+        )
+    )
     runner = RemoteRunner(
         str(config),
         ssh,

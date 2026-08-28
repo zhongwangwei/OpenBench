@@ -446,9 +446,7 @@ def test_conda_env_change_detects_only_remote_source_root(
     def fake_exec(ssh_manager, command, timeout=None, should_abort=None):
         calls.append(command)
         return (
-            "login-shell noise\n"
-            "__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n"
-            + source_root_line,
+            "login-shell noise\n__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n" + source_root_line,
             "",
             0,
         )
@@ -1634,7 +1632,8 @@ def test_compute_node_edit_pending_guard_restores_confirmed_target(qapp):
     widget = RemoteConfigWidget()
     widget._ssh_manager = type(
         "SSH",
-        (), {
+        (),
+        {
             "is_connected": True,
             "is_jump_connected": True,
             "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
@@ -1662,7 +1661,8 @@ def test_compute_node_edit_without_pending_disconnects_old_target(qapp):
     widget = RemoteConfigWidget()
     widget._ssh_manager = type(
         "SSH",
-        (), {
+        (),
+        {
             "is_connected": True,
             "is_jump_connected": True,
             "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
@@ -1686,7 +1686,8 @@ def test_manual_compute_disconnect_pending_guard_keeps_target(qapp):
     widget = RemoteConfigWidget()
     widget._ssh_manager = type(
         "SSH",
-        (), {
+        (),
+        {
             "is_connected": True,
             "_jump_client": object(),
             "disconnect_jump": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
@@ -1736,7 +1737,8 @@ def test_main_server_edit_pending_guard_restores_confirmed_connection(qapp):
     widget = RemoteConfigWidget()
     ssh = type(
         "SSH",
-        (), {
+        (),
+        {
             "is_connected": True,
             "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
         },

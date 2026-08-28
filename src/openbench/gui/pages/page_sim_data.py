@@ -512,7 +512,11 @@ def _remote_registry_is_offline(controller) -> bool:
     try:
         from openbench.gui.path_utils import get_remote_ssh_manager
 
-        ssh = get_remote_ssh_manager(controller) if hasattr(controller, "storage") else getattr(controller, "ssh_manager", None)
+        ssh = (
+            get_remote_ssh_manager(controller)
+            if hasattr(controller, "storage")
+            else getattr(controller, "ssh_manager", None)
+        )
     except Exception:
         # Only a provably disconnected target may use the offline-preservation
         # path.  A lookup failure is a real registry error, not evidence that
