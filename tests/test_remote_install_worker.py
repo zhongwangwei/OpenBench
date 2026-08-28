@@ -302,6 +302,66 @@ def test_main_connect_rejects_missing_selected_compute_credentials(qapp, monkeyp
     assert warnings and warnings[-1][1] == "Authentication Required"
 
 
+def test_main_connect_discards_handshake_if_ui_target_changes(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        def __init__(self, *args, **kwargs):
+            self.is_connected = False
+            self.disconnected = False
+
+        def connect(self, host, password=None, key_file=None):
+            assert host == "alice@login-a"
+            widget.host_input.setText("alice@login-b")
+            self.is_connected = True
+
+        def disconnect(self):
+            self.disconnected = True
+            self.is_connected = False
+
+    widget = RemoteConfigWidget()
+    widget.host_input.setText("alice@login-a")
+    widget.radio_password.setChecked(True)
+    widget.password_input.setText("secret")
+    monkeypatch.setattr(remote_config, "SSHManager", SSH)
+    monkeypatch.setattr(remote_config, "call_responsive", lambda fn: fn())
+    monkeypatch.setattr(remote_config.QMessageBox, "critical", staticmethod(lambda *a, **k: None))
+
+    widget._test_connection()
+
+    assert widget._ssh_manager is None
+    assert widget.status_label.text() == "Connection failed"
+
+
+def test_compute_connect_discards_handshake_if_ui_target_changes(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+        is_jump_connected = False
+
+        def connect_with_jump(self, **_kwargs):
+            self.is_jump_connected = True
+            widget.node_input.setText("node-b")
+
+        def disconnect(self):
+            self.is_connected = False
+            self.is_jump_connected = False
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-a")
+    monkeypatch.setattr(remote_config, "call_responsive", lambda fn: fn())
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+
+    widget._confirm_node_connection()
+
+    assert widget._ssh_manager.is_connected is False
+    assert widget._ssh_manager.is_jump_connected is False
+    assert widget.node_status_label.text().startswith("✗ Connection settings changed")
+
+
 def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
     from types import SimpleNamespace
 
@@ -403,7 +463,62 @@ def test_conda_env_change_detects_only_remote_source_root(
     assert "find_spec" in calls[0]
     inner_command = shlex.split(calls[0])[-1]
     inner_parts = shlex.split(inner_command)
+    assert "conda" not in inner_parts
+    assert inner_parts[2] == "/envs/openbench/bin/python"
     compile(inner_parts[inner_parts.index("-c") + 1], "<remote-openbench-probe>", "exec")
+
+
+def test_conda_env_change_preserves_combo_items_when_python_path_is_applied(qapp, monkeypatch):
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QSignalBlocker
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SimpleNamespace(is_connected=False)
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("base", "/shared/apps/conda")
+    widget.conda_combo.addItem("openbench", "/shared/apps/conda/envs/openbench")
+    widget.conda_combo.setCurrentIndex(2)
+    del blocker
+
+    widget._on_conda_env_changed(2)
+
+    assert [widget.conda_combo.itemText(i) for i in range(widget.conda_combo.count())] == [
+        "(Not using conda environment)",
+        "base",
+        "openbench",
+    ]
+    assert [widget.conda_combo.itemData(i) for i in range(widget.conda_combo.count())] == [
+        None,
+        "/shared/apps/conda",
+        "/shared/apps/conda/envs/openbench",
+    ]
+    assert widget.conda_combo.currentText() == "openbench"
+    assert widget.python_combo.currentText() == "/shared/apps/conda/envs/openbench/bin/python"
+
+
+@pytest.mark.parametrize(
+    "python_path",
+    [
+        "/usr/bin/python",
+        "/opt/venv/bin/python",
+        "/work/project/envs/openbench/bin/python",
+        "/work/conda-venv/bin/python",
+    ],
+)
+def test_plain_remote_python_is_not_inferred_as_conda(qapp, python_path):
+    from PySide6.QtCore import QSignalBlocker
+
+    widget = RemoteConfigWidget()
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("openbench", "/shared/apps/conda/envs/openbench")
+    widget.conda_combo.setCurrentIndex(1)
+    del blocker
+
+    widget.python_combo.setCurrentText(python_path)
+
+    assert widget.conda_combo.currentIndex() == 0
+    assert widget.conda_combo.count() == 2
 
 
 def test_conda_env_change_discards_result_after_remote_target_changes(qapp, monkeypatch):
@@ -436,6 +551,65 @@ def test_conda_env_change_discards_result_after_remote_target_changes(qapp, monk
 
     assert widget.python_combo.currentText() == ""
     assert widget.openbench_input.text() == "~/OpenBench"
+
+
+def test_conda_env_change_discards_fallback_after_remote_target_disconnect(qapp, monkeypatch):
+    from PySide6.QtCore import QSignalBlocker
+
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+        identity = ("direct", "login-a")
+
+        def get_active_target_identity(self):
+            return self.identity
+
+    ssh = SSH()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = ssh
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("openbench", "/envs/openbench")
+    widget.conda_combo.setCurrentIndex(1)
+    del blocker
+
+    def fake_exec(*_args, **_kwargs):
+        ssh.identity = None
+        raise RuntimeError("connection dropped")
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
+
+    widget._on_conda_env_changed(1)
+
+    assert widget.python_combo.currentText() == ""
+
+
+def test_conda_env_probe_expands_tilde_python_path(qapp, monkeypatch):
+    import shlex
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QSignalBlocker
+
+    from openbench.gui.widgets import remote_config
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SimpleNamespace(is_connected=True)
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("openbench", "~/miniconda3/envs/openbench")
+    widget.conda_combo.setCurrentIndex(1)
+    del blocker
+    commands = []
+
+    def fake_exec(_ssh, command, **_kwargs):
+        commands.append(command)
+        return "__OPENBENCH_PYTHON__=/home/alice/miniconda3/envs/openbench/bin/python\n", "", 0
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
+
+    widget._on_conda_env_changed(1)
+
+    inner_command = shlex.split(commands[0])[-1]
+    assert '"$HOME"/miniconda3/envs/openbench/bin/python' in inner_command
 
 
 def test_create_conda_env_uses_guarded_dialog_and_blocks_reentry(qapp, monkeypatch):
@@ -1072,6 +1246,68 @@ def test_conda_create_commands_expand_tilde_conda_exe(qapp, monkeypatch):
     assert ssh.commands
     assert ssh.commands[0].startswith('"$HOME"/miniconda3/bin/conda create')
     assert "'~/" not in ssh.commands[0]
+
+
+def test_create_conda_env_derives_base_from_selected_env_python(qapp, monkeypatch):
+    from PySide6.QtCore import QObject, Signal
+
+    from openbench.gui.widgets import remote_config
+
+    created = []
+
+    class FakeCallable:
+        def __init__(self, func, parent=None):
+            class Signals(QObject):
+                finished_with_result = Signal(object)
+                failed = Signal(str)
+                finished = Signal()
+
+            self._signals = Signals()
+            self.finished_with_result = self._signals.finished_with_result
+            self.failed = self._signals.failed
+            self.finished = self._signals.finished
+            self.func = func
+            created.append(self)
+
+        def start(self):
+            pass
+
+        def isRunning(self):
+            return True
+
+        def deleteLater(self):
+            pass
+
+        def requestInterruption(self):
+            pass
+
+        def isInterruptionRequested(self):
+            return False
+
+    class RecordingSSH:
+        is_connected = True
+
+        def __init__(self):
+            self.commands = []
+
+        def detect_conda_envs(self):
+            return []
+
+        def execute(self, command, timeout=None, should_abort=None):
+            self.commands.append(command)
+            return "ok", "", 0
+
+    monkeypatch.setattr(remote_config, "CallableWorker", FakeCallable)
+    monkeypatch.setattr(remote_config.QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = RecordingSSH()
+    widget.python_combo.setCurrentText("/shared/apps/conda/envs/existing/bin/python")
+
+    widget._create_conda_env()
+    created[0].func()
+
+    assert widget._ssh_manager.commands[0].startswith("/shared/apps/conda/bin/conda create")
 
 
 def test_install_openbench_skips_dependency_step_without_python_env(qapp, monkeypatch):

@@ -248,6 +248,21 @@ def test_kill_remote_process_matches_tilde_config_as_expanded_home(tmp_path):
     assert "/[^[:space:]]+/OpenBench/output/case/openbench\\.yaml" in ssh.commands[0]
 
 
+def test_kill_remote_process_terminates_captured_process_group(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("", "", 0))
+    runner = _runner(config, ssh)
+    runner._remote_process_group = 4321
+
+    runner._kill_remote_process()
+
+    assert len(ssh.commands) == 1
+    assert "kill -TERM -4321" in ssh.commands[0]
+    assert "kill -KILL -4321" in ssh.commands[0]
+    assert "pkill" not in ssh.commands[0]
+
+
 def test_cleanup_remote_reports_nonzero_rm_failure(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
@@ -323,6 +338,25 @@ def test_execute_remote_openbench_passes_should_abort_to_stream(tmp_path):
 
     assert success is True
     assert callable(ssh.stream_kwargs.get("should_abort"))
+
+
+def test_execute_remote_openbench_captures_hidden_process_group_marker(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = StreamSSH(lines=["login banner\n", "__OPENBENCH_PGID__=4321\n", "running\n"], exit_code=0)
+    runner = _runner(config, ssh)
+    runner._remote_config_path = "/remote/main.yaml"
+    logs = []
+    runner.log_message.connect(logs.append)
+
+    success, _message = runner._execute_remote_openbench()
+
+    assert success is True
+    assert runner._remote_process_group == 4321
+    assert logs[-1] == "running"
+    assert "login banner" in logs
+    assert all("__OPENBENCH_PGID__" not in line for line in logs)
+    assert "setsid" in ssh.stream_command
 
 
 def test_execute_remote_openbench_preserves_partial_marker_outside_tail(tmp_path):

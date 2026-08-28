@@ -27,7 +27,6 @@ import re
 import shlex
 from typing import Optional, Dict, Any, List
 
-
 def _has_exact_stdout_line(stdout: str, sentinel: str) -> bool:
     return any(line.strip() == sentinel for line in stdout.splitlines())
 
@@ -82,6 +81,7 @@ from openbench.gui.widgets._ssh_worker import (
     execute_responsive,
 )
 from openbench.config.schema import DEFAULT_NUM_CORES
+from openbench.gui.remote_python import conda_env_from_python_path
 from openbench.gui.widgets._task_worker import CallableWorker
 from openbench.remote.ssh import SSHManager, SSHConnectionError
 from openbench.remote.credentials import CredentialManager, CredentialStorageError
@@ -868,8 +868,8 @@ class RemoteConfigWidget(QWidget):
         self.python_combo = NoScrollComboBox()
         self.python_combo.setEditable(True)
         self.python_combo.setMinimumWidth(250)
-        self.python_combo.currentTextChanged.connect(self._on_config_changed)
         self.python_combo.currentTextChanged.connect(self._infer_conda_from_python)
+        self.python_combo.currentTextChanged.connect(self._on_config_changed)
         python_layout.addWidget(self.python_combo, 1)
 
         self.btn_detect_python = QPushButton("Detect")
@@ -1047,7 +1047,7 @@ class RemoteConfigWidget(QWidget):
             for name in ("_conda_create_worker", "_install_worker")
         ) or any(
             getattr(self, name, False)
-            for name in ("_conda_create_flow_active", "_install_flow_active")
+            for name in ("_handshake_active", "_conda_create_flow_active", "_install_flow_active")
         )
 
     def _prepare_target_change(self) -> bool:
@@ -1175,6 +1175,9 @@ class RemoteConfigWidget(QWidget):
         if not node_name:
             QMessageBox.warning(self, "Error", "Please enter the compute node name")
             return
+        server_config = self._current_server_config()
+        project_path = self.openbench_input.text().strip()
+        node_config = self._current_node_config()
         self._handshake_active = True
         try:
             self.btn_confirm_node.setEnabled(False)
@@ -1224,11 +1227,23 @@ class RemoteConfigWidget(QWidget):
             if callable(get_home):
                 call_responsive(get_home)
 
+            if (
+                self._ssh_manager is not manager
+                or self._current_server_config() != server_config
+                or self._current_node_config() != node_config
+                or self.openbench_input.text().strip() != project_path
+            ):
+                try:
+                    manager.disconnect()
+                except Exception as exc:
+                    logger.warning("Error disconnecting stale compute-node handshake: %s", exc)
+                raise SSHConnectionError("Connection settings changed while SSH was connecting; please connect again.")
+
             if self._ssh_manager.is_jump_connected:
                 self.node_status_label.setText(f"✓ Connected to {node_name}")
                 self.node_status_label.setStyleSheet("color: green; font-weight: bold;")
                 # Toggle buttons - connected
-                self._confirmed_node_config = self._current_node_config()
+                self._confirmed_node_config = node_config
                 self.btn_confirm_node.setEnabled(False)
                 self.btn_disconnect_node.setEnabled(True)
                 # Update CPU count for compute node
@@ -1369,31 +1384,30 @@ if spec is not None:
                 # One remote round trip resolves both values. PYTHONPATH and
                 # the user site are excluded so the selected environment, not
                 # a login-shell override, determines the result.
+                env_python = posixpath.join(str(env_path).rstrip("/"), "bin/python")
                 inner = (
                     "PYTHONPATH= PYTHONNOUSERSITE=1 "
-                    f"conda run -n {shlex.quote(env_name)} python -c {shlex.quote(probe)} 2>/dev/null"
+                    f"{_safe_remote_path(env_python)} -c {shlex.quote(probe)} 2>/dev/null"
                 )
                 cmd = f"bash -i -l -c {shlex.quote(inner)}"
                 stdout, _, exit_code = execute_responsive(ssh_manager, cmd, timeout=10)
-                if seq != self._conda_env_sync_seq:
-                    return  # superseded by a newer selection
-                if self._ssh_manager is not ssh_manager:
-                    return
-                if callable(get_identity):
-                    current_identity = get_identity()
-                    if current_identity is None or tuple(current_identity) != identity:
-                        return
-                if exit_code == 0 and stdout.strip():
-                    for line in stdout.splitlines():
-                        line = line.strip()
-                        if line.startswith(_CONDA_PYTHON_MARKER):
-                            python_path = line[len(_CONDA_PYTHON_MARKER) :].strip()
-                        elif line.startswith(_CONDA_SOURCE_ROOT_MARKER):
-                            openbench_root = line[len(_CONDA_SOURCE_ROOT_MARKER) :].strip()
             except Exception:
-                pass
+                stdout, exit_code = "", 1
             if seq != self._conda_env_sync_seq:
                 return  # a newer selection owns the fallback too
+            if self._ssh_manager is not ssh_manager:
+                return
+            if callable(get_identity):
+                current_identity = get_identity()
+                if current_identity is None or tuple(current_identity) != identity:
+                    return
+            if exit_code == 0 and stdout.strip():
+                for line in stdout.splitlines():
+                    line = line.strip()
+                    if line.startswith(_CONDA_PYTHON_MARKER):
+                        python_path = line[len(_CONDA_PYTHON_MARKER) :].strip()
+                    elif line.startswith(_CONDA_SOURCE_ROOT_MARKER):
+                        openbench_root = line[len(_CONDA_SOURCE_ROOT_MARKER) :].strip()
 
         # Fallback: construct path from env_path
         if not python_path.startswith("/"):
@@ -1483,6 +1497,8 @@ if spec is not None:
         if getattr(self, "_handshake_active", False):
             return  # another handshake is mid-auth; don't race it
 
+        server_config = self._current_server_config()
+        project_path = self.openbench_input.text().strip()
         node = ""
         node_password = None
         node_key_file = None
@@ -1498,6 +1514,7 @@ if spec is not None:
             if self.radio_node_key.isChecked() and not node_key_file:
                 QMessageBox.warning(self, "Authentication Required", "Select the compute node SSH key.")
                 return
+        node_config = self._current_node_config()
 
         # Update status
         self.status_label.setText("Connecting...")
@@ -1539,10 +1556,16 @@ if spec is not None:
 
             if not shiboken6.isValid(self):
                 return  # widget destroyed while the handshake event loop ran
+            if (
+                self._current_server_config() != server_config
+                or self._current_node_config() != node_config
+                or self.openbench_input.text().strip() != project_path
+            ):
+                raise SSHConnectionError("Connection settings changed while SSH was connecting; please connect again.")
 
-            self._confirmed_server_config = self._current_server_config()
-            self._confirmed_node_config = self._current_node_config()
-            self._confirmed_project_path = self.openbench_input.text().strip()
+            self._confirmed_server_config = server_config
+            self._confirmed_node_config = node_config
+            self._confirmed_project_path = project_path
 
             # Update status to connected
             self.status_label.setText("Connected")
@@ -1859,10 +1882,8 @@ if spec is not None:
             return
 
         # Determine conda path from python path
-        import re
-
-        conda_match = re.search(r"(.*/(miniconda|miniforge|anaconda|mambaforge)[^/]*)/bin/python", python_path)
-        if not conda_match:
+        conda_info = conda_env_from_python_path(python_path)
+        if not conda_info:
             QMessageBox.warning(
                 self,
                 "Error",
@@ -1870,7 +1891,7 @@ if spec is not None:
             )
             return
 
-        conda_base = conda_match.group(1)
+        _, conda_base = conda_info
         conda_exe = f"{conda_base}/bin/conda"
 
         # Progress dialog (Esc/close stays blocked until the worker finishes)
@@ -2017,37 +2038,25 @@ if spec is not None:
         if not python_path:
             return
 
-        # Check if this is a conda Python path
-        # Pattern: /path/to/conda_install/bin/python -> base environment
-        # Pattern: /path/to/conda_install/envs/ENV_NAME/bin/python -> ENV_NAME environment
+        conda_info = conda_env_from_python_path(python_path)
+        blocker = QSignalBlocker(self.conda_combo)
+        try:
+            if not conda_info:
+                if self.conda_combo.count():
+                    self.conda_combo.setCurrentIndex(0)
+                return
 
-        import re
-
-        # Check for environment path: .../envs/ENV_NAME/bin/python
-        env_match = re.search(r"/(miniconda|miniforge|anaconda|mambaforge)[^/]*/envs/([^/]+)/bin/python", python_path)
-        if env_match:
-            env_name = env_match.group(2)
-            conda_type = env_match.group(1)
-            # Update conda combo to show this environment
-            self.conda_combo.clear()
-            self.conda_combo.addItem(f"{env_name} ({conda_type} env)")
-            self.conda_combo.setCurrentIndex(0)
-            return
-
-        # Check for base environment: .../miniconda*/bin/python
-        base_match = re.search(r"/(miniconda|miniforge|anaconda|mambaforge)[^/]*/bin/python", python_path)
-        if base_match:
-            conda_type = base_match.group(1)
-            # This is the base environment
-            self.conda_combo.clear()
-            self.conda_combo.addItem(f"base ({conda_type})")
-            self.conda_combo.setCurrentIndex(0)
-            return
-
-        # Not a conda Python
-        self.conda_combo.clear()
-        self.conda_combo.addItem("(Not using conda environment)")
-        self.conda_combo.setCurrentIndex(0)
+            env_name, conda_base = conda_info
+            env_path = conda_base if env_name == "base" else f"{conda_base}/envs/{env_name}"
+            for idx in range(self.conda_combo.count()):
+                item_path = self.conda_combo.itemData(idx)
+                if item_path == env_path or (not item_path and self.conda_combo.itemText(idx).split()[0] == env_name):
+                    self.conda_combo.setCurrentIndex(idx)
+                    return
+            self.conda_combo.addItem(env_name, env_path)
+            self.conda_combo.setCurrentIndex(self.conda_combo.count() - 1)
+        finally:
+            del blocker
 
     def _browse_openbench(self):
         """Open remote file browser to select OpenBench installation path."""

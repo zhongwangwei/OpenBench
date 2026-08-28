@@ -5,13 +5,10 @@ from __future__ import annotations
 import base64
 import json
 import os
-import re
 import shlex
 import tempfile
 import uuid
 from typing import Any
-
-_CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)")
 
 
 # Canonical implementation lives in the remote layer so non-GUI modules
@@ -19,6 +16,30 @@ _CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambafor
 from openbench.remote.ssh import quote_remote_path  # noqa: F401
 
 _MAX_INLINE_SCRIPT_CHARS = 60_000
+
+
+def _looks_like_conda_base(path: str) -> bool:
+    name = path.rstrip("/").rsplit("/", 1)[-1].lower()
+    return name in {"conda", "mamba"} or name.startswith(
+        ("miniconda", "anaconda", "miniforge", "mambaforge", "micromamba")
+    )
+
+
+def conda_env_from_python_path(python_path: str) -> tuple[str, str] | None:
+    """Return ``(environment name, Conda base)`` for an identifiable Conda Python."""
+    path = (python_path or "").strip()
+    suffix = "/bin/python"
+    if not path.endswith(suffix):
+        return None
+    prefix = path[: -len(suffix)]
+    if "/envs/" in prefix:
+        base, env_name = prefix.rsplit("/envs/", 1)
+        if _looks_like_conda_base(base) and env_name and "/" not in env_name:
+            return env_name, base
+        return None
+    if _looks_like_conda_base(prefix):
+        return "base", prefix
+    return None
 
 
 def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") -> str:
@@ -34,11 +55,11 @@ def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") 
     if not conda_env:
         return inner
     q_env = shlex.quote(conda_env)
-    match = _CONDA_BASE_PATTERN.search(python_path or "")
-    if match:
+    conda_info = conda_env_from_python_path(python_path)
+    if conda_info:
         # SSHManager wraps everything in `sh -c`, so use the POSIX dot
         # command (`source` is a bashism that dash/ash reject).
-        q_base = quote_remote_path(match.group(1))
+        q_base = quote_remote_path(conda_info[1])
         return f". {q_base}/etc/profile.d/conda.sh && conda activate {q_env} && {inner}"
     return f"bash -l -c {shlex.quote(f'conda activate {q_env} && {inner}')}"
 

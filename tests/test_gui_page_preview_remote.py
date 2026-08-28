@@ -699,3 +699,118 @@ def test_remote_preview_uses_expanded_root_for_output_parent_and_paths(monkeypat
         preview._resolve_path_for_remote("Reference", "~/OpenBench", preview.controller.ssh_manager)
         == "/home/alice/OpenBench/Reference"
     )
+
+
+def test_remote_export_aborts_if_target_changes_after_mkdir(monkeypatch, tmp_path):
+    from openbench.gui.pages import page_preview as preview_module
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.identity = ("direct", "alice", "login-a", 22)
+            self.sftp_opened = False
+
+        def get_active_target_identity(self):
+            return self.identity
+
+        def execute(self, command, timeout=30):
+            self.identity = ("direct", "alice", "login-b", 22)
+            return "", "", 0
+
+        def open_sftp(self):
+            self.sftp_opened = True
+            return FakeSFTP()
+
+    class Controller(FakeControllerBase):
+        config = {"general": {"basename": "demo"}}
+        navigated = []
+
+        def go_to_page(self, page):
+            self.navigated.append(page)
+
+    critical = []
+    ssh = SSH()
+    monkeypatch.setattr(preview_module, "get_remote_ssh_manager", lambda controller: ssh)
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_preview.QMessageBox.critical",
+        lambda parent, title, message: critical.append((title, message)),
+    )
+
+    preview = _preview()
+    preview.controller = Controller()
+    preview.run_requested = FakeSignal()
+    preview._get_openbench_root = lambda: str(tmp_path)
+    preview._export_for_remote = lambda *args, **kwargs: pytest.fail("must abort before local export")
+
+    assert preview._export_and_run_remote("/remote/output/demo") is False
+    assert ssh.sftp_opened is False
+    assert preview.controller.navigated == []
+    assert preview.run_requested.emitted == []
+    assert critical and "Remote target changed" in critical[-1][1]
+
+
+def test_remote_export_aborts_if_target_changes_between_sftp_uploads(monkeypatch, tmp_path):
+    from openbench.gui.pages import page_preview as preview_module
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.identity = ("direct", "alice", "login-a", 22)
+            self.sftp = None
+
+        def get_active_target_identity(self):
+            return self.identity
+
+        def execute(self, command, timeout=30):
+            return "", "", 0
+
+        def open_sftp(self):
+            self.sftp = FakeSFTP()
+            original_put = self.sftp.put
+
+            def put(local, remote):
+                original_put(local, remote)
+                self.identity = ("direct", "alice", "login-b", 22)
+
+            self.sftp.put = put
+            return self.sftp
+
+    class Controller(FakeControllerBase):
+        config = {"general": {"basename": "demo"}}
+        navigated = []
+
+        def go_to_page(self, page):
+            self.navigated.append(page)
+
+    def export_for_remote(local_dir, output_dir, openbench_root, remote_openbench_path, **_kwargs):
+        nml_dir = os.path.join(local_dir, "nml")
+        os.makedirs(nml_dir, exist_ok=True)
+        for name in ("a.yaml", "b.yaml"):
+            with open(os.path.join(nml_dir, name), "w", encoding="utf-8") as f:
+                f.write(name)
+        config_path = os.path.join(local_dir, "openbench.yaml")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("project: {}\n")
+        return {"config": config_path}
+
+    critical = []
+    ssh = SSH()
+    monkeypatch.setattr(preview_module, "get_remote_ssh_manager", lambda controller: ssh)
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_preview.QMessageBox.critical",
+        lambda parent, title, message: critical.append((title, message)),
+    )
+
+    preview = _preview()
+    preview.controller = Controller()
+    preview.run_requested = FakeSignal()
+    preview._get_openbench_root = lambda: str(tmp_path)
+    preview._export_for_remote = export_for_remote
+
+    assert preview._export_and_run_remote("/remote/output/demo") is False
+    assert len(ssh.sftp.put_calls) == 1
+    assert preview.controller.navigated == []
+    assert preview.run_requested.emitted == []
+    assert critical and "Remote target changed" in critical[-1][1]

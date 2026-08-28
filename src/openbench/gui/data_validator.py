@@ -554,18 +554,19 @@ except Exception as e:
 
     def _run_inspect_script(self, path: str) -> Optional[Dict[str, Any]]:
         """Run inspection script on remote server."""
-        from openbench.gui.remote_python import build_remote_python_command
+        from openbench.gui.remote_python import run_remote_python_json
 
         script = self.INSPECT_SCRIPT.format(path_json=json.dumps(path))
-        cmd = build_remote_python_command(script, python_path=self._python_path, conda_env=self._conda_env)
-
         try:
-            stdout, stderr, exit_code = execute_responsive(self._ssh, cmd, timeout=30)
-            if exit_code == 0 and stdout.strip():
-                return json.loads(stdout.strip())
+            return run_remote_python_json(
+                self._ssh,
+                script,
+                python_path=self._python_path,
+                conda_env=self._conda_env,
+                timeout=30,
+            )
         except Exception:
-            pass
-        return None
+            return None
 
     def inspect_file(self, path: str) -> Dict[str, Any]:
         """Return all remotely inspected metadata in one SSH round trip."""

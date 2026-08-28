@@ -180,11 +180,12 @@ def test_switching_local_aborts_when_storage_switch_fails(qapp, monkeypatch):
     assert "reset" not in events
 
 
-def test_switching_local_is_blocked_while_remote_install_is_active(qapp, monkeypatch):
+@pytest.mark.parametrize("active_attr", ["_install_flow_active", "_handshake_active"])
+def test_switching_local_is_blocked_while_remote_setup_is_active(qapp, monkeypatch, active_attr):
     page = _runtime_page(qapp, monkeypatch)
     events = []
     page.radio_remote.setChecked(True)
-    page.remote_config_widget._install_flow_active = True
+    setattr(page.remote_config_widget, active_attr, True)
     page.remote_config_widget.prepare_target_change = lambda: events.append("flush") or True
     page.remote_config_widget.disconnect = lambda: events.append("disconnect")
     page.remote_config_widget.reset_to_defaults = lambda: events.append("reset")
@@ -210,7 +211,7 @@ def test_switching_local_does_not_run_remote_target_change_callback(qapp, monkey
 
     assert page.radio_local.isChecked()
     assert "flush" not in events
-    assert events == ["switch", "reset"]
+    assert events == ["switch"]
 
 
 def test_connection_success_switches_to_remote_and_saves(qapp, monkeypatch):
@@ -262,12 +263,13 @@ def test_switching_local_flushes_storage_before_widget_disconnect():
         disconnect=lambda: events.append("disconnect"),
         reset_to_defaults=lambda: events.append("reset"),
     )
+    page._remote_export_blocks_target_change = lambda: False
     page._switch_to_local_storage = lambda: events.append("flush-and-switch") or True
     page._on_config_changed = lambda: events.append("save")
 
     page._on_execution_mode_changed(True)
 
-    assert events == ["flush-and-switch", "disconnect", "reset", "save"]
+    assert events == ["flush-and-switch", "disconnect", "save"]
 
 
 def test_local_install_commands_include_editable_install_with_selected_python(qapp, monkeypatch, tmp_path):
@@ -524,3 +526,52 @@ def test_switch_to_remote_storage_rejects_blank_openbench_path(qapp, monkeypatch
 
     assert page._switch_to_remote_storage() is False
     assert warnings == [("Remote OpenBench Not Configured", "Set the remote OpenBench path first.")]
+
+
+def test_switching_modes_preserves_local_and_remote_settings(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    page.local_openbench_input.setText("/local/OpenBench")
+    page.remote_config_widget.host_input.setText("alice@example.test")
+    page.remote_config_widget.openbench_input.setText("/remote/OpenBench")
+    page.remote_config_widget.get_ssh_manager = lambda: None
+    page._switch_to_local_storage = lambda: True
+
+    page.radio_remote.setChecked(True)
+    assert page.local_openbench_input.text() == "/local/OpenBench"
+
+    page.radio_local.setChecked(True)
+    assert page.remote_config_widget.host_input.text() == "alice@example.test"
+    assert page.remote_config_widget.openbench_input.text() == "/remote/OpenBench"
+    assert page._collect_runtime_settings()["remote"]["host"] == "alice@example.test"
+
+
+def test_runtime_prepare_remote_target_change_blocks_preview_export(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    warnings = []
+    page._get_main_window = lambda: SimpleNamespace(pages={"preview": SimpleNamespace(_export_in_progress=True)})
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_runtime.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    assert page._prepare_remote_target_change() is False
+    assert warnings == [
+        (
+            "Remote Export Active",
+            "Remote export is still in progress. Wait for it to finish before changing the remote target.",
+        )
+    ]
+
+
+def test_switching_local_is_blocked_during_remote_preview_export(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    page.radio_remote.setChecked(True)
+    page._get_main_window = lambda: SimpleNamespace(pages={"preview": SimpleNamespace(_export_in_progress=True)})
+    switches = []
+    page._switch_to_local_storage = lambda: switches.append(True) or True
+    monkeypatch.setattr("openbench.gui.pages.page_runtime.QMessageBox.warning", lambda *_args: None)
+
+    page.radio_local.setChecked(True)
+
+    assert page.radio_remote.isChecked()
+    assert switches == []

@@ -238,8 +238,8 @@ skipped = []
 try:
     from openbench.data.registry.manager import get_registry
     registered_names = {{ref.name for ref in get_registry().list_references()}}
-except Exception:
-    registered_names = set()
+except Exception as exc:
+    raise RuntimeError("remote registry load failed: %s: %s" % (type(exc).__name__, exc)) from exc
 only_names = {only_names_expr}
 if selected_variants is not None:
     groups = [

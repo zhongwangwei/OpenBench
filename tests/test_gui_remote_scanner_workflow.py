@@ -265,6 +265,16 @@ def test_remote_python_command_uses_conda_sh_when_base_derivable():
     assert cmd.endswith("| base64 -d | /opt/miniconda3/envs/ob/bin/python")
 
 
+def test_remote_python_command_uses_nonstandard_conda_root():
+    from openbench.gui.remote_python import build_remote_python_command
+
+    cmd = build_remote_python_command(
+        "print(1)", python_path="/shared/apps/conda/envs/ob/bin/python", conda_env="ob"
+    )
+
+    assert ". /shared/apps/conda/etc/profile.d/conda.sh && conda activate ob && " in cmd
+
+
 def test_conda_wrapped_commands_stay_posix_under_sh_wrapper():
     """SSHManager wraps every command in `sh -c`; `source` is a bashism that
     dash/ash reject, so the conda activation chain must stay pure POSIX."""
@@ -417,6 +427,54 @@ def test_remote_grid_single_time_check_rejects_missing_time_dimension():
 
     assert check.passed is False
     assert "Time dimension not found" in check.message
+
+
+def test_data_validator_inspect_accepts_login_banner_before_json():
+    from openbench.gui.data_validator import RemoteNetCDFValidator
+
+    class SSH:
+        def __init__(self):
+            self.commands = []
+
+        def execute(self, command, timeout=None):
+            self.commands.append((command, timeout))
+            return "Last login: Fri Aug 28\n{\"success\": true, \"variables\": [\"tas\"]}\n", "", 0
+
+    validator = RemoteNetCDFValidator(SSH())
+
+    result = validator.inspect_file("/remote/x.nc")
+
+    assert result == {"success": True, "variables": ["tas"]}
+    assert validator._ssh.commands[0][1] == 30
+
+
+def test_remote_reference_scan_reports_registry_load_failures(monkeypatch):
+    from openbench.data.registry import manager as registry_manager
+    from openbench.gui.pages import _scan_worker
+
+    def fake_run(ssh_manager, script, **kwargs):
+        exec(compile(script, "<remote-scan-script>", "exec"), {})
+
+    def fail_registry():
+        raise PermissionError("bad registry yaml")
+
+    monkeypatch.setattr("openbench.gui.remote_python.run_remote_python_json", fake_run)
+    monkeypatch.setattr(registry_manager, "get_registry", fail_registry)
+
+    with pytest.raises(RuntimeError, match="remote registry load failed: PermissionError: bad registry yaml"):
+        _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref")
+
+
+def test_remote_reference_scan_script_does_not_hide_registry_load_failures(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch, result={"groups": [], "skipped": [], "data_root": "/remote/ref"})
+
+    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref")
+
+    script = captured["script"]
+    assert "remote registry load failed" in script
+    assert "registered_names = set()" not in script
 
 
 def _capture_remote_json(monkeypatch, result=None):
