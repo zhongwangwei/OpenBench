@@ -180,6 +180,39 @@ def test_switching_local_aborts_when_storage_switch_fails(qapp, monkeypatch):
     assert "reset" not in events
 
 
+def test_switching_local_is_blocked_while_remote_install_is_active(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    page.radio_remote.setChecked(True)
+    page.remote_config_widget._install_flow_active = True
+    page.remote_config_widget.prepare_target_change = lambda: events.append("flush") or True
+    page.remote_config_widget.disconnect = lambda: events.append("disconnect")
+    page.remote_config_widget.reset_to_defaults = lambda: events.append("reset")
+    page._switch_to_local_storage = lambda: events.append("switch") or True
+
+    page.radio_local.setChecked(True)
+
+    assert page.radio_remote.isChecked()
+    assert not page.radio_local.isChecked()
+    assert events == []
+
+
+def test_switching_local_does_not_run_remote_target_change_callback(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    page.radio_remote.setChecked(True)
+    page.remote_config_widget.prepare_target_change = lambda: events.append("flush") or True
+    page.remote_config_widget.get_ssh_manager = lambda: None
+    page.remote_config_widget.reset_to_defaults = lambda: events.append("reset")
+    page._switch_to_local_storage = lambda: events.append("switch") or True
+
+    page.radio_local.setChecked(True)
+
+    assert page.radio_local.isChecked()
+    assert "flush" not in events
+    assert events == ["switch", "reset"]
+
+
 def test_connection_success_switches_to_remote_and_saves(qapp, monkeypatch):
     page = _runtime_page(qapp, monkeypatch)
     page.remote_config_widget.host_input.setText("alice@example.test")

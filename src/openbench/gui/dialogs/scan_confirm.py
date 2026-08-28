@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 
 
 class ScanConfirmDialog(QDialog):
@@ -65,9 +67,11 @@ class ScanConfirmDialog(QDialog):
 
         # --- Match info ---
         if match_info:
-            match_label = QLabel(f"<pre>{match_info}</pre>")
-            match_label.setStyleSheet("background: #f8f8f8; padding: 6px; border-radius: 4px;")
-            layout.addWidget(match_label)
+            match_box = QPlainTextEdit(match_info)
+            match_box.setReadOnly(True)
+            match_box.setMaximumHeight(160)
+            match_box.setStyleSheet("background: #f8f8f8; padding: 6px; border-radius: 4px;")
+            layout.addWidget(match_box)
 
         # --- Case table ---
         layout.addWidget(QLabel("Select cases to run and assign models:"))
@@ -140,6 +144,10 @@ class ScanConfirmDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            self.setMaximumHeight(max(420, screen.availableGeometry().height() - 80))
 
     @property
     def register_button(self) -> QPushButton:

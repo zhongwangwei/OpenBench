@@ -57,17 +57,35 @@ def unpack_scan_result(result):
     return result, []
 
 
-def format_scan_skips(skipped) -> str:
+def format_scan_skips(skipped, *, limit: int = 20) -> str:
     """Format unsupported reference folders for a GUI warning."""
-    lines = [f"The scanner skipped {len(skipped)} unsupported folder(s):"]
-    for item in skipped:
+    total = len(skipped)
+    shown = skipped[:limit]
+    lines = [f"The scanner skipped {total} unsupported folder(s):"]
+    for item in shown:
         path = getattr(item, "path", str(item))
         reason = getattr(item, "reason", "unsupported_layout")
         hint = getattr(item, "hint", "")
         lines.append(f"• {path}: {reason}")
         if hint:
             lines.append(f"  {hint}")
+    if total > len(shown):
+        lines.append(f"… and {total - len(shown)} more. See details for the full list.")
     return "\n".join(lines)
+
+
+def show_scan_incomplete(parent, skipped) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Warning)
+    box.setWindowTitle("Scan Incomplete")
+    box.setText(
+        f"The scanner skipped {len(skipped)} unsupported folder(s). "
+        "Open Details for the full list and remediation hints."
+    )
+    box.setDetailedText(format_scan_skips(skipped, limit=len(skipped)))
+    box.exec()
 
 
 def _remote_ref_root_path(value: str, data_root: str) -> str:
@@ -331,12 +349,19 @@ def enrich_selected_remote_variants(
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QProgressDialog
 
-        progress = QProgressDialog("Inspecting selected reference datasets...", None, 0, 0, parent)
+        import threading
+
+        progress = QProgressDialog("Inspecting selected reference datasets...", "Cancel", 0, 0, parent)
         progress.setWindowTitle("Inspecting")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
+        cancel_event = threading.Event()
+        canceled = getattr(progress, "canceled", None)
+        if canceled is not None and hasattr(canceled, "connect"):
+            canceled.connect(cancel_event.set)
         progress.show()
+    else:
+        cancel_event = None
     try:
         groups = scan_reference_datasets_remote(
             ssh_manager,
@@ -346,7 +371,14 @@ def enrich_selected_remote_variants(
             openbench_path=openbench_path,
             only_names=refresh_names,
             selected_variants=[variant for variant in variants if variant.registry_name in refresh_names],
+            should_abort=cancel_event.is_set if cancel_event is not None else None,
         )
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError("Cancelled")
+    except Exception as exc:
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError("Cancelled") from exc
+        raise
     finally:
         if progress is not None:
             progress.close()
@@ -389,6 +421,7 @@ def register_scanned_datasets_remote(
     conda_env: str = "",
     openbench_path: str = "",
     timeout: int = 900,
+    should_abort=None,
 ):
     from openbench.gui.remote_python import run_remote_python_json
 
@@ -420,6 +453,7 @@ print(json.dumps({{"catalog_path": str(catalog_path), "data_root": _data_root}})
         python_path=python_path,
         conda_env=conda_env,
         timeout=timeout,
+        should_abort=should_abort,
     )
 
 
@@ -446,10 +480,20 @@ class RegisterScannedDatasetsWorker(QThread):
         self._python_path = python_path
         self._conda_env = conda_env
         self._openbench_path = openbench_path
+        self._interruption_requested = False
+
+    def requestInterruption(self) -> None:  # noqa: N802 - Qt API name
+        self._interruption_requested = True
+        super().requestInterruption()
+
+    def _should_abort(self) -> bool:
+        return self._interruption_requested or self.isInterruptionRequested()
 
     def run(self) -> None:  # pragma: no cover - exercised through GUI integration
         try:
             if self._ssh_manager is not None:
+                if self._should_abort():
+                    raise InterruptedError("Cancelled")
                 result = register_scanned_datasets_remote(
                     self._ssh_manager,
                     self._datasets,
@@ -457,6 +501,7 @@ class RegisterScannedDatasetsWorker(QThread):
                     python_path=self._python_path,
                     conda_env=self._conda_env,
                     openbench_path=self._openbench_path,
+                    should_abort=self._should_abort,
                 )
             else:
                 from openbench.data.registry.scanner import register_scanned_datasets_batch

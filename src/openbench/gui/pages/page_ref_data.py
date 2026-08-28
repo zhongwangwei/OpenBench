@@ -386,11 +386,15 @@ class PageRefData(BasePage):
                 remember_reference_root(data_root)
                 self.save_to_config()
 
-            progress = QProgressDialog("Scanning reference datasets...", None, 0, 0, self)
+            progress = QProgressDialog(
+                "Scanning reference datasets...", "Cancel" if worker_kwargs else None, 0, 0, self
+            )
             progress.setWindowTitle("Scanning")
             progress.setWindowModality(Qt.WindowModal)
             progress.setMinimumDuration(0)
-            progress.setCancelButton(None)
+            canceled = getattr(progress, "canceled", None)
+            if worker_kwargs and canceled is not None and hasattr(canceled, "connect"):
+                canceled.connect(lambda: self._finish_scan_worker(cancel=True))
 
             from openbench.gui.pages._scan_worker import FindDatasetsWorker
 
@@ -501,11 +505,19 @@ class PageRefData(BasePage):
             data_root, worker_kwargs = remote_context
             remote_register_kwargs = {"data_root": data_root, **worker_kwargs}
 
-        progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
+        progress = QProgressDialog(
+            "Registering selected reference datasets...",
+            "Cancel" if remote_register_kwargs else None,
+            0,
+            0,
+            self,
+        )
         progress.setWindowTitle("Registering")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)
-        progress.setCancelButton(None)
+        canceled = getattr(progress, "canceled", None)
+        if remote_register_kwargs and canceled is not None and hasattr(canceled, "connect"):
+            canceled.connect(lambda: self._finish_register_worker(cancel=True))
 
         self.btn_scan.setEnabled(False)
         worker = RegisterScannedDatasetsWorker(variants, **remote_register_kwargs)
@@ -546,14 +558,14 @@ class PageRefData(BasePage):
         self._finish_scan_worker()
         try:
             from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
-            from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
+            from openbench.gui.pages._scan_worker import show_scan_incomplete, unpack_scan_result
 
             new_groups, skipped = unpack_scan_result(new_groups)
             self._available_registry_names = {
                 variant.registry_name for group in new_groups for variant in group.variants.values()
             }
             if skipped:
-                QMessageBox.warning(self, "Scan Incomplete", format_scan_skips(skipped))
+                show_scan_incomplete(self, skipped)
 
             if not new_groups:
                 self._refresh_registry_after_scan()
@@ -588,6 +600,9 @@ class PageRefData(BasePage):
             else:
                 self._refresh_registry_after_scan()
 
+        except InterruptedError:
+            self._refresh_registry_after_scan()
+            return
         except Exception as e:
             QMessageBox.critical(self, "Scan Failed", f"Error scanning: {e}")
             logger.exception("Data scan registration failed")

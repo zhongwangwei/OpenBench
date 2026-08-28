@@ -260,13 +260,15 @@ class NCImporterDialog(QDialog):
 
         script = f"""
 import json
+import os
 import xarray as xr
 
 _COORD_NAMES = set({coord_literal})
 
 {rows_src}
 
-with xr.open_dataset({json.dumps(path)}) as ds:
+remote_path = os.path.expanduser({json.dumps(path)})
+with xr.open_dataset(remote_path) as ds:
     payload = {{
         "path": {json.dumps(path)},
         "data_var_count": len(ds.data_vars),

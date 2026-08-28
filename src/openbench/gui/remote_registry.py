@@ -82,6 +82,18 @@ def _target_identity(ssh_manager) -> tuple:
     return tuple(identity)
 
 
+def _execution_context(settings: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(settings.get("python_path") or ""),
+        str(settings.get("conda_env") or ""),
+        str(settings.get("openbench_path") or ""),
+    )
+
+
+def _cache_key(controller, ssh_manager) -> tuple:
+    return (_target_identity(ssh_manager),) + _execution_context(_remote_settings(controller))
+
+
 def _remote_bootstrap(openbench_path: str) -> str:
     if not openbench_path:
         return ""
@@ -109,9 +121,9 @@ def _remote_json(controller, script: str):
     )
 
 
-def _load_remote_snapshot(controller, identity: tuple) -> "RemoteRegistrySnapshot":
+def _load_remote_snapshot(controller, cache_key: tuple) -> "RemoteRegistrySnapshot":
     payload = _remote_json(controller, _SNAPSHOT_SCRIPT)
-    return RemoteRegistrySnapshot(controller, identity, payload)
+    return RemoteRegistrySnapshot(controller, cache_key[0], payload, cache_key=cache_key)
 
 
 def _build_remote_reference(data: dict) -> ReferenceDataset:
@@ -131,9 +143,10 @@ class RemoteRegistrySnapshot:
     RESOLUTION_SUFFIXES = ("_LowRes", "_MidRes", "_HigRes")
     REFERENCE_ALIASES: dict[str, str] = {}
 
-    def __init__(self, controller, identity: tuple, payload: dict[str, Any]):
+    def __init__(self, controller, identity: tuple, payload: dict[str, Any], *, cache_key: tuple | None = None):
         self._controller = controller
         self._identity = identity
+        self._cache_key = cache_key or (identity, "", "", "")
         self.last_resolve_reason = ""
         self._references: dict[str, ReferenceDataset] = {}
         self._models: dict[str, ModelProfile] = {}
@@ -167,13 +180,13 @@ class RemoteRegistrySnapshot:
                 self._var_index.setdefault(normalize_name(var_name), []).append(key)
 
     def _ensure_current_target(self) -> None:
-        current = _target_identity(_ssh_manager(self._controller))
-        if current != self._identity:
-            raise RuntimeError("Remote registry target changed; refresh the controller registry")
+        current = _cache_key(self._controller, _ssh_manager(self._controller))
+        if current != self._cache_key:
+            raise RuntimeError("Remote registry target or execution context changed; refresh the controller registry")
 
     def refresh(self) -> "RemoteRegistrySnapshot":
         self._ensure_current_target()
-        fresh = _load_remote_snapshot(self._controller, self._identity)
+        fresh = _load_remote_snapshot(self._controller, self._cache_key)
         self._replace(
             {
                 "references": [ref.to_dict() for ref in fresh.list_references()],
@@ -184,6 +197,7 @@ class RemoteRegistrySnapshot:
         return self
 
     def list_references(self) -> list[ReferenceDataset]:
+        self._ensure_current_target()
         return sorted(self._references.values(), key=lambda ref: ref.name)
 
     def get_reference(
@@ -192,6 +206,7 @@ class RemoteRegistrySnapshot:
         sim_tim_res: str | None = None,
         sim_grid_res: float | None = None,
     ) -> ReferenceDataset | None:
+        self._ensure_current_target()
         key = normalize_name(name)
         key = self.REFERENCE_ALIASES.get(key, key)
         if key in self._references:
@@ -210,6 +225,7 @@ class RemoteRegistrySnapshot:
         return ref
 
     def get_resolution_variants(self, base_name: str) -> dict[str, ReferenceDataset]:
+        self._ensure_current_target()
         variants = {}
         base_key = normalize_name(base_name)
         base_key = self.REFERENCE_ALIASES.get(base_key, base_key)
@@ -222,12 +238,15 @@ class RemoteRegistrySnapshot:
         return variants
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
+        self._ensure_current_target()
         return [self._references[key] for key in self._var_index.get(normalize_name(variable), []) if key in self._references]
 
     def list_models(self) -> list[ModelProfile]:
+        self._ensure_current_target()
         return sorted(self._models.values(), key=lambda model: model.name)
 
     def get_model(self, name: str) -> ModelProfile | None:
+        self._ensure_current_target()
         key = normalize_name(name)
         result = self._models.get(key)
         if result is not None:
@@ -264,10 +283,10 @@ def get_registry(controller=None, *, refresh: bool = False):
         return get_local_registry()
 
     ssh = _ssh_manager(controller)
-    identity = _target_identity(ssh)
-    if refresh or identity not in _REMOTE_CACHE:
-        _REMOTE_CACHE[identity] = _load_remote_snapshot(controller, identity)
-    return _REMOTE_CACHE[identity]
+    key = _cache_key(controller, ssh)
+    if refresh or key not in _REMOTE_CACHE:
+        _REMOTE_CACHE[key] = _load_remote_snapshot(controller, key)
+    return _REMOTE_CACHE[key]
 
 
 def refresh_registry(controller=None):
@@ -280,6 +299,14 @@ def refresh_registry(controller=None):
     return get_registry(controller, refresh=True)
 
 
+def clear_remote_cache_for_target(ssh_manager) -> None:
+    """Drop all cached snapshots for the active SSH target."""
+    identity = _target_identity(ssh_manager)
+    for key in list(_REMOTE_CACHE):
+        if key and key[0] == identity:
+            _REMOTE_CACHE.pop(key, None)
+
+
 def clear_registry(controller=None) -> None:
     """Clear local or remote registry cache for ``controller``."""
     if controller is None or not _is_remote_controller(controller):
@@ -288,8 +315,6 @@ def clear_registry(controller=None) -> None:
         clear_registry_cache()
         return
     try:
-        identity = _target_identity(_ssh_manager(controller))
+        clear_remote_cache_for_target(_ssh_manager(controller))
     except RuntimeError:
         _REMOTE_CACHE.clear()
-        return
-    _REMOTE_CACHE.pop(identity, None)

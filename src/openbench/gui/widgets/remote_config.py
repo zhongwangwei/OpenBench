@@ -22,6 +22,7 @@ main thread anymore.
 import logging
 import os
 import platform
+import posixpath
 import re
 import shlex
 from typing import Optional, Dict, Any, List
@@ -203,7 +204,7 @@ def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env
             if interrupted():
                 return {"exit_code": 130, "output": "Interrupted before environment removal.\n", "envs": []}
             cmd = f"{quoted_conda_exe} env remove -n {quoted_env_name} -y 2>&1"
-            stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=120)
+            stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=120, should_abort=interrupted)
             output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
             if exit_code != 0:
                 return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": []}
@@ -211,7 +212,7 @@ def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env
             output_chunks.append("\nInterrupted before environment creation.\n")
             return {"exit_code": 130, "output": "".join(output_chunks), "envs": []}
         cmd = f"{quoted_conda_exe} create -n {quoted_env_name} python=3.12 -y 2>&1"
-        stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=300)
+        stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=300, should_abort=interrupted)
         output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
         envs = ssh_manager.detect_conda_envs() if exit_code == 0 and not interrupted() else []
         return {"exit_code": exit_code, "output": "".join(output_chunks), "envs": envs}
@@ -1038,7 +1039,18 @@ class RemoteConfigWidget(QWidget):
             self.btn_disconnect_node.setEnabled(False)
         self.connection_status_changed.emit(False)
 
+    def has_active_setup_flow(self) -> bool:
+        return any(
+            getattr(self, name, None) is not None
+            for name in ("_conda_create_worker", "_install_worker")
+        ) or any(
+            getattr(self, name, False)
+            for name in ("_conda_create_flow_active", "_install_flow_active")
+        )
+
     def _prepare_target_change(self) -> bool:
+        if self.has_active_setup_flow():
+            return False
         callback = getattr(self, "prepare_target_change", None)
         return bool(callback()) if callable(callback) else True
 
@@ -2054,12 +2066,13 @@ class RemoteConfigWidget(QWidget):
         if not self._has_connected_target():
             self._warn_not_connected()
             return
+        ssh_manager = self._ssh_manager
 
         # Get installation path
         install_path = self.openbench_input.text().strip()
         if not install_path:
             try:
-                home = call_responsive(self._ssh_manager._get_home_dir)
+                home = call_responsive(ssh_manager._get_home_dir)
                 install_path = f"{home}/OpenBench"
                 self.openbench_input.setText(install_path)
             except Exception as e:
@@ -2068,7 +2081,7 @@ class RemoteConfigWidget(QWidget):
                 return
 
         # Check if git is available
-        stdout, stderr, exit_code = execute_responsive(self._ssh_manager, "which git", timeout=10)
+        stdout, stderr, exit_code = execute_responsive(ssh_manager, "which git", timeout=10)
         if exit_code != 0:
             QMessageBox.warning(self, "Error", "Git is not installed on the remote server. Please install git first.")
             return
@@ -2081,15 +2094,24 @@ class RemoteConfigWidget(QWidget):
             QMessageBox.warning(self, "Invalid Path", str(exc))
             return
         stdout, stderr, exit_code = execute_responsive(
-            self._ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
+            ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
         )
         if exit_code == 0 and _has_exact_stdout_line(stdout, "exists"):
             # Check if it's a git repository
             quoted_git_dir = _safe_remote_path(f"{install_path}/.git")
             stdout2, stderr2, exit_code2 = execute_responsive(
-                self._ssh_manager, f"test -d {quoted_git_dir} && echo is_git", timeout=10
+                ssh_manager,
+                (
+                    f"test -e {quoted_git_dir} && "
+                    f"git -C {quoted_install_path} rev-parse --is-inside-work-tree 2>/dev/null "
+                    f"| grep -qx true && "
+                    f"test -f {_safe_remote_path(f'{install_path}/pyproject.toml')} && "
+                    f"test -d {_safe_remote_path(f'{install_path}/src/openbench')} && "
+                    f"echo is_openbench"
+                ),
+                timeout=10,
             )
-            if exit_code2 == 0 and _has_exact_stdout_line(stdout2, "is_git"):
+            if exit_code2 == 0 and _has_exact_stdout_line(stdout2, "is_openbench"):
                 # It's a git repo, offer update
                 reply = QMessageBox.question(
                     self,
@@ -2103,24 +2125,14 @@ class RemoteConfigWidget(QWidget):
                 else:
                     return
             else:
-                # Directory exists but not a git repo
-                reply = QMessageBox.question(
+                # Never delete an arbitrary remote directory on the user's behalf.
+                QMessageBox.warning(
                     self,
                     "Directory Exists",
-                    f"Directory {install_path} already exists but is NOT a git repository.\n\nDo you want to DELETE it and install fresh?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
+                    f"Directory {install_path} already exists but is not an OpenBench git repository.\n\n"
+                    "Choose an empty path or move/remove that directory manually.",
                 )
-                if reply == QMessageBox.Yes:
-                    # Delete the directory first (path already validated above)
-                    stdout3, stderr3, exit_code3 = execute_responsive(
-                        self._ssh_manager, f"rm -rf {quoted_install_path}", timeout=30
-                    )
-                    if exit_code3 != 0:
-                        QMessageBox.warning(self, "Error", f"Failed to delete directory:\n{stderr3}")
-                        return
-                else:
-                    return
+                return
 
         # Protocol selection dialog
         if not is_update:
@@ -2161,6 +2173,10 @@ class RemoteConfigWidget(QWidget):
         else:
             repo_url = None  # Not needed for update
 
+        # Bind pip to the environment selected when the operation starts;
+        # the combo remains editable while git is running.
+        python_path = self.python_combo.currentText().strip()
+
         # Progress dialog
         progress_dialog = _InstallProgressDialog(self)
         progress_dialog.setWindowTitle("Installing OpenBench" if not is_update else "Updating OpenBench")
@@ -2175,10 +2191,9 @@ class RemoteConfigWidget(QWidget):
         output_text.setStyleSheet("font-family: monospace;")
         progress_layout.addWidget(output_text)
 
-        close_btn = QPushButton("Close")
-        close_btn.setEnabled(False)
-        close_btn.clicked.connect(progress_dialog.accept)
+        close_btn = QPushButton("Cancel")
         progress_layout.addWidget(close_btn)
+        cancel_requested = {"value": False}
 
         progress_dialog.show()
 
@@ -2193,14 +2208,32 @@ class RemoteConfigWidget(QWidget):
             # but quote it anyway in case the source ever becomes
             # user-editable.
             quoted_repo_url = shlex.quote(repo_url)
-            cmd = f"git clone --progress {quoted_repo_url} {quoted_install_path} 2>&1"
+            clone_cmd = f"git clone --progress {quoted_repo_url} {quoted_install_path} 2>&1"
+            parent_path = posixpath.dirname(install_path.rstrip("/"))
+            cmd = (
+                f"mkdir -p {_safe_remote_path(parent_path)} && {clone_cmd}"
+                if parent_path
+                else clone_cmd
+            )
             status_label.setText(f"Cloning from {repo_url}...")
 
         def finish_install():
             self.btn_install_ob.setEnabled(True)
+            close_btn.setText("Close")
             close_btn.setEnabled(True)
             progress_dialog.allow_close = True
             self._install_worker = None
+
+        def cancel_or_close():
+            if progress_dialog.allow_close:
+                progress_dialog.accept()
+                return
+            cancel_requested["value"] = True
+            worker = self._install_worker
+            status_label.setText("Cancelling...")
+            close_btn.setEnabled(False)
+            if worker is not None:
+                worker.requestInterruption()
 
         def start_install_worker(command: str, timeout: int, on_done):
             output_text.append(f"$ {command}\n")
@@ -2208,7 +2241,7 @@ class RemoteConfigWidget(QWidget):
             # QThread would be destroyed with the widget mid-run, aborting the
             # app. Lifetime is held by self._install_worker and, on detach,
             # by _DETACHED_TASK_WORKERS.
-            worker = SshExecuteWorker(self._ssh_manager, command, timeout=timeout)
+            worker = SshExecuteWorker(ssh_manager, command, timeout=timeout)
             self._install_worker = worker
             worker.line.connect(lambda line: output_text.append(str(line).rstrip("\n")))
             worker.finished_with_result.connect(on_done)
@@ -2218,12 +2251,20 @@ class RemoteConfigWidget(QWidget):
 
         def on_install_failed(message: str):
             output_text.append(f"\nError: {message}")
-            status_label.setText("✗ Error occurred!")
-            status_label.setStyleSheet("color: red; font-weight: bold;")
+            worker = self._install_worker
+            if cancel_requested["value"] or (worker is not None and worker.isInterruptionRequested()):
+                status_label.setText("Installation cancelled")
+                status_label.setStyleSheet("color: gray; font-weight: bold;")
+            else:
+                status_label.setText("✗ Error occurred!")
+                status_label.setStyleSheet("color: red; font-weight: bold;")
             finish_install()
 
         def on_deps_done(exit_code: int, _stdout: str, _stderr: str):
-            if exit_code == 0:
+            if cancel_requested["value"]:
+                status_label.setText("Installation cancelled")
+                status_label.setStyleSheet("color: gray; font-weight: bold;")
+            elif exit_code == 0:
                 status_label.setText("✓ Installation complete with all dependencies!")
                 status_label.setStyleSheet("color: green; font-weight: bold;")
             else:
@@ -2232,11 +2273,23 @@ class RemoteConfigWidget(QWidget):
             finish_install()
 
         def on_git_done(exit_code: int, _stdout: str, _stderr: str):
+            if cancel_requested["value"]:
+                status_label.setText("Installation cancelled")
+                status_label.setStyleSheet("color: gray; font-weight: bold;")
+                finish_install()
+                return
             if exit_code != 0:
                 status_label.setText("✗ Installation failed!" if not is_update else "✗ Update failed!")
                 status_label.setStyleSheet("color: red; font-weight: bold;")
                 finish_install()
                 return
+
+            try:
+                from openbench.gui.remote_registry import clear_remote_cache_for_target
+
+                clear_remote_cache_for_target(ssh_manager)
+            except Exception as exc:
+                logger.warning("Failed to clear remote registry cache after install/update: %s", exc)
 
             status_label.setText("✓ Repository ready! Checking dependencies...")
             status_label.setStyleSheet("color: green;")
@@ -2247,9 +2300,6 @@ class RemoteConfigWidget(QWidget):
                 # pyproject.toml (there is no requirements.yml), so
                 # `pip install -e` is the one step that makes openbench
                 # importable AND pulls xarray/netCDF4 for remote scans/runs.
-                install_path = self.openbench_input.text().strip()
-                python_path = self.python_combo.currentText().strip()
-
                 if python_path:
                     output_text.append("\n\n=== Installing package and dependencies (pip install -e) ===\n")
                     status_label.setText("Installing dependencies with pip...")
@@ -2275,7 +2325,8 @@ class RemoteConfigWidget(QWidget):
         # until the worker finishes); a plain deleteLater after exec() would
         # be swept early by nested event loops when exec is non-blocking.
         progress_dialog.finished.connect(progress_dialog.deleteLater)
-        start_install_worker(cmd, 300, on_git_done)
+        close_btn.clicked.connect(cancel_or_close)
+        start_install_worker(cmd, 900, on_git_done)
         progress_dialog.exec()
 
     def get_ssh_manager(self) -> Optional[SSHManager]:

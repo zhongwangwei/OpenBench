@@ -269,6 +269,12 @@ class PageRuntime(BasePage):
             return
 
         if self.radio_local.isChecked():
+            # Do not call the full target-change guard here: it may flush remote
+            # storage, and _switch_to_local_storage() owns that side effect.
+            has_setup_flow = getattr(self.remote_config_widget, "has_active_setup_flow", None)
+            if callable(has_setup_flow) and has_setup_flow():
+                self._set_execution_mode("remote")
+                return
             # Flush pending remote writes before disconnecting the SSH session.
             if not self._switch_to_local_storage():
                 self._set_execution_mode("remote")

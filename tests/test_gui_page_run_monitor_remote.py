@@ -16,6 +16,10 @@ class FakeSSH:
     def __init__(self, exc=None):
         self.exc = exc
         self.commands = []
+        self.identity = ("direct", "alice", "login", 22)
+
+    def get_active_target_identity(self):
+        return self.identity
 
     def execute(self, command, timeout=30, should_abort=None):
         self.commands.append(command)
@@ -156,10 +160,11 @@ class FakeSignal:
 class FakeDownloadWorker:
     created = []
 
-    def __init__(self, ssh_manager, remote_dir, local_target):
+    def __init__(self, ssh_manager, remote_dir, local_target, target_identity=None):
         self.ssh_manager = ssh_manager
         self.remote_dir = remote_dir
         self.local_target = local_target
+        self.target_identity = target_identity
         self.progress_updated = FakeSignal()
         self.finished_signal = FakeSignal()
         self.finished = FakeSignal()
@@ -298,3 +303,94 @@ def test_remote_folder_download_worker_expands_tilde_for_relpaths(tmp_path, qapp
 
     assert finished == [(True, False, "Download complete")]
     assert ssh.sftp.downloads == [("/home/alice/OpenBench/output/a.nc", str(tmp_path / "output" / "a.nc"))]
+
+
+def test_remote_folder_download_worker_rejects_changed_target_after_listing(tmp_path, qapp):
+    class SwitchingSSH(ListingSSH):
+        def execute(self, command, timeout=30, should_abort=None):
+            result = super().execute(command, timeout=timeout, should_abort=should_abort)
+            self.identity = ("direct", "bob", "other", 22)
+            return result
+
+    ssh = SwitchingSSH()
+    worker = RemoteFolderDownloadWorker(
+        ssh, "/remote/output", str(tmp_path / "output"), ("direct", "alice", "login", 22)
+    )
+    finished = []
+    worker.finished_signal.connect(
+        lambda success, canceled, message, target: finished.append((success, canceled, message, target))
+    )
+
+    worker.run()
+
+    assert finished == [
+        (False, False, "Failed to download files:\nremote target identity changed", str(tmp_path / "output"))
+    ]
+    assert ssh.sftp.downloads == []
+
+
+def test_remote_folder_download_worker_aborts_inside_copy_callback_on_target_change(tmp_path, qapp):
+    ssh = ListingSSH()
+
+    class SwitchingSftp(FakeSftp):
+        def get(self, remote, local, callback=None):
+            ssh.identity = ("direct", "bob", "other", 22)
+            callback(1, 2)
+            self.downloads.append((remote, local))
+
+    ssh.sftp = SwitchingSftp()
+    worker = RemoteFolderDownloadWorker(
+        ssh, "/remote/output", str(tmp_path / "output"), ("direct", "alice", "login", 22)
+    )
+    finished = []
+    worker.finished_signal.connect(
+        lambda success, canceled, message, target: finished.append((success, canceled, message, target))
+    )
+
+    worker.run()
+
+    assert finished == [
+        (False, False, "Failed to download files:\nremote target identity changed", str(tmp_path / "output"))
+    ]
+    assert ssh.sftp.downloads == []
+
+
+def test_open_remote_output_rejects_saved_output_for_changed_target(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_run_monitor.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+    ssh = ListingSSH()
+    ssh.identity = ("direct", "bob", "other", 22)
+    page = _page()
+    page._last_run_target_identity = ("direct", "alice", "login", 22)
+    page._get_ssh_manager = lambda: ssh
+
+    page._open_remote_output("/remote/output")
+
+    assert warnings == [
+        (
+            "Remote Target Changed",
+            "The saved run output belongs to a different remote target. Reconnect to that target or run again.",
+        )
+    ]
+    assert ssh.commands == []
+
+
+def test_download_remote_folder_passes_saved_target_identity(monkeypatch, tmp_path):
+    from openbench.gui.pages import page_run_monitor as run_monitor_module
+
+    FakeDownloadWorker.created = []
+    page = _page()
+    page._last_run_target_identity = ("direct", "alice", "login", 22)
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_run_monitor.QFileDialog.getExistingDirectory",
+        lambda *args, **kwargs: str(tmp_path),
+    )
+    monkeypatch.setattr(run_monitor_module, "RemoteFolderDownloadWorker", FakeDownloadWorker)
+    monkeypatch.setattr("openbench.gui.pages.page_run_monitor.QProgressDialog", FakeProgressDialog)
+
+    page._download_remote_folder(ListingSSH(), "/remote/output", FakeParentDialog())
+
+    assert FakeDownloadWorker.created[-1].target_identity == ("direct", "alice", "login", 22)

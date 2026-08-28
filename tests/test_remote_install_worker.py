@@ -144,8 +144,9 @@ def test_conda_create_task_aborts_between_steps_when_interrupted():
     commands = []
 
     class SSH:
-        def execute(self, command, timeout=None):
+        def execute(self, command, timeout=None, should_abort=None):
             commands.append(command)
+            assert callable(should_abort)
             return "ok", "", 0
 
         def detect_conda_envs(self):
@@ -174,6 +175,45 @@ def test_remote_config_main_thread_ssh_inventory():
     assert text.count("self._ssh_manager.execute(") == 0
     assert text.count("self._ssh_manager.detect_conda_envs()") == 0
     assert text.count("self._ssh_manager.detect_python_interpreters()") == 0
+
+
+@pytest.mark.parametrize(
+    ("active_attr", "active_value"),
+    [
+        ("_install_flow_active", True),
+        ("_conda_create_flow_active", True),
+        ("_install_worker", object()),
+        ("_conda_create_worker", object()),
+    ],
+)
+def test_active_remote_task_blocks_target_change(qapp, active_attr, active_value):
+    from PySide6.QtCore import QSignalBlocker
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.disconnect_calls = 0
+
+        def disconnect(self):
+            self.disconnect_calls += 1
+
+    widget = RemoteConfigWidget()
+    blocker = QSignalBlocker(widget.host_input)
+    widget.host_input.setText("login-a")
+    del blocker
+    widget._confirmed_server_config = widget._current_server_config()
+    widget._ssh_manager = SSH()
+    callback_calls = []
+    widget.prepare_target_change = lambda: callback_calls.append(True) or True
+    setattr(widget, active_attr, active_value)
+
+    widget.host_input.setText("login-b")
+
+    assert widget.host_input.text() == "login-a"
+    assert widget._ssh_manager.disconnect_calls == 0
+    assert callback_calls == []
+    setattr(widget, active_attr, None if active_attr.endswith("worker") else False)
 
 
 def test_gui_modules_have_no_main_thread_ssh_band_aids():
@@ -551,12 +591,13 @@ def test_install_path_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypa
     assert len(FakeWorker.created) == 1
     assert (
         FakeWorker.created[0].command
-        == "git clone --progress git@github.com:zhongwangwei/OpenBench.git /remote/OpenBench 2>&1"
+        == "mkdir -p /remote && git clone --progress git@github.com:zhongwangwei/OpenBench.git "
+        "/remote/OpenBench 2>&1"
     )
     assert all(".git" not in command for command, _timeout in widget._ssh_manager.execute_calls)
 
 
-def test_git_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypatch):
+def test_existing_non_git_directory_is_never_deleted(qapp, monkeypatch):
     from openbench.gui.widgets import remote_config
 
     class SSH:
@@ -569,19 +610,13 @@ def test_git_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypatch):
             self.execute_calls.append((command, timeout))
             if command == "which git":
                 return "/usr/bin/git\n", "", 0
-            if command.startswith("test -d /remote/OpenBench/.git"):
-                return "not is_git\n", "", 1
+            if command.startswith("test -e /remote/OpenBench/.git"):
+                return "not is_openbench\n", "", 1
             if command.startswith("test -d /remote/OpenBench"):
                 return "exists\n", "", 0
-            if command.startswith("rm -rf /remote/OpenBench"):
-                return "", "", 0
             raise AssertionError(command)
 
-    questions = []
-
-    def fake_question(*args, **kwargs):
-        questions.append(args[2])
-        return QMessageBox.No
+    warnings = []
 
     FakeWorker.created.clear()
     widget = RemoteConfigWidget()
@@ -589,11 +624,12 @@ def test_git_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypatch):
     widget.openbench_input.setText("/remote/OpenBench")
 
     monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
-    monkeypatch.setattr(QMessageBox, "question", fake_question)
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: warnings.append(args[2]))
 
     widget._install_openbench()
 
-    assert questions and "is NOT a git repository" in questions[-1]
+    assert warnings and "move/remove that directory manually" in warnings[-1]
+    assert all("rm -rf" not in command for command, _timeout in widget._ssh_manager.execute_calls)
     assert FakeWorker.created == []
 
 
@@ -603,14 +639,17 @@ class GuardedInstallSSH:
     def __init__(self):
         self.execute_calls = []
 
+    def get_active_target_identity(self):
+        return ("direct", "alice", "remote.example", 22)
+
     def execute(self, command, timeout=None):
         self.execute_calls.append((command, timeout))
         if command == "which git":
             return "/usr/bin/git\n", "", 0
-        if command.startswith("test -d /remote/OpenBench/.git") or command.startswith(
-            "test -d '/remote/OpenBench/.git'"
+        if command.startswith("test -e /remote/OpenBench/.git") or command.startswith(
+            "test -e '/remote/OpenBench/.git'"
         ):
-            return "is_git\n", "", 0
+            return "is_openbench\n", "", 0
         if command.startswith("test -d /remote/OpenBench") or command.startswith("test -d '/remote/OpenBench'"):
             return "exists\n", "", 0
         if command.startswith("test -f /remote/OpenBench/requirements.yml") or command.startswith(
@@ -642,6 +681,7 @@ class FakeWorker:
         self.timeout = timeout
         self.parent = parent
         self.started = False
+        self.interrupted = False
         FakeWorker.created.append(self)
 
     def start(self):
@@ -654,7 +694,10 @@ class FakeWorker:
         return self.started
 
     def requestInterruption(self):
-        pass
+        self.interrupted = True
+
+    def isInterruptionRequested(self):
+        return self.interrupted
 
 
 def test_install_openbench_update_uses_ssh_execute_worker_not_blocking_execute(qapp, monkeypatch):
@@ -677,8 +720,13 @@ def test_install_openbench_update_uses_ssh_execute_worker_not_blocking_execute(q
     worker = FakeWorker.created[0]
     assert worker.ssh_manager is widget._ssh_manager
     assert worker.command == "cd /remote/OpenBench && git pull --ff-only 2>&1"
-    assert worker.timeout == 300
+    assert worker.timeout == 900
     assert worker.started is True
+    git_probe = next(command for command, _timeout in widget._ssh_manager.execute_calls if ".git" in command)
+    assert "test -e" in git_probe
+    assert "git -C /remote/OpenBench rev-parse --is-inside-work-tree" in git_probe
+    assert "test -f /remote/OpenBench/pyproject.toml" in git_probe
+    assert "test -d /remote/OpenBench/src/openbench" in git_probe
     assert all("git pull" not in command for command, _timeout in widget._ssh_manager.execute_calls)
     # A parented QThread is destroyed with the widget even while running
     # (Qt fatals with "QThread: Destroyed while thread is still running"),
@@ -716,6 +764,64 @@ def test_install_progress_dialog_ignores_escape_while_worker_runs(qapp, monkeypa
     assert not dialog.isVisible()
 
 
+def test_install_progress_dialog_can_cancel_running_worker(qapp, monkeypatch):
+    from PySide6.QtWidgets import QPushButton
+
+    from openbench.gui.widgets import remote_config
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = GuardedInstallSSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+    dialog = widget.findChild(remote_config._InstallProgressDialog)
+    cancel = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Cancel")
+
+    cancel.click()
+
+    assert FakeWorker.created[0].interrupted is True
+    assert cancel.isEnabled() is False
+
+    FakeWorker.created[0].failed.emit("Interrupted")
+    assert cancel.text() == "Close"
+    cancel.click()
+    assert not dialog.isVisible()
+
+
+def test_install_cancel_during_finished_signal_race_does_not_start_pip(qapp, monkeypatch):
+    from PySide6.QtWidgets import QPushButton
+
+    from openbench.gui.widgets import remote_config
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = GuardedInstallSSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+    widget.python_combo.setCurrentText("/opt/miniconda/bin/python")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+    dialog = widget.findChild(remote_config._InstallProgressDialog)
+    cancel = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Cancel")
+    git_worker = FakeWorker.created[0]
+    git_worker.started = False  # command ended, result signal has not reached the GUI yet
+
+    cancel.click()
+    git_worker.finished_with_result.emit(0, "git ok", "")
+
+    assert len(FakeWorker.created) == 1
+    assert cancel.text() == "Close"
+    assert dialog.isVisible()
+
+
 def test_install_openbench_installs_package_with_pip_as_second_worker(qapp, monkeypatch):
     """The repo has no requirements.yml; deps come from pyproject via pip install -e."""
     from openbench.gui.widgets import remote_config
@@ -741,7 +847,48 @@ def test_install_openbench_installs_package_with_pip_as_second_worker(qapp, monk
     assert pip_worker.started is True
     assert all("pip install" not in command for command, _timeout in widget._ssh_manager.execute_calls)
     # The requirements.yml probe round-trip is gone too.
-    assert all("test -f" not in command for command, _timeout in widget._ssh_manager.execute_calls)
+    assert all("requirements.yml" not in command for command, _timeout in widget._ssh_manager.execute_calls)
+
+
+def test_install_pip_uses_environment_selected_when_operation_started(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = GuardedInstallSSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+    widget.python_combo.setCurrentText("/envs/selected/bin/python")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+    widget.python_combo.setCurrentText("/envs/changed/bin/python")
+    FakeWorker.created[0].finished_with_result.emit(0, "git ok", "")
+
+    assert FakeWorker.created[1].command.startswith("/envs/selected/bin/python -m pip install")
+
+
+def test_successful_git_step_invalidates_remote_registry_cache(qapp, monkeypatch):
+    from openbench.gui import remote_registry
+    from openbench.gui.widgets import remote_config
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = GuardedInstallSSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+    cleared = []
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+    monkeypatch.setattr(remote_registry, "clear_remote_cache_for_target", cleared.append)
+
+    widget._install_openbench()
+    FakeWorker.created[0].finished_with_result.emit(0, "git ok", "")
+
+    assert cleared == [widget._ssh_manager]
 
 
 def test_install_pip_step_expands_tilde_python_path(qapp, monkeypatch):
@@ -815,8 +962,9 @@ def test_conda_create_commands_expand_tilde_conda_exe(qapp, monkeypatch):
         def detect_conda_envs(self):
             return []
 
-        def execute(self, command, timeout=None):
+        def execute(self, command, timeout=None, should_abort=None):
             self.commands.append(command)
+            assert callable(should_abort)
             return "ok", "", 0
 
     monkeypatch.setattr(remote_config, "CallableWorker", FakeCallable)
@@ -856,7 +1004,7 @@ def test_install_openbench_skips_dependency_step_without_python_env(qapp, monkey
 
     assert len(FakeWorker.created) == 1  # no pip worker without a configured interpreter
     # And no leftover requirements.yml probe either.
-    assert all("test -f" not in command for command, _timeout in widget._ssh_manager.execute_calls)
+    assert all("requirements.yml" not in command for command, _timeout in widget._ssh_manager.execute_calls)
 
 
 def test_local_install_worker_stop_terminates_silent_process(qapp):
