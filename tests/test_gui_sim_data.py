@@ -163,7 +163,7 @@ def test_remote_sim_scan_rehydrates_scanner_metadata_and_fulllist(monkeypatch):
         "/remote/sim",
         python_path="/remote/conda/env/bin/python",
         conda_env="ob",
-        openbench_path="~/OpenBench",
+        openbench_source_path="~/OpenBench",
         should_abort=lambda: False,
     )
 
@@ -179,6 +179,25 @@ def test_remote_sim_scan_rehydrates_scanner_metadata_and_fulllist(monkeypatch):
     assert captured["python_path"] == "/remote/conda/env/bin/python"
     assert captured["conda_env"] == "ob"
     assert captured["timeout"] == 900
+
+
+def test_remote_sim_scan_does_not_import_from_workspace(monkeypatch):
+    captured = {}
+
+    def fake_remote_json(_ssh, script, **_kwargs):
+        captured["script"] = script
+        return {"cases": [], "diagnostics": {"root": "/remote/sim"}}
+
+    monkeypatch.setattr("openbench.gui.remote_python.run_remote_python_json", fake_remote_json)
+
+    _discovered, metadata = page_sim_data.scan_simulation_cases_remote(
+        object(),
+        "/remote/sim",
+        openbench_path="/stale/OpenBench",
+    )
+
+    assert "/stale/OpenBench" not in captured["script"]
+    assert metadata["__scan__"]["root"] == "/remote/sim"
 
 
 def test_remote_model_match_uses_case_label_and_leaves_unknown_blank():

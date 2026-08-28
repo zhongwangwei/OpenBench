@@ -253,6 +253,7 @@ def scan_simulation_cases_remote(
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
+    openbench_source_path: str = "",
     timeout: int = 900,
     should_abort=None,
 ) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
@@ -262,8 +263,8 @@ def scan_simulation_cases_remote(
     from openbench.gui.remote_python import run_remote_python_json
 
     bootstrap = ""
-    if openbench_path:
-        remote_root = openbench_path.rstrip("/")
+    if openbench_source_path:
+        remote_root = openbench_source_path.rstrip("/")
         bootstrap = (
             "import os\n"
             "import sys\n"
@@ -276,9 +277,11 @@ def scan_simulation_cases_remote(
     script = f"""{bootstrap}
 import dataclasses
 import json
+import sys
 from hashlib import blake2s
 from pathlib import Path
 
+import openbench
 from openbench.data.coordinates import glob_nc
 try:
     from openbench.data.sim_scanner import scan_simulation_roots
@@ -327,7 +330,16 @@ for case in result.cases:
     if case.station_layout and not case.fulllist and station_materialize_error:
         data["station_materialize_error"] = station_materialize_error
     payload.append(data)
-print(json.dumps({{"cases": payload}}, default=_json_default))
+module_file = getattr(openbench, "__file__", "") or ""
+print(json.dumps({{
+    "cases": payload,
+    "diagnostics": {{
+        "python": sys.executable,
+        "openbench_module": str(Path(module_file).resolve()) if module_file else "",
+        "root": str(Path(root).expanduser()),
+        "root_exists": Path(root).expanduser().is_dir(),
+    }},
+}}, default=_json_default))
 """
     payload = run_remote_python_json(
         ssh_manager,
@@ -365,6 +377,8 @@ def _rehydrate_simulation_cases(payload) -> tuple[List[tuple], Dict[str, Dict[st
     raw_cases = payload.get("cases", []) if isinstance(payload, dict) else payload
     discovered: List[tuple] = []
     case_meta: Dict[str, Dict[str, Any]] = {}
+    if isinstance(payload, dict) and isinstance(payload.get("diagnostics"), dict):
+        case_meta["__scan__"] = dict(payload["diagnostics"])
     for item in raw_cases or []:
         if not isinstance(item, dict):
             continue
@@ -771,7 +785,7 @@ class PageSimData(BasePage):
                         root,
                         python_path=remote_settings.get("python_path", ""),
                         conda_env=remote_settings.get("conda_env", ""),
-                        openbench_path=remote_settings.get("openbench_path", ""),
+                        openbench_source_path=remote_settings.get("openbench_source_path", ""),
                         should_abort=cancel_event.is_set if cancel_event is not None else None,
                     )
                 except Exception as exc:
@@ -795,7 +809,17 @@ class PageSimData(BasePage):
             return
 
         if not discovered:
-            QMessageBox.information(self, "No Cases Found", f"No NetCDF simulation cases found under:\n{root}")
+            message = f"No NetCDF simulation cases found under:\n{root}"
+            diagnostics = case_meta.get("__scan__", {})
+            if diagnostics:
+                message += (
+                    f"\n\nPython: {diagnostics.get('python') or 'unknown'}"
+                    f"\nOpenBench: {diagnostics.get('openbench_module') or 'unknown'}"
+                    f"\nScanned root: {diagnostics.get('root') or root}"
+                )
+                if diagnostics.get("root_exists") is False:
+                    message += "\nThe selected remote root does not exist."
+            QMessageBox.information(self, "No Cases Found", message)
             return
 
         # Refresh model names

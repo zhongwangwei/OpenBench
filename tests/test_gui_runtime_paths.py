@@ -433,6 +433,49 @@ def test_general_load_from_config_expands_remote_tilde_basedir(qapp, monkeypatch
     assert page.basedir_input.path() == "/home/alice/runs"
 
 
+@pytest.mark.parametrize(
+    "basedir",
+    ["G:/OpenBench/output", r"C:\OpenBench\output", r"\\server\share\output", "//server/share/output"],
+)
+def test_general_load_from_config_drops_windows_basedir_in_remote_mode(qapp, monkeypatch, basedir):
+    from openbench.gui.pages import page_general as page_general_module
+    from openbench.remote.storage import RemoteStorage
+
+    controller = WizardController()
+    controller.config["general"].update(
+        {"basename": "demo", "basedir": basedir, "remote": {"openbench_path": "/home/alice/OpenBench"}}
+    )
+    controller.storage = RemoteStorage("/home/alice/OpenBench", sync_engine=object())
+    page = PageGeneral(controller)
+    monkeypatch.setattr(page_general_module, "get_remote_ssh_manager", lambda _controller: None)
+    page.load_from_config()
+
+    assert page.basedir_input.path() == "/home/alice/OpenBench/output"
+
+
+def test_general_load_keeps_remote_unix_basedir_on_windows_client(qapp, monkeypatch):
+    from openbench.gui import path_utils
+    from openbench.gui.pages import page_general as page_general_module
+    from openbench.remote.storage import RemoteStorage
+
+    monkeypatch.setattr(path_utils.sys, "platform", "win32")
+    controller = WizardController()
+    controller.config["general"].update(
+        {
+            "basename": "demo",
+            "basedir": "/scratch/openbench/output",
+            "remote": {"openbench_path": "/home/alice/OpenBench"},
+        }
+    )
+    controller.storage = RemoteStorage("/home/alice/OpenBench", sync_engine=object())
+    page = PageGeneral(controller)
+    monkeypatch.setattr(page_general_module, "get_remote_ssh_manager", lambda _controller: None)
+
+    page.load_from_config()
+
+    assert page.basedir_input.path() == "/scratch/openbench/output"
+
+
 def test_runtime_prepare_remote_target_change_blocks_pending_sync(qapp, monkeypatch):
     page = _runtime_page(qapp, monkeypatch)
     warnings = []

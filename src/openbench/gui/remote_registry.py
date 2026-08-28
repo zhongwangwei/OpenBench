@@ -86,7 +86,7 @@ def _execution_context(settings: dict[str, Any]) -> tuple[str, str, str]:
     return (
         str(settings.get("python_path") or ""),
         str(settings.get("conda_env") or ""),
-        str(settings.get("openbench_path") or ""),
+        str(settings.get("openbench_source_path") or ""),
     )
 
 
@@ -94,10 +94,10 @@ def _cache_key(controller, ssh_manager) -> tuple:
     return (_target_identity(ssh_manager),) + _execution_context(_remote_settings(controller))
 
 
-def _remote_bootstrap(openbench_path: str) -> str:
-    if not openbench_path:
+def _remote_bootstrap(openbench_source_path: str) -> str:
+    if not openbench_source_path:
         return ""
-    root = openbench_path.rstrip("/")
+    root = openbench_source_path.rstrip("/")
     return (
         "import os\n"
         "import sys\n"
@@ -112,7 +112,7 @@ def _remote_json(controller, script: str):
     from openbench.gui import remote_python
 
     settings = _remote_settings(controller)
-    script = _remote_bootstrap(settings.get("openbench_path", "")) + script
+    script = _remote_bootstrap(settings.get("openbench_source_path", "")) + script
     return remote_python.run_remote_python_json(
         _ssh_manager(controller),
         script,

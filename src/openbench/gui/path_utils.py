@@ -69,6 +69,17 @@ def is_cross_platform_path(path: str) -> bool:
     return False
 
 
+def is_windows_absolute_path(path: str) -> bool:
+    """Return whether a path is a Windows drive or UNC path on any client OS."""
+    return bool(
+        path
+        and (
+            (len(path) >= 3 and path[0].isalpha() and path[1] == ":" and path[2] in ("/", "\\"))
+            or path.startswith(("//", "\\\\"))
+        )
+    )
+
+
 def to_posix_path(path: str) -> str:
     """
     Convert a path to POSIX format (forward slashes).
@@ -510,12 +521,16 @@ def remote_exec_context(controller, parent):
         QMessageBox.warning(parent, "Not Connected", "Remote mode requires connecting to the server first.")
         return None
     remote_config = controller.remote_settings()
-    return {
+    context = {
         "ssh_manager": ssh_manager,
         "python_path": remote_config.get("python_path", ""),
         "conda_env": remote_config.get("conda_env", ""),
         "openbench_path": remote_config.get("openbench_path", ""),
     }
+    source_path = remote_config.get("openbench_source_path", "")
+    if source_path:
+        context["openbench_source_path"] = source_path
+    return context
 
 
 def browse_directory(controller, parent, title: str, current_path: str = "") -> str:

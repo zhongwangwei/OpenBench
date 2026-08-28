@@ -412,19 +412,28 @@ def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("source_root_line", "workspace", "expected_workspace"),
+    ("package_path", "source_root_line", "workspace", "expected_workspace", "expected_source"),
     [
         pytest.param(
+            "/work/alice/OpenBench/src/openbench",
             "__OPENBENCH_SOURCE_ROOT__=/work/alice/OpenBench\n",
             "~/OpenBench",
             "/work/alice/OpenBench",
+            "/work/alice/OpenBench",
             id="editable-source",
         ),
-        pytest.param("", "/work/alice/openbench-runs", "/work/alice/openbench-runs", id="plain-pip"),
+        pytest.param(
+            "/envs/openbench/lib/python3.12/site-packages/openbench",
+            "",
+            "/work/alice/openbench-runs",
+            "/work/alice/openbench-runs",
+            "",
+            id="plain-pip",
+        ),
     ],
 )
 def test_conda_env_change_detects_only_remote_source_root(
-    qapp, monkeypatch, source_root_line, workspace, expected_workspace
+    qapp, monkeypatch, package_path, source_root_line, workspace, expected_workspace, expected_source
 ):
     import shlex
     from types import SimpleNamespace
@@ -440,13 +449,17 @@ def test_conda_env_change_detects_only_remote_source_root(
     widget.conda_combo.setCurrentIndex(1)
     del blocker
     widget.openbench_input.setText(workspace)
+    widget._openbench_source_path = "/stale/OpenBench"
+    widget.openbench_package_input.setText("/stale/OpenBench/src/openbench")
 
     calls = []
 
     def fake_exec(ssh_manager, command, timeout=None, should_abort=None):
         calls.append(command)
         return (
-            "login-shell noise\n__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n" + source_root_line,
+            "login-shell noise\n"
+            "__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n"
+            f"__OPENBENCH_PACKAGE_PATH__={package_path}\n" + source_root_line,
             "",
             0,
         )
@@ -457,13 +470,17 @@ def test_conda_env_change_detects_only_remote_source_root(
 
     assert widget.python_combo.currentText() == "/envs/openbench/bin/python"
     assert widget.openbench_input.text() == expected_workspace
+    assert widget.openbench_package_input.text() == package_path
+    assert widget.get_config()["openbench_source_path"] == expected_source
     assert len(calls) == 1
     assert "find_spec" in calls[0]
     inner_command = shlex.split(calls[0])[-1]
     inner_parts = shlex.split(inner_command)
     assert "conda" not in inner_parts
     assert inner_parts[2] == "/envs/openbench/bin/python"
-    compile(inner_parts[inner_parts.index("-c") + 1], "<remote-openbench-probe>", "exec")
+    probe = inner_parts[inner_parts.index("-c") + 1]
+    assert "package_dir in source_dirs" in probe
+    compile(probe, "<remote-openbench-probe>", "exec")
 
 
 def test_conda_env_change_preserves_combo_items_when_python_path_is_applied(qapp, monkeypatch):
@@ -1109,6 +1126,10 @@ def test_install_openbench_installs_package_with_pip_as_second_worker(qapp, monk
     # The requirements.yml probe round-trip is gone too.
     assert all("requirements.yml" not in command for command, _timeout in widget._ssh_manager.execute_calls)
 
+    pip_worker.finished_with_result.emit(0, "pip ok", "")
+    assert widget.get_config()["openbench_source_path"] == "/remote/OpenBench"
+    assert widget.openbench_package_input.text() == "/remote/OpenBench/src/openbench"
+
 
 def test_install_pip_uses_environment_selected_when_operation_started(qapp, monkeypatch):
     from openbench.gui.widgets import remote_config
@@ -1399,6 +1420,8 @@ def test_remote_config_roundtrips_compute_node_key_without_saved_credentials(qap
             "num_cores": 12,
             "python_path": "/opt/python/bin/python",
             "openbench_path": "/remote/OpenBench",
+            "openbench_source_path": "/remote/OpenBench",
+            "openbench_package_path": "/remote/OpenBench/src/openbench",
         }
     )
 
@@ -1410,6 +1433,8 @@ def test_remote_config_roundtrips_compute_node_key_without_saved_credentials(qap
     assert widget.node_key_input.text() == "/keys/node"
     assert config["jump_auth"] == "key"
     assert config["node_key_file"] == "/keys/node"
+    assert config["openbench_source_path"] == "/remote/OpenBench"
+    assert config["openbench_package_path"] == "/remote/OpenBench/src/openbench"
 
 
 def test_test_connection_passes_compute_node_key_to_jump_connect(qapp, monkeypatch):
@@ -1510,6 +1535,8 @@ def test_reset_to_defaults_keeps_compute_node_auth_none(qapp):
 
     assert widget.radio_node_none.isChecked() is True
     assert widget.openbench_input.text() == "~/OpenBench"
+    assert widget.get_config()["openbench_source_path"] == ""
+    assert widget.openbench_package_input.text() == ""
 
 
 def test_update_remote_cpu_count_ignores_banner_lines(qapp, monkeypatch):

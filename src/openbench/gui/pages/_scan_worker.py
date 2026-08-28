@@ -95,10 +95,10 @@ def _remote_ref_root_path(value: str, data_root: str) -> str:
     return value.replace("${OPENBENCH_REF_ROOT}", root).replace("$OPENBENCH_REF_ROOT", root)
 
 
-def _remote_bootstrap(openbench_path: str) -> str:
-    if not openbench_path:
+def _remote_bootstrap(openbench_source_path: str) -> str:
+    if not openbench_source_path:
         return ""
-    root = openbench_path.rstrip("/")
+    root = openbench_source_path.rstrip("/")
     # Make a plain git checkout importable even when the pip-install
     # dependency step was skipped or failed on the remote host.
     return (
@@ -138,6 +138,7 @@ def scan_reference_datasets_remote(
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
+    openbench_source_path: str = "",
     timeout: int = 900,
     should_abort=None,
     rescan: bool = False,
@@ -164,7 +165,7 @@ def scan_reference_datasets_remote(
             selected_payload.append(data)
     selected_variants_json = json.dumps(selected_payload)
 
-    bootstrap = _remote_bootstrap(openbench_path)
+    bootstrap = _remote_bootstrap(openbench_source_path)
     ref_root_setup = _remote_ref_root_setup(data_root)
 
     script = f"""import os
@@ -338,6 +339,7 @@ def enrich_selected_remote_variants(
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
+    openbench_source_path: str = "",
     parent=None,
 ):
     """Inspect registered variants only when the user explicitly selects them."""
@@ -369,6 +371,7 @@ def enrich_selected_remote_variants(
             python_path=python_path,
             conda_env=conda_env,
             openbench_path=openbench_path,
+            openbench_source_path=openbench_source_path,
             only_names=refresh_names,
             selected_variants=[variant for variant in variants if variant.registry_name in refresh_names],
             should_abort=cancel_event.is_set if cancel_event is not None else None,
@@ -420,6 +423,7 @@ def register_scanned_datasets_remote(
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
+    openbench_source_path: str = "",
     timeout: int = 900,
     should_abort=None,
 ):
@@ -432,7 +436,7 @@ def register_scanned_datasets_remote(
         payload.append(data)
 
     script = f"""import os
-{_remote_bootstrap(openbench_path)}{_remote_ref_root_setup(data_root)}import dataclasses
+{_remote_bootstrap(openbench_source_path)}{_remote_ref_root_setup(data_root)}import dataclasses
 import json
 
 from openbench.data.registry.scanner import ScannedDataset, register_scanned_datasets_batch
@@ -472,6 +476,7 @@ class RegisterScannedDatasetsWorker(QThread):
         python_path: str = "",
         conda_env: str = "",
         openbench_path: str = "",
+        openbench_source_path: str = "",
     ):
         super().__init__(parent)
         self._datasets = list(datasets)
@@ -480,6 +485,7 @@ class RegisterScannedDatasetsWorker(QThread):
         self._python_path = python_path
         self._conda_env = conda_env
         self._openbench_path = openbench_path
+        self._openbench_source_path = openbench_source_path
         self._interruption_requested = False
 
     def requestInterruption(self) -> None:  # noqa: N802 - Qt API name
@@ -501,6 +507,7 @@ class RegisterScannedDatasetsWorker(QThread):
                     python_path=self._python_path,
                     conda_env=self._conda_env,
                     openbench_path=self._openbench_path,
+                    openbench_source_path=self._openbench_source_path,
                     should_abort=self._should_abort,
                 )
             else:
@@ -526,6 +533,7 @@ class FindDatasetsWorker(QThread):
         python_path: str = "",
         conda_env: str = "",
         openbench_path: str = "",
+        openbench_source_path: str = "",
     ):
         super().__init__(parent)
         self._data_root = data_root
@@ -533,6 +541,7 @@ class FindDatasetsWorker(QThread):
         self._python_path = python_path
         self._conda_env = conda_env
         self._openbench_path = openbench_path
+        self._openbench_source_path = openbench_source_path
 
     def run(self) -> None:  # pragma: no cover - exercised through GUI integration
         try:
@@ -544,6 +553,7 @@ class FindDatasetsWorker(QThread):
                     python_path=self._python_path,
                     conda_env=self._conda_env,
                     openbench_path=self._openbench_path,
+                    openbench_source_path=self._openbench_source_path,
                     should_abort=self.isInterruptionRequested,
                     rescan=True,
                     on_skip=skipped.append,

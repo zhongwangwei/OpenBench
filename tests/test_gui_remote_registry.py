@@ -86,7 +86,12 @@ def test_remote_snapshot_does_not_call_local_registry_or_write_paths(monkeypatch
     ssh = FakeSSH(("direct", "alice", "login", 22))
     controller = FakeController(
         ssh,
-        {"python_path": "~/venv/bin/python", "conda_env": "ob", "openbench_path": "~/OpenBench"},
+        {
+            "python_path": "~/venv/bin/python",
+            "conda_env": "ob",
+            "openbench_path": "~/OpenBench",
+            "openbench_source_path": "~/OpenBench",
+        },
     )
     calls = []
 
@@ -134,6 +139,27 @@ def test_remote_snapshot_never_expands_paths_from_local_environment(monkeypatch)
     assert remote_ref.fulllist == "$OPENBENCH_REF_ROOT/stations.csv"
 
 
+def test_remote_registry_does_not_import_from_workspace(monkeypatch):
+    from openbench.gui import remote_python, remote_registry
+
+    remote_registry._REMOTE_CACHE.clear()
+    controller = FakeController(
+        FakeSSH(("direct", "alice", "login", 22)),
+        {"python_path": "/env/bin/python", "openbench_path": "/stale/OpenBench"},
+    )
+    captured = {}
+
+    def fake_run(_ssh, script, **_kwargs):
+        captured["script"] = script
+        return _snapshot()
+
+    monkeypatch.setattr(remote_python, "run_remote_python_json", fake_run)
+
+    remote_registry.get_registry(controller, refresh=True)
+
+    assert "/stale/OpenBench" not in captured["script"]
+
+
 def test_remote_cache_is_bound_to_active_target_identity(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 
@@ -169,11 +195,21 @@ def test_remote_cache_is_bound_to_execution_context(monkeypatch):
     ssh = FakeSSH(("direct", "alice", "login", 22))
     controller_a = FakeController(
         ssh,
-        {"python_path": "/envs/a/bin/python", "conda_env": "a", "openbench_path": "/opt/OpenBenchA"},
+        {
+            "python_path": "/envs/a/bin/python",
+            "conda_env": "a",
+            "openbench_path": "/work/A",
+            "openbench_source_path": "/opt/OpenBenchA",
+        },
     )
     controller_b = FakeController(
         ssh,
-        {"python_path": "/envs/b/bin/python", "conda_env": "b", "openbench_path": "/opt/OpenBenchB"},
+        {
+            "python_path": "/envs/b/bin/python",
+            "conda_env": "b",
+            "openbench_path": "/work/B",
+            "openbench_source_path": "/opt/OpenBenchB",
+        },
     )
     calls = []
 
@@ -200,12 +236,46 @@ def test_remote_cache_is_bound_to_execution_context(monkeypatch):
     assert "/opt/OpenBenchB/src" in calls[1][2]
 
 
+def test_remote_registry_cache_ignores_workspace_only_changes(monkeypatch):
+    from openbench.gui import remote_python, remote_registry
+
+    remote_registry._REMOTE_CACHE.clear()
+    ssh = FakeSSH(("direct", "alice", "login", 22))
+    controller = FakeController(
+        ssh,
+        {
+            "python_path": "/env/bin/python",
+            "openbench_path": "/work/A",
+            "openbench_source_path": "/src/OpenBench",
+        },
+    )
+    calls = []
+
+    def fake_run(_ssh, _script, **_kwargs):
+        calls.append(1)
+        return _snapshot()
+
+    monkeypatch.setattr(remote_python, "run_remote_python_json", fake_run)
+
+    first = remote_registry.get_registry(controller)
+    controller._settings["openbench_path"] = "/work/B"
+    second = remote_registry.get_registry(controller)
+
+    assert second is first
+    assert len(calls) == 1
+
+
 def test_stale_remote_snapshot_refuses_write_after_execution_context_switch(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 
     remote_registry._REMOTE_CACHE.clear()
     ssh = FakeSSH(("direct", "alice", "login", 22))
-    settings = {"python_path": "/envs/a/bin/python", "conda_env": "a", "openbench_path": "/opt/OpenBenchA"}
+    settings = {
+        "python_path": "/envs/a/bin/python",
+        "conda_env": "a",
+        "openbench_path": "/work/A",
+        "openbench_source_path": "/opt/OpenBenchA",
+    }
     controller = FakeController(ssh, settings)
     calls = []
 
@@ -216,7 +286,12 @@ def test_stale_remote_snapshot_refuses_write_after_execution_context_switch(monk
     monkeypatch.setattr(remote_python, "run_remote_python_json", fake_run)
 
     registry = remote_registry.get_registry(controller)
-    controller._settings = {"python_path": "/envs/b/bin/python", "conda_env": "b", "openbench_path": "/opt/OpenBenchB"}
+    controller._settings = {
+        "python_path": "/envs/b/bin/python",
+        "conda_env": "b",
+        "openbench_path": "/work/B",
+        "openbench_source_path": "/opt/OpenBenchB",
+    }
 
     with pytest.raises(RuntimeError, match="target or execution context changed"):
         registry.save_reference("RemoteRef_LowRes", _ref())

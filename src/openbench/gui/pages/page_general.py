@@ -25,7 +25,7 @@ from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDou
 
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
+from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager, is_windows_absolute_path
 from openbench.gui.widgets import PathSelector
 
 logger = logging.getLogger(__name__)
@@ -593,6 +593,8 @@ class PageGeneral(BasePage):
                 ssh_manager = get_remote_ssh_manager(self.controller)
                 if remote_openbench:
                     remote_openbench = expand_remote_home(ssh_manager, remote_openbench)
+                if is_windows_absolute_path(basedir):
+                    basedir = "./output"
                 if not basedir or basedir == "./output":
                     # Set default to remote OpenBench/output
                     if remote_openbench:

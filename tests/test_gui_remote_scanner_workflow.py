@@ -129,6 +129,7 @@ def test_register_scanned_datasets_remote_writes_remote_user_registry(monkeypatc
         python_path="/remote/python",
         conda_env="ob",
         openbench_path="~/OpenBench",
+        openbench_source_path="~/OpenBench",
     )
 
     script = captured["script"]
@@ -137,6 +138,7 @@ def test_register_scanned_datasets_remote_writes_remote_user_registry(monkeypatc
     assert '_data_root = os.path.abspath(os.path.expanduser("~/Reference"))' in script
     assert 'os.environ["OPENBENCH_REF_ROOT"] = _data_root' in script
     assert "remember_reference_root(_data_root)" in script
+    assert '"~/OpenBench/src"' in script
     remember_index = script.index("remember_reference_root(_data_root)")
     register_index = script.index("register_scanned_datasets_batch(datasets)")
     assert remember_index < register_index
@@ -446,6 +448,57 @@ def test_data_validator_inspect_accepts_login_banner_before_json():
     assert validator._ssh.commands[0][1] == 30
 
 
+def test_remote_spatial_accepts_global_center_coordinates_with_half_cell_tolerance():
+    from openbench.gui.data_validator import RemoteNetCDFValidator
+
+    validator = RemoteNetCDFValidator(object())
+
+    check = validator.check_spatial_range(
+        "/remote/ref/global.nc",
+        -90.0,
+        90.0,
+        -180.0,
+        180.0,
+        {
+            "success": True,
+            "lat_range": [-89.875, 89.875],
+            "lat_resolution": 0.25,
+            "lat_is_global": True,
+            "lon_range": [0.125, 359.875],
+            "lon_is_global": True,
+        },
+    )
+
+    assert check.passed is True
+
+
+def test_remote_spatial_keeps_regional_center_coordinates_strict():
+    from openbench.gui.data_validator import RemoteNetCDFValidator
+
+    validator = RemoteNetCDFValidator(object())
+
+    check = validator.check_spatial_range(
+        "/remote/ref/regional.nc",
+        -10.0,
+        10.0,
+        100.0,
+        120.0,
+        {
+            "success": True,
+            "lat_range": [-9.875, 9.875],
+            "lat_resolution": 0.25,
+            "lat_is_global": False,
+            "lon_range": [100.125, 119.875],
+            "lon_coverage": [100.125, 119.875],
+            "lon_is_global": False,
+        },
+    )
+
+    assert check.passed is False
+    assert "Lat: data -9.9~9.9, required -10.0~10.0" in check.message
+    assert "Lon: data 100.1~119.9, required 100.0~120.0" in check.message
+
+
 def test_remote_reference_scan_reports_registry_load_failures(monkeypatch):
     from openbench.data.registry import manager as registry_manager
     from openbench.gui.pages import _scan_worker
@@ -490,11 +543,11 @@ def _capture_remote_json(monkeypatch, result=None):
     return captured
 
 
-def test_remote_scan_script_bootstraps_openbench_path_and_remote_names(monkeypatch):
+def test_remote_scan_script_bootstraps_verified_source_path_and_remote_names(monkeypatch):
     from openbench.gui.pages import _scan_worker
 
     captured = _capture_remote_json(monkeypatch)
-    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_path="/remote/openbench")
+    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_source_path="/remote/openbench")
 
     script = captured["script"]
     assert "sys.path.insert" in script
@@ -511,12 +564,22 @@ def test_remote_scan_bootstrap_expands_tilde_openbench_path(monkeypatch):
     captured = _capture_remote_json(monkeypatch)
     monkeypatch.setattr(_scan_worker, "_local_reference_names", lambda: set())
 
-    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_path="~/OpenBench")
+    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_source_path="~/OpenBench")
 
     script = captured["script"]
     # Python never expands '~' in sys.path entries; the script must do it.
     assert "expanduser" in script
     compile(script, "<remote-scan-script>", "exec")
+
+
+def test_remote_scan_does_not_import_from_workspace(monkeypatch):
+    from openbench.gui.pages import _scan_worker
+
+    captured = _capture_remote_json(monkeypatch)
+
+    _scan_worker.scan_reference_datasets_remote(object(), "/remote/ref", openbench_path="/stale/OpenBench")
+
+    assert "/stale/OpenBench" not in captured["script"]
 
 
 def test_find_datasets_worker_passes_interruption_probe(qapp, monkeypatch):
@@ -1259,6 +1322,18 @@ def test_ref_scan_starts_remote_worker(monkeypatch):
     }
     assert captured["started"] is True
     assert page.btn_scan.enabled is False
+
+
+def test_remote_exec_context_includes_only_verified_source_override():
+    from openbench.gui.path_utils import remote_exec_context
+
+    controller = RemoteController()
+    controller.config["general"]["remote"]["openbench_source_path"] = "/verified/OpenBench"
+
+    context = remote_exec_context(controller, None)
+
+    assert context["openbench_path"] == "/remote/openbench"
+    assert context["openbench_source_path"] == "/verified/OpenBench"
 
 
 def test_ref_scan_disables_button_before_remote_existence_check(monkeypatch):

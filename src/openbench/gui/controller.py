@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal
 
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.config_manager import ConfigManager
-from openbench.gui.path_utils import get_openbench_root
+from openbench.gui.path_utils import get_openbench_root, is_windows_absolute_path
 from openbench.remote.ssh import expand_remote_home
 
 if TYPE_CHECKING:
@@ -309,6 +309,8 @@ class WizardController(QObject):
         from openbench.remote.storage import RemoteStorage
 
         is_remote = isinstance(self.storage, RemoteStorage)
+        if is_remote and is_windows_absolute_path(basedir):
+            basedir = "./output"
 
         if is_remote and basedir and (basedir == "~" or basedir.startswith("~/")):
             expanded = expand_remote_home(self._ssh_manager, basedir).replace("\\", "/")

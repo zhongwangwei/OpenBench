@@ -431,6 +431,49 @@ def test_remote_output_dir_keeps_dot_relative_basedir_under_openbench_root():
     assert controller.get_output_dir() == "/remote/openbench/runs/demo"
 
 
+@pytest.mark.parametrize(
+    "basedir",
+    ["G:/OpenBench/output", r"C:\OpenBench\output", r"\\server\share\output", "//server/share/output"],
+)
+def test_remote_output_dir_drops_windows_basedir_instead_of_joining_it(basedir):
+    controller = _controller(
+        {"general": {"basename": "demo", "basedir": basedir, "remote": {"openbench_path": "/remote/openbench"}}},
+        storage=RemoteStorage("/remote/project", sync_engine=object()),
+        project_root="/local/source/tree",
+    )
+
+    assert controller.get_output_dir() == "/remote/openbench/output/demo"
+
+
+def test_remote_output_dir_keeps_unix_basedir_on_windows_client(monkeypatch):
+    from openbench.gui import path_utils
+
+    monkeypatch.setattr(path_utils.sys, "platform", "win32")
+    controller = _controller(
+        {
+            "general": {
+                "basename": "demo",
+                "basedir": "/scratch/openbench/output",
+                "remote": {"openbench_path": "/remote/openbench"},
+            }
+        },
+        storage=RemoteStorage("/remote/project", sync_engine=object()),
+        project_root="C:/local/source/tree",
+    )
+
+    assert controller.get_output_dir() == "/scratch/openbench/output/demo"
+
+
+def test_local_output_dir_keeps_windows_like_basedir_behavior_unchanged():
+    controller = _controller(
+        {"general": {"basename": "demo", "basedir": "G:/OpenBench/output"}},
+        storage=LocalStorage("/local/source/tree"),
+        project_root="/local/source/tree",
+    )
+
+    assert controller.get_output_dir() == os.path.join("/local/source/tree", "G:/OpenBench/output", "demo")
+
+
 def test_remote_namelist_autosync_does_not_mirror_external_absolute_output_under_storage_root():
     class Sync:
         def __init__(self):

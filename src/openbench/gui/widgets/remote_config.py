@@ -191,6 +191,7 @@ class ClickableLineEdit(QLineEdit):
 # Delimits the resolve/ls/find sections of the combined listing command.
 _SECTION_MARKER = "__OPENBENCH_SECTION__"
 _CONDA_PYTHON_MARKER = "__OPENBENCH_PYTHON__="
+_CONDA_PACKAGE_PATH_MARKER = "__OPENBENCH_PACKAGE_PATH__="
 _CONDA_SOURCE_ROOT_MARKER = "__OPENBENCH_SOURCE_ROOT__="
 
 
@@ -628,6 +629,7 @@ class RemoteConfigWidget(QWidget):
         self._confirmed_node_config = None
         self._confirmed_server_config = None
         self._confirmed_project_path = None
+        self._openbench_source_path = ""
         self.prepare_target_change = None
         self._setup_ui()
         self.destroyed.connect(lambda *_: self._cleanup_conda_create_worker(detach=True))
@@ -869,8 +871,7 @@ class RemoteConfigWidget(QWidget):
         self.python_combo = NoScrollComboBox()
         self.python_combo.setEditable(True)
         self.python_combo.setMinimumWidth(250)
-        self.python_combo.currentTextChanged.connect(self._infer_conda_from_python)
-        self.python_combo.currentTextChanged.connect(self._on_config_changed)
+        self.python_combo.currentTextChanged.connect(self._on_python_path_changed)
         python_layout.addWidget(self.python_combo, 1)
 
         self.btn_detect_python = QPushButton("Detect")
@@ -887,12 +888,21 @@ class RemoteConfigWidget(QWidget):
 
         env_layout.addRow("Python:", python_layout)
 
-        # OpenBench path with Browse and Install buttons
+        self.openbench_package_input = QLineEdit()
+        self.openbench_package_input.setReadOnly(True)
+        self.openbench_package_input.setPlaceholderText("Detected from the selected Python environment")
+        self.openbench_package_input.setToolTip(
+            "OpenBench package imported by the selected remote Python. This is informational and is not used as a workspace."
+        )
+        env_layout.addRow("Package:", self.openbench_package_input)
+
+        # Remote workspace with Browse and Install buttons
         ob_layout = QHBoxLayout()
         ob_layout.setSpacing(8)
         self.openbench_input = QLineEdit()
         self.openbench_input.setPlaceholderText("/home/user/OpenBench")
         self.openbench_input.setText("~/OpenBench")
+        self.openbench_input.setToolTip("Writable remote workspace used for configs, outputs, and source installs")
         self.openbench_input.textChanged.connect(self._on_config_changed)
         ob_layout.addWidget(self.openbench_input, 1)
 
@@ -908,7 +918,7 @@ class RemoteConfigWidget(QWidget):
         self.btn_install_ob.clicked.connect(self._install_openbench)
         ob_layout.addWidget(self.btn_install_ob)
 
-        env_layout.addRow("OpenBench:", ob_layout)
+        env_layout.addRow("Workspace:", ob_layout)
 
         layout.addWidget(env_group)
         layout.addStretch()
@@ -1344,6 +1354,9 @@ class RemoteConfigWidget(QWidget):
         # probe that may still be inside execute_responsive's nested event loop.
         seq = getattr(self, "_conda_env_sync_seq", 0) + 1
         self._conda_env_sync_seq = seq
+        self._set_openbench_probe_paths()
+        if hasattr(self, "node_group"):
+            self._on_config_changed()
         if index <= 0:
             # "(Not using conda environment)" selected, don't change Python path
             return
@@ -1354,6 +1367,7 @@ class RemoteConfigWidget(QWidget):
             return
 
         python_path = ""
+        package_path = ""
         openbench_root = ""
 
         # Get Python path directly from conda
@@ -1372,12 +1386,15 @@ import sys
 print({_CONDA_PYTHON_MARKER!r} + sys.executable)
 spec = find_spec("openbench")
 if spec is not None:
-    for location in spec.submodule_search_locations or ():
+    locations = list(spec.submodule_search_locations or ())
+    if not locations and spec.origin:
+        locations = [Path(spec.origin).parent]
+    for location in locations:
         package_dir = Path(location).resolve()
+        print({_CONDA_PACKAGE_PATH_MARKER!r} + str(package_dir))
         for root in package_dir.parents:
-            if (root / "pyproject.toml").is_file() and (
-                (root / "src" / "openbench").is_dir() or (root / "openbench").is_dir()
-            ):
+            source_dirs = ((root / "src" / "openbench").resolve(), (root / "openbench").resolve())
+            if (root / "pyproject.toml").is_file() and package_dir in source_dirs:
                 print({_CONDA_SOURCE_ROOT_MARKER!r} + str(root))
                 raise SystemExit
 """
@@ -1406,6 +1423,8 @@ if spec is not None:
                     line = line.strip()
                     if line.startswith(_CONDA_PYTHON_MARKER):
                         python_path = line[len(_CONDA_PYTHON_MARKER) :].strip()
+                    elif line.startswith(_CONDA_PACKAGE_PATH_MARKER):
+                        package_path = line[len(_CONDA_PACKAGE_PATH_MARKER) :].strip()
                     elif line.startswith(_CONDA_SOURCE_ROOT_MARKER):
                         openbench_root = line[len(_CONDA_SOURCE_ROOT_MARKER) :].strip()
 
@@ -1416,10 +1435,27 @@ if spec is not None:
         if idx < 0:
             self.python_combo.addItem(python_path)
         self.python_combo.setCurrentText(python_path)
+        self._set_openbench_probe_paths(
+            package_path if package_path.startswith("/") else "",
+            openbench_root if openbench_root.startswith("/") else "",
+        )
         # A wheel-only install resolves inside site-packages, which is not a
         # writable Remote workspace. Only a verified source root is applied.
         if openbench_root.startswith("/"):
             self.openbench_input.setText(openbench_root)
+        self._on_config_changed()
+
+    def _set_openbench_probe_paths(self, package_path: str = "", source_path: str = "") -> None:
+        self._openbench_source_path = (source_path or "").strip()
+        if hasattr(self, "openbench_package_input"):
+            self.openbench_package_input.setText((package_path or "").strip())
+
+    def _on_python_path_changed(self, text: str) -> None:
+        # A manually selected interpreter must never inherit another
+        # environment's source checkout override.
+        self._set_openbench_probe_paths()
+        self._infer_conda_from_python(text)
+        self._on_config_changed()
 
     def _update_remote_cpu_count(self):
         """Query remote server for CPU count and update label."""
@@ -2306,6 +2342,8 @@ if spec is not None:
                 status_label.setText("Installation cancelled")
                 status_label.setStyleSheet("color: gray; font-weight: bold;")
             elif exit_code == 0:
+                self._set_openbench_probe_paths(posixpath.join(install_path.rstrip("/"), "src/openbench"), install_path)
+                self._on_config_changed()
                 status_label.setText("✓ Installation complete with all dependencies!")
                 status_label.setStyleSheet("color: green; font-weight: bold;")
             else:
@@ -2422,6 +2460,8 @@ if spec is not None:
             "python_path": self.python_combo.currentText().strip(),
             "conda_env": conda_env,
             "openbench_path": self.openbench_input.text().strip(),
+            "openbench_source_path": self._openbench_source_path,
+            "openbench_package_path": self.openbench_package_input.text().strip(),
         }
 
     def set_config(self, config: Dict[str, Any]):
@@ -2480,6 +2520,9 @@ if spec is not None:
 
         # Set OpenBench path
         self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
+        self._set_openbench_probe_paths(
+            config.get("openbench_package_path", ""), config.get("openbench_source_path", "")
+        )
 
         # Restore signals
         self.blockSignals(False)
@@ -2594,3 +2637,4 @@ if spec is not None:
         self.conda_combo.setCurrentIndex(0)
         self.python_combo.clear()
         self.openbench_input.setText("~/OpenBench")
+        self._set_openbench_probe_paths()
