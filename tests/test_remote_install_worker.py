@@ -338,8 +338,9 @@ def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
     widget.python_combo = FakePythonCombo()
 
     def fake_exec(ssh_manager, command, timeout=None, should_abort=None):
-        # Simulate the user picking another env while this query is in flight.
-        widget._conda_env_sync_seq += 1
+        # Simulate the user selecting "not using conda" while this query is
+        # in flight. That selection must invalidate the pending result too.
+        widget._on_conda_env_changed(0)
         return "/envs/A/bin/python\n", "", 0
 
     monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
@@ -348,6 +349,93 @@ def test_conda_env_change_discards_stale_query_result(qapp, monkeypatch):
 
     # The superseded query must not apply its (now stale) result.
     assert widget.python_combo.current == ""
+
+
+@pytest.mark.parametrize(
+    ("source_root_line", "workspace", "expected_workspace"),
+    [
+        pytest.param(
+            "__OPENBENCH_SOURCE_ROOT__=/work/alice/OpenBench\n",
+            "~/OpenBench",
+            "/work/alice/OpenBench",
+            id="editable-source",
+        ),
+        pytest.param("", "/work/alice/openbench-runs", "/work/alice/openbench-runs", id="plain-pip"),
+    ],
+)
+def test_conda_env_change_detects_only_remote_source_root(
+    qapp, monkeypatch, source_root_line, workspace, expected_workspace
+):
+    import shlex
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QSignalBlocker
+
+    from openbench.gui.widgets import remote_config
+
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SimpleNamespace(is_connected=True)
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("openbench", "/envs/openbench")
+    widget.conda_combo.setCurrentIndex(1)
+    del blocker
+    widget.openbench_input.setText(workspace)
+
+    calls = []
+
+    def fake_exec(ssh_manager, command, timeout=None, should_abort=None):
+        calls.append(command)
+        return (
+            "login-shell noise\n"
+            "__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n"
+            + source_root_line,
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
+
+    widget._on_conda_env_changed(1)
+
+    assert widget.python_combo.currentText() == "/envs/openbench/bin/python"
+    assert widget.openbench_input.text() == expected_workspace
+    assert len(calls) == 1
+    assert "find_spec" in calls[0]
+    inner_command = shlex.split(calls[0])[-1]
+    inner_parts = shlex.split(inner_command)
+    compile(inner_parts[inner_parts.index("-c") + 1], "<remote-openbench-probe>", "exec")
+
+
+def test_conda_env_change_discards_result_after_remote_target_changes(qapp, monkeypatch):
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QSignalBlocker
+
+    from openbench.gui.widgets import remote_config
+
+    ssh = SimpleNamespace(is_connected=True, identity=("direct", "login-a"))
+    ssh.get_active_target_identity = lambda: ssh.identity
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = ssh
+    blocker = QSignalBlocker(widget.conda_combo)
+    widget.conda_combo.addItem("openbench", "/envs/openbench")
+    widget.conda_combo.setCurrentIndex(1)
+    del blocker
+
+    def fake_exec(*args, **kwargs):
+        ssh.identity = ("jump", "compute-b")
+        return (
+            "__OPENBENCH_PYTHON__=/envs/openbench/bin/python\n__OPENBENCH_SOURCE_ROOT__=/work/alice/OpenBench\n",
+            "",
+            0,
+        )
+
+    monkeypatch.setattr(remote_config, "execute_responsive", fake_exec)
+
+    widget._on_conda_env_changed(1)
+
+    assert widget.python_combo.currentText() == ""
+    assert widget.openbench_input.text() == "~/OpenBench"
 
 
 def test_create_conda_env_uses_guarded_dialog_and_blocks_reentry(qapp, monkeypatch):
