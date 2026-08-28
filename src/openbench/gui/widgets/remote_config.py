@@ -27,6 +27,7 @@ import re
 import shlex
 from typing import Optional, Dict, Any, List
 
+
 def _has_exact_stdout_line(stdout: str, sentinel: str) -> bool:
     return any(line.strip() == sentinel for line in stdout.splitlines())
 
@@ -1043,8 +1044,7 @@ class RemoteConfigWidget(QWidget):
 
     def has_active_setup_flow(self) -> bool:
         return any(
-            getattr(self, name, None) is not None
-            for name in ("_conda_create_worker", "_install_worker")
+            getattr(self, name, None) is not None for name in ("_conda_create_worker", "_install_worker")
         ) or any(
             getattr(self, name, False)
             for name in ("_handshake_active", "_conda_create_flow_active", "_install_flow_active")
@@ -1657,7 +1657,11 @@ if spec is not None:
         """
         if not self._ssh_manager:
             return
-        if not silent and getattr(self, "_confirmed_node_config", None) is not None and not self._prepare_target_change():
+        if (
+            not silent
+            and getattr(self, "_confirmed_node_config", None) is not None
+            and not self._prepare_target_change()
+        ):
             self._restore_confirmed_node_config()
             return
 
@@ -2251,11 +2255,7 @@ if spec is not None:
             quoted_repo_url = shlex.quote(repo_url)
             clone_cmd = f"git clone --progress {quoted_repo_url} {quoted_install_path} 2>&1"
             parent_path = posixpath.dirname(install_path.rstrip("/"))
-            cmd = (
-                f"mkdir -p {_safe_remote_path(parent_path)} && {clone_cmd}"
-                if parent_path
-                else clone_cmd
-            )
+            cmd = f"mkdir -p {_safe_remote_path(parent_path)} && {clone_cmd}" if parent_path else clone_cmd
             status_label.setText(f"Cloning from {repo_url}...")
 
         def finish_install():

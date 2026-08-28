@@ -293,7 +293,9 @@ class RemoteRunner(QThread):
 
             self._remote_temp_dir = _marked_remote_temp_dir(stdout)
             if not self._remote_temp_dir:
-                error_msg = "Failed to create remote temp directory: mktemp returned no safe /tmp/openbench_wizard_* path"
+                error_msg = (
+                    "Failed to create remote temp directory: mktemp returned no safe /tmp/openbench_wizard_* path"
+                )
                 self.log_message.emit(error_msg)
                 self.finished_signal.emit(False, error_msg)
                 return False
@@ -459,10 +461,7 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
         # Stop can terminate ProcessPool/Dask descendants, not only the parent
         # `python -m openbench` process. The foreground wrapper preserves the
         # SSH channel's normal exit-code and streaming behavior.
-        grouped_inner = (
-            f"printf '{_REMOTE_PGID_PREFIX}%s\\n' \"$$\"; "
-            f"exec sh -c {shlex.quote(cmd)}"
-        )
+        grouped_inner = f"printf '{_REMOTE_PGID_PREFIX}%s\\n' \"$$\"; exec sh -c {shlex.quote(cmd)}"
         stream_cmd = (
             "if command -v setsid >/dev/null 2>&1; then "
             f"exec setsid sh -c {shlex.quote(grouped_inner)}; "
@@ -549,8 +548,7 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             if self._remote_process_group is not None:
                 pgid = self._remote_process_group
                 self._ssh_manager.execute(
-                    f"kill -TERM -{pgid} 2>/dev/null || true; "
-                    f"sleep 1; kill -KILL -{pgid} 2>/dev/null || true",
+                    f"kill -TERM -{pgid} 2>/dev/null || true; sleep 1; kill -KILL -{pgid} 2>/dev/null || true",
                     timeout=10,
                 )
                 self.log_message.emit("Sent kill signal to remote process group")

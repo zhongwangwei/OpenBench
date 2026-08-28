@@ -870,9 +870,7 @@ class PageRegistry(BasePage):
         worker_kwargs = remote_exec_context(self.controller, self)
         if worker_kwargs is None:
             return
-        progress = QProgressDialog(
-            "Scanning reference datasets...", "Cancel" if worker_kwargs else None, 0, 0, self
-        )
+        progress = QProgressDialog("Scanning reference datasets...", "Cancel" if worker_kwargs else None, 0, 0, self)
         progress.setWindowTitle("Scanning")
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)

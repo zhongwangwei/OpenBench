@@ -443,7 +443,14 @@ class PagePreview(BasePage):
         return files
 
     def _sync_namelists_for_remote(
-        self, config: dict, local_dir: str, remote_dir: str, openbench_root: str, *, ssh_manager=None, target_identity=None
+        self,
+        config: dict,
+        local_dir: str,
+        remote_dir: str,
+        openbench_root: str,
+        *,
+        ssh_manager=None,
+        target_identity=None,
     ):
         """Sync namelist files with remote paths."""
         from openbench.gui.path_utils import remote_join
@@ -992,7 +999,9 @@ class PagePreview(BasePage):
                     # Convert path fields in variable config to absolute remote paths
                     for field in path_fields:
                         if field in var_config and var_config[field]:
-                            var_config[field] = self._resolve_path_for_remote(var_config[field], openbench_root, ssh_manager)
+                            var_config[field] = self._resolve_path_for_remote(
+                                var_config[field], openbench_root, ssh_manager
+                            )
                     if var_config:  # Only add if there's data
                         filtered[item] = var_config
                 elif item_data is not None:
@@ -1062,6 +1071,8 @@ class PagePreview(BasePage):
                 except IOError:
                     pass  # May already exist
                 uploaded.extend(
-                    self._upload_directory(sftp, local_path, remote_path, ssh_manager=ssh_manager, target_identity=target_identity)
+                    self._upload_directory(
+                        sftp, local_path, remote_path, ssh_manager=ssh_manager, target_identity=target_identity
+                    )
                 )
         return uploaded

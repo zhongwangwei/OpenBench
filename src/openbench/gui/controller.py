@@ -312,7 +312,9 @@ class WizardController(QObject):
 
         if is_remote and basedir and (basedir == "~" or basedir.startswith("~/")):
             expanded = expand_remote_home(self._ssh_manager, basedir).replace("\\", "/")
-            result = expanded if expanded.rstrip("/").split("/")[-1] == basename else f"{expanded.rstrip('/')}/{basename}"
+            result = (
+                expanded if expanded.rstrip("/").split("/")[-1] == basename else f"{expanded.rstrip('/')}/{basename}"
+            )
         elif basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
             # Check if basedir already ends with basename to avoid duplication
             # Use both separators for compatibility

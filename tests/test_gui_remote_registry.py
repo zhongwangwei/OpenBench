@@ -161,6 +161,7 @@ def test_remote_cache_is_bound_to_active_target_identity(monkeypatch):
     assert [ref.name for ref in reg_b.list_references()] == ["BRef_LowRes"]
     assert calls == [ssh_a.identity, ssh_b.identity]
 
+
 def test_remote_cache_is_bound_to_execution_context(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 
@@ -198,6 +199,7 @@ def test_remote_cache_is_bound_to_execution_context(monkeypatch):
     assert "/opt/OpenBenchA/src" in calls[0][2]
     assert "/opt/OpenBenchB/src" in calls[1][2]
 
+
 def test_stale_remote_snapshot_refuses_write_after_execution_context_switch(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 
@@ -220,6 +222,7 @@ def test_stale_remote_snapshot_refuses_write_after_execution_context_switch(monk
         registry.save_reference("RemoteRef_LowRes", _ref())
 
     assert calls == [{"python_path": "/envs/a/bin/python", "conda_env": "a"}]
+
 
 def test_clear_remote_cache_for_target_removes_all_contexts(monkeypatch):
     from openbench.gui import remote_python, remote_registry
@@ -246,6 +249,7 @@ def test_clear_remote_cache_for_target_removes_all_contexts(monkeypatch):
     )
     assert other_again is other
     assert len(calls) == 4
+
 
 def test_remote_registry_rejects_manager_when_controller_is_not_remote_storage():
     from openbench.gui import remote_registry
@@ -327,6 +331,7 @@ def test_stale_remote_snapshot_refuses_write_after_target_switch(monkeypatch):
 
     assert len(calls) == 1
 
+
 def test_stale_remote_snapshot_refuses_reads_after_target_switch(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 
@@ -349,6 +354,7 @@ def test_stale_remote_snapshot_refuses_reads_after_target_switch(monkeypatch):
     for read in readers:
         with pytest.raises(RuntimeError, match="target or execution context changed"):
             read()
+
 
 def test_remote_crud_payload_is_a_mapping():
     from openbench.gui.remote_registry import _remote_crud_script

@@ -316,7 +316,6 @@ def test_sync_file_deletes_old_snapshot_when_file_deleted_during_upload():
     assert sync.get_pending_count() == 0
 
 
-
 class FlakySSH(FakeSSH):
     def __init__(self, failures):
         super().__init__()
@@ -428,9 +427,7 @@ def test_delete_uses_explicit_file_or_recursive_directory_command():
     sync.delete("dir/file.txt")
 
     quoted = shlex.quote("/remote/project/dir/file.txt")
-    assert ssh.commands == [
-        f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
-    ]
+    assert ssh.commands == [f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"]
 
 
 def test_delete_permission_failure_preserves_local_cache():

@@ -239,7 +239,11 @@ class RemoteRegistrySnapshot:
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         self._ensure_current_target()
-        return [self._references[key] for key in self._var_index.get(normalize_name(variable), []) if key in self._references]
+        return [
+            self._references[key]
+            for key in self._var_index.get(normalize_name(variable), [])
+            if key in self._references
+        ]
 
     def list_models(self) -> list[ModelProfile]:
         self._ensure_current_target()

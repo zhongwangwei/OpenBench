@@ -338,6 +338,7 @@ def test_scan_confirmation_leaves_unresolved_model_blank(qapp):
 
     assert dialog.get_results()[0]["model"] == ""
 
+
 def test_scan_confirmation_match_info_is_bounded_scroll_text(qapp):
     from PySide6.QtWidgets import QPlainTextEdit
 
