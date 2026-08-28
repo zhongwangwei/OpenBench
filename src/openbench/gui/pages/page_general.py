@@ -19,12 +19,13 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 from openbench.gui.remote_python import quote_remote_path
+from openbench.remote.ssh import expand_remote_home
 from openbench.gui.widgets._ssh_worker import execute_responsive
 from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.path_utils import browse_directory
+from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
 from openbench.gui.widgets import PathSelector
 
 logger = logging.getLogger(__name__)
@@ -589,12 +590,17 @@ class PageGeneral(BasePage):
                 # Remote mode: use remote OpenBench path for defaults
                 remote_openbench = self.controller.remote_settings().get("openbench_path", "")
 
+                ssh_manager = get_remote_ssh_manager(self.controller)
+                if remote_openbench:
+                    remote_openbench = expand_remote_home(ssh_manager, remote_openbench)
                 if not basedir or basedir == "./output":
                     # Set default to remote OpenBench/output
                     if remote_openbench:
                         basedir = f"{remote_openbench.rstrip('/')}/output"
                     else:
                         basedir = "./output"
+                elif basedir == "~" or basedir.startswith("~/"):
+                    basedir = expand_remote_home(ssh_manager, basedir)
                 elif not basedir.startswith("/"):
                     # Convert relative path to absolute using remote root
                     if basedir.startswith("./"):

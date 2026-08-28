@@ -48,12 +48,15 @@ _DETACHED_SCAN_WORKERS = []
 from openbench.gui.path_utils import get_remote_ssh_manager
 
 
-def _registry_source_data(var_name: str, source_name: str) -> dict | None:
+def _registry_source_data(var_name: str, source_name: str, registry=None) -> dict | None:
     """Build the GUI source config directly from a registry descriptor."""
-    from openbench.data.registry.manager import get_registry
     from openbench.util.names import get_mapping_key_case_insensitive
 
-    ref = get_registry().get_reference(source_name)
+    if registry is None:
+        from openbench.data.registry.manager import get_registry
+
+        registry = get_registry()
+    ref = registry.get_reference(source_name)
     if ref is None:
         return None
 
@@ -89,7 +92,7 @@ def _registry_source_data(var_name: str, source_name: str) -> dict | None:
     return source_data
 
 
-def _infer_ref_data_root(general_section, selected_vars) -> str:
+def _infer_ref_data_root(general_section, selected_vars, registry=None) -> str:
     """Fallback scan root when the GUI has no persisted ``_scan_root``.
 
     Runtime configs normally resolve sources through the registry, so derive
@@ -97,9 +100,10 @@ def _infer_ref_data_root(general_section, selected_vars) -> str:
     sources' registry roots instead of leaving the scan field empty.
     """
     try:
-        from openbench.data.registry.manager import get_registry
+        if registry is None:
+            from openbench.data.registry.manager import get_registry
 
-        registry = get_registry()
+            registry = get_registry()
     except Exception:
         return ""
     roots = []
@@ -148,6 +152,29 @@ class PageRefData(BasePage):
     PAGE_SUBTITLE = "Configure reference data sources for each evaluation variable"
     CONTENT_EXPAND = True  # Allow content to fill available space
 
+    def _registry(self):
+        controller = getattr(self, "controller", None)
+        is_remote = getattr(controller, "is_remote_mode", None)
+        if callable(is_remote) and is_remote():
+            from openbench.gui.remote_registry import get_registry
+
+            return get_registry(controller)
+        from openbench.data.registry.manager import get_registry
+
+        return get_registry()
+
+    def _clear_registry_cache(self):
+        controller = getattr(self, "controller", None)
+        is_remote = getattr(controller, "is_remote_mode", None)
+        if callable(is_remote) and is_remote():
+            from openbench.gui.remote_registry import clear_registry
+
+            clear_registry(controller)
+        else:
+            from openbench.data.registry.manager import clear_registry_cache
+
+            clear_registry_cache()
+
     def _setup_content(self):
         """Setup page content."""
         # === Data Root + Scan Controls ===
@@ -182,9 +209,7 @@ class PageRefData(BasePage):
         self.content_layout.addWidget(scan_group)
 
         # === Registry Info ===
-        from openbench.data.registry.manager import get_registry
-
-        mgr = get_registry()
+        mgr = self._registry()
         ref_count = len(mgr.list_references())
         self.registry_label = QLabel(f"Registry: {ref_count} datasets available")
         self.content_layout.addWidget(self.registry_label)
@@ -440,10 +465,9 @@ class PageRefData(BasePage):
         self.btn_scan.setEnabled(True)
 
     def _choose_scanned_nc_variables(self, variants, existing_names: set[str]) -> None:
-        from openbench.data.registry.manager import get_registry
         from openbench.gui.dialogs.data_discovery import choose_nc_variable
 
-        registry = get_registry()
+        registry = self._registry()
         for variant in variants:
             existing = (
                 registry.get_reference(variant.registry_name) if variant.registry_name in existing_names else None
@@ -471,6 +495,12 @@ class PageRefData(BasePage):
     def _start_register_worker(self, variants):
         from openbench.gui.pages._scan_worker import RegisterScannedDatasetsWorker
 
+        remote_register_kwargs = {}
+        remote_context = getattr(self, "_scan_remote_context", None)
+        if remote_context:
+            data_root, worker_kwargs = remote_context
+            remote_register_kwargs = {"data_root": data_root, **worker_kwargs}
+
         progress = QProgressDialog("Registering selected reference datasets...", None, 0, 0, self)
         progress.setWindowTitle("Registering")
         progress.setWindowModality(Qt.WindowModal)
@@ -478,7 +508,7 @@ class PageRefData(BasePage):
         progress.setCancelButton(None)
 
         self.btn_scan.setEnabled(False)
-        worker = RegisterScannedDatasetsWorker(variants)
+        worker = RegisterScannedDatasetsWorker(variants, **remote_register_kwargs)
         self._register_worker = worker
         self._register_progress = progress
         worker.finished_with_result.connect(lambda _path: self._on_register_finished(len(variants)))
@@ -494,19 +524,18 @@ class PageRefData(BasePage):
 
     def _on_register_finished(self, registered: int):
         self._finish_register_worker()
-        from openbench.data.registry.manager import clear_registry_cache
-
-        clear_registry_cache()
+        self._clear_registry_cache()
         self._refresh_registry_after_scan()
 
         message = f"Registered/updated {registered} dataset(s).\nThey are now available in the dropdown menus below."
+        details = ""
         if getattr(self, "_scan_was_remote", False):
             from openbench.gui.pages._scan_worker import remote_scan_caveats
 
-            caveats = remote_scan_caveats(getattr(self, "_register_variants", []))
-            if caveats:
-                message += f"\n\n{caveats}"
-        QMessageBox.information(self, "Scan Complete", message)
+            details = remote_scan_caveats(getattr(self, "_register_variants", []))
+        from openbench.gui.pages._scan_worker import show_scan_complete
+
+        show_scan_complete(self, message, details)
 
     def _on_scan_data_root_failed(self, message: str):
         self._finish_scan_worker()
@@ -516,7 +545,6 @@ class PageRefData(BasePage):
     def _on_scan_data_root_finished(self, new_groups):
         self._finish_scan_worker()
         try:
-            from openbench.data.registry.manager import get_registry
             from openbench.gui.dialogs.data_discovery import DataDiscoveryDialog
             from openbench.gui.pages._scan_worker import format_scan_skips, unpack_scan_result
 
@@ -533,7 +561,7 @@ class PageRefData(BasePage):
                     QMessageBox.information(self, "Scan Complete", "No supported reference datasets found.")
                 return
 
-            existing_names = {ref.name for ref in get_registry().list_references()}
+            existing_names = {ref.name for ref in self._registry().list_references()}
             dlg = DataDiscoveryDialog(new_groups, existing_names=existing_names, parent=self)
             if dlg.exec():
                 selected = dlg.get_selected()
@@ -566,9 +594,7 @@ class PageRefData(BasePage):
 
     def _refresh_registry_after_scan(self):
         """Refresh selectors using only registry entries confirmed by the scan."""
-        from openbench.data.registry.manager import get_registry
-
-        registered = {ref.name for ref in get_registry().list_references()}
+        registered = {ref.name for ref in self._registry().list_references()}
         available = getattr(self, "_available_registry_names", set())
         self.registry_label.setText(f"Registry: {len(registered & available)} datasets available")
         self.load_from_config()
@@ -583,9 +609,7 @@ class PageRefData(BasePage):
         combo.addItem("-- Select from Registry --", None)
 
         try:
-            from openbench.data.registry.manager import get_registry
-
-            mgr = get_registry()
+            mgr = self._registry()
             refs_with_var = mgr.references_for_variable(var_name)
             available = getattr(self, "_available_registry_names", None)
             if available is not None:
@@ -624,7 +648,8 @@ class PageRefData(BasePage):
                         combo.addItem(label, {"group": base_name, "variants": [v.name for v in variants]})
             else:
                 combo.addItem("(No registry datasets for this variable)", None)
-        except ImportError:
+        except Exception as exc:
+            logger.warning("Registry unavailable while populating %s: %s", var_name, exc)
             combo.addItem("(Registry not available)", None)
 
     def _on_dataset_selected(self, var_name: str, combo: QComboBox):
@@ -656,7 +681,13 @@ class PageRefData(BasePage):
             source_name = combo_data
 
         try:
-            source_data = _registry_source_data(var_name, source_name)
+            controller = getattr(self, "controller", None)
+            is_remote = getattr(controller, "is_remote_mode", None)
+            source_data = (
+                _registry_source_data(var_name, source_name, self._registry())
+                if callable(is_remote) and is_remote()
+                else _registry_source_data(var_name, source_name)
+            )
             if source_data is None:
                 QMessageBox.warning(self, "Not Found", f"Dataset '{source_name}' not found in registry.")
                 return
@@ -723,9 +754,7 @@ class PageRefData(BasePage):
 
         Returns selected source_name or None if cancelled.
         """
-        from openbench.data.registry.manager import get_registry
-
-        mgr = get_registry()
+        mgr = self._registry()
         base_name = group_data["group"]
         variant_names = group_data["variants"]
 
@@ -773,6 +802,13 @@ class PageRefData(BasePage):
         import os
         import yaml
 
+        try:
+            registry = self._registry()
+        except Exception as exc:
+            registry = None
+            self.registry_label.setText("Registry: remote registry unavailable")
+            logger.warning("Remote registry unavailable while loading reference data: %s", exc)
+
         # Clear existing source configs before reloading
         self._source_configs.clear()
 
@@ -788,7 +824,15 @@ class PageRefData(BasePage):
         saved_data_root = ref_data.get("_scan_root", "")
         if not saved_data_root:
             eval_items_cfg = self.controller.config.get("evaluation_items", {})
-            saved_data_root = _infer_ref_data_root(general_section, [k for k, v in eval_items_cfg.items() if v])
+            saved_data_root = (
+                _infer_ref_data_root(
+                    general_section,
+                    [k for k, v in eval_items_cfg.items() if v],
+                    registry,
+                )
+                if registry is not None
+                else ""
+            )
         if not saved_data_root and ref_data.get("_data_root_explicit"):
             saved_data_root = general_section.get("data_root", "")
         if saved_data_root:
@@ -853,7 +897,13 @@ class PageRefData(BasePage):
                                     source_data[field] = value
                             source_data["_explicit_override"] = True
 
-                registry_data = _registry_source_data(var_name, source_name)
+                registry_data = None
+                if registry is not None:
+                    registry_data = (
+                        _registry_source_data(var_name, source_name, registry)
+                        if is_remote
+                        else _registry_source_data(var_name, source_name)
+                    )
                 if registry_data:
                     registry_data["general"].update(source_data.get("general", {}))
                     registry_data.update({key: value for key, value in source_data.items() if key != "general"})
@@ -879,7 +929,7 @@ class PageRefData(BasePage):
                 self._fill_advanced_fields(var_name, first_source_data)
 
         # Persist loaded state back
-        if self._source_configs:
+        if self._source_configs and (registry is not None or not is_remote):
             self.save_to_config()
 
     def _load_remote_nml_content(self, ssh_manager, def_nml_path: str) -> dict:

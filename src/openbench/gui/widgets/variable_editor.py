@@ -110,6 +110,7 @@ class VariableEditorDialog(QDialog):
         suffix: str = "",
         compute: str = "",
         fallbacks: Optional[list[dict]] = None,
+        known_variables: Optional[list[str]] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -122,8 +123,11 @@ class VariableEditorDialog(QDialog):
 
         # Ensure KNOWN_VARIABLES is populated
         global KNOWN_VARIABLES
-        if not KNOWN_VARIABLES:
-            KNOWN_VARIABLES = _collect_known_variables()
+        if known_variables is None:
+            if not KNOWN_VARIABLES:
+                KNOWN_VARIABLES = _collect_known_variables()
+            known_variables = KNOWN_VARIABLES
+        self._known_variables = list(known_variables)
 
         self._setup_ui(variable_name, varname, varunit, sub_dir, prefix, suffix, compute)
 
@@ -149,7 +153,7 @@ class VariableEditorDialog(QDialog):
 
         self.combo_variable = QComboBox()
         self.combo_variable.setEditable(True)
-        self.combo_variable.addItems(KNOWN_VARIABLES)
+        self.combo_variable.addItems(self._known_variables)
         if variable_name:
             idx = self.combo_variable.findText(variable_name)
             if idx >= 0:

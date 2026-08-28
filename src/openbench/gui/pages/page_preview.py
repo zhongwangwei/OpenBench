@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox
 from PySide6.QtCore import Signal
 
 from openbench.gui.remote_python import quote_remote_path
+from openbench.remote.ssh import expand_remote_home
 from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import YamlPreview
@@ -152,8 +153,16 @@ class PagePreview(BasePage):
         from openbench.remote.storage import RemoteStorage
 
         if isinstance(self.controller.storage, RemoteStorage):
+            ssh_manager = getattr(self.controller, "ssh_manager", None)
+            try:
+                ssh_manager = get_remote_ssh_manager(self.controller) or ssh_manager
+            except Exception:
+                pass
             remote_path_base = self.controller.remote_settings().get("openbench_path", "") or output_dir
-            generate_kwargs["path_transform"] = lambda path: self._resolve_path_for_remote(path, remote_path_base)
+            remote_path_base = expand_remote_home(ssh_manager, remote_path_base).replace("\\", "/")
+            generate_kwargs["path_transform"] = lambda path: self._resolve_path_for_remote(
+                path, remote_path_base, ssh_manager
+            )
 
         config_yaml = self.config_manager.generate_config_yaml(config, **generate_kwargs)
         self.config_preview.set_content(config_yaml)
@@ -240,6 +249,8 @@ class PagePreview(BasePage):
             return False
 
         try:
+            output_dir = expand_remote_home(ssh_manager, output_dir).replace("\\", "/")
+
             # Create output directory on remote server
             nml_dir = f"{output_dir}/nml"
             sim_nml_dir = f"{nml_dir}/sim"
@@ -259,7 +270,9 @@ class PagePreview(BasePage):
                 openbench_root = self._get_openbench_root()
 
                 # Get remote OpenBench path from remote config
-                remote_openbench_path = self.controller.remote_settings().get("openbench_path", "")
+                remote_openbench_path = expand_remote_home(
+                    ssh_manager, self.controller.remote_settings().get("openbench_path", "")
+                ).replace("\\", "/")
 
                 # Generate config files with remote output_dir paths
                 # This ensures paths like reference_nml point to remote locations
@@ -446,11 +459,18 @@ class PagePreview(BasePage):
 
                 # Scan-based assignments store bare registry model names
                 # (e.g. "CoLM2024"), not file paths. Generate the definition
-                # from the local registry instead of searching the remote
+                # from the remote registry instead of searching the remote
                 # filesystem for a file that never existed there.
                 from openbench.gui.config_manager import model_definition_from_registry
+                from openbench.gui.remote_registry import get_registry
 
-                registry_content = model_definition_from_registry(model_path, selected_items)
+                registry_content = None
+                if "/" not in model_path and "\\" not in model_path and not model_path.endswith((".yaml", ".nml")):
+                    registry_content = model_definition_from_registry(
+                        model_path,
+                        selected_items,
+                        get_registry(self.controller),
+                    )
                 if registry_content is not None:
                     import yaml as _yaml
 
@@ -459,8 +479,7 @@ class PagePreview(BasePage):
                         _yaml.dump(
                             registry_content, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2
                         )
-                    logger.debug("model %s generated from local registry → %s", model_path, dest_path)
-                    self._stage_remote_registry_model(model_path, ssh_manager)
+                    logger.debug("model %s generated from remote registry → %s", model_path, dest_path)
                     continue
 
                 actual_path = self._resolve_model_path(
@@ -511,58 +530,6 @@ class PagePreview(BasePage):
             dest_path = os.path.join(ref_nml_dir, f"{source_name}.yaml")
             remote_dest_path = remote_join(remote_ref_nml_dir, f"{source_name}.yaml")
             self._write_source_config_remote(merged_config, dest_path, selected_items, openbench_root, remote_dest_path)
-
-    def _stage_remote_registry_model(self, model_name: str, ssh_manager) -> None:
-        """Upload a user-registered model profile to the remote registry.
-
-        The remote ``openbench run`` resolves ``simulation.<case>.model``
-        through its own registry. Built-in models ship with every install,
-        but models the user registered locally (e.g. via the Data Registry
-        page) must be staged into the remote ``~/.openbench/models/`` overlay
-        or the remote preflight rejects the model name.
-        """
-        from openbench.gui.config_manager import is_builtin_model, registry_model_profile
-        from openbench.gui.path_utils import remote_home_dir
-
-        if is_builtin_model(model_name):
-            return
-        profile = registry_model_profile(model_name)
-        if profile is None or not ssh_manager or not ssh_manager.is_connected:
-            return
-
-        import tempfile
-
-        import yaml as _yaml
-
-        try:
-            home = remote_home_dir(ssh_manager)
-            if not home or home == "/":
-                raise RemoteNamelistSyncError("could not determine remote home directory")
-            remote_models_dir = f"{home.rstrip('/')}/.openbench/models"
-            _stdout, stderr, exit_code = execute_responsive(
-                ssh_manager, f"mkdir -p {quote_remote_path(remote_models_dir)}", timeout=15
-            )
-            if exit_code != 0:
-                raise RemoteNamelistSyncError(stderr.strip() or f"mkdir exit code {exit_code}")
-
-            with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
-                _yaml.dump(
-                    profile.to_dict(), tmp, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2
-                )
-                tmp_path = tmp.name
-            try:
-                remote_path = f"{remote_models_dir}/{model_name}.yaml"
-                ssh_manager.upload_file(tmp_path, remote_path)
-                logger.info("Staged model profile %s to remote registry: %s", model_name, remote_path)
-            finally:
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
-        except Exception as exc:
-            raise RemoteNamelistSyncError(
-                f"Could not stage model profile '{model_name}' on the remote server: {exc}"
-            ) from exc
 
     def _merge_source_configs(self, configs: list, var_names: list) -> dict:
         """Merge multiple source configs into one.
@@ -793,7 +760,7 @@ class PagePreview(BasePage):
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
         return True
 
-    def _resolve_path_for_remote(self, path: str, openbench_root: str) -> str:
+    def _resolve_path_for_remote(self, path: str, openbench_root: str, ssh_manager=None) -> str:
         """Convert a path to absolute remote path.
 
         Works the same as local mode's to_absolute_path() - but for remote paths.
@@ -804,8 +771,18 @@ class PagePreview(BasePage):
         if not path:
             return ""
 
+        if ssh_manager is None:
+            controller = getattr(self, "controller", None)
+            try:
+                ssh_manager = get_remote_ssh_manager(controller) if controller is not None else None
+            except Exception:
+                ssh_manager = getattr(controller, "ssh_manager", None) if controller is not None else None
+
         # Convert to POSIX format (forward slashes)
         path = to_posix_path(path)
+        openbench_root = to_posix_path(expand_remote_home(ssh_manager, openbench_root)).rstrip("/")
+        if path == "~" or path.startswith("~/"):
+            return to_posix_path(expand_remote_home(ssh_manager, path))
 
         # Handle Windows absolute paths (e.g., C:/Users/... or D:/...)
         # After to_posix_path, Windows paths become like "C:/Users/..."

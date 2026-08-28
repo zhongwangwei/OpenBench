@@ -715,8 +715,6 @@ def test_remote_model_sync_accepts_registry_name(monkeypatch, tmp_path):
     monkeypatch.setattr(page_preview_module, "get_remote_ssh_manager", lambda _controller: None)
 
     page = PagePreview.__new__(PagePreview)
-    staged = []
-    page._stage_remote_registry_model = lambda name, ssh: staged.append(name)
     page.controller = SimpleNamespace(config={}, storage=None)
 
     config = {
@@ -737,7 +735,45 @@ def test_remote_model_sync_accepts_registry_name(monkeypatch, tmp_path):
     assert model_file.exists()
     written = yaml.safe_load(model_file.read_text())
     assert written["general"]["model"] == "CoLM2024"
-    assert staged == ["CoLM2024"]
+
+
+def test_remote_model_sync_reads_only_remote_registry(monkeypatch, tmp_path):
+    from openbench.data.registry.schema import ModelProfile, VariableMapping
+    from openbench.gui import remote_registry
+    from openbench.gui.pages import page_preview as page_preview_module
+    from openbench.gui.pages.page_preview import PagePreview
+
+    remote_model = ModelProfile(
+        name="RemoteOnly",
+        description="remote",
+        variables={"Runoff": VariableMapping(varname="remote_runoff", varunit="mm day-1")},
+    )
+    registry = SimpleNamespace(get_model=lambda name: remote_model if name == "RemoteOnly" else None)
+    monkeypatch.setattr(remote_registry, "get_registry", lambda _controller: registry)
+    monkeypatch.setattr(page_preview_module, "get_remote_ssh_manager", lambda _controller: None)
+    monkeypatch.setattr(
+        "openbench.data.registry.manager.get_registry",
+        lambda: (_ for _ in ()).throw(AssertionError("local registry read")),
+    )
+
+    page = PagePreview.__new__(PagePreview)
+    page.controller = SimpleNamespace(config={}, storage=None, is_remote_mode=lambda: True)
+    config = {
+        "evaluation_items": {"Runoff": True},
+        "sim_data": {
+            "source_configs": {
+                "Case01": {
+                    "general": {"model_namelist": "RemoteOnly", "root_dir": "/remote/sims/Case01"},
+                }
+            }
+        },
+        "ref_data": {"source_configs": {}},
+    }
+
+    PagePreview._sync_namelists_for_remote(page, config, str(tmp_path), "/remote/out", "/remote/openbench")
+
+    written = yaml.safe_load((tmp_path / "nml" / "sim" / "models" / "RemoteOnly.yaml").read_text())
+    assert written["Runoff"]["varname"] == "remote_runoff"
 
 
 def test_gui_reference_validation_accepts_nc4_and_uppercase_netcdf_suffixes(tmp_path):

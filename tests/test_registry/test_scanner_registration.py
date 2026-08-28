@@ -1883,6 +1883,30 @@ def test_rescan_preserves_existing_fulllist_when_file_exists(tmp_path: Path):
     assert user_fulllist.read_text(encoding="utf-8").startswith("ID,SYEAR,EYEAR,LON,LAT,DIR\n")
 
 
+def test_remote_fulllist_overrides_existing_local_fulllist_on_rescan(tmp_path: Path):
+    """Remote re-scan must not keep a local GUI fulllist path in the remote catalog."""
+    from openbench.data.registry.scanner import ScannedDataset, _finalize_descriptor
+
+    user_fulllist = tmp_path / "user_curated_stations.csv"
+    user_fulllist.write_text("ID,SYEAR,EYEAR,LON,LAT,DIR\nfluxstn,2010,2010,11.0,47.0,\n")
+
+    scanned = ScannedDataset(
+        name="FluxStn",
+        resolution="Station",
+        category="Carbon",
+        data_type="stn",
+        root_dir=str(tmp_path / "remote-shaped-root"),
+        variables={"CH4_Flux": "Carbon/CH4_Flux/FluxStn"},
+        remote_fulllist="/remote/home/.openbench/station_lists/FluxStn.csv",
+    )
+    descriptor = {"data_type": "stn", "root_dir": scanned.root_dir}
+    existing = {"fulllist": str(user_fulllist), "root_dir": str(tmp_path), "variables": {}}
+
+    _finalize_descriptor(scanned, descriptor, prov={}, existing_descriptor=existing)
+
+    assert descriptor["fulllist"] == "/remote/home/.openbench/station_lists/FluxStn.csv"
+
+
 def test_data_groupby_detects_monthly_files(tmp_path: Path):
     """Files like ET_2010_01.nc / ET_2010_02.nc / ... must be classified as
     Month, not Year. The previous implementation only output Year or Single.

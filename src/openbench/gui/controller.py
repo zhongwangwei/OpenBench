@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, Signal
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.config_manager import ConfigManager
 from openbench.gui.path_utils import get_openbench_root
+from openbench.remote.ssh import expand_remote_home
 
 if TYPE_CHECKING:
     from openbench.remote.storage import ProjectStorage
@@ -309,7 +310,10 @@ class WizardController(QObject):
 
         is_remote = isinstance(self.storage, RemoteStorage)
 
-        if basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
+        if is_remote and basedir and (basedir == "~" or basedir.startswith("~/")):
+            expanded = expand_remote_home(self._ssh_manager, basedir).replace("\\", "/")
+            result = expanded if expanded.rstrip("/").split("/")[-1] == basename else f"{expanded.rstrip('/')}/{basename}"
+        elif basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
             # Check if basedir already ends with basename to avoid duplication
             # Use both separators for compatibility
             basedir_stripped = basedir.rstrip("/").rstrip("\\")
@@ -413,10 +417,15 @@ class WizardController(QObject):
             # Remote mode: use forward slashes
             storage_root = storage_root.rstrip("/").replace("\\", "/")
             output_dir_clean = output_dir.rstrip("/").replace("\\", "/")
-            if output_dir_clean.startswith(storage_root):
+            if output_dir_clean == storage_root:
+                rel_path = ""
+            elif output_dir_clean.startswith(storage_root + "/"):
                 rel_path = output_dir_clean[len(storage_root) :].lstrip("/")
             else:
-                rel_path = output_dir_clean.lstrip("/")
+                # Remote preview/export uploads directly to absolute output
+                # paths outside the OpenBench storage root. Do not mirror an
+                # absolute /scratch/... path under OpenBench by stripping '/'.
+                return
             nml_path = f"{rel_path}/nml" if rel_path else "nml"
         else:
             # Local mode: use os.path

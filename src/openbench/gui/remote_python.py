@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import shlex
+import tempfile
+import uuid
 from typing import Any
 
 _CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambaforge)[^/]*)")
@@ -14,6 +17,8 @@ _CONDA_BASE_PATTERN = re.compile(r"(.*?/(?:miniconda|miniforge|anaconda|mambafor
 # Canonical implementation lives in the remote layer so non-GUI modules
 # (sync engine, SSH manager) can use it; re-exported here for the GUI imports.
 from openbench.remote.ssh import quote_remote_path  # noqa: F401
+
+_MAX_INLINE_SCRIPT_CHARS = 60_000
 
 
 def wrap_with_conda_env(inner: str, python_path: str = "", conda_env: str = "") -> str:
@@ -46,6 +51,51 @@ def build_remote_python_command(script: str, python_path: str = "", conda_env: s
     return wrap_with_conda_env(runner, python_path=python_path, conda_env=conda_env)
 
 
+def _execute(ssh_manager, command: str, *, timeout: int, should_abort=None):
+    try:
+        from openbench.gui.widgets._ssh_worker import execute_responsive
+
+        return execute_responsive(ssh_manager, command, timeout=timeout, should_abort=should_abort)
+    except ImportError:  # pragma: no cover - GUI extra not installed
+        if should_abort is None:
+            return ssh_manager.execute(command, timeout=timeout)
+        return ssh_manager.execute(command, timeout=timeout, should_abort=should_abort)
+
+
+def _parse_json_stdout(stdout: str) -> Any:
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("Remote Python command returned no JSON output")
+    text = lines[-1]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Remote Python command returned invalid JSON: {exc}") from exc
+
+
+def _remote_python_file_command(remote_path: str, python_path: str = "", conda_env: str = "") -> str:
+    python = python_path or "python3"
+    runner = f"{quote_remote_path(python)} {quote_remote_path(remote_path)}"
+    return wrap_with_conda_env(runner, python_path=python_path, conda_env=conda_env)
+
+
+def _upload_remote_script(ssh_manager, script: str) -> str:
+    remote_path = f"/tmp/openbench-python-{uuid.uuid4().hex}.py"
+    local_path = ""
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".py", delete=False) as handle:
+            local_path = handle.name
+            handle.write(script)
+        ssh_manager.upload_file(local_path, remote_path)
+    finally:
+        if local_path:
+            try:
+                os.unlink(local_path)
+            except OSError:
+                pass
+    return remote_path
+
+
 def run_remote_python_json(
     ssh_manager,
     script: str,
@@ -56,21 +106,21 @@ def run_remote_python_json(
     should_abort=None,
 ) -> Any:
     """Execute ``script`` remotely and parse a JSON value from stdout."""
-    command = build_remote_python_command(script, python_path=python_path, conda_env=conda_env)
+    remote_script = ""
+    if len(script) > _MAX_INLINE_SCRIPT_CHARS and hasattr(ssh_manager, "upload_file"):
+        remote_script = _upload_remote_script(ssh_manager, script)
+        command = _remote_python_file_command(remote_script, python_path=python_path, conda_env=conda_env)
+    else:
+        command = build_remote_python_command(script, python_path=python_path, conda_env=conda_env)
     try:
-        from openbench.gui.widgets._ssh_worker import execute_responsive
-
-        stdout, stderr, exit_code = execute_responsive(ssh_manager, command, timeout=timeout, should_abort=should_abort)
-    except ImportError:  # pragma: no cover - GUI extra not installed
-        stdout, stderr, exit_code = ssh_manager.execute(command, timeout=timeout)
+        stdout, stderr, exit_code = _execute(ssh_manager, command, timeout=timeout, should_abort=should_abort)
+    finally:
+        if remote_script:
+            try:
+                _execute(ssh_manager, f"rm -f {quote_remote_path(remote_script)}", timeout=30)
+            except Exception:
+                pass
     if exit_code != 0:
         detail = (stderr or stdout or "").strip()
         raise RuntimeError(f"Remote Python command failed with exit code {exit_code}: {detail}")
-    lines = [line for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        raise RuntimeError("Remote Python command returned no JSON output")
-    text = lines[-1]
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Remote Python command returned invalid JSON: {exc}") from exc
+    return _parse_json_stdout(stdout)

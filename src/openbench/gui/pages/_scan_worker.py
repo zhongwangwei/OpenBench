@@ -30,9 +30,8 @@ def remote_scan_caveats(variants) -> str:
     )
     if inspection:
         messages.append(
-            "Remote NetCDF metadata/data_groupby inspection degraded for: "
-            + ", ".join(f"{name} ({reason})" for name, reason in inspection)
-            + "."
+            "Remote NetCDF metadata/data_groupby inspection degraded for:\n"
+            + "\n".join(f"• {name}: {reason}" for name, reason in inspection)
         )
     station = sorted(
         (
@@ -44,9 +43,9 @@ def remote_scan_caveats(variants) -> str:
     )
     if station:
         messages.append(
-            "Station fulllist generation was unavailable for: "
-            + ", ".join(f"{name} ({reason})" for name, reason in station)
-            + ". Complete their fulllist manually in the Data Registry page."
+            "Station fulllist generation was unavailable for:\n"
+            + "\n".join(f"• {name}: {reason}" for name, reason in station)
+            + "\nComplete their fulllist manually in the Data Registry page."
         )
     return "\n".join(messages)
 
@@ -71,6 +70,49 @@ def format_scan_skips(skipped) -> str:
     return "\n".join(lines)
 
 
+def _remote_ref_root_path(value: str, data_root: str) -> str:
+    if not isinstance(value, str) or "OPENBENCH_REF_ROOT" not in value:
+        return value
+    root = data_root.rstrip("/")
+    return value.replace("${OPENBENCH_REF_ROOT}", root).replace("$OPENBENCH_REF_ROOT", root)
+
+
+def _remote_bootstrap(openbench_path: str) -> str:
+    if not openbench_path:
+        return ""
+    root = openbench_path.rstrip("/")
+    # Make a plain git checkout importable even when the pip-install
+    # dependency step was skipped or failed on the remote host.
+    return (
+        "import sys\n"
+        f"for _path in ({json.dumps(root)}, {json.dumps(root + '/src')}):\n"
+        "    _path = os.path.expanduser(_path)\n"
+        "    if _path not in sys.path:\n"
+        "        sys.path.insert(0, _path)\n"
+    )
+
+
+def _remote_ref_root_setup(data_root: str) -> str:
+    return (
+        f"_data_root = os.path.abspath(os.path.expanduser({json.dumps(data_root)}))\n"
+        'os.environ["OPENBENCH_REF_ROOT"] = _data_root\n'
+    )
+
+
+def show_scan_complete(parent, message: str, details: str = "") -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    if not details:
+        QMessageBox.information(parent, "Scan Complete", message)
+        return
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Information)
+    box.setWindowTitle("Scan Complete")
+    box.setText(message)
+    box.setDetailedText(details)
+    box.exec()
+
+
 def scan_reference_datasets_remote(
     ssh_manager,
     data_root: str,
@@ -89,12 +131,11 @@ def scan_reference_datasets_remote(
 
     The remote script performs expensive NetCDF inspection for new datasets.
     When ``selected_variants`` is provided it skips discovery entirely and
-    inspects only those paths. Local catalog names determine discovery status.
+    inspects only those paths. The remote catalog determines discovery status.
     """
     from openbench.data.registry.scanner import DatasetGroup, ScannedDataset, ScanSkip
     from openbench.gui.remote_python import run_remote_python_json
 
-    registered_names = sorted(_local_reference_names())
     only_names_expr = "None" if only_names is None else f"set({json.dumps(sorted(only_names))})"
     selected_payload = None
     if selected_variants is not None:
@@ -105,22 +146,11 @@ def scan_reference_datasets_remote(
             selected_payload.append(data)
     selected_variants_json = json.dumps(selected_payload)
 
-    bootstrap = ""
-    if openbench_path:
-        root = openbench_path.rstrip("/")
-        # Make a plain git checkout importable even when the pip-install
-        # dependency step was skipped or failed on the remote host.
-        bootstrap = (
-            "import os\n"
-            "import sys\n"
-            f"for _path in ({json.dumps(root)}, {json.dumps(root + '/src')}):\n"
-            "    _path = os.path.expanduser(_path)\n"  # '~/OpenBench' is the documented default
-            "    if _path not in sys.path:\n"
-            "        sys.path.insert(0, _path)\n"
-        )
+    bootstrap = _remote_bootstrap(openbench_path)
+    ref_root_setup = _remote_ref_root_setup(data_root)
 
-    script = f"""{bootstrap}
-import dataclasses
+    script = f"""import os
+{bootstrap}{ref_root_setup}import dataclasses
 import inspect
 import json
 from types import SimpleNamespace
@@ -187,7 +217,11 @@ def _scan_with_skips(scan_fn, *args, **kwargs):
 
 
 skipped = []
-registered_names = set({json.dumps(registered_names)})
+try:
+    from openbench.data.registry.manager import get_registry
+    registered_names = {{ref.name for ref in get_registry().list_references()}}
+except Exception:
+    registered_names = set()
 only_names = {only_names_expr}
 if selected_variants is not None:
     groups = [
@@ -200,11 +234,11 @@ if selected_variants is not None:
 elif {rescan!r}:
     scan_fn = scan_reference_directory or find_new_datasets
     scan_kwargs = {{}} if scan_reference_directory is not None else {{"existing_names": set()}}
-    groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
+    groups = _scan_with_skips(scan_fn, _data_root, **scan_kwargs)
 else:
     scan_fn = find_new_datasets or scan_reference_directory
     scan_kwargs = {{"existing_names": registered_names}} if find_new_datasets is not None else {{}}
-    groups = _scan_with_skips(scan_fn, {json.dumps(data_root)}, **scan_kwargs)
+    groups = _scan_with_skips(scan_fn, _data_root, **scan_kwargs)
 payload = []
 for group in groups:
     variants = {{}}
@@ -235,7 +269,7 @@ for group in groups:
         variants[resolution] = data
     if variants:
         payload.append({{"base_name": group.base_name, "variants": variants}})
-print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for item in skipped]}}, default=_json_default))
+print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for item in skipped], "data_root": _data_root}}, default=_json_default))
 """
     payload = run_remote_python_json(
         ssh_manager,
@@ -248,6 +282,7 @@ print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for i
 
     raw_groups = payload.get("groups", []) if isinstance(payload, dict) else payload
     raw_skips = payload.get("skipped", []) if isinstance(payload, dict) else []
+    remote_data_root = payload.get("data_root", data_root) if isinstance(payload, dict) else data_root
     if on_skip:
         skip_fields = {f.name for f in dataclasses.fields(ScanSkip)}
         for item in raw_skips:
@@ -260,6 +295,10 @@ print(json.dumps({{"groups": payload, "skipped": [dataclasses.asdict(item) for i
     for item in raw_groups:
         variants = {}
         for resolution, variant in (item.get("variants") or {}).items():
+            if "root_dir" in variant:
+                variant["root_dir"] = _remote_ref_root_path(variant["root_dir"], remote_data_root)
+            if "remote_fulllist" in variant:
+                variant["remote_fulllist"] = _remote_ref_root_path(variant["remote_fulllist"], remote_data_root)
             known = {key: value for key, value in variant.items() if key in field_names}
             try:
                 variants[resolution] = ScannedDataset(**known)
@@ -341,21 +380,89 @@ def enrich_local_variant_metadata(groups) -> None:
                 variant.detected_data_groupby = scanner_module._detect_data_groupby(variant)
 
 
+def register_scanned_datasets_remote(
+    ssh_manager,
+    datasets,
+    data_root: str,
+    *,
+    python_path: str = "",
+    conda_env: str = "",
+    openbench_path: str = "",
+    timeout: int = 900,
+):
+    from openbench.gui.remote_python import run_remote_python_json
+
+    payload = []
+    for dataset in datasets:
+        data = dataclasses.asdict(dataset)
+        data["registry_name"] = dataset.registry_name
+        payload.append(data)
+
+    script = f"""import os
+{_remote_bootstrap(openbench_path)}{_remote_ref_root_setup(data_root)}import dataclasses
+import json
+
+from openbench.data.registry.scanner import ScannedDataset, register_scanned_datasets_batch
+from openbench.config.user_settings import remember_reference_root
+
+field_names = {{field.name for field in dataclasses.fields(ScannedDataset)}}
+datasets = []
+for item in json.loads({json.dumps(payload)!r}):
+    item.pop("registry_name", None)
+    datasets.append(ScannedDataset(**{{key: value for key, value in item.items() if key in field_names}}))
+remember_reference_root(_data_root)
+catalog_path = register_scanned_datasets_batch(datasets)
+print(json.dumps({{"catalog_path": str(catalog_path), "data_root": _data_root}}))
+"""
+    return run_remote_python_json(
+        ssh_manager,
+        script,
+        python_path=python_path,
+        conda_env=conda_env,
+        timeout=timeout,
+    )
+
+
 class RegisterScannedDatasetsWorker(QThread):
     """Register selected scanned datasets off the Qt main thread."""
 
     finished_with_result = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, datasets, parent=None):
+    def __init__(
+        self,
+        datasets,
+        parent=None,
+        ssh_manager=None,
+        data_root: str = "",
+        python_path: str = "",
+        conda_env: str = "",
+        openbench_path: str = "",
+    ):
         super().__init__(parent)
         self._datasets = list(datasets)
+        self._ssh_manager = ssh_manager
+        self._data_root = data_root
+        self._python_path = python_path
+        self._conda_env = conda_env
+        self._openbench_path = openbench_path
 
     def run(self) -> None:  # pragma: no cover - exercised through GUI integration
         try:
-            from openbench.data.registry.scanner import register_scanned_datasets_batch
+            if self._ssh_manager is not None:
+                result = register_scanned_datasets_remote(
+                    self._ssh_manager,
+                    self._datasets,
+                    self._data_root,
+                    python_path=self._python_path,
+                    conda_env=self._conda_env,
+                    openbench_path=self._openbench_path,
+                )
+            else:
+                from openbench.data.registry.scanner import register_scanned_datasets_batch
 
-            self.finished_with_result.emit(register_scanned_datasets_batch(self._datasets))
+                result = register_scanned_datasets_batch(self._datasets)
+            self.finished_with_result.emit(result)
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
 

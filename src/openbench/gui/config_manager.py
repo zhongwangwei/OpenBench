@@ -15,7 +15,7 @@ from openbench.gui.path_utils import convert_paths_in_dict, get_openbench_root, 
 _BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
 
 
-def registry_model_profile(model_name: str):
+def registry_model_profile(model_name: str, registry=None):
     """Return the registry ModelProfile for a bare model name, else None.
 
     The scan-based Simulation Data page stores registry model names (e.g.
@@ -26,15 +26,19 @@ def registry_model_profile(model_name: str):
     if not name or "/" in name or "\\" in name or name.endswith((".yaml", ".nml")):
         return None
     try:
-        from openbench.data.registry.manager import get_registry
+        if registry is None:
+            from openbench.data.registry.manager import get_registry
 
-        return get_registry().get_model(name)
+            registry = get_registry()
+        return registry.get_model(name)
     except Exception:
         return None
 
 
 def model_definition_from_registry(
-    model_name: str, selected_items: Optional[List[str]] = None
+    model_name: str,
+    selected_items: Optional[List[str]] = None,
+    registry=None,
 ) -> Optional[Dict[str, Any]]:
     """Build a model definition dict from the registry for export.
 
@@ -42,7 +46,7 @@ def model_definition_from_registry(
     evaluation item) used by the exported ``nml/sim/models/*.yaml`` files,
     or None when ``model_name`` is not a bare registry model name.
     """
-    profile = registry_model_profile(model_name)
+    profile = registry_model_profile(model_name, registry)
     if profile is None:
         return None
     content: Dict[str, Any] = {"general": {"model": getattr(profile, "name", model_name)}}
@@ -704,10 +708,13 @@ class ConfigManager:
                 return path
             return path_transform(path)
 
+        output_dir = _case_parent(case_output_dir) if case_output_dir else general.get("basedir", "./output")
+        project_output_dir = _maybe_transform_path(output_dir)
+
         # --- project ---
         project: Dict[str, Any] = {
             "name": general.get("basename", "config"),
-            "output_dir": _case_parent(case_output_dir) if case_output_dir else general.get("basedir", "./output"),
+            "output_dir": project_output_dir,
             "years": [int(general.get("syear", 2000)), int(general.get("eyear", 2020))],
         }
 

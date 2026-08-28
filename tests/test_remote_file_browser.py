@@ -68,6 +68,27 @@ def test_symlink_readlink_failure_warns_and_does_not_emit(qapp, monkeypatch):
     assert warnings == [("Broken Link", "Failed to resolve remote symlink:\n/remote/model.yaml")]
 
 
+def test_symlink_readlink_ignores_shell_banner(qapp, monkeypatch):
+    _silence_warnings(monkeypatch)
+    ssh = FakeSSH(
+        {
+            "cd /remote ": listing_response(
+                "/remote",
+                "total 1\nlrwxrwxrwx 1 user group 11 Jan 1 00:00 model.yaml -> real.yaml",
+                "/remote",
+            ),
+            "readlink -f /remote/model.yaml": ("Welcome to the cluster\n/real/model.yaml\n", "", 0),
+        }
+    )
+    browser = RemoteFileBrowser(ssh, "/remote")
+    emitted = []
+    browser.file_selected.connect(emitted.append)
+
+    browser._on_item_double_clicked(_first_browser_item(browser, "model.yaml"))
+
+    assert emitted == ["/real/model.yaml"]
+
+
 def test_load_directory_uses_a_single_ssh_round_trip(qapp, monkeypatch):
     warnings = _silence_warnings(monkeypatch)
     ssh = FakeSSH({"cd /remote ": listing_response("/remote", "total 0")})

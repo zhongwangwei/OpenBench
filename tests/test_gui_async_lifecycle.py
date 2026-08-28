@@ -340,6 +340,110 @@ def test_setup_remote_storage_disconnects_replaced_ssh_manager(monkeypatch):
     assert events == ["old-disconnect"]
 
 
+def test_setup_remote_storage_refuses_pending_changes_from_another_target(monkeypatch):
+    from openbench.gui import main_window
+    from openbench.remote.storage import RemoteStorage
+
+    class OldSync:
+        _ssh = object()
+
+        def get_pending_count(self):
+            return 1
+
+        def rebind_ssh(self, _new_manager):
+            raise RuntimeError("remote target identity changed")
+
+        def stop_background_sync(self):
+            raise AssertionError("different-target storage must be preserved")
+
+    old_storage = RemoteStorage("/old", OldSync())
+
+    class Controller:
+        storage = old_storage
+        ssh_manager = object()
+
+    warnings = []
+    window = MainWindow.__new__(MainWindow)
+    window.controller = Controller()
+    window._sync_status = None
+    monkeypatch.setattr(main_window.QMessageBox, "warning", lambda *args: warnings.append(args))
+
+    assert window.setup_remote_storage(object(), "/new") is False
+    assert window.controller.storage is old_storage
+    assert warnings and warnings[-1][1] == "Remote Target Changed"
+
+
+def test_setup_remote_storage_rebinds_pending_changes_to_same_target(monkeypatch):
+    from openbench.remote.storage import RemoteStorage
+
+    events = []
+
+    class OldSync:
+        _ssh = object()
+        _on_status_changed = None
+
+        def get_pending_count(self):
+            return 1
+
+        def rebind_ssh(self, new_manager):
+            events.append(("rebind", new_manager))
+            self._ssh = new_manager
+
+        def stop_background_sync(self):
+            events.append("stop")
+
+        def sync_all(self):
+            events.append("sync")
+            return True
+
+    class NewSync:
+        def __init__(self, ssh, root):
+            events.append(("new", ssh, root))
+            self._on_status_changed = None
+
+        def start_background_sync(self):
+            events.append("start")
+
+    old_storage = RemoteStorage("/old", OldSync())
+
+    class Controller:
+        storage = old_storage
+        ssh_manager = object()
+
+    new_manager = object()
+    window = MainWindow.__new__(MainWindow)
+    window.controller = Controller()
+    window._sync_status = None
+    window._setup_sync_status = lambda _sync: None
+    monkeypatch.setattr("openbench.remote.sync.SyncEngine", NewSync)
+
+    assert window.setup_remote_storage(new_manager, "/new") is True
+    assert events == [
+        ("rebind", new_manager),
+        "stop",
+        "sync",
+        ("new", new_manager, "/new"),
+        "start",
+    ]
+
+
+def test_setup_remote_storage_refuses_offline_execution_target(monkeypatch):
+    from openbench.gui import main_window
+
+    class SSH:
+        def get_active_target_identity(self):
+            return None
+
+    warnings = []
+    window = MainWindow.__new__(MainWindow)
+    window.controller = type("Controller", (), {"storage": None, "ssh_manager": None})()
+    monkeypatch.setattr(main_window.QMessageBox, "warning", lambda *args: warnings.append(args))
+
+    assert window.setup_remote_storage(SSH(), "/remote/project") is False
+    assert window.controller.storage is None
+    assert warnings and warnings[-1][1] == "Remote Target Unavailable"
+
+
 def test_find_remote_project_root_accepts_v3_source_marker(monkeypatch):
     from openbench.gui import main_window
 

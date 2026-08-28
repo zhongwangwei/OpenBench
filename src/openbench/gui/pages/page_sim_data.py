@@ -142,7 +142,7 @@ def _local_variable_overrides(nc_dir: str, model_name: str) -> Dict[str, Any]:
         return {}
 
 
-def _filename_variable_overrides(file_names: List[str], model_name: str) -> Dict[str, Any]:
+def _filename_variable_overrides(file_names: List[str], model_name: str, registry=None) -> Dict[str, Any]:
     """Per-variable overrides from filenames only (no file IO; remote-safe)."""
     names = [os.path.basename(str(name)) for name in file_names if name]
     if not model_name or len(names) < 2:
@@ -152,9 +152,11 @@ def _filename_variable_overrides(file_names: List[str], model_name: str) -> Dict
     if len({_filename_pattern_for_file(Path(name)) for name in names}) < 2:
         return {}
     try:
-        from openbench.data.registry.manager import get_registry
+        if registry is None:
+            from openbench.data.registry.manager import get_registry
 
-        profile = get_registry().get_model(model_name)
+            registry = get_registry()
+        profile = registry.get_model(model_name)
     except Exception:
         profile = None
     if not profile:
@@ -242,6 +244,161 @@ def _remote_detect_prefix(ssh_manager, case_dir: str) -> str:
     return _remote_detect_case_pattern(ssh_manager, case_dir)[0]
 
 
+def scan_simulation_cases_remote(
+    ssh_manager,
+    root: str,
+    *,
+    python_path: str = "",
+    conda_env: str = "",
+    openbench_path: str = "",
+    timeout: int = 900,
+    should_abort=None,
+) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
+    """Run the same simulation scanner on the remote host and rehydrate GUI rows."""
+    import json
+
+    from openbench.gui.remote_python import run_remote_python_json
+
+    bootstrap = ""
+    if openbench_path:
+        remote_root = openbench_path.rstrip("/")
+        bootstrap = (
+            "import os\n"
+            "import sys\n"
+            f"for _path in ({json.dumps(remote_root)}, {json.dumps(remote_root + '/src')}):\n"
+            "    _path = os.path.expanduser(_path)\n"
+            "    if _path not in sys.path:\n"
+            "        sys.path.insert(0, _path)\n"
+        )
+
+    script = f"""{bootstrap}
+import dataclasses
+import json
+from hashlib import blake2s
+from pathlib import Path
+
+from openbench.data.coordinates import glob_nc
+try:
+    from openbench.data.sim_scanner import scan_simulation_roots
+except ImportError as exc:
+    raise RuntimeError("remote OpenBench checkout is missing simulation scanner: %s" % exc) from exc
+try:
+    from openbench.data.sim_scanner import materialize_station_cases
+except ImportError as exc:
+    materialize_station_cases = None
+    station_materialize_error = "remote OpenBench checkout is missing station materializer: %s" % exc
+else:
+    station_materialize_error = ""
+
+root = {json.dumps(root)}
+result = scan_simulation_roots([root], model_name="auto")
+if any(case.station_layout for case in result.cases):
+    if materialize_station_cases is None:
+        pass
+    else:
+        try:
+            digest = blake2s(root.encode("utf-8"), digest_size=6).hexdigest()
+            materialize_station_cases(result, Path.home() / ".openbench" / "sim_station_lists" / digest, num_workers=1)
+        except Exception as exc:
+            station_materialize_error = "station materialization failed: %s: %s" % (type(exc).__name__, exc)
+
+
+def _case_files(case):
+    for directory in (case.root_dir / "history", case.root_dir):
+        files = glob_nc(directory)
+        if files:
+            return [path.name for path in files]
+    return []
+
+
+def _json_default(value):
+    item = getattr(value, "item", None)
+    if callable(item):
+        return item()
+    return str(value)
+
+
+payload = []
+for case in result.cases:
+    data = dataclasses.asdict(case)
+    data["files"] = _case_files(case)
+    if case.station_layout and not case.fulllist and station_materialize_error:
+        data["station_materialize_error"] = station_materialize_error
+    payload.append(data)
+print(json.dumps({{"cases": payload}}, default=_json_default))
+"""
+    payload = run_remote_python_json(
+        ssh_manager,
+        script,
+        python_path=python_path,
+        conda_env=conda_env,
+        timeout=timeout,
+        should_abort=should_abort,
+    )
+    return _rehydrate_simulation_cases(payload)
+
+
+def _model_from_payload(item: Dict[str, Any]) -> str:
+    model = "" if item.get("model") == "UNRESOLVED" else str(item.get("model") or "")
+    return model
+
+
+def _station_materialize_error(item: Dict[str, Any]) -> str:
+    explicit = str(item.get("station_materialize_error") or "")
+    if explicit:
+        return explicit
+    dropped = [str(name) for name in (item.get("station_dropped_sites") or []) if name]
+    unresolved = {str(name) for name in (item.get("unresolved") or [])}
+    if "station_partial" not in unresolved and not dropped:
+        return ""
+    if not dropped:
+        return "station materialization was partial"
+    shown = ", ".join(dropped[:5])
+    if len(dropped) > 5:
+        shown += f", ... (+{len(dropped) - 5} more)"
+    return f"station materialization dropped {len(dropped)} site(s): {shown}"
+
+
+def _rehydrate_simulation_cases(payload) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
+    raw_cases = payload.get("cases", []) if isinstance(payload, dict) else payload
+    discovered: List[tuple] = []
+    case_meta: Dict[str, Dict[str, Any]] = {}
+    for item in raw_cases or []:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "")
+        nc_dir = str(item.get("root_dir") or "")
+        if not label or not nc_dir:
+            continue
+        files = [os.path.basename(str(path)) for path in (item.get("files") or [])]
+        prefix = str(item.get("prefix") or "")
+        suffix = str(item.get("suffix") or "")
+        overrides = item.get("variable_overrides") if isinstance(item.get("variable_overrides"), dict) else {}
+        _, _, pattern_multi_stream = _case_file_patterns(files)
+        multi_stream = pattern_multi_stream or not _case_prefix_is_safe(prefix, suffix, overrides)
+        model = _model_from_payload(item)
+        discovered.append((label, nc_dir, prefix))
+        case_meta[label] = {
+            "files": files,
+            "suffix": suffix,
+            "multi_stream": multi_stream,
+            "model": model,
+            "variables": list(item.get("variables") or []),
+            "variable_overrides": overrides,
+            "data_type": item.get("data_type"),
+            "grid_res": item.get("grid_res"),
+            "tim_res": item.get("tim_res"),
+            "data_groupby": item.get("data_groupby"),
+            "fulllist": str(item.get("fulllist") or ""),
+            "station_layout": item.get("station_layout"),
+            "station_dropped_sites": [str(name) for name in (item.get("station_dropped_sites") or [])],
+            "unresolved": [str(name) for name in (item.get("unresolved") or [])],
+            "station_materialize_error": _station_materialize_error(item),
+            "source_root": str(item.get("source_root") or ""),
+        }
+    return discovered, case_meta
+
+
 def _remote_list_dirs(ssh_manager, root: str, max_depth: int = 5) -> list[str]:
     quoted = quote_remote_path(root)
     stdout, stderr, exit_code = execute_responsive(
@@ -322,24 +479,26 @@ def _apply_variable_pattern_edit(overrides: Dict[str, Any], variable_name: str, 
     return result
 
 
-def _get_model_names() -> List[str]:
+def _get_model_names(registry=None) -> List[str]:
     """Return sorted list of registered model names."""
     try:
-        from openbench.data.registry.manager import get_registry
+        if registry is None:
+            from openbench.data.registry.manager import get_registry
 
-        mgr = get_registry()
-        return sorted([m.name for m in mgr.list_models()])
+            registry = get_registry()
+        return sorted([m.name for m in registry.list_models()])
     except Exception:
         return []
 
 
-def _get_model_variables(model_name: str) -> List[str]:
+def _get_model_variables(model_name: str, registry=None) -> List[str]:
     """Return variable names supported by a model profile."""
     try:
-        from openbench.data.registry.manager import get_registry
+        if registry is None:
+            from openbench.data.registry.manager import get_registry
 
-        mgr = get_registry()
-        mp = mgr.get_model(model_name)
+            registry = get_registry()
+        mp = registry.get_model(model_name)
         if mp and hasattr(mp, "variables"):
             return sorted(mp.variables.keys())
     except Exception:
@@ -386,6 +545,31 @@ class PageSimData(BasePage):
     # Emitted when case selection or model assignment changes.
     # Carries the union of variable names from all selected models.
     available_variables_changed = Signal(list)
+
+    def _registry(self):
+        from openbench.gui.remote_registry import get_registry
+
+        return get_registry(getattr(self, "controller", None))
+
+    def _registry_model_names(self) -> List[str]:
+        try:
+            is_remote = getattr(getattr(self, "controller", None), "is_remote_mode", None)
+            if callable(is_remote) and is_remote():
+                return _get_model_names(PageSimData._registry(self))
+            return _get_model_names()
+        except Exception as exc:
+            logger.warning("Could not load registry models: %s", exc)
+            return []
+
+    def _registry_model_variables(self, model_name: str) -> List[str]:
+        try:
+            is_remote = getattr(getattr(self, "controller", None), "is_remote_mode", None)
+            if callable(is_remote) and is_remote():
+                return _get_model_variables(model_name, PageSimData._registry(self))
+            return _get_model_variables(model_name)
+        except Exception as exc:
+            logger.warning("Could not load registry model %s: %s", model_name, exc)
+            return []
 
     # ------------------------------------------------------------------
     # Setup
@@ -435,7 +619,7 @@ class PageSimData(BasePage):
         self._cases: List[Dict[str, Any]] = []
 
         # Cached model names
-        self._model_names: List[str] = _get_model_names()
+        self._model_names: List[str] = PageSimData._registry_model_names(self)
 
         # === Shared settings ===
         self._settings_group = QGroupBox("Optional Overrides for Selected Cases")
@@ -539,43 +723,21 @@ class PageSimData(BasePage):
             # dialog so per-variable overrides can be derived for the chosen model.
             case_meta: Dict[str, Dict[str, Any]] = {}
             if is_remote:
-                seen_nc_dirs = set()
+                remote_settings = {}
+                settings_fn = getattr(self.controller, "remote_settings", None)
+                if callable(settings_fn):
+                    remote_settings = settings_fn() or {}
                 try:
-                    remote_dirs = _remote_list_dirs(ssh_manager, root)
+                    discovered, case_meta = scan_simulation_cases_remote(
+                        ssh_manager,
+                        root,
+                        python_path=remote_settings.get("python_path", ""),
+                        conda_env=remote_settings.get("conda_env", ""),
+                        openbench_path=remote_settings.get("openbench_path", ""),
+                    )
                 except Exception as exc:
-                    QMessageBox.critical(self, "Error", f"Cannot scan remote directory:\n{exc}")
+                    QMessageBox.critical(self, "Error", f"Cannot scan remote simulation data:\n{exc}")
                     return
-                for full in remote_dirs:
-                    try:
-                        nc_dir = _remote_find_nc_dir(ssh_manager, full)
-                    except Exception as exc:
-                        QMessageBox.critical(self, "Error", f"Cannot scan remote NetCDF files:\n{exc}")
-                        return
-                    normalized_nc_dir = nc_dir.rstrip("/")
-                    if not nc_dir or normalized_nc_dir in seen_nc_dirs:
-                        continue
-                    seen_nc_dirs.add(normalized_nc_dir)
-                    nc_leaf = normalized_nc_dir.rsplit("/", 1)[-1].lower()
-                    label_dir = normalized_nc_dir.rsplit("/", 1)[0] if nc_leaf == "history" else full
-                    label = label_dir.rstrip("/").rsplit("/", 1)[-1]
-                    try:
-                        prefix, suffix, multi_stream, file_names = _remote_detect_case_pattern(ssh_manager, full)
-                    except Exception as exc:
-                        QMessageBox.critical(self, "Error", f"Cannot inspect remote NetCDF files:\n{exc}")
-                        return
-                    discovered.append((label, nc_dir, prefix))
-                    case_meta[label] = {
-                        "files": file_names,
-                        "suffix": suffix,
-                        "multi_stream": multi_stream,
-                        "data_type": None,
-                        "grid_res": None,
-                        "tim_res": None,
-                        "data_groupby": None,
-                        "fulllist": "",
-                        "station_layout": None,
-                        "source_root": root,
-                    }
             else:
                 try:
                     discovered, case_meta = call_responsive(lambda: _scan_local_cases(root))
@@ -590,7 +752,7 @@ class PageSimData(BasePage):
             return
 
         # Refresh model names
-        self._model_names = _get_model_names()
+        self._model_names = PageSimData._registry_model_names(self)
         case_models = {}
         for label, _nc_dir, _prefix in discovered:
             meta = case_meta.get(label, {})
@@ -666,7 +828,12 @@ class PageSimData(BasePage):
             overrides = _local_variable_overrides(nc_dir, model_name)
             if overrides:
                 return overrides
-        return _filename_variable_overrides(file_names, model_name)
+        try:
+            registry = PageSimData._registry(self)
+        except Exception as exc:
+            logger.warning("Could not load registry model %s: %s", model_name, exc)
+            return {}
+        return _filename_variable_overrides(file_names, model_name, registry)
 
     def _add_case_row(
         self,
@@ -761,6 +928,10 @@ class PageSimData(BasePage):
             model_combo.addItem(mn, mn)
         if model_name:
             idx = model_combo.findData(model_name)
+            is_remote = getattr(self.controller, "is_remote_mode", None)
+            if idx < 0 and callable(is_remote) and is_remote():
+                model_combo.addItem(f"{model_name} (registry unavailable)", model_name)
+                idx = model_combo.count() - 1
             if idx >= 0:
                 model_combo.setCurrentIndex(idx)
         model_combo.hide()
@@ -842,7 +1013,7 @@ class PageSimData(BasePage):
 
     def _edit_variable_pattern(self, case: Dict[str, Any]):
         variables = sorted(
-            set(_get_model_variables(case["model_combo"].currentData() or ""))
+            set(PageSimData._registry_model_variables(self, case["model_combo"].currentData() or ""))
             | set((case.get("variable_overrides") or {}).keys())
         )
         if not variables:
@@ -856,6 +1027,8 @@ class PageSimData(BasePage):
 
         overrides = case.get("variable_overrides") or {}
         current = overrides.get(variable_name, {}) if isinstance(overrides.get(variable_name, {}), dict) else {}
+        is_remote = getattr(self.controller, "is_remote_mode", None)
+        dialog_kwargs = {"known_variables": variables} if callable(is_remote) and is_remote() else {}
         dlg = VariableEditorDialog(
             mode="simulation",
             variable_name=variable_name,
@@ -864,6 +1037,7 @@ class PageSimData(BasePage):
             prefix=current.get("prefix", ""),
             suffix=current.get("suffix", ""),
             parent=self,
+            **dialog_kwargs,
         )
         if not dlg.exec():
             return
@@ -914,7 +1088,7 @@ class PageSimData(BasePage):
                 continue
             model_name = case["model_combo"].currentData()
             if model_name:
-                var_set.update(_get_model_variables(model_name))
+                var_set.update(PageSimData._registry_model_variables(self, model_name))
         return var_set
 
     def get_selected_cases(self) -> List[Dict[str, Any]]:
@@ -967,6 +1141,7 @@ class PageSimData(BasePage):
                     "data_groupby": data_groupby_override or metadata.get("data_groupby") or "",
                     "fulllist": (metadata.get("fulllist") or "") if data_type == "stn" else "",
                     "station_layout": metadata.get("station_layout") or "",
+                    "station_materialize_error": metadata.get("station_materialize_error") or "",
                     "source_root": metadata.get("source_root") or "",
                 }
             )
@@ -1072,7 +1247,9 @@ class PageSimData(BasePage):
                 model = c.get("model", "")
                 if model not in model_vars_cache:
                     model_vars_cache[model] = (
-                        {str(name).casefold() for name in _get_model_variables(model)} if model else set()
+                        {str(name).casefold() for name in PageSimData._registry_model_variables(self, model)}
+                        if model
+                        else set()
                     )
                 if var_key in model_vars_cache[model]:
                     sources.append(c["label"])
@@ -1098,6 +1275,7 @@ class PageSimData(BasePage):
         self.controller.update_section("sim_data", sim_data)
 
     def load_from_config(self):
+        self._model_names = PageSimData._registry_model_names(self)
         sim_data = self.controller.config.get("sim_data", {})
         if not sim_data:
             return
@@ -1254,6 +1432,19 @@ class PageSimData(BasePage):
             if is_remote:
                 if not ssh_manager or not ssh_manager.is_connected:
                     issues.append(f"{c['label']}: remote server is not connected")
+                    continue
+                if c.get("data_type") == "stn":
+                    detail = c.get("station_materialize_error")
+                    if detail:
+                        issues.append(f"{c['label']}: {detail}")
+                        continue
+                    fulllist = c.get("fulllist", "")
+                    if not fulllist:
+                        issues.append(f"{c['label']}: station fulllist is missing")
+                        continue
+                    check = file_checker.check_file_exists(fulllist)
+                    if not check.passed:
+                        issues.append(f"{c['label']}: {check.message}")
                     continue
                 try:
                     nc_dir = _remote_find_nc_dir(ssh_manager, c["nc_dir"])

@@ -268,6 +268,8 @@ def test_generate_config_yaml_remote_case_dir_overrides_output_and_transforms_pa
     config = _runnable_config(tmp_path)
 
     def to_remote(path: str) -> str:
+        if path.startswith("/remote/"):
+            return path
         return f"/remote/project/{path.strip('/')}"
 
     data = yaml.safe_load(
@@ -666,3 +668,23 @@ def test_unified_to_gui_omitted_metrics_scores_show_defaults_but_explicit_empty_
     exported = yaml.safe_load(ConfigManager().generate_config_yaml(explicit))
     assert exported["metrics"] == []
     assert exported["scores"] == []
+
+
+def test_generate_config_yaml_transforms_project_output_parent_for_remote_preview():
+    config = {"general": {"basename": "demo", "basedir": "./output", "syear": 2000, "eyear": 2001}}
+    transformed = []
+
+    def to_remote(path):
+        transformed.append(path)
+        return path.replace("/remote", "/checked/remote")
+
+    data = yaml.safe_load(
+        ConfigManager().generate_config_yaml(
+            config,
+            case_output_dir="/remote/output/demo",
+            path_transform=to_remote,
+        )
+    )
+
+    assert transformed[0] == "/remote/output"
+    assert data["project"]["output_dir"] == "/checked/remote/output"

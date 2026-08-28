@@ -195,6 +195,27 @@ def test_connection_success_switches_to_remote_and_saves(qapp, monkeypatch):
     assert page.controller.config["general"]["remote"]["openbench_path"] == "/work/alice/OpenBench"
 
 
+def test_remote_storage_setup_failure_disconnects_candidate_without_claiming_local(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    page.radio_remote.setChecked(True)
+    page.remote_config_widget.get_ssh_manager = lambda: object()
+
+    def disconnect():
+        events.append("disconnect")
+        page._on_connection_status_changed(False)
+
+    page.remote_config_widget.disconnect = disconnect
+    page._switch_to_remote_storage = lambda: False
+
+    page._on_connection_status_changed(True)
+
+    assert page.radio_remote.isChecked()
+    assert not page.radio_local.isChecked()
+    assert page.controller.ssh_manager is None
+    assert events == ["disconnect"]
+
+
 def test_switching_local_flushes_storage_before_widget_disconnect():
     events = []
     page = PageRuntime.__new__(PageRuntime)
@@ -349,3 +370,124 @@ def test_checkbox_group_set_selection_clears_items_not_in_selection(qapp):
     group.set_selection({"b": True})
 
     assert group.get_selection() == {"a": False, "b": True, "c": False}
+
+
+def test_general_load_from_config_expands_remote_tilde_basedir(qapp, monkeypatch):
+    from openbench.gui.pages import page_general as page_general_module
+    from openbench.remote.storage import RemoteStorage
+
+    class SSH:
+        is_connected = True
+
+        def _get_home_dir(self):
+            return "/home/alice"
+
+        def get_active_client(self):
+            return object()
+
+    controller = WizardController()
+    controller.config["general"].update(
+        {"basename": "demo", "basedir": "~/runs", "remote": {"openbench_path": "~/OpenBench"}}
+    )
+    controller.storage = RemoteStorage("/home/alice/OpenBench", sync_engine=object())
+    controller.ssh_manager = SSH()
+    page = PageGeneral(controller)
+    monkeypatch.setattr(page_general_module, "get_remote_ssh_manager", lambda _controller: controller.ssh_manager)
+    page.load_from_config()
+
+    assert page.basedir_input.path() == "/home/alice/runs"
+
+
+def test_runtime_prepare_remote_target_change_blocks_pending_sync(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    warnings = []
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_runtime.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+    sync = SimpleNamespace(get_pending_count=lambda: 2)
+    main = SimpleNamespace(_current_sync_engine=lambda: sync)
+    page._get_main_window = lambda: main
+
+    assert page._prepare_remote_target_change() is False
+    assert warnings and warnings[-1][0] == "Remote Sync Pending"
+
+
+def test_runtime_prepare_remote_target_change_cleans_storage_when_synced(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    sync = SimpleNamespace(get_pending_count=lambda: 0)
+    main = SimpleNamespace(
+        _current_sync_engine=lambda: sync,
+        _cleanup_remote_storage=lambda **kwargs: events.append(kwargs) or True,
+    )
+    page._get_main_window = lambda: main
+
+    assert page._prepare_remote_target_change() is True
+    assert events == [{"sync_pending": False, "disconnect_ssh": False}]
+
+
+def test_runtime_prepare_remote_target_change_freezes_before_cleanup(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    sync = SimpleNamespace(freeze_if_synced=lambda: events.append("freeze") or True)
+    main = SimpleNamespace(
+        _current_sync_engine=lambda: sync,
+        _cleanup_remote_storage=lambda **kwargs: events.append(("cleanup", kwargs)) or True,
+    )
+    page._get_main_window = lambda: main
+
+    assert page._prepare_remote_target_change() is True
+    assert events == ["freeze", ("cleanup", {"sync_pending": False, "disconnect_ssh": False})]
+
+
+def test_runtime_prepare_remote_target_change_thaws_after_cleanup_failure(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    sync = SimpleNamespace(
+        freeze_if_synced=lambda: events.append("freeze") or True,
+        thaw=lambda: events.append("thaw"),
+    )
+    main = SimpleNamespace(
+        _current_sync_engine=lambda: sync,
+        _cleanup_remote_storage=lambda **kwargs: events.append("cleanup") or False,
+    )
+    page._get_main_window = lambda: main
+
+    assert page._prepare_remote_target_change() is False
+    assert events == ["freeze", "cleanup", "thaw"]
+
+
+def test_runtime_prepare_remote_target_change_preserves_offline_pending_sync(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    events = []
+    sync = SimpleNamespace(
+        freeze_if_synced=lambda: False,
+        is_bound_target_active=lambda: False,
+        freeze=lambda: events.append("freeze-pending"),
+    )
+    main = SimpleNamespace(
+        _current_sync_engine=lambda: sync,
+        _cleanup_remote_storage=lambda **kwargs: events.append(("cleanup", kwargs)) or True,
+    )
+    page._get_main_window = lambda: main
+
+    assert page._prepare_remote_target_change() is True
+    assert events == ["freeze-pending"]
+
+
+def test_switch_to_remote_storage_rejects_blank_openbench_path(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    warnings = []
+    page.remote_config_widget.get_ssh_manager = lambda: object()
+    page.remote_config_widget.get_config = lambda: {"openbench_path": ""}
+    page._get_main_window = lambda: SimpleNamespace(
+        setup_remote_storage=lambda *_args: (_ for _ in ()).throw(AssertionError("must not set up blank path"))
+    )
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_runtime.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    assert page._switch_to_remote_storage() is False
+    assert warnings == [("Remote OpenBench Not Configured", "Set the remote OpenBench path first.")]
