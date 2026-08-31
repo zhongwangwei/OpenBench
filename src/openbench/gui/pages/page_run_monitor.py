@@ -316,7 +316,6 @@ class PageRunMonitor(BasePage):
         num_statistics = len([k for k, v in statistics.items() if v])
 
         if is_remote:
-            self.dashboard.show_resource_unavailable("Resources (remote not monitored)")
             # Remote execution mode
             self._runner = self._create_remote_runner(config_path, general)
             if self._runner is None:
@@ -324,6 +323,7 @@ class PageRunMonitor(BasePage):
                 self.dashboard.stop_monitoring()
                 self._refresh_parent_navigation()
                 return
+            self.dashboard.monitor_remote_resources()
         else:
             # Local execution mode (default)
             python_path = general.get("python_path", "")
@@ -355,6 +355,8 @@ class PageRunMonitor(BasePage):
         # Connect signals - same interface for both runners
         self._runner.progress_updated.connect(self._on_progress)
         self._runner.log_message.connect(self._on_log)
+        if is_remote:
+            self._runner.resource_updated.connect(self.dashboard.update_remote_resource_usage)
         self._runner.finished_signal.connect(self._on_finished)
         self._runner.finished.connect(self._refresh_parent_navigation)
         self._runner.start()

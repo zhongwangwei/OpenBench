@@ -237,6 +237,25 @@ class ProgressDashboard(QWidget):
         self.resource_group.setTitle(title)
         self._set_resource_labels_unavailable()
 
+    def monitor_remote_resources(self):
+        """Accept resource samples emitted by the remote runner."""
+        self._resource_mode = "remote"
+        self._resource_pid_provider = None
+        self._resource_processes.clear()
+        self.resource_group.setTitle("Resources (OpenBench remote)")
+        self._set_resource_labels_unavailable()
+
+    def update_remote_resource_usage(self, cpu_percent: float, mem_percent: float):
+        """Display one remote process-group resource sample."""
+        if self._resource_mode != "remote":
+            return
+        cpu_value = max(0, min(100, int(round(cpu_percent))))
+        mem_value = max(0, min(100, int(round(mem_percent))))
+        self.cpu_bar.setValue(cpu_value)
+        self.mem_bar.setValue(mem_value)
+        self.cpu_label.setText(f"{cpu_value}%")
+        self.mem_label.setText(f"{mem_percent:.1f}%" if 0 < mem_percent < 1 else f"{mem_value}%")
+
     def _set_resource_labels_unavailable(self):
         self.cpu_bar.setValue(0)
         self.mem_bar.setValue(0)
@@ -306,6 +325,8 @@ class ProgressDashboard(QWidget):
         """Update resource usage display."""
         if self._resource_mode == "unavailable":
             self._set_resource_labels_unavailable()
+            return
+        if self._resource_mode == "remote":
             return
         try:
             import psutil
