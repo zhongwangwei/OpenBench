@@ -4215,6 +4215,30 @@ def test_parse_merged_station_file_uses_first_non_time_dimension(tmp_path: Path)
     assert [row[0] for row in rows] == ["A", "B"]
 
 
+def test_station_coordinate_values_loads_array_once():
+    import numpy as np
+
+    from openbench.data.registry.scanner import _station_coordinate_value, _station_coordinate_values
+
+    class Coordinate:
+        dims = ("station",)
+        size = 2
+
+        def __init__(self):
+            self.reads = 0
+
+        @property
+        def values(self):
+            self.reads += 1
+            return np.array([10.0, 20.0])
+
+    coordinate = Coordinate()
+    values = _station_coordinate_values({"lat": coordinate}, "lat", "station")
+
+    assert [_station_coordinate_value(values, "lat", i) for i in range(2)] == [10.0, 20.0]
+    assert coordinate.reads == 1
+
+
 def test_build_variables_uses_injected_remote_inspection(tmp_path):
     """Remote-scanned datasets ship NC inspection results computed on the remote host."""
     from openbench.data.registry.scanner import ScannedDataset, _build_variables

@@ -113,6 +113,9 @@ def _remote_bootstrap(openbench_source_path: str) -> str:
 def _remote_ref_root_setup(data_root: str) -> str:
     return (
         f"_data_root = os.path.abspath(os.path.expanduser({json.dumps(data_root)}))\n"
+        "_scan_root = _data_root\n"
+        'if os.path.basename(_data_root).casefold() in {"grid", "station"}:\n'
+        "    _data_root = os.path.dirname(_data_root)\n"
         'os.environ["OPENBENCH_REF_ROOT"] = _data_root\n'
     )
 
@@ -253,11 +256,11 @@ if selected_variants is not None:
 elif {rescan!r}:
     scan_fn = scan_reference_directory or find_new_datasets
     scan_kwargs = {{}} if scan_reference_directory is not None else {{"existing_names": set()}}
-    groups = _scan_with_skips(scan_fn, _data_root, **scan_kwargs)
+    groups = _scan_with_skips(scan_fn, _scan_root, **scan_kwargs)
 else:
     scan_fn = find_new_datasets or scan_reference_directory
     scan_kwargs = {{"existing_names": registered_names}} if find_new_datasets is not None else {{}}
-    groups = _scan_with_skips(scan_fn, _data_root, **scan_kwargs)
+    groups = _scan_with_skips(scan_fn, _scan_root, **scan_kwargs)
 payload = []
 for group in groups:
     variants = {{}}

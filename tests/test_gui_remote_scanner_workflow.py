@@ -106,8 +106,9 @@ def test_remote_reference_scan_script_sets_absolute_ref_root(monkeypatch):
 
     script = captured["script"]
     assert '_data_root = os.path.abspath(os.path.expanduser("~/Reference"))' in script
+    assert "_scan_root = _data_root" in script
     assert 'os.environ["OPENBENCH_REF_ROOT"] = _data_root' in script
-    assert "groups = _scan_with_skips(scan_fn, _data_root" in script
+    assert "groups = _scan_with_skips(scan_fn, _scan_root" in script
     assert '"data_root": _data_root' in script
     compile(script, "<remote-scan-script>", "exec")
 

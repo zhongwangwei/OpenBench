@@ -160,6 +160,31 @@ def test_remote_registry_does_not_import_from_workspace(monkeypatch):
     assert "/stale/OpenBench" not in captured["script"]
 
 
+def test_remote_registry_recovers_source_root_from_detected_src_package(monkeypatch):
+    from openbench.gui import remote_python, remote_registry
+
+    remote_registry._REMOTE_CACHE.clear()
+    controller = FakeController(
+        FakeSSH(("direct", "alice", "login", 22)),
+        {
+            "python_path": "/env/bin/python",
+            "openbench_path": "/workspace",
+            "openbench_package_path": "/tera/OpenBench/src/openbench",
+        },
+    )
+    captured = {}
+
+    def fake_run(_ssh, script, **_kwargs):
+        captured["script"] = script
+        return _snapshot()
+
+    monkeypatch.setattr(remote_python, "run_remote_python_json", fake_run)
+
+    remote_registry.get_registry(controller, refresh=True)
+
+    assert "/tera/OpenBench/src" in captured["script"]
+
+
 def test_remote_cache_is_bound_to_active_target_identity(monkeypatch):
     from openbench.gui import remote_python, remote_registry
 

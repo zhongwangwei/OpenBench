@@ -889,6 +889,8 @@ def test_existing_non_git_directory_is_never_deleted(qapp, monkeypatch):
                 return "/usr/bin/git\n", "", 0
             if command.startswith("test -e /remote/OpenBench/.git"):
                 return "not is_openbench\n", "", 1
+            if command.startswith("first_entry=$(find /remote/OpenBench"):
+                return "", "", 1
             if command.startswith("test -d /remote/OpenBench"):
                 return "exists\n", "", 0
             raise AssertionError(command)
@@ -908,6 +910,43 @@ def test_existing_non_git_directory_is_never_deleted(qapp, monkeypatch):
     assert warnings and "move/remove that directory manually" in warnings[-1]
     assert all("rm -rf" not in command for command, _timeout in widget._ssh_manager.execute_calls)
     assert FakeWorker.created == []
+
+
+def test_existing_empty_directory_can_be_install_target(qapp, monkeypatch):
+    from openbench.gui.widgets import remote_config
+
+    class SSH:
+        is_connected = True
+
+        def __init__(self):
+            self.execute_calls = []
+
+        def execute(self, command, timeout=None):
+            self.execute_calls.append((command, timeout))
+            if command == "which git":
+                return "/usr/bin/git\n", "", 0
+            if command.startswith("test -e /remote/OpenBench/.git"):
+                return "", "", 1
+            if command.startswith("first_entry=$(find /remote/OpenBench"):
+                return "is_empty\n", "", 0
+            if command.startswith("test -d /remote/OpenBench"):
+                return "exists\n", "", 0
+            raise AssertionError(command)
+
+    FakeWorker.created.clear()
+    widget = RemoteConfigWidget()
+    widget._ssh_manager = SSH()
+    widget.openbench_input.setText("/remote/OpenBench")
+
+    monkeypatch.setattr(remote_config, "SshExecuteWorker", FakeWorker, raising=False)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.Accepted)
+
+    widget._install_openbench()
+
+    assert len(FakeWorker.created) == 1
+    assert FakeWorker.created[0].command.endswith(
+        "git clone --progress git@github.com:zhongwangwei/OpenBench.git /remote/OpenBench 2>&1"
+    )
 
 
 class GuardedInstallSSH:
@@ -1264,6 +1303,7 @@ def test_conda_create_commands_expand_tilde_conda_exe(qapp, monkeypatch):
 
     assert ssh.commands
     assert ssh.commands[0].startswith('"$HOME"/miniconda3/bin/conda create')
+    assert "-c conda-forge" in ssh.commands[0]
     assert "'~/" not in ssh.commands[0]
 
 
@@ -1580,6 +1620,30 @@ def test_parse_ssh_config_splits_multiple_host_aliases(tmp_path, monkeypatch):
     assert {host["hostname"] for host in hosts} == {"login.example.org"}
     assert {host["user"] for host in hosts} == {"alice"}
     assert {host["port"] for host in hosts} == {"2222"}
+
+
+def test_remote_config_recovers_source_root_from_detected_src_package(qapp):
+    widget = RemoteConfigWidget()
+    widget._openbench_source_path = ""
+    widget.openbench_package_input.setText("/tera/OpenBench/src/openbench")
+
+    assert widget.get_config()["openbench_source_path"] == "/tera/OpenBench"
+
+
+def test_host_input_click_emits_with_existing_text(qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from openbench.gui.widgets.remote_config import ClickableLineEdit
+
+    line_edit = ClickableLineEdit()
+    clicks = []
+    line_edit.clicked.connect(lambda: clicks.append(True))
+    line_edit.setText("alice@login.example.org")
+
+    QTest.mouseClick(line_edit, Qt.LeftButton)
+
+    assert clicks == [True]
 
 
 def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
