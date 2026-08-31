@@ -374,7 +374,7 @@ def test_execute_remote_openbench_captures_hidden_process_group_marker(tmp_path)
     assert logs[-1] == "Remote evaluation process completed."
     assert "login banner" in logs
     assert all("__OPENBENCH_PGID__" not in line for line in logs)
-    assert "setsid" in ssh.stream_command
+    assert "setsid -w" in ssh.stream_command
 
 
 def test_execute_remote_openbench_rejects_unconfirmed_zero_exit(tmp_path):
