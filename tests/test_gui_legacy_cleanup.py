@@ -60,7 +60,9 @@ def test_gui_metric_and_score_options_come_from_core_registry():
     assert gui_scores <= IMPLEMENTED_SCORES
     assert {"dr", "APFB", "br2", "cp"} <= gui_metrics
     assert {"smpi", "SMPI", "MSE", "LNSE", "The_Ideal_Point_score"} & (gui_metrics | gui_scores) == set()
-    assert {"index_agreement", "nSeasonalityScore"} <= gui_scores
+    assert "index_agreement" in METRICS_ITEMS["Efficiency"]
+    assert "index_agreement" not in gui_scores
+    assert "nSeasonalityScore" in gui_scores
 
 
 def test_metric_and_score_labels_use_full_name_with_abbreviation(qapp):
