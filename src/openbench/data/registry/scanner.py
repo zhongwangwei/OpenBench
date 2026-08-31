@@ -3374,7 +3374,9 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
             lon_var = _find_var(ds, LON_NAMES)
             lat_values = _station_coordinate_values(ds, lat_var, stn_dim)
             lon_values = _station_coordinate_values(ds, lon_var, stn_dim)
-            id_values = [(name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds]
+            id_values = [
+                (name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds
+            ]
             station_values = ds[stn_dim].values if stn_dim in ds.coords else None
 
             # Time range (case-insensitive dim name)
