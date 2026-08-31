@@ -115,7 +115,18 @@ class ClimatologyProcessor:
             "KGE",  # Kling-Gupta Efficiency
             "KGESS",  # KGE with multiple components
             "mKGE",  # Modified KGE
-            "nKGE",  # Normalized KGE
+            "KGEkm",  # Known-moments KGE
+            "KGElf",  # Low-flow KGE
+            "KGEnp",  # Non-parametric KGE
+            "rSD",  # standard-deviation ratio
+            "RSR",  # RMSE / observed standard deviation
+            "rSpearman",  # rank correlation requires multiple pairs
+            "pbiasfdc",  # flow-duration slope requires a distribution
+            "LNSE",  # log NSE needs observed variance
+            "mNSE",  # modified NSE needs observed absolute deviation
+            "rNSE",  # relative NSE needs observed relative variance
+            "MIA",  # agreement around the observed mean
+            "RIA",  # relative agreement around the observed mean
             "pc_ampli",  # Phase and amplitude require temporal variation
             "CRMSD",  # Centered RMSD uses std(dim='time') and correlation
             "rv",  # Relative variability requires std(dim='time')
