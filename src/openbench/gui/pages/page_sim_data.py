@@ -117,8 +117,10 @@ def _case_prefix_is_safe(prefix: str, suffix: str, overrides: Dict[str, Any]) ->
     for override in overrides.values():
         if not isinstance(override, dict):
             continue
-        seen_prefixes.add(override.get("prefix", prefix) or "")
-        seen_suffixes.add(override.get("suffix", suffix) or "")
+        if override.get("prefix"):
+            seen_prefixes.add(override["prefix"])
+        if override.get("suffix"):
+            seen_suffixes.add(override["suffix"])
     return len(seen_prefixes) <= 1 and len(seen_suffixes) <= 1
 
 

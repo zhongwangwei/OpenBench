@@ -714,6 +714,20 @@ def test_infer_tim_res_from_time_coverage_preserves_subdaily_labels():
     assert _infer_tim_res_from_time_coverage({"time_count": 3, "time_span_seconds": 12 * 3600}) == "6Hour"
 
 
+def test_blank_compute_override_does_not_hide_case_file_prefix():
+    from types import SimpleNamespace
+
+    from openbench.cli.sim import _case_prefix_is_safe_to_write
+
+    case = SimpleNamespace(
+        prefix="case.clm2.h0.",
+        suffix="",
+        variable_overrides={"Surface_Albedo": {"prefix": "", "suffix": ""}},
+    )
+
+    assert _case_prefix_is_safe_to_write(case) is True
+
+
 def test_rebase_station_artifacts_updates_fulllist_and_case_paths(tmp_path):
     from types import SimpleNamespace
 
