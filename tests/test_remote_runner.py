@@ -331,7 +331,14 @@ def test_execute_remote_openbench_nonzero_exit_includes_log_tail(tmp_path):
 def test_execute_remote_openbench_passes_should_abort_to_stream(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
-    ssh = StreamSSH(lines=["running\n"], exit_code=0)
+    ssh = StreamSSH(
+        lines=[
+            "__OPENBENCH_PHASE__=run_started\n",
+            "running\n",
+            "__OPENBENCH_PHASE__=run_completed\n",
+        ],
+        exit_code=0,
+    )
     runner = _runner(config, ssh)
     runner._remote_config_path = "/remote/main.yaml"
 
@@ -344,7 +351,16 @@ def test_execute_remote_openbench_passes_should_abort_to_stream(tmp_path):
 def test_execute_remote_openbench_captures_hidden_process_group_marker(tmp_path):
     config = tmp_path / "main.yaml"
     config.write_text("x: 1\n", encoding="utf-8")
-    ssh = StreamSSH(lines=["login banner\n", "__OPENBENCH_PGID__=4321\n", "running\n"], exit_code=0)
+    ssh = StreamSSH(
+        lines=[
+            "login banner\n",
+            "__OPENBENCH_PGID__=4321\n",
+            "__OPENBENCH_PHASE__=run_started\n",
+            "running\n",
+            "__OPENBENCH_PHASE__=run_completed\n",
+        ],
+        exit_code=0,
+    )
     runner = _runner(config, ssh)
     runner._remote_config_path = "/remote/main.yaml"
     logs = []
@@ -354,10 +370,45 @@ def test_execute_remote_openbench_captures_hidden_process_group_marker(tmp_path)
 
     assert success is True
     assert runner._remote_process_group == 4321
-    assert logs[-1] == "running"
+    assert "running" in logs
+    assert logs[-1] == "Remote evaluation process completed."
     assert "login banner" in logs
     assert all("__OPENBENCH_PGID__" not in line for line in logs)
     assert "setsid" in ssh.stream_command
+
+
+def test_execute_remote_openbench_rejects_unconfirmed_zero_exit(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = StreamSSH(lines=["Config valid. Ready to run.\n"], exit_code=0)
+    runner = _runner(config, ssh)
+    runner._remote_config_path = "/remote/main.yaml"
+
+    success, message = runner._execute_remote_openbench()
+
+    assert success is False
+    assert message == "Remote command exited before the OpenBench evaluation started"
+
+
+def test_remote_resource_sample_is_normalized_to_configured_cores(tmp_path):
+    config = tmp_path / "main.yaml"
+    config.write_text("x: 1\n", encoding="utf-8")
+    ssh = ExecuteSSH(("240.0 1.5\n", "", 0))
+    runner = RemoteRunner(
+        str(config),
+        ssh,
+        {"python_path": "python3", "openbench_path": "/remote/openbench", "num_cores": 12},
+        config_already_remote=True,
+    )
+    runner._remote_process_group = 4321
+    samples = []
+    runner.resource_updated.connect(lambda cpu, memory: samples.append((cpu, memory)))
+
+    assert runner._sample_remote_resources() is True
+
+    assert samples == [(20.0, 1.5)]
+    assert "ps -eo pgid=,pcpu=,rss=" in ssh.commands[-1]
+    assert "target=4321" in ssh.commands[-1]
 
 
 def test_execute_remote_openbench_preserves_partial_marker_outside_tail(tmp_path):
