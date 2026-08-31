@@ -683,8 +683,10 @@ def _case_prefix_is_safe_to_write(case) -> bool:
     for override in overrides.values():
         if not isinstance(override, dict):
             continue
-        seen_prefixes.add(override.get("prefix", case_prefix) or "")
-        seen_suffixes.add(override.get("suffix", case_suffix) or "")
+        if override.get("prefix"):
+            seen_prefixes.add(override["prefix"])
+        if override.get("suffix"):
+            seen_suffixes.add(override["suffix"])
     return len(seen_prefixes) <= 1 and len(seen_suffixes) <= 1
 
 
