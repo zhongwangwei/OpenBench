@@ -87,6 +87,82 @@ def test_remote_sim_scan_cancel_uses_threading_event(qapp, monkeypatch):
     assert page._scan_btn.enabled is True
 
 
+def test_remote_sim_scan_keeps_results_when_progress_close_emits_cancel(qapp, monkeypatch):
+    from openbench.gui.dialogs import scan_confirm
+    from openbench.remote.storage import RemoteStorage
+
+    class Signal:
+        def connect(self, slot):
+            self.slot = slot
+
+        def emit(self):
+            self.slot()
+
+    class Progress:
+        def __init__(self, *_args):
+            self.canceled = Signal()
+
+        def setWindowTitle(self, *_args):
+            pass
+
+        def setWindowModality(self, *_args):
+            pass
+
+        def setMinimumDuration(self, *_args):
+            pass
+
+        def show(self):
+            pass
+
+        def close(self):
+            self.canceled.emit()
+
+        def deleteLater(self):
+            pass
+
+    class Dialog:
+        register_button = SimpleNamespace(clicked=SimpleNamespace(connect=lambda *_args: None))
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def exec(self):
+            return True
+
+        def get_results(self):
+            return [{"label": "CLM5", "nc_dir": "/remote/sim/CLM5", "prefix": "hist_", "model": "CLM5"}]
+
+    added = []
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=RemoteStorage("/remote", object()), remote_settings=lambda: {}),
+        _root_input=_Text("/remote/sim"),
+        _clear_cases=lambda: None,
+        _registry_model_names=lambda: ["CLM5"],
+        _compute_variable_overrides=lambda *_args: {},
+        _add_case_row=lambda *args, **kwargs: added.append((args, kwargs)),
+        _settings_group=SimpleNamespace(setVisible=lambda *_args: None),
+        _on_selection_changed=lambda: None,
+    )
+    monkeypatch.setattr(page_sim_data, "get_remote_ssh_manager", lambda _controller: SimpleNamespace(is_connected=True))
+    monkeypatch.setattr(page_sim_data, "_remote_is_dir", lambda *_args: True)
+    monkeypatch.setattr(page_sim_data, "QProgressDialog", Progress)
+    monkeypatch.setattr(
+        page_sim_data,
+        "scan_simulation_cases_remote",
+        lambda *_args, **_kwargs: (
+            [("CLM5", "/remote/sim/CLM5", "hist_")],
+            {"CLM5": {"model": "CLM5", "variables": ["Runoff"]}},
+        ),
+    )
+    monkeypatch.setattr(scan_confirm, "ScanConfirmDialog", Dialog)
+    monkeypatch.setattr(page_sim_data.QApplication, "setOverrideCursor", lambda *_args: None)
+    monkeypatch.setattr(page_sim_data.QApplication, "restoreOverrideCursor", lambda: None)
+
+    page_sim_data.PageSimData._do_scan_flow(page)
+
+    assert added and added[0][0][:3] == ("CLM5", "/remote/sim/CLM5", "hist_")
+
+
 def test_remote_sim_scan_helpers_quote_paths_and_find_nc4():
     commands = []
 
@@ -491,6 +567,50 @@ def test_remote_station_validation_checks_fulllist_not_case_root(monkeypatch):
     page_sim_data.PageSimData._validate_data(page)
 
     assert calls == ["/remote/home/.openbench/sim_station_lists/StationCase.csv"]
+    assert infos and infos[0][1] == "Validation OK"
+
+
+def test_remote_grid_validation_lists_each_case_once(monkeypatch):
+    from openbench.remote.storage import RemoteStorage
+
+    calls = []
+    infos = []
+    ssh = SimpleNamespace(is_connected=True)
+    monkeypatch.setattr(page_sim_data, "get_remote_ssh_manager", lambda _controller: ssh)
+    monkeypatch.setattr(page_sim_data, "_remote_find_nc_dir", lambda *_args: "/remote/sim/CaseA")
+
+    def list_files(*_args):
+        calls.append(1)
+        return ["/remote/sim/CaseA/runoff_2001.nc", "/remote/sim/CaseA/heat_2001.nc"]
+
+    monkeypatch.setattr(page_sim_data, "_remote_list_nc_files", list_files)
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: infos.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *_args: None)
+
+    page = SimpleNamespace(
+        controller=SimpleNamespace(
+            storage=RemoteStorage("/remote", ssh),
+            config={"general": {"syear": 2001, "eyear": 2001}},
+            remote_settings=lambda: {},
+        ),
+        get_selected_cases=lambda: [
+            {
+                "label": "CaseA",
+                "nc_dir": "/remote/sim/CaseA",
+                "model": "CoLM2024",
+                "data_type": "grid",
+                "data_groupby": "Year",
+                "variables": {
+                    "Runoff": {"prefix": "runoff_", "suffix": ".nc"},
+                    "Latent_Heat": {"prefix": "heat_", "suffix": ".nc"},
+                },
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert calls == [1]
     assert infos and infos[0][1] == "Validation OK"
 
 

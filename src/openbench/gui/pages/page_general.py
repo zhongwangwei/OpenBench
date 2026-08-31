@@ -58,6 +58,7 @@ class PageGeneral(BasePage):
         self.basename_input = QLineEdit()
         self.basename_input.setPlaceholderText("Project name (e.g., Initial_test)")
         self.basename_input.textChanged.connect(self._on_project_name_changed)
+        self._confirmed_project = None
         name_layout.addWidget(self.basename_input)
 
         self.btn_confirm_name = QPushButton("Confirm")
@@ -410,6 +411,7 @@ class PageGeneral(BasePage):
         Note: Only saves to config without triggering sync_namelists.
         Directory creation happens only when Confirm button is clicked.
         """
+        self._confirmed_project = None
         self._save_to_config_no_sync()
 
     def _on_basedir_changed(self, path):
@@ -418,6 +420,7 @@ class PageGeneral(BasePage):
         Note: Only saves to config without triggering sync_namelists.
         Directory creation happens only when Confirm button is clicked.
         """
+        self._confirmed_project = None
         self._save_to_config_no_sync()
 
     def _on_confirm_project(self):
@@ -493,7 +496,8 @@ class PageGeneral(BasePage):
 
         if is_remote:
             # Create directories on remote server
-            self._create_remote_project_folder(output_dir)
+            if self._create_remote_project_folder(output_dir):
+                self._confirmed_project = (basedir, basename)
         else:
             # Create the output directory and nml subdirectories locally
             try:
@@ -503,6 +507,7 @@ class PageGeneral(BasePage):
 
                 # Trigger namelist sync
                 self.controller.sync_namelists()
+                self._confirmed_project = (basedir, basename)
 
                 QMessageBox.information(self, "Project Created", f"Project folder created:\n{output_dir}")
             except Exception as e:
@@ -515,7 +520,7 @@ class PageGeneral(BasePage):
             QMessageBox.warning(
                 self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
-            return
+            return False
 
         try:
             # Create directories on remote server
@@ -530,12 +535,14 @@ class PageGeneral(BasePage):
                 QMessageBox.information(
                     self, "Project Created", f"Project folder created on remote server:\n{output_dir}"
                 )
+                return True
             else:
                 QMessageBox.critical(
                     self, "Error", f"Failed to create project folder on remote server:\n{stderr or stdout}"
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create project folder:\n{str(e)}")
+        return False
 
     def load_from_config(self):
         """Load settings from controller config."""
@@ -873,7 +880,7 @@ class PageGeneral(BasePage):
 
     def validate(self) -> bool:
         """Validate page input."""
-        from openbench.gui.validation import FieldValidator, ValidationManager
+        from openbench.gui.validation import FieldValidator, ValidationError, ValidationManager
 
         errors = []
         manager = ValidationManager(self)
@@ -887,7 +894,8 @@ class PageGeneral(BasePage):
             widget=self.basename_input,
         )
         if error:
-            errors.append(error)
+            manager.show_error_and_focus(error, allow_skip=False)
+            return False
 
         # Output directory required
         error = FieldValidator.required(
@@ -898,7 +906,21 @@ class PageGeneral(BasePage):
             widget=self.basedir_input,
         )
         if error:
-            errors.append(error)
+            manager.show_error_and_focus(error, allow_skip=False)
+            return False
+
+        project = (self.basedir_input.path().strip(), self.basename_input.text().strip())
+        if self._confirmed_project != project:
+            manager.show_error_and_focus(
+                ValidationError(
+                    "project",
+                    "Enter a project name and click Confirm before continuing.",
+                    self.PAGE_ID,
+                    self.btn_confirm_name,
+                ),
+                allow_skip=False,
+            )
+            return False
 
         # Year range validation
         error = FieldValidator.min_max(

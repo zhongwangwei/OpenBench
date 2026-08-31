@@ -14,6 +14,7 @@ variables are available for evaluation downstream.
 import logging
 import os
 import threading
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
@@ -769,6 +770,7 @@ class PageSimData(BasePage):
         # live event loop), so the window stays painted while the progress
         # dialog can cancel the SSH command.
         QApplication.setOverrideCursor(Qt.WaitCursor)
+        scan_was_canceled = False
         try:
             discovered = []
             # label → {files, suffix, multi_stream}; carried past the confirm
@@ -800,12 +802,13 @@ class PageSimData(BasePage):
                     QMessageBox.critical(self, "Error", f"Cannot scan directory:\n{exc}")
                     return
         finally:
+            scan_was_canceled = cancel_event is not None and cancel_event.is_set()
             QApplication.restoreOverrideCursor()
             if progress is not None:
                 progress.close()
                 progress.deleteLater()
 
-        if cancel_event is not None and cancel_event.is_set():
+        if scan_was_canceled:
             return
 
         if not discovered:
@@ -1568,6 +1571,11 @@ class PageSimData(BasePage):
                 if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
                     continue
+                try:
+                    available_files = _remote_list_nc_files(ssh_manager, nc_dir)
+                except Exception as exc:
+                    issues.append(f"{c['label']}: {exc}")
+                    continue
             else:
                 if not os.path.isdir(c["nc_dir"]):
                     issues.append(f"{c['label']}: directory not found ({c['nc_dir']})")
@@ -1576,6 +1584,7 @@ class PageSimData(BasePage):
                 if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
                     continue
+                available_files = [str(path) for path in _glob_nc_local(nc_dir)]
 
             variable_patterns = [
                 (name, override)
@@ -1596,7 +1605,16 @@ class PageSimData(BasePage):
                     ssh_manager=ssh_manager,
                     remote_openbench_root=remote_openbench_root,
                 )
-                sample_paths = path_gen.get_sample_paths()
+                candidate_patterns = (
+                    path_gen._candidate_filenames()
+                    if str(path_gen.data_groupby).lower() == "single"
+                    else path_gen._candidate_patterns()
+                )
+                sample_paths = [
+                    path
+                    for path in available_files
+                    if any(fnmatch(os.path.basename(path), pattern) for pattern in candidate_patterns)
+                ]
                 issue_label = f"{c['label']} ({variable_name})" if variable_name else c["label"]
                 if not sample_paths:
                     pattern = path_gen.describe_pattern()
@@ -1604,17 +1622,6 @@ class PageSimData(BasePage):
                         f"No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
                     )
                     issues.append(f"{issue_label}: {message}")
-                    continue
-
-                file_checks = [file_checker.check_file_exists(path) for path in sample_paths]
-                if not any(check.passed for check in file_checks):
-                    pattern = path_gen.describe_pattern()
-                    issues.append(
-                        f"{issue_label}: No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
-                    )
-                elif any(not check.passed for check in file_checks):
-                    failed = next(check for check in file_checks if not check.passed)
-                    issues.append(f"{issue_label}: {failed.message}")
         if issues:
             QMessageBox.warning(self, "Validation Issues", "\n".join(issues))
         else:

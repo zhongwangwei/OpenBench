@@ -400,10 +400,32 @@ def test_remote_storage_setup_expands_tilde_project_dir(monkeypatch):
     window._current_sync_engine = lambda: None
     window._cleanup_remote_storage = lambda sync_pending=True, disconnect_ssh=False: True
     window._setup_sync_status = lambda sync: None
+    reloads = []
+    window.pages = {"general": SimpleNamespace(load_from_config=lambda: reloads.append(True))}
     monkeypatch.setattr("openbench.remote.sync.SyncEngine", Sync)
 
     assert window.setup_remote_storage(SSH(), "~/OpenBench") is True
     assert window.controller.storage.project_dir == "/home/alice/OpenBench"
+    assert window.controller.config["general"]["basedir"] == "/home/alice/OpenBench/output"
+    assert reloads == [True]
+
+
+def test_local_storage_restores_local_output_directory():
+    from openbench.gui.main_window import MainWindow
+
+    window = MainWindow.__new__(MainWindow)
+    window.controller = _controller(
+        {"general": {"basedir": "/remote/OpenBench/output"}},
+        storage=RemoteStorage("/remote/OpenBench", sync_engine=object()),
+    )
+    window._cleanup_remote_storage = lambda **_kwargs: True
+    window._sync_status = None
+    reloads = []
+    window.pages = {"general": SimpleNamespace(load_from_config=lambda: reloads.append(True))}
+
+    assert window.setup_local_storage("/local/OpenBench") is True
+    assert window.controller.config["general"]["basedir"] == os.path.join("/local/OpenBench", "output")
+    assert reloads == [True]
 
 
 def test_remote_output_dir_expands_tilde_basedir_with_connected_ssh():

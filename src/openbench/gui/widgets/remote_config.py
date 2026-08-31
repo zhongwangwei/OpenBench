@@ -184,8 +184,7 @@ class ClickableLineEdit(QLineEdit):
     def mousePressEvent(self, event):
         """Handle mouse press event."""
         super().mousePressEvent(event)
-        if not self.text():  # Only show menu if empty
-            self.clicked.emit()
+        self.clicked.emit()
 
 
 # Delimits the resolve/ls/find sections of the combined listing command.
@@ -215,7 +214,7 @@ def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env
         if interrupted():
             output_chunks.append("\nInterrupted before environment creation.\n")
             return {"exit_code": 130, "output": "".join(output_chunks), "envs": []}
-        cmd = f"{quoted_conda_exe} create -n {quoted_env_name} python=3.12 -y 2>&1"
+        cmd = f"{quoted_conda_exe} create -n {quoted_env_name} -c conda-forge python=3.12 -y 2>&1"
         stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=300, should_abort=interrupted)
         output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
         envs = ssh_manager.detect_conda_envs() if exit_code == 0 and not interrupted() else []
@@ -2206,14 +2205,23 @@ if spec is not None:
                 else:
                     return
             else:
-                # Never delete an arbitrary remote directory on the user's behalf.
-                QMessageBox.warning(
-                    self,
-                    "Directory Exists",
-                    f"Directory {install_path} already exists but is not an OpenBench git repository.\n\n"
-                    "Choose an empty path or move/remove that directory manually.",
+                stdout3, stderr3, exit_code3 = execute_responsive(
+                    ssh_manager,
+                    (
+                        f"first_entry=$(find {quoted_install_path} -mindepth 1 -maxdepth 1 -print -quit "
+                        f"2>/dev/null) && test -z \"$first_entry\" && test -w {quoted_install_path} && echo is_empty"
+                    ),
+                    timeout=10,
                 )
-                return
+                if exit_code3 != 0 or not _has_exact_stdout_line(stdout3, "is_empty"):
+                    # Never delete an arbitrary remote directory on the user's behalf.
+                    QMessageBox.warning(
+                        self,
+                        "Directory Exists",
+                        f"Directory {install_path} already exists but is not an OpenBench git repository.\n\n"
+                        "Choose an empty path or move/remove that directory manually.",
+                    )
+                    return
 
         # Protocol selection dialog
         if not is_update:
@@ -2448,6 +2456,12 @@ if spec is not None:
             # Extract env name from "envname (type)" format
             conda_env = conda_env_text.split()[0]
 
+        package_path = self.openbench_package_input.text().strip()
+        source_path = self._openbench_source_path
+        normalized_package_path = package_path.replace("\\", "/").rstrip("/")
+        if not source_path and normalized_package_path.endswith("/src/openbench"):
+            source_path = normalized_package_path[: -len("/src/openbench")]
+
         return {
             "host": self.host_input.text().strip(),
             "auth_type": "password" if self.radio_password.isChecked() else "key",
@@ -2460,8 +2474,8 @@ if spec is not None:
             "python_path": self.python_combo.currentText().strip(),
             "conda_env": conda_env,
             "openbench_path": self.openbench_input.text().strip(),
-            "openbench_source_path": self._openbench_source_path,
-            "openbench_package_path": self.openbench_package_input.text().strip(),
+            "openbench_source_path": source_path,
+            "openbench_package_path": package_path,
         }
 
     def set_config(self, config: Dict[str, Any]):

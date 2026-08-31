@@ -1256,12 +1256,20 @@ def _scan_ignore_profile(ref_root: Path, profile_name: str, scan: dict) -> tuple
     return None, {ignored_root}
 
 
-def _scan_profile_layouts(ref_root: Path, on_skip=None) -> tuple[dict[str, DatasetGroup], set[Path]]:
+def _scan_profile_layouts(
+    ref_root: Path,
+    on_skip=None,
+    selected_scope: str | None = None,
+) -> tuple[dict[str, DatasetGroup], set[Path]]:
     """Scan profile-declared layouts before generic directory walking."""
     groups: dict[str, DatasetGroup] = {}
     consumed_dirs: set[Path] = set()
 
     for profile_name, profile, scan in _profile_scan_specs():
+        root_sub_dir = str(scan.get("root_sub_dir", ""))
+        profile_scope = Path(root_sub_dir).parts[0].casefold() if root_sub_dir else ""
+        if selected_scope and profile_scope != selected_scope:
+            continue
         layout = scan.get("layout")
         scanned = None
         consumed: set[Path] = set()
@@ -1293,31 +1301,37 @@ def _scan_profile_layouts(ref_root: Path, on_skip=None) -> tuple[dict[str, Datas
     return groups, consumed_dirs
 
 
-def _reference_dataset_dirs(ref_root: Path, consumed_dirs: set[Path]) -> list[Path]:
+def _reference_dataset_dirs(
+    ref_root: Path,
+    consumed_dirs: set[Path],
+    selected_scope: str | None = None,
+) -> list[Path]:
     """Collect generic dataset roots that need recursive NetCDF discovery."""
     directories = []
-    grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
-    for res_name in ("LowRes", "MidRes", "HigRes"):
-        res_dir = _child_dir_case_insensitive(grid_dir, res_name)
-        for category_dir in _iter_dirs(res_dir):
-            for var_dir in _iter_dirs(category_dir):
-                if not _is_profile_consumed(var_dir, consumed_dirs):
-                    directories.extend(
-                        dataset_dir
-                        for dataset_dir in _iter_dirs(var_dir)
-                        if not _is_profile_consumed(dataset_dir, consumed_dirs)
-                    )
+    if selected_scope != "station":
+        grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
+        for res_name in ("LowRes", "MidRes", "HigRes"):
+            res_dir = _child_dir_case_insensitive(grid_dir, res_name)
+            for category_dir in _iter_dirs(res_dir):
+                for var_dir in _iter_dirs(category_dir):
+                    if not _is_profile_consumed(var_dir, consumed_dirs):
+                        directories.extend(
+                            dataset_dir
+                            for dataset_dir in _iter_dirs(var_dir)
+                            if not _is_profile_consumed(dataset_dir, consumed_dirs)
+                        )
 
-    station_dir = _child_dir_case_insensitive(ref_root, "Station")
-    for category_dir in _iter_dirs(station_dir):
-        for var_dir in _iter_dirs(category_dir):
-            if _is_profile_consumed(var_dir, consumed_dirs) or _count_nc(var_dir):
-                continue
-            directories.extend(
-                dataset_dir
-                for dataset_dir in _iter_dirs(var_dir)
-                if not _is_profile_consumed(dataset_dir, consumed_dirs)
-            )
+    if selected_scope != "grid":
+        station_dir = _child_dir_case_insensitive(ref_root, "Station")
+        for category_dir in _iter_dirs(station_dir):
+            for var_dir in _iter_dirs(category_dir):
+                if _is_profile_consumed(var_dir, consumed_dirs) or _count_nc(var_dir):
+                    continue
+                directories.extend(
+                    dataset_dir
+                    for dataset_dir in _iter_dirs(var_dir)
+                    if not _is_profile_consumed(dataset_dir, consumed_dirs)
+                )
     return list(dict.fromkeys(directories))
 
 
@@ -1359,13 +1373,16 @@ def scan_reference_directory(
         List of DatasetGroup, each containing resolution variants.
     """
     ref_root = Path(ref_root)
+    selected_scope = ref_root.name.casefold() if ref_root.name.casefold() in {"grid", "station"} else None
+    if selected_scope:
+        ref_root = ref_root.parent
     if not ref_root.exists():
         logger.warning("Reference directory not found: %s", ref_root)
         return []
 
-    groups, consumed_dirs = _scan_profile_layouts(ref_root, on_skip=on_skip)
+    groups, consumed_dirs = _scan_profile_layouts(ref_root, on_skip=on_skip, selected_scope=selected_scope)
     nc_locations = _find_reference_nc_dirs(
-        _reference_dataset_dirs(ref_root, consumed_dirs),
+        _reference_dataset_dirs(ref_root, consumed_dirs, selected_scope=selected_scope),
         max_workers=max_workers,
     )
 
@@ -1376,7 +1393,7 @@ def scan_reference_directory(
     # If a 3rd-level dir has NC files → standard dataset.
     # If not but its children do → dataset with sub-dirs (depth 4).
     grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
-    if grid_dir.exists():
+    if selected_scope != "station" and grid_dir.exists():
         for res_name in ["LowRes", "MidRes", "HigRes"]:
             res_dir = _child_dir_case_insensitive(grid_dir, res_name)
             if not res_dir.exists():
@@ -1520,7 +1537,7 @@ def scan_reference_directory(
     # Scan station data: Station/<category>/<variable>/<dataset>/
     # Also handles Composite layout: Station/Composite/<dataset>/dataset/*.nc
     stn_dir = _child_dir_case_insensitive(ref_root, "Station")
-    if stn_dir.exists():
+    if selected_scope != "grid" and stn_dir.exists():
         if on_progress:
             on_progress("Scanning Station/...")
         for category_dir in _iter_dirs(stn_dir):
@@ -3123,7 +3140,28 @@ def _numeric_scalar_or_singleton(value) -> float | None:
     return float(arr.reshape(-1)[0])
 
 
-def _station_coordinate_value(ds, coord_var: str | None, station_dim: str, index: int) -> float | None:
+def _station_coordinate_values(ds, coord_var: str | None, station_dim: str):
+    """Load a merged station coordinate once, with the station axis first."""
+    if not coord_var:
+        return None
+
+    import numpy as np
+
+    data_array = ds[coord_var]
+    if station_dim in data_array.dims:
+        return np.moveaxis(data_array.values, data_array.dims.index(station_dim), 0)
+    if data_array.size == 1:
+        return data_array.values
+    logger.warning(
+        "Skipping merged station coordinate %s: dims %s are not indexed by station dimension %s",
+        coord_var,
+        data_array.dims,
+        station_dim,
+    )
+    return None
+
+
+def _station_coordinate_value(values, coord_var: str | None, index: int) -> float | None:
     """Return a station coordinate only when it is scalar for this station.
 
     Merged station files should expose lat/lon either as scalar values or as
@@ -3137,19 +3175,10 @@ def _station_coordinate_value(ds, coord_var: str | None, station_dim: str, index
 
     import numpy as np
 
-    data_array = ds[coord_var]
-    if station_dim in data_array.dims:
-        value = data_array.isel({station_dim: index}).values
-    elif data_array.size == 1:
-        value = data_array.values
-    else:
-        logger.warning(
-            "Skipping merged station coordinate %s: dims %s are not indexed by station dimension %s",
-            coord_var,
-            data_array.dims,
-            station_dim,
-        )
+    if values is None:
         return None
+
+    value = values if np.asarray(values).size == 1 else values[index]
 
     scalar = _numeric_scalar_or_singleton(value)
     if scalar is not None:
@@ -3343,6 +3372,10 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
             n_stations = ds.sizes[stn_dim]
             lat_var = _find_var(ds, LAT_NAMES)
             lon_var = _find_var(ds, LON_NAMES)
+            lat_values = _station_coordinate_values(ds, lat_var, stn_dim)
+            lon_values = _station_coordinate_values(ds, lon_var, stn_dim)
+            id_values = [(name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds]
+            station_values = ds[stn_dim].values if stn_dim in ds.coords else None
 
             # Time range (case-insensitive dim name)
             syear = ""
@@ -3358,19 +3391,17 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
 
             for i in range(n_stations):
                 station_id = None
-                for id_var in ("station_id", "site_id", "station_name", "site"):
-                    if id_var in ds:
-                        values = ds[id_var].values
-                        try:
-                            station_id = _decode_station_id_value(values[i])
-                        except Exception:
-                            station_id = None
-                        if station_id:
-                            break
+                for _id_var, values in id_values:
+                    try:
+                        station_id = _decode_station_id_value(values[i])
+                    except Exception:
+                        station_id = None
+                    if station_id:
+                        break
                 if not station_id:
-                    station_id = str(ds[stn_dim].values[i]) if stn_dim in ds.coords else str(i)
-                lat = _station_coordinate_value(ds, lat_var, stn_dim, i)
-                lon = _station_coordinate_value(ds, lon_var, stn_dim, i)
+                    station_id = str(station_values[i]) if station_values is not None else str(i)
+                lat = _station_coordinate_value(lat_values, lat_var, i)
+                lon = _station_coordinate_value(lon_values, lon_var, i)
 
                 if lat is not None and lon is not None and not (np.isnan(lat) or np.isnan(lon)):
                     rows.append([station_id, syear, eyear, lon, lat, str(nc_file)])

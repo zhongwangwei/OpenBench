@@ -125,12 +125,14 @@ class MainWindow(QMainWindow):
 
         # Logo/Title area
         title_frame = QFrame()
-        title_frame.setStyleSheet("background-color: #252525; padding: 20px;")
+        title_frame.setStyleSheet("background-color: #252525;")
         title_layout = QVBoxLayout(title_frame)
+        title_layout.setContentsMargins(16, 16, 16, 16)
 
         self.logo_label = QLabel()
         if not self._logo_pixmap.isNull():
-            self.logo_label.setPixmap(self._logo_pixmap.scaled(160, 92, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo_label.setPixmap(self._logo_pixmap.scaled(132, 76, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.logo_label.setStyleSheet("background-color: #ffffff; border-radius: 8px; padding: 6px;")
         self.logo_label.setAlignment(Qt.AlignCenter)
         title_layout.addWidget(self.logo_label)
 
@@ -1240,6 +1242,8 @@ class MainWindow(QMainWindow):
         """
         from openbench.remote.sync import SyncEngine
 
+        was_remote = isinstance(self.controller.storage, RemoteStorage)
+
         get_target_identity = getattr(ssh_manager, "get_active_target_identity", None)
         if callable(get_target_identity) and get_target_identity() is None:
             QMessageBox.warning(
@@ -1285,6 +1289,12 @@ class MainWindow(QMainWindow):
         sync_engine = SyncEngine(ssh_manager, remote_project_dir)
         self.controller.storage = RemoteStorage(remote_project_dir, sync_engine)
         self.controller.ssh_manager = ssh_manager
+        config = getattr(self.controller, "config", None)
+        if not was_remote and isinstance(config, dict):
+            config.setdefault("general", {})["basedir"] = f"{remote_project_dir.rstrip('/')}/output"
+        general_page = getattr(self, "pages", {}).get("general")
+        if general_page is not None:
+            general_page.load_from_config()
         from openbench.gui.remote_registry import clear_registry
 
         clear_registry(self.controller)
@@ -1304,11 +1314,18 @@ class MainWindow(QMainWindow):
         Args:
             project_dir: Local project directory path
         """
+        was_remote = isinstance(self.controller.storage, RemoteStorage)
         if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True):
             return False
 
         self.controller.storage = LocalStorage(project_dir)
         self.controller.project_root = project_dir
+        config = getattr(self.controller, "config", None)
+        if was_remote and isinstance(config, dict):
+            config.setdefault("general", {})["basedir"] = os.path.join(project_dir, "output")
+        general_page = getattr(self, "pages", {}).get("general")
+        if general_page is not None:
+            general_page.load_from_config()
 
         # Remove sync status widget if exists
         if self._sync_status:

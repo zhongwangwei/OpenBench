@@ -62,6 +62,14 @@ def _remote_settings(controller) -> dict[str, Any]:
     return {}
 
 
+def _configured_source_path(settings: dict[str, Any]) -> str:
+    source_path = str(settings.get("openbench_source_path") or "").strip()
+    package_path = str(settings.get("openbench_package_path") or "").strip().replace("\\", "/").rstrip("/")
+    if not source_path and package_path.endswith("/src/openbench"):
+        source_path = package_path[: -len("/src/openbench")]
+    return source_path
+
+
 def _ssh_manager(controller):
     if hasattr(controller, "storage"):
         from openbench.gui.path_utils import get_remote_ssh_manager
@@ -86,7 +94,7 @@ def _execution_context(settings: dict[str, Any]) -> tuple[str, str, str]:
     return (
         str(settings.get("python_path") or ""),
         str(settings.get("conda_env") or ""),
-        str(settings.get("openbench_source_path") or ""),
+        _configured_source_path(settings),
     )
 
 
@@ -112,7 +120,7 @@ def _remote_json(controller, script: str):
     from openbench.gui import remote_python
 
     settings = _remote_settings(controller)
-    script = _remote_bootstrap(settings.get("openbench_source_path", "")) + script
+    script = _remote_bootstrap(_configured_source_path(settings)) + script
     return remote_python.run_remote_python_json(
         _ssh_manager(controller),
         script,
