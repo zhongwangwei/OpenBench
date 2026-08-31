@@ -331,7 +331,7 @@ class RunnerBindings:
             _STAT_DEFAULTS: dict[str, dict[str, Any]] = {
                 "Hellinger_Distance": {"nbins": 25},
                 "Functional_Response": {"nbins": 25},
-                "Mann_Kendall_Trend_Test": {"significance_level": 0.05},
+                "Mann_Kendall_Trend_Test": {"significance_level": 0.05, "max_sen_pairs": 2_000_000},
                 "ANOVA": {"n_jobs": -1, "analysis_type": "oneway"},
                 "Partial_Least_Squares_Regression": {
                     "max_components": 10,

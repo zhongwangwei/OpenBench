@@ -21,7 +21,10 @@ def process_unit(ref_unit, sim_unit, metric):
         "MSE": "Square of input data unit",  # Mean Squared Error
         "ubRMSE": "Same as input data",  # Unbiased Root Mean Squared Error
         "CRMSD": "Same as input data",  # Centered Root Mean Square Difference
-        "nrmse": "Unitless",  # Normalized Root Mean Square Error
+        "NRMSE": "Unitless",  # Normalized Root Mean Square Error
+        "NMAE": "Unitless",  # Normalized Mean Absolute Error
+        "RSR": "Unitless",  # RMSE-observation standard deviation ratio
+        "RSS": "Square of input data unit",  # Residual sum of squares
         "L": "Unitless",  # Likelihood
         "correlation": "Unitless",  # correlation coefficient
         "correlation_R2": "Unitless",  # correlation coefficient R2
@@ -49,16 +52,19 @@ def process_unit(ref_unit, sim_unit, metric):
         "KGEnp": "Unitless",  # Non-parametric version of the Kling-Gupta Efficiency
         "md": "Unitless",  # Modified Index of Agreement
         "mNSE": "Unitless",  # Modified Nash-Sutcliffe efficiency
+        "mKGE": "Unitless",  # Modified Kling-Gupta efficiency
         "pbiasfdc": "%",  # Percent Bias in the Slope of the Midsegment of the Flow Duration Curve
         "pfactor": "%",  # the percent of observations that are within the given uncertainty bounds.
         "rd": "Unitless",  # Relative Index of Agreement
+        "MIA": "Unitless",  # Modified Index of Agreement
+        "RIA": "Unitless",  # Relative Index of Agreement
         "rfactor": "Unitless",
         # the average width of the given uncertainty bounds divided by the standard deviation of the observations.
         "rNSE": "Unitless",  # Relative Nash-Sutcliffe efficiency
         "rSpearman": "Unitless",  # Spearman's rank correlation coefficient
-        "rsr": "Unitless",  # Ratio of RMSE to the standard deviation of the observations
+        "rsr": "Unitless",  # Legacy spelling for RSR
         "sKGE": "Unitless",  # Split Kling-Gupta Efficiency
-        "ssq": "Square of input data unit",  # Sum of the Squared Residuals
+        "ssq": "Square of input data unit",  # Legacy spelling for RSS
         "valindex": "Unitless",  # Valid Indexes
         "ve": "Unitless",  # Volumetric Efficiency
         "wNSE": "Unitless",  # Weighted Nash-Sutcliffe efficiency

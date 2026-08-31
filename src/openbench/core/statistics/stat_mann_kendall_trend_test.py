@@ -18,9 +18,13 @@ def stat_mann_kendall_trend_test(self, data):
         xarray.Dataset: Dataset containing trend test results for each variable and grid point.
     """
     try:
-        significance_level = self.stats_nml["Mann_Kendall_Trend_Test"]["significance_level"]
+        method_config = self.stats_nml["Mann_Kendall_Trend_Test"]
     except (AttributeError, KeyError, TypeError):
-        significance_level = self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"]
+        method_config = self.compare_nml["Mann_Kendall_Trend_Test"]
+    significance_level = method_config["significance_level"]
+    max_sen_pairs = int(method_config.get("max_sen_pairs", 2_000_000))
+    if max_sen_pairs < 0:
+        raise ValueError("Mann_Kendall_Trend_Test max_sen_pairs must be non-negative")
 
     def _apply_mann_kendall(da, significance_level):
         """
@@ -28,31 +32,70 @@ def stat_mann_kendall_trend_test(self, data):
         """
 
         def mk_test(x):
-            if len(x) < 4 or np.all(np.isnan(x)):
-                return np.array([np.nan, np.nan, np.nan, np.nan])
+            if len(x) < 4 or not np.isfinite(x).any():
+                return np.full(7, np.nan)
 
-            # Remove NaN values
-            x = x[~np.isnan(x)]
+            valid = np.isfinite(x)
+            positions = np.flatnonzero(valid)
+            x = x[valid]
+            n = len(x)
+            if n < 4:
+                return np.full(7, np.nan)
 
-            if len(x) < 4:
-                return np.array([np.nan, np.nan, np.nan, np.nan])
+            _, ranks = np.unique(x, return_inverse=True)
+            tree = np.zeros(ranks.max() + 2, dtype=np.int64)
 
-            # Let SciPy select exact inference only when it is valid. In
-            # particular, tied values cannot use method="exact" and require
-            # the tie-corrected asymptotic path.
-            tau, p_value = stats.kendalltau(np.arange(len(x)), x, method="auto")
+            def _rank_count(rank):
+                count = 0
+                while rank > 0:
+                    count += tree[rank]
+                    rank -= rank & -rank
+                return count
 
-            # Determine trend. Propagate NaN from `p_value` (e.g. exact-method
-            # output for a degenerate constant series) into `significance`
-            # rather than letting `NaN < α` silently fold to False (= "not
-            # significant"), which conflates "no trend" with "undefined".
-            trend = np.sign(tau)
-            if np.isnan(p_value):
-                significance = np.nan
+            s_stat = 0
+            for seen, zero_based_rank in enumerate(ranks):
+                rank = int(zero_based_rank) + 1
+                less = _rank_count(rank - 1)
+                less_or_equal = _rank_count(rank)
+                s_stat += less - (seen - less_or_equal)
+                update = rank
+                while update < tree.size:
+                    tree[update] += 1
+                    update += update & -update
+            s_stat = float(s_stat)
+
+            _, tie_counts = np.unique(x, return_counts=True)
+            tie_term = np.sum(tie_counts * (tie_counts - 1) * (2 * tie_counts + 5))
+            var_s = (n * (n - 1) * (2 * n + 5) - tie_term) / 18.0
+            if var_s > 0:
+                if s_stat > 0:
+                    z_score = (s_stat - 1) / np.sqrt(var_s)
+                elif s_stat < 0:
+                    z_score = (s_stat + 1) / np.sqrt(var_s)
+                else:
+                    z_score = 0.0
+                p_value = float(2 * stats.norm.sf(abs(z_score)))
             else:
-                significance = float(p_value < significance_level)
+                z_score = np.nan
+                p_value = np.nan
 
-            return np.array([trend, significance, p_value, tau])
+            pair_count = n * (n - 1) // 2
+            if pair_count <= max_sen_pairs:
+                pair_slopes = np.concatenate(
+                    [
+                        (x[index + 1 :] - x[index]) / (positions[index + 1 :] - positions[index])
+                        for index in range(n - 1)
+                    ]
+                )
+                sen_slope = float(np.median(pair_slopes))
+            else:
+                sen_slope = np.nan
+            tau, _ = stats.kendalltau(positions, x, method="auto")
+
+            trend = np.sign(s_stat)
+            significance = np.nan if np.isnan(p_value) else float(p_value < significance_level)
+
+            return np.array([trend, significance, p_value, tau, s_stat, z_score, sen_slope])
 
         try:
             # Rechunk time dimension to single chunk for apply_ufunc with dask
@@ -68,7 +111,7 @@ def stat_mann_kendall_trend_test(self, data):
                 vectorize=True,
                 dask="parallelized",
                 output_dtypes=[float],
-                dask_gufunc_kwargs={"output_sizes": {"mk_params": 4}},
+                dask_gufunc_kwargs={"output_sizes": {"mk_params": 7}},
             )
 
             # Create separate variables for each component
@@ -76,9 +119,22 @@ def stat_mann_kendall_trend_test(self, data):
             significance = result.isel(mk_params=1)
             p_value = result.isel(mk_params=2)
             tau = result.isel(mk_params=3)
+            s_statistic = result.isel(mk_params=4)
+            z_score = result.isel(mk_params=5)
+            sen_slope = result.isel(mk_params=6)
 
             # Create a new Dataset with separate variables
-            ds = xr.Dataset({"trend": trend, "significance": significance, "p_value": p_value, "tau": tau})
+            ds = xr.Dataset(
+                {
+                    "trend": trend,
+                    "significance": significance,
+                    "p_value": p_value,
+                    "tau": tau,
+                    "s_statistic": s_statistic,
+                    "z_score": z_score,
+                    "sen_slope": sen_slope,
+                }
+            )
 
             # Add attributes
             ds.trend.attrs["long_name"] = "Mann-Kendall trend"
@@ -91,9 +147,16 @@ def stat_mann_kendall_trend_test(self, data):
             ds.p_value.attrs["description"] = "p-value of the Mann-Kendall trend test"
             ds.tau.attrs["long_name"] = "Kendall's tau statistic"
             ds.tau.attrs["description"] = "Kendall's tau correlation coefficient"
+            ds.s_statistic.attrs["long_name"] = "Mann-Kendall S statistic"
+            ds.s_statistic.attrs["description"] = "Sum of signs over all forward time pairs"
+            ds.z_score.attrs["long_name"] = "Mann-Kendall Z statistic"
+            ds.z_score.attrs["description"] = "Tie-corrected normal Z statistic for the Mann-Kendall S statistic"
+            ds.sen_slope.attrs["long_name"] = "Sen's slope"
+            ds.sen_slope.attrs["description"] = "Median of all pairwise slopes per time step"
 
-            ds.attrs["statistical_test"] = "Mann-Kendall trend test (using Kendall's tau)"
+            ds.attrs["statistical_test"] = "Mann-Kendall trend test with Sen slope"
             ds.attrs["significance_level"] = significance_level
+            ds.attrs["sen_slope_max_exact_pairs"] = max_sen_pairs
 
             # Clean up intermediate result
             del result
