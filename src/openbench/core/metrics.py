@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
@@ -118,6 +119,35 @@ class metrics:
         # Calculate RMSE
         rmse = np.sqrt(((s - o) ** 2).mean(dim="time"))
         return rmse
+
+    def MSE(self, s, o, dim="time"):
+        """Mean square error from the appendix."""
+        s, o = self._validate_inputs(s, o)
+        return ((s - o) ** 2).mean(dim=dim)
+
+    def NRMSE(self, s, o, dim="time"):
+        """RMSE normalized by ``abs(mean(o))`` (appendix NRMSE_mu)."""
+        s, o = self._validate_inputs(s, o)
+        o_mean = o.mean(dim=dim)
+        return xr.where(o_mean != 0, np.sqrt(((s - o) ** 2).mean(dim=dim)) / np.abs(o_mean), np.nan)
+
+    def RSR(self, s, o, dim="time"):
+        """RMSE-observations standard deviation ratio."""
+        s, o = self._validate_inputs(s, o)
+        denom = np.sqrt(((o - o.mean(dim=dim)) ** 2).sum(dim=dim))
+        numer = np.sqrt(((s - o) ** 2).sum(dim=dim))
+        return xr.where(denom != 0, numer / denom, np.nan)
+
+    def RSS(self, s, o, dim="time"):
+        """Residual sum of squares."""
+        s, o = self._validate_inputs(s, o)
+        return ((s - o) ** 2).sum(dim=dim)
+
+    def NMAE(self, s, o, dim="time"):
+        """Normalized mean absolute error using sum(abs(o)) denominator."""
+        s, o = self._validate_inputs(s, o)
+        denom = np.abs(o).sum(dim=dim)
+        return xr.where(denom != 0, np.abs(s - o).sum(dim=dim) / denom, np.nan)
 
     def ubRMSE(self, s, o):
         """
@@ -490,25 +520,252 @@ class metrics:
         safe_o_range = o_range.where((o_range != 0) & o_range.notnull())
         return s_range / safe_o_range - 1.0
 
-    def rSD(self, s, o):
-        # Ratio of standard deviations
-        # also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
-        # Indicates if flow variability is being over- or underestimated; calculated from rSD in the hydroGOF R package
-        raise NotImplementedError("rSD metric is not yet implemented")
+    def _chunk_core_dim(self, *arrays, dim="time"):
+        out = []
+        for array in arrays:
+            if hasattr(array, "chunks") and array.chunks is not None and dim in array.dims:
+                array = array.chunk({dim: -1})
+            out.append(array)
+        return out
 
-    def PBIAS_HF(self, s, o):
-        # Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
-        # also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
-        # Characterizes response to large precipitation events; calculated using flows ≥ the 98th percentile flow with pbias in the hydroGOF R package
-        raise NotImplementedError("PBIAS_HF metric is not yet implemented")
+    def _kge_components(self, s, o, dim="time"):
+        s, o = self._validate_inputs(s, o)
+        r = xr.corr(s, o, dim=dim)
+        s_mean = s.mean(dim=dim)
+        o_mean = o.mean(dim=dim)
+        s_std = s.std(dim=dim)
+        o_std = o.std(dim=dim)
+        alpha = xr.where(o_std != 0, s_std / o_std, np.nan)
+        beta = xr.where(o_mean != 0, s_mean / o_mean, np.nan)
+        cv_s = xr.where(s_mean != 0, s_std / s_mean, np.nan)
+        cv_o = xr.where(o_mean != 0, o_std / o_mean, np.nan)
+        gamma = xr.where(cv_o != 0, cv_s / cv_o, np.nan)
+        return r, alpha, beta, gamma
 
-    def PBIAS_LF(self, s, o):
-        # Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
-        # also see E. Towler et al.: Benchmarking model simulations of retrospective streamflow in the contiguous US
-        # Characterizes baseflow; calculated following equations in
-        # Yilmaz et al. (2008) using logged flows ≤ the 30th percentile (zeros are set to the USGS observational threshold
-        # of 0.01 ft3 s−1 (0.000283 m3 s−1))
-        raise NotImplementedError("PBIAS_LF metric is not yet implemented")
+    def rSD(self, s, o, dim="time"):
+        """Ratio of simulated to observed standard deviation."""
+        s, o = self._validate_inputs(s, o)
+        o_std = o.std(dim=dim)
+        return xr.where(o_std != 0, s.std(dim=dim) / o_std, np.nan)
+
+    def PBIAS_HF(self, s, o, quantile=0.98, dim="time"):
+        """Percent bias over observed high-flow samples; default threshold is Q98."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+        threshold = o.quantile(quantile, dim=dim, skipna=True)
+        high = o >= threshold
+        denom = o.where(high).sum(dim=dim)
+        return xr.where(denom != 0, 100.0 * (s - o).where(high).sum(dim=dim) / denom, np.nan)
+
+    def PBIAS_LF(self, s, o, quantile=0.30, dim="time"):
+        """Percent bias over observed low-flow samples; default threshold is Q30."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+        threshold = o.quantile(quantile, dim=dim, skipna=True)
+        low = o <= threshold
+        selected = o.where(low)
+        denom = selected.sum(dim=dim)
+        strictly_positive = ((selected > 0) | selected.isnull()).all(dim=dim) & low.any(dim=dim)
+        return xr.where(
+            strictly_positive & (denom != 0),
+            100.0 * (s - o).where(low).sum(dim=dim) / denom,
+            np.nan,
+        )
+
+    def pbiasfdc(self, s, o, high_quantile=0.66, low_quantile=0.33, dim="time"):
+        """Percent bias in the slope of the midsegment of the flow-duration curve."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+        qs_h = s.quantile(high_quantile, dim=dim, skipna=True)
+        qs_l = s.quantile(low_quantile, dim=dim, skipna=True)
+        qo_h = o.quantile(high_quantile, dim=dim, skipna=True)
+        qo_l = o.quantile(low_quantile, dim=dim, skipna=True)
+        valid = (qs_h > 0) & (qs_l > 0) & (qo_h > 0) & (qo_l > 0)
+        sim_slope = np.log(qs_h) - np.log(qs_l)
+        obs_slope = np.log(qo_h) - np.log(qo_l)
+        return xr.where(valid & (obs_slope != 0), 100.0 * (sim_slope - obs_slope) / obs_slope, np.nan)
+
+    def rSpearman(self, s, o, dim="time"):
+        """Spearman rank correlation using average ranks for ties."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+
+        def _spearman_1d(sim, obs):
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            if mask.sum() < 2:
+                return np.nan
+            sim_rank = pd.Series(sim[mask]).rank(method="average").to_numpy()
+            obs_rank = pd.Series(obs[mask]).rank(method="average").to_numpy()
+            if np.std(sim_rank) == 0 or np.std(obs_rank) == 0:
+                return np.nan
+            return float(np.corrcoef(sim_rank, obs_rank)[0, 1])
+
+        return xr.apply_ufunc(
+            _spearman_1d,
+            s,
+            o,
+            input_core_dims=[[dim], [dim]],
+            vectorize=True,
+            dask="parallelized",
+            output_dtypes=[float],
+        )
+
+    def MIA(self, s, o, dim="time"):
+        """Modified index of agreement."""
+        s, o = self._validate_inputs(s, o)
+        o_mean = o.mean(dim=dim)
+        denom = (np.abs(s - o_mean) + np.abs(o - o_mean)).sum(dim=dim)
+        return xr.where(denom != 0, 1 - np.abs(s - o).sum(dim=dim) / denom, np.nan)
+
+    def RIA(self, s, o, dim="time"):
+        """Relative index of agreement for positive observations."""
+        s, o = self._validate_inputs(s, o)
+        valid_pair = np.isfinite(s) & np.isfinite(o)
+        o_mean = o.mean(dim=dim)
+        positive = ((o > 0) | ~valid_pair).all(dim=dim) & (valid_pair.sum(dim=dim) > 0) & (o_mean > 0)
+        numer = (np.abs(s - o) / o.where(o > 0)).sum(dim=dim)
+        denom = ((np.abs(s - o_mean) + np.abs(o - o_mean)) / o_mean).sum(dim=dim)
+        return xr.where(positive & (denom != 0), 1 - numer / denom, np.nan)
+
+    def valindex(self, s, o, epsilon=0.0, dim="time"):
+        """Fraction of valid pairs with absolute error <= epsilon (default exact match)."""
+        s, o = self._validate_inputs(s, o)
+        n = np.isfinite(s).sum(dim=dim)
+        hits = (np.abs(s - o) <= epsilon).where(np.isfinite(s)).sum(dim=dim)
+        return xr.where(n != 0, hits / n, np.nan)
+
+    def VE(self, s, o, dim="time"):
+        """Volumetric efficiency for non-negative observed volumes/flows."""
+        s, o = self._validate_inputs(s, o)
+        valid_pair = np.isfinite(s) & np.isfinite(o)
+        denom = o.sum(dim=dim)
+        nonnegative = ((o >= 0) | ~valid_pair).all(dim=dim) & (valid_pair.sum(dim=dim) > 0)
+        return xr.where(nonnegative & (denom > 0), 1 - np.abs(s - o).sum(dim=dim) / denom, np.nan)
+
+    def LNSE(self, s, o, dim="time"):
+        """Log Nash-Sutcliffe efficiency for strictly positive pairs."""
+        s, o = self._validate_inputs(s, o)
+        valid_pair = np.isfinite(s) & np.isfinite(o)
+        positive_pair = (s > 0) & (o > 0)
+        valid_domain = (positive_pair | ~valid_pair).all(dim=dim) & (valid_pair.sum(dim=dim) > 0)
+        log_s = np.log(s.where(positive_pair))
+        log_o = np.log(o.where(positive_pair))
+        denom = ((log_o - log_o.mean(dim=dim)) ** 2).sum(dim=dim)
+        numer = ((log_s - log_o) ** 2).sum(dim=dim)
+        return xr.where(valid_domain & (denom != 0), 1 - numer / denom, np.nan)
+
+    def mNSE(self, s, o, dim="time"):
+        """Modified NSE using absolute errors and absolute observed deviations."""
+        s, o = self._validate_inputs(s, o)
+        denom = np.abs(o - o.mean(dim=dim)).sum(dim=dim)
+        return xr.where(denom != 0, 1 - np.abs(s - o).sum(dim=dim) / denom, np.nan)
+
+    def rNSE(self, s, o, dim="time"):
+        """Relative NSE; only defined for non-zero observations and observed mean."""
+        s, o = self._validate_inputs(s, o)
+        valid_pair = np.isfinite(s) & np.isfinite(o)
+        o_mean = o.mean(dim=dim)
+        nonzero = ((o != 0) | ~valid_pair).all(dim=dim) & (valid_pair.sum(dim=dim) > 0) & (o_mean != 0)
+        numer = (((s - o) / o.where(o != 0)) ** 2).sum(dim=dim)
+        denom = (((o - o_mean) / o_mean) ** 2).sum(dim=dim)
+        return xr.where(nonzero & (denom != 0), 1 - numer / denom, np.nan)
+
+    def wNSE(self, s, o, weights, dim="time"):
+        """Weighted NSE using explicit non-negative sample weights."""
+        s, o = self._validate_inputs(s, o)
+        s, o, weights = xr.align(s, o, weights, join="inner")
+        valid_weight_domain = ((weights >= 0) | ~np.isfinite(weights)).all(dim=dim)
+        weights = weights.where(np.isfinite(s) & np.isfinite(o) & np.isfinite(weights) & (weights >= 0))
+        wsum = weights.sum(dim=dim)
+        o_mean = (weights * o).sum(dim=dim) / wsum.where(wsum != 0)
+        denom = (weights * (o - o_mean) ** 2).sum(dim=dim)
+        numer = (weights * (s - o) ** 2).sum(dim=dim)
+        return xr.where(valid_weight_domain & (wsum > 0) & (denom != 0), 1 - numer / denom, np.nan)
+
+    def wsNSE(self, s, o, season_weights, seasons=None, dim="time"):
+        """Weighted seasonal NSE using explicit season weights and labels."""
+        s, o = self._validate_inputs(s, o)
+        if not isinstance(season_weights, Mapping):
+            raise TypeError("wsNSE season_weights must map season labels to weights")
+        if seasons is None:
+            if dim not in o.coords:
+                raise ValueError("wsNSE requires explicit seasons or a datetime coordinate")
+            try:
+                seasons = o[dim].dt.season
+            except (AttributeError, TypeError) as exc:
+                raise ValueError("wsNSE requires explicit seasons for non-datetime coordinates") from exc
+        s, o, seasons = xr.align(s, o, seasons, join="inner")
+        seasons = seasons.rename(seasons.name or "season")
+        labels = np.asarray(seasons)
+        missing = set(np.unique(labels)) - set(season_weights)
+        if missing:
+            raise ValueError(f"Missing wsNSE weights for seasons: {sorted(missing)}")
+        if any(weight < 0 for weight in season_weights.values()):
+            raise ValueError("wsNSE season weights must be non-negative")
+        weights = xr.DataArray(
+            [season_weights[label.item() if hasattr(label, "item") else label] for label in labels],
+            coords={dim: o[dim]},
+            dims=[dim],
+        )
+        season_mean = o.groupby(seasons).mean(dim=dim)
+        centered = o.groupby(seasons) - season_mean
+        denom = (weights * centered**2).sum(dim=dim)
+        numer = (weights * (s - o) ** 2).sum(dim=dim)
+        return xr.where((weights.sum(dim=dim) > 0) & (denom != 0), 1 - numer / denom, np.nan)
+
+    def mKGE(self, s, o, dim="time"):
+        """Modified KGE using coefficient-of-variation ratio gamma."""
+        r, _alpha, beta, gamma = self._kge_components(s, o, dim=dim)
+        return 1 - ((r - 1) ** 2 + (beta - 1) ** 2 + (gamma - 1) ** 2) ** 0.5
+
+    def sKGE(self, s, o, dim="time"):
+        """Split KGE components as [r, beta, gamma]."""
+        r, _alpha, beta, gamma = self._kge_components(s, o, dim=dim)
+        return xr.concat([r, beta, gamma], dim=xr.IndexVariable("component", ["r", "beta", "gamma"]))
+
+    def KGEkm(self, s, o, dim="time"):
+        """Known-moments KGE variant with alpha, beta, and CV-ratio gamma."""
+        r, alpha, beta, gamma = self._kge_components(s, o, dim=dim)
+        return 1 - ((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2 + (gamma - 1) ** 2) ** 0.5
+
+    def KGElf(self, s, o, quantile=0.30, dim="time"):
+        """Low-flow KGE over samples where observed values are <= Q30 by default."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+        threshold = o.quantile(quantile, dim=dim, skipna=True)
+        low = o <= threshold
+        r, alpha, beta, _gamma = self._kge_components(s.where(low), o.where(low), dim=dim)
+        return 1 - ((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2) ** 0.5
+
+    def KGEnp(self, s, o, dim="time"):
+        """Pool et al. non-parametric KGE using normalized flow-duration curves."""
+        s, o = self._validate_inputs(s, o)
+        s, o = self._chunk_core_dim(s, o, dim=dim)
+        rho = self.rSpearman(s, o, dim=dim)
+
+        def _fdc_variability(sim, obs):
+            mask = np.isfinite(sim) & np.isfinite(obs)
+            sim = sim[mask]
+            obs = obs[mask]
+            if sim.size < 2 or sim.mean() == 0 or obs.mean() == 0:
+                return np.nan
+            n = sim.size
+            sim_fdc = np.sort(sim)[::-1] / (n * sim.mean())
+            obs_fdc = np.sort(obs)[::-1] / (n * obs.mean())
+            return 1.0 - 0.5 * np.abs(sim_fdc - obs_fdc).sum()
+
+        alpha_np = xr.apply_ufunc(
+            _fdc_variability,
+            s,
+            o,
+            input_core_dims=[[dim], [dim]],
+            vectorize=True,
+            dask="parallelized",
+            output_dtypes=[float],
+        )
+        o_mean = o.mean(dim=dim)
+        beta = xr.where(o_mean != 0, s.mean(dim=dim) / o_mean, np.nan)
+        return 1 - ((rho - 1) ** 2 + (alpha_np - 1) ** 2 + (beta - 1) ** 2) ** 0.5
 
     def APFB(
         self,
