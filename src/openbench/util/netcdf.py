@@ -39,8 +39,8 @@ def _distributed_client_active() -> bool:
 
 
 def _needs_local_dask_netcdf_write(data: Any) -> bool:
-    """Keep distributed workers out of the HDF5 store phase."""
-    if not _distributed_client_active() or not isinstance(data, (xr.Dataset, xr.DataArray)):
+    """Keep Dask worker threads out of the HDF5 store phase."""
+    if not isinstance(data, (xr.Dataset, xr.DataArray)):
         return False
 
     try:
@@ -237,7 +237,7 @@ def write_netcdf_atomic(
                         "Cannot write xarray data backed by distributed Futures; "
                         "pass the unpersisted lazy Dataset or DataArray instead."
                     )
-                logger.info("Writing lazy xarray data with local single-threaded NetCDF scheduler")
+                logger.info("Writing lazy xarray data with a single-threaded NetCDF scheduler")
                 # ponytail: serial HDF5 store; use Zarr when parallel output bandwidth becomes the bottleneck.
                 data.to_netcdf(tmp_path, compute=False, **nc_kwargs).compute(
                     scheduler="threads",
