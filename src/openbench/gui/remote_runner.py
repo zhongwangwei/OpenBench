@@ -476,12 +476,13 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
 
         # Run the CLI in its own process group when `setsid` is available so
         # Stop can terminate ProcessPool/Dask descendants, not only the parent
-        # `python -m openbench` process. The foreground wrapper preserves the
-        # SSH channel's normal exit-code and streaming behavior.
+        # `python -m openbench` process. `setsid -w` is required because some
+        # SSH channels make setsid fork; without wait mode the channel reports
+        # success as soon as the short-lived parent exits.
         grouped_inner = f"printf '{_REMOTE_PGID_PREFIX}%s\\n' \"$$\"; exec sh -c {shlex.quote(cmd)}"
         stream_cmd = (
-            "if command -v setsid >/dev/null 2>&1; then "
-            f"exec setsid sh -c {shlex.quote(grouped_inner)}; "
+            "if command -v setsid >/dev/null 2>&1 && setsid -w true >/dev/null 2>&1; then "
+            f"exec setsid -w sh -c {shlex.quote(grouped_inner)}; "
             f"else exec sh -c {shlex.quote(cmd)}; fi"
         )
 
