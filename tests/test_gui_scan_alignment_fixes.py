@@ -536,6 +536,24 @@ def test_get_selected_cases_keeps_prefix_for_single_stream():
     assert selected["variables"] == {}
 
 
+def test_get_selected_cases_keeps_prefix_with_blank_compute_overrides():
+    case = {
+        "checkbox": _FakeCheck(),
+        "model_combo": _FakeCombo("CLM5"),
+        "label": "CLM5",
+        "nc_dir": "/sims/CLM5",
+        "auto_prefix": "case.clm2.h0.",
+        "auto_suffix": "",
+        "variable_overrides": {"Surface_Albedo": {"prefix": "", "suffix": ""}},
+        "multi_stream": True,
+    }
+
+    (selected,) = _selected_cases(case)
+
+    assert selected["prefix"] == "case.clm2.h0."
+    assert selected["variables"]["Surface_Albedo"] == {"prefix": "", "suffix": ""}
+
+
 def test_get_selected_cases_uses_per_case_pattern_edits():
     case = {
         "checkbox": _FakeCheck(),
