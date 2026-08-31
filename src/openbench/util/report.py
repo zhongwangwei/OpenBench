@@ -1591,6 +1591,12 @@ class ReportGenerator:
         logger.info(f"Copied {copied_count} figures to report directory")
         _remove_appledouble_files(figures_dir)
 
+        output_figures_dir = os.path.join(self.output_dir, "figures")
+        if os.path.exists(output_figures_dir):
+            _remove_report_tree(output_figures_dir)
+        shutil.copytree(figures_dir, output_figures_dir)
+        logger.info(f"Published {copied_count} figures to output figures directory")
+
     def _verify_figure_paths(self, report_data: Dict[str, Any]):
         """Verify that all referenced figures exist in the report directory"""
         logger.info("Verifying figure paths...")
