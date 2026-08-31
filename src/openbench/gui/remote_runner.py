@@ -23,6 +23,10 @@ from openbench.gui.runner import RunnerStatus, RunnerProgress, _looks_like_parti
 
 
 _REMOTE_PGID_PREFIX = "__OPENBENCH_PGID__="
+_REMOTE_PHASE_PREFIX = "__OPENBENCH_PHASE__="
+_REMOTE_CHECK_STARTED = "check_started"
+_REMOTE_RUN_STARTED = "run_started"
+_REMOTE_RUN_COMPLETED = "run_completed"
 
 
 def build_remote_run_command(python_path: str, openbench_path: str, config_path: str, conda_env: str) -> str:
@@ -38,7 +42,16 @@ def build_remote_run_command(python_path: str, openbench_path: str, config_path:
     q_openbench = quote_remote_path(openbench_path)
     q_config = quote_remote_path(config_path)
     prefix = f"PYTHONUNBUFFERED=1 OPENBENCH_GUI_PROGRESS=1 {q_python} -u -m openbench"
-    invocation = f"{prefix} check {q_config} && {prefix} run {q_config}"
+    marker = lambda phase: f"printf '%s\\n' {shlex.quote(_REMOTE_PHASE_PREFIX + phase)}"
+    invocation = " && ".join(
+        (
+            marker(_REMOTE_CHECK_STARTED),
+            f"{prefix} check {q_config}",
+            marker(_REMOTE_RUN_STARTED),
+            f"{prefix} run {q_config}",
+            marker(_REMOTE_RUN_COMPLETED),
+        )
+    )
     return wrap_with_conda_env(
         f"cd {q_openbench} && {invocation}",
         python_path=python_path,
@@ -82,6 +95,7 @@ class RemoteRunner(QThread):
     # Signals - same interface as EvaluationRunner
     progress_updated = Signal(object)  # RunnerProgress
     log_message = Signal(str)
+    resource_updated = Signal(float, float)  # normalized CPU %, host memory %
     finished_signal = Signal(bool, str)  # success, message
 
     def __init__(
@@ -113,6 +127,8 @@ class RemoteRunner(QThread):
         self._config_already_remote = config_already_remote
         self._stop_requested = False
         self._stop_lock = threading.Lock()
+        self._resource_stop = threading.Event()
+        self._resource_thread: threading.Thread | None = None
 
         # Remote paths
         self._remote_temp_dir = ""
@@ -257,6 +273,7 @@ class RemoteRunner(QThread):
             self.finished_signal.emit(False, error_msg)
 
         finally:
+            self._stop_resource_monitor()
             # Cleanup remote temp directory
             self._cleanup_remote()
 
@@ -473,6 +490,8 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             progress = self.PROGRESS_INIT
             output_tail = deque(maxlen=5)
             saw_partial_completion = False
+            saw_run_started = False
+            saw_run_completed = False
 
             # `execute_stream` yields output lines and `return`s the exit
             # code. We need to capture the StopIteration.value to know
@@ -501,7 +520,19 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
                             value = line[len(_REMOTE_PGID_PREFIX) :].strip()
                             if value.isdigit() and int(value) > 1:
                                 self._remote_process_group = int(value)
+                                self._start_resource_monitor()
                                 continue
+                        if line.startswith(_REMOTE_PHASE_PREFIX):
+                            phase = line[len(_REMOTE_PHASE_PREFIX) :].strip()
+                            if phase == _REMOTE_CHECK_STARTED:
+                                self.log_message.emit("Validating remote configuration...")
+                            elif phase == _REMOTE_RUN_STARTED:
+                                saw_run_started = True
+                                self.log_message.emit("Remote configuration valid. Evaluation started.")
+                            elif phase == _REMOTE_RUN_COMPLETED:
+                                saw_run_completed = True
+                                self.log_message.emit("Remote evaluation process completed.")
+                            continue
                         output_tail.append(line)
                         saw_partial_completion = saw_partial_completion or _looks_like_partial_completion([line])
                         self.log_message.emit(line)
@@ -528,6 +559,10 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             if stopped_by_user:
                 return (False, "Stopped by user")
             if exit_code == 0:
+                if not saw_run_started:
+                    return (False, "Remote command exited before the OpenBench evaluation started")
+                if not saw_run_completed:
+                    return (False, "Remote command exited before OpenBench reported evaluation completion")
                 return (True, "Completed")
             message = self._format_remote_failure(f"Remote OpenBench exited with code {exit_code}", output_tail)
             if saw_partial_completion and not _looks_like_partial_completion([message]):
@@ -541,6 +576,59 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             return (False, self._format_command_context(f"SSH error while running remote command: {e}", cmd))
         except Exception as e:
             return (False, self._format_command_context(f"Execution error while running remote command: {e}", cmd))
+        finally:
+            self._stop_resource_monitor()
+
+    def _start_resource_monitor(self) -> None:
+        """Poll the captured remote process group without blocking the GUI thread."""
+        if self._resource_thread is not None and self._resource_thread.is_alive():
+            return
+        self._resource_stop.clear()
+
+        def monitor():
+            while not self._resource_stop.is_set():
+                self._sample_remote_resources()
+                self._resource_stop.wait(2.0)
+
+        self._resource_thread = threading.Thread(target=monitor, name="openbench-remote-resources", daemon=True)
+        self._resource_thread.start()
+
+    def _stop_resource_monitor(self) -> None:
+        self._resource_stop.set()
+        thread = self._resource_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+        self._resource_thread = None
+
+    def _sample_remote_resources(self) -> bool:
+        """Emit CPU-capacity and host-memory usage for this run's process group."""
+        pgid = self._remote_process_group
+        if pgid is None:
+            return False
+        command = (
+            "mem_total=$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null || true); "
+            "ps -eo pgid=,pcpu=,rss= | "
+            f'awk -v target={pgid} -v total="${{mem_total:-0}}" \''
+            "$1 == target {cpu += $2; rss += $3; found=1} "
+            "END {if (!found) exit 1; mem=(total > 0 ? 100 * rss / total : 0); "
+            'printf "%.6f %.6f\\n", cpu, mem}'
+        )
+        try:
+            stdout, _stderr, exit_code = self._ssh_manager.execute(command, timeout=2)
+            if exit_code != 0:
+                return False
+            aggregate_cpu, memory_percent = map(float, stdout.split()[-2:])
+            try:
+                configured_cores = max(1, int(self._remote_config.get("num_cores") or 1))
+            except (TypeError, ValueError):
+                configured_cores = 1
+            self.resource_updated.emit(
+                max(0.0, min(100.0, aggregate_cpu / configured_cores)),
+                max(0.0, min(100.0, memory_percent)),
+            )
+            return True
+        except Exception:
+            return False
 
     def _kill_remote_process(self):
         """Attempt to kill the remote OpenBench process."""
