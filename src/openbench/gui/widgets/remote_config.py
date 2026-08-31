@@ -2209,7 +2209,7 @@ if spec is not None:
                     ssh_manager,
                     (
                         f"first_entry=$(find {quoted_install_path} -mindepth 1 -maxdepth 1 -print -quit "
-                        f"2>/dev/null) && test -z \"$first_entry\" && test -w {quoted_install_path} && echo is_empty"
+                        f'2>/dev/null) && test -z "$first_entry" && test -w {quoted_install_path} && echo is_empty'
                     ),
                     timeout=10,
                 )
