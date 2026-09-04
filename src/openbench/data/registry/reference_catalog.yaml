@@ -675,7 +675,7 @@ ERA5LAND_MidRes:
     Surface_Albedo:
       varname: albedo
       varunit: '1'
-      sub_dir: Heat/Surface_Albedo/ERA5LAND/0p25deg_daily/
+      sub_dir: Heat/Surface_Albedo/ERA5LAND/
       prefix: ERA5LAND_
       suffix: _albedo_1D_0p25
     Surface_Downward_LW_Radiation:
@@ -720,7 +720,7 @@ ERA5LAND_MidRes:
     Surface_Upward_SW_Radiation:
       varname: susr
       varunit: W m-2
-      sub_dir: Heat/Surface_Upward_SW_Radiation/ERA5LAND/0p25deg_daily
+      sub_dir: Heat/Surface_Upward_SW_Radiation/ERA5LAND
       prefix: ERA5LAND_
       suffix: _susr_1D_0p25
       years:
@@ -733,7 +733,7 @@ ERA5LAND_MidRes:
       prefix: ERA5LAND_
       suffix: _daymax_2m_temperature_1D_0p25
     Diurnal_Min_Temperature:
-      varname: mn2t
+      varname: t2m
       varunit: K
       sub_dir: Meteo/Diurnal_Min_Temperature/ERA5LAND
       prefix: ERA5LAND_
@@ -811,7 +811,7 @@ ESACCI-BIOMASS-L4_LowRes:
   data_groupby: Single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Biomass:
       varname: agb
@@ -834,7 +834,7 @@ ESACCI-L4_FIRE-BA-MODIS_LowRes:
   years:
   - 2001
   - 2020
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Burned_Area:
       varname: burned_area
@@ -1143,10 +1143,11 @@ GDHY2019ver_LowRes:
   description: GDHY2019 global historical crop-yield dataset
   category: Bio
   data_type: grid
-  tim_res: Month
+  tim_res: Year
   data_groupby: Year
   timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  grid_res: 0.5
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes/
   years:
   - 1981
   - 2016
@@ -1181,7 +1182,6 @@ GDHY2019ver_LowRes:
       varunit: t ha-1
       prefix: yield_
       suffix: ''
-  grid_res: 0.5
   _provenance:
     data_groupby: profile
     tim_res: profile
@@ -1268,16 +1268,16 @@ GIEMS_MC_LowRes:
   years:
   - 1992
   - 2020
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Inundation_Area:
       varname: water_surface_area
-      varunit: m
+      varunit: m2
       sub_dir: Water/Inundation_Area/GIEMS_MC
       prefix: GIEMS-MC_water_area_map_setrange
     Inundation_Fraction:
       varname: total_water_fraction
-      varunit: m
+      varunit: fraction
       sub_dir: Water/Inundation_Fraction/GIEMS_MC
       prefix: GIEMS-MC_water_fraction_map_setrange
   _provenance:
@@ -1349,7 +1349,7 @@ GIWUED_LowRes:
   years:
   - 2011
   - 2018
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Total_Irrigation_Amount:
       sub_dir: Anth/Crop/GIWUED
@@ -1373,7 +1373,7 @@ GLASS_LowRes:
   years:
   - 1981
   - 2018
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Net_Primary_Production:
       varname: NPP
@@ -2056,7 +2056,7 @@ HOMTS_MidRes:
   variables:
     Root_Zone_Soil_Temperature:
       varname: Root_Zone_Soil_Temperature
-      varunit: ''
+      varunit: TS
       sub_dir: Meteo/Root_Zone_Soil_Temperature/HOMTS/
       prefix: HOM_TS0cm_daily_025x025_1960_2017
     Surface_Soil_Temperature:
@@ -2078,7 +2078,7 @@ HSWUD_MidRes:
   data_groupby: Year
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
-  grid_res: 0.25
+  grid_res: 0.1
   variables:
     Water_Use:
       varname: dom
@@ -2172,7 +2172,7 @@ LGS_Reco_LowRes:
   years:
   - 1982
   - 2015
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Ecosystem_Respiration:
       varname: Reco
@@ -2264,7 +2264,7 @@ MODIS_MOD10CM_LowRes:
   data_groupby: Single
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Snow_Cover_Extent:
       varname: Snow_Cover_Monthly_CMG
@@ -2946,7 +2946,7 @@ UpCH4_LowRes:
   data_groupby: Year
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
-  grid_res: 0.5
+  grid_res: 0.25
   variables:
     Wetland_Methane_Emission:
       varname: mean_ch4
