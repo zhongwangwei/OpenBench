@@ -544,8 +544,8 @@ CLM5:
       varname: TREFMXAV
       varunit: K
     Diurnal_Min_Temperature:
-      varname: ''
-      varunit: ''
+      varname: TREFMNAV
+      varunit: K
     Surface_Downward_SW_Radiation:
       varname: FSDS
       varunit: w m-2
@@ -1141,7 +1141,7 @@ CaMa:
       varunit: m2
     Inundation_Fraction:
       varname: fldfrc
-      varunit: m2 m-2
+      varunit: fraction
     Streamflow:
       varname: outflw
       varunit: m3 s-1
@@ -1459,6 +1459,19 @@ CoLM2024:
     Total_Irrigation_Amount:
       varname: f_sum_irrig
       varunit: kg m-2
+    Urban_Air_Temperature_Max:
+      varname: f_tmax
+      varunit: K
+    Urban_Air_Temperature_Min:
+      varname: f_tmin
+      varunit: K
+    Urban_Albedo:
+      compute: ds['f_sr'] / ds['f_xy_solarin']
+      varname: Urban_Albedo
+      varunit: '-'
+    Urban_Surface_Temperature:
+      varname: f_tref
+      varunit: kelvin
 ERA5-Land:
   data_type: grid
   description: ECMWF ERA5-Land Reanalysis
@@ -1551,7 +1564,7 @@ GLDAS:
       varname: SWE_inst
       varunit: kg m-2
     Surface_Soil_Moisture:
-      varname: SoilMoi00_10cm_inst
+      varname: SoilMoi0_10cm_inst
       varunit: kg m-2
     Surface_Soil_Temperature:
       varname: SoilTMP0_10cm_inst

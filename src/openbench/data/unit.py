@@ -116,6 +116,7 @@ class UnitProcessing:
                 "mm mon-1": lambda x: _per_month_to_per_day(x),
                 "mm month-1": lambda x: _per_month_to_per_day(x),
                 "w m-2 heat": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
+                "w m-2": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
                 "mm 3hour-1": lambda x: x * 8,
                 "mm 3h-1": lambda x: x * 8,
                 "m hr-1": lambda x: x * 1000 * 24,
