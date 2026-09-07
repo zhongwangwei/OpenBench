@@ -920,8 +920,13 @@ class PageRefData(BasePage):
                         else _registry_source_data(var_name, source_name)
                     )
                 if registry_data:
-                    registry_data["general"].update(source_data.get("general", {}))
-                    registry_data.update({key: value for key, value in source_data.items() if key != "general"})
+                    if explicit_override:
+                        registry_data["general"].update(source_data.get("general", {}))
+                        registry_data.update({key: value for key, value in source_data.items() if key != "general"})
+                    else:
+                        def_nml_path = source_data.get("def_nml_path") or def_nml.get(source_name, "")
+                        if def_nml_path:
+                            registry_data["def_nml_path"] = def_nml_path
                     registry_data["_explicit_override"] = explicit_override
                     source_data = registry_data
                 else:

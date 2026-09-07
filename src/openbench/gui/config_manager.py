@@ -11,8 +11,163 @@ import yaml
 
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.path_utils import convert_paths_in_dict, get_openbench_root, to_absolute_path
+from openbench.util.names import canonical_variable_name
 
 _BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
+
+LEGACY_GUI_VARIABLE_NAMES = ("Water_Evaporation", "Bare_Soil_Evaporation")
+
+
+def migrate_gui_variable_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy *config* and migrate only legacy GUI logical variable keys."""
+    import copy
+
+    migrated = copy.deepcopy(config or {})
+
+    def unique_list(items: List[Any]) -> List[Any]:
+        result: List[Any] = []
+        for item in items:
+            if item not in (None, "") and item not in result:
+                result.append(item)
+        return result
+
+    def merge_values(old: Any, new: Any, path: str, *, merge_lists: bool = False, merge_bool: bool = False) -> Any:
+        if old in (None, "", [], {}):
+            return new
+        if new in (None, "", [], {}):
+            return old
+        if merge_bool and isinstance(old, bool) and isinstance(new, bool):
+            return old or new
+        if old == new:
+            return new
+        if merge_lists and (isinstance(old, list) or isinstance(new, list)):
+            items = old if isinstance(old, list) else [old]
+            items += new if isinstance(new, list) else [new]
+            return unique_list(items)
+        if merge_lists and not isinstance(old, dict) and not isinstance(new, dict):
+            return unique_list([old, new])
+        if isinstance(old, dict) and isinstance(new, dict):
+            merged = dict(new)
+            for key, value in old.items():
+                merged[key] = (
+                    merge_values(
+                        value,
+                        merged[key],
+                        f"{path}.{key}",
+                        merge_lists=merge_lists,
+                        merge_bool=merge_bool,
+                    )
+                    if key in merged
+                    else value
+                )
+            return merged
+        raise ValueError(f"Conflicting values while migrating legacy GUI variable config at {path}")
+
+    def rename_mapping_keys(mapping: Any, path: str, *, merge_bool: bool = False) -> None:
+        if not isinstance(mapping, dict):
+            return
+        for key in list(mapping):
+            new_key = canonical_variable_name(key)
+            if new_key == key:
+                continue
+            value = mapping.pop(key)
+            mapping[new_key] = (
+                merge_values(value, mapping[new_key], f"{path}.{new_key}", merge_bool=merge_bool)
+                if new_key in mapping
+                else value
+            )
+
+    def rename_variable_list(container: Any, key: str, path: str) -> None:
+        if not isinstance(container, dict) or key not in container:
+            return
+        value = container[key]
+        if isinstance(value, list):
+            container[key] = unique_list([canonical_variable_name(item) for item in value])
+        elif isinstance(value, dict):
+            rename_mapping_keys(value, f"{path}.{key}")
+
+    def rename_source_general(general: Any, suffix: str, path: str) -> None:
+        if not isinstance(general, dict):
+            return
+        for key in list(general):
+            if not key.endswith(suffix):
+                continue
+            var_name = key[: -len(suffix)]
+            new_key = f"{canonical_variable_name(var_name)}{suffix}"
+            if new_key == key:
+                continue
+            value = general.pop(key)
+            general[new_key] = (
+                merge_values(value, general[new_key], f"{path}.{new_key}", merge_lists=True)
+                if new_key in general
+                else value
+            )
+
+    def rename_compound_source_configs(source_configs: Any, path: str) -> None:
+        if not isinstance(source_configs, dict):
+            return
+        for source_cfg in source_configs.values():
+            if isinstance(source_cfg, dict) and isinstance(source_cfg.get("_var_name"), str):
+                source_cfg["_var_name"] = canonical_variable_name(source_cfg["_var_name"])
+        for key in list(source_configs):
+            if "::" not in key:
+                source_cfg = source_configs[key]
+                if isinstance(source_cfg, dict):
+                    rename_mapping_keys(source_cfg, f"{path}.{key}")
+                continue
+            var_name, source_name = key.split("::", 1)
+            new_var = canonical_variable_name(var_name)
+            if new_var == var_name:
+                continue
+            value = source_configs.pop(key)
+            if isinstance(value, dict):
+                value["_var_name"] = new_var
+            new_key = f"{new_var}::{source_name}"
+            source_configs[new_key] = (
+                merge_values(value, source_configs[new_key], f"{path}.{new_key}")
+                if new_key in source_configs
+                else value
+            )
+
+    rename_mapping_keys(migrated.get("evaluation_items"), "evaluation_items", merge_bool=True)
+
+    ref_data = migrated.get("ref_data") if isinstance(migrated.get("ref_data"), dict) else {}
+    rename_source_general(ref_data.get("general"), "_ref_source", "ref_data.general")
+    rename_compound_source_configs(ref_data.get("source_configs"), "ref_data.source_configs")
+    for old_name in LEGACY_GUI_VARIABLE_NAMES:
+        new_name = canonical_variable_name(old_name)
+        if old_name in ref_data:
+            value = ref_data.pop(old_name)
+            ref_data[new_name] = (
+                merge_values(value, ref_data[new_name], f"ref_data.{new_name}") if new_name in ref_data else value
+            )
+
+    sim_data = migrated.get("sim_data") if isinstance(migrated.get("sim_data"), dict) else {}
+    rename_source_general(sim_data.get("general"), "_sim_source", "sim_data.general")
+    for old_name in LEGACY_GUI_VARIABLE_NAMES:
+        new_name = canonical_variable_name(old_name)
+        if old_name in sim_data:
+            value = sim_data.pop(old_name)
+            sim_data[new_name] = (
+                merge_values(value, sim_data[new_name], f"sim_data.{new_name}") if new_name in sim_data else value
+            )
+    for source_name, source_cfg in (sim_data.get("source_configs") or {}).items():
+        if isinstance(source_cfg, dict):
+            rename_mapping_keys(source_cfg.get("variables"), f"sim_data.source_configs.{source_name}.variables")
+    for index, case in enumerate(sim_data.get("_scanned_cases") or []):
+        if not isinstance(case, dict):
+            continue
+        rename_variable_list(case, "variables", f"sim_data._scanned_cases[{index}]")
+        rename_mapping_keys(case.get("variable_overrides"), f"sim_data._scanned_cases[{index}].variable_overrides")
+        metadata = case.get("metadata") if isinstance(case.get("metadata"), dict) else case.get("scan_metadata")
+        if isinstance(metadata, dict):
+            rename_variable_list(metadata, "variables", f"sim_data._scanned_cases[{index}].metadata")
+            rename_mapping_keys(
+                metadata.get("variable_overrides"),
+                f"sim_data._scanned_cases[{index}].metadata.variable_overrides",
+            )
+
+    return migrated
 
 
 def registry_model_profile(model_name: str, registry=None):
@@ -285,22 +440,29 @@ class ConfigManager:
             [cfg.get("general", {}).get("root_dir", "") for cfg in sim_source_configs.values()]
         )
 
-        return {
-            "general": general,
-            "evaluation_items": evaluation_items,
-            "metrics": metrics,
-            "scores": scores,
-            "comparisons": comparisons,
-            "statistics": statistics,
-            "ref_data": {"general": ref_general, "def_nml": {}, "source_configs": ref_source_configs, **ref_metadata},
-            "sim_data": {
-                "general": sim_general,
-                "def_nml": {},
-                "source_configs": sim_source_configs,
-                **({"_scan_root": sim_scan_root} if sim_scan_root else {}),
-            },
-            **({"uncertainty": config["uncertainty"]} if isinstance(config.get("uncertainty"), dict) else {}),
-        }
+        return migrate_gui_variable_config(
+            {
+                "general": general,
+                "evaluation_items": evaluation_items,
+                "metrics": metrics,
+                "scores": scores,
+                "comparisons": comparisons,
+                "statistics": statistics,
+                "ref_data": {
+                    "general": ref_general,
+                    "def_nml": {},
+                    "source_configs": ref_source_configs,
+                    **ref_metadata,
+                },
+                "sim_data": {
+                    "general": sim_general,
+                    "def_nml": {},
+                    "source_configs": sim_source_configs,
+                    **({"_scan_root": sim_scan_root} if sim_scan_root else {}),
+                },
+                **({"uncertainty": config["uncertainty"]} if isinstance(config.get("uncertainty"), dict) else {}),
+            }
+        )
 
     def generate_main_nml(
         self,
@@ -694,6 +856,7 @@ class ConfigManager:
         Returns:
             YAML string in the new unified format.
         """
+        config = migrate_gui_variable_config(config)
         general = config.get("general", {})
 
         def _case_parent(path: str) -> str:

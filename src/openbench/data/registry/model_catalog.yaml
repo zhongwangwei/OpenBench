@@ -1565,7 +1565,9 @@ GLDAS:
       varunit: kg m-2
     Surface_Soil_Moisture:
       varname: SoilMoi0_10cm_inst
-      varunit: kg m-2
+      # Noah layer thickness 0.1 m: https://ldas.gsfc.nasa.gov/gldas/specifications
+      compute: ds['SoilMoi0_10cm_inst'] / 100.0
+      varunit: m3 m-3
     Surface_Soil_Temperature:
       varname: SoilTMP0_10cm_inst
       varunit: K
@@ -1613,10 +1615,14 @@ GLDAS:
       varunit: W m-2
     Root_Zone_Soil_Moisture:
       varname: RootMoist_inst
-      varunit: kg m-2
+      # ponytail: user-selected 1 m root zone; adjust depth below for other products.
+      compute: ds['RootMoist_inst'] / (1000.0 * 1.0)
+      varunit: m3 m-3
     Soil_Moisture_Lev2:
       varname: SoilMoi10_40cm_inst
-      varunit: kg m-2
+      # Noah layer thickness 0.3 m; divide water mass by density * layer thickness.
+      compute: ds['SoilMoi10_40cm_inst'] / 300.0
+      varunit: m3 m-3
     Surface_Albedo:
       varname: Albedo_inst
       varunit: unitless

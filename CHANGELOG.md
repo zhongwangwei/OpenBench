@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.0.0b16] - 2026-08-31
+
+Beta release over 3.0.0b15 for remote workflow reliability, expanded evaluation
+methods, and complete output packaging.
+
+### Added
+- Evaluation-guide appendix metrics and methods, including deterministic,
+  categorical, uncertainty, trend, and distribution diagnostics.
+- Live remote CPU and memory monitoring tied to the active OpenBench process.
+
+### Changed
+- Index of Agreement is available through the metric workflow.
+- Generated figures are published under the advertised top-level `figures/`
+  directory while existing metric, comparison, and report paths remain valid.
+
+### Fixed
+- Remote installation, Conda environment creation, SSH host selection, output
+  paths, project confirmation, and local/remote dataset discovery.
+- Remote progress now waits for the real evaluation process across jump hosts
+  instead of reporting premature success or completion.
+- Legacy flat reference layouts, CLM multi-stream file prefixes, and simulation
+  data scanning now preserve the files selected by the user.
+- Appendix NetCDF execution, GUI/Qt CI stability, and repository formatting.
+
 ## [3.0.0b15] - 2026-08-26
 
 Beta release over 3.0.0b14 for GUI/runtime reliability, truthful reporting,
