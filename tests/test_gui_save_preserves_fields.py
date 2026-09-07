@@ -577,6 +577,93 @@ def test_ref_data_load_save_preserves_multiple_reference_sources(monkeypatch):
     assert ref_data["source_configs"]["Runoff::RefB"]["_explicit_override"] is False
 
 
+def test_ref_data_load_refreshes_autofill_snapshot_but_keeps_explicit_overrides(monkeypatch):
+    from types import SimpleNamespace
+
+    import openbench.data.registry.manager as manager_module
+
+    def _ref(name):
+        variables = {
+            "Runoff": SimpleNamespace(
+                varname="registry_q", varunit="mm", prefix="registry_", suffix=".nc", sub_dir="Runoff/New"
+            ),
+            "Latent_Heat": SimpleNamespace(
+                varname="registry_lh", varunit="W m-2", prefix="lh_", suffix=".nc", sub_dir="Heat/New"
+            ),
+        }
+        return SimpleNamespace(
+            root_dir=f"/registry/{name}",
+            data_type="grid",
+            tim_res="Day",
+            data_groupby="Year",
+            timezone=0,
+            years=[2001, 2002],
+            grid_res=0.25,
+            fulllist="",
+            variables=variables,
+        )
+
+    monkeypatch.setattr(manager_module, "get_registry", lambda: SimpleNamespace(get_reference=_ref))
+    controller = FakeController(
+        {
+            "general": {"basedir": "/out"},
+            "evaluation_items": {"Runoff": True, "Latent_Heat": True},
+            "ref_data": {
+                "general": {"Runoff_ref_source": "RefA", "Latent_Heat_ref_source": "RefA"},
+                "def_nml": {"RefA": "/out/nml/ref/RefA.yaml"},
+                "source_configs": {
+                    "Runoff::RefA": {
+                        "general": {"root_dir": "/stale/RefA", "tim_res": "Month"},
+                        "varname": "stale_q",
+                        "prefix": "stale_",
+                        "_explicit_override": False,
+                    },
+                    "Latent_Heat::RefA": {
+                        "general": {"root_dir": "/manual/RefA", "tim_res": "Month"},
+                        "varname": "manual_lh",
+                        "prefix": "manual_",
+                        "_explicit_override": True,
+                    },
+                },
+            },
+        }
+    )
+    controller.storage = object()
+    page = PageRefData.__new__(PageRefData)
+    page.controller = controller
+    page.data_root_input = FakeText("")
+    page._source_configs = {}
+    page._var_combos = {
+        "Runoff": FakeLoadCombo([("Choose", None), ("RefA", "RefA")]),
+        "Latent_Heat": FakeLoadCombo([("Choose", None), ("RefA", "RefA")]),
+    }
+    page._var_advanced_fields = {
+        var: {key: FakeText("") for key in ("varname", "varunit", "prefix", "suffix", "sub_dir")}
+        for var in ("Runoff", "Latent_Heat")
+    }
+    page._rebuild_variable_groups = lambda: None
+
+    page.load_from_config()
+
+    runoff = page._source_configs["Runoff"]["RefA"]
+    assert runoff["general"]["root_dir"] == "/registry/RefA"
+    assert runoff["general"]["tim_res"] == "Day"
+    assert runoff["varname"] == "registry_q"
+    assert runoff["prefix"] == "registry_"
+    assert runoff["_explicit_override"] is False
+
+    latent_heat = page._source_configs["Latent_Heat"]["RefA"]
+    assert latent_heat["general"]["root_dir"] == "/manual/RefA"
+    assert latent_heat["general"]["tim_res"] == "Month"
+    assert latent_heat["varname"] == "manual_lh"
+    assert latent_heat["prefix"] == "manual_"
+    assert latent_heat["_explicit_override"] is True
+
+    saved_runoff = controller.config["ref_data"]["source_configs"]["Runoff::RefA"]
+    assert saved_runoff["general"]["root_dir"] == "/registry/RefA"
+    assert saved_runoff["varname"] == "registry_q"
+
+
 def test_registry_source_data_uses_case_insensitive_variable_and_null_years(monkeypatch):
     from types import SimpleNamespace
 

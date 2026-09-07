@@ -7,7 +7,7 @@ from typing import Any
 
 from openbench.data.registry.manager import _auto_resolve_variant, _build_model, _build_reference
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset
-from openbench.util.names import normalize_name
+from openbench.util.names import canonical_variable_name, normalize_name
 
 _REMOTE_CACHE: dict[tuple, "RemoteRegistrySnapshot"] = {}
 
@@ -185,7 +185,7 @@ class RemoteRegistrySnapshot:
         self._var_index.clear()
         for key, ref in self._references.items():
             for var_name in ref.variables:
-                self._var_index.setdefault(normalize_name(var_name), []).append(key)
+                self._var_index.setdefault(normalize_name(canonical_variable_name(var_name)), []).append(key)
 
     def _ensure_current_target(self) -> None:
         current = _cache_key(self._controller, _ssh_manager(self._controller))
@@ -249,7 +249,7 @@ class RemoteRegistrySnapshot:
         self._ensure_current_target()
         return [
             self._references[key]
-            for key in self._var_index.get(normalize_name(variable), [])
+            for key in self._var_index.get(normalize_name(canonical_variable_name(variable)), [])
             if key in self._references
         ]
 

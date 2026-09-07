@@ -841,11 +841,16 @@ class DataValidator:
                     ValidationCheck("file_exists", False, f"No files found matching pattern '{pattern}' in {base_dir}")
                 )
         else:
+            file_checks = []
             for path in sample_paths:
                 check = self._validator.check_file_exists(path)
-                checks.append(check)
+                file_checks.append(check)
                 if check.passed and first_existing_path is None:
                     first_existing_path = path
+            # Single suffixes are alternatives, not separate required files.
+            if first_existing_path is not None and str(data_groupby).lower() == "single":
+                file_checks = [check for check in file_checks if check.passed]
+            checks.extend(file_checks)
 
         # If no files found, skip other checks
         if first_existing_path is None:
