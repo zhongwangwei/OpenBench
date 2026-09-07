@@ -1080,7 +1080,15 @@ def test_install_progress_dialog_ignores_escape_while_worker_runs(qapp, monkeypa
     assert not dialog.isVisible()
 
 
-def test_install_progress_dialog_can_cancel_running_worker(qapp, monkeypatch):
+@pytest.fixture
+def english_ui(qapp, monkeypatch):
+    """Text-based button lookup must not inherit another test's UI language."""
+    from openbench.gui.localization import ENGLISH, get_language_manager
+
+    monkeypatch.setattr(get_language_manager(), "language", ENGLISH)
+
+
+def test_install_progress_dialog_can_cancel_running_worker(qapp, monkeypatch, english_ui):
     from PySide6.QtWidgets import QPushButton
 
     from openbench.gui.widgets import remote_config
@@ -1109,7 +1117,7 @@ def test_install_progress_dialog_can_cancel_running_worker(qapp, monkeypatch):
     assert not dialog.isVisible()
 
 
-def test_install_cancel_during_finished_signal_race_does_not_start_pip(qapp, monkeypatch):
+def test_install_cancel_during_finished_signal_race_does_not_start_pip(qapp, monkeypatch, english_ui):
     from PySide6.QtWidgets import QPushButton
 
     from openbench.gui.widgets import remote_config

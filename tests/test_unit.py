@@ -112,3 +112,26 @@ def test_land_model_unit_aliases_normalize():
     converted, base_unit = UnitProcessing.convert_unit(0.001, "kg C m-2 s-1")
     assert base_unit == "gc m-2 day-1"
     assert converted == 86400.0
+
+
+def test_gldas_fixed_soil_layers_convert_to_volumetric_moisture(tmp_path):
+    import xarray as xr
+
+    from openbench.data.compute import execute_compute
+    from openbench.data.registry.manager import RegistryManager
+
+    profile = RegistryManager(user_dir=tmp_path).get_model("GLDAS")
+    ds = xr.Dataset(
+        {
+            "SoilMoi00_10cm_inst": ("x", [20.0]),
+            "SoilMoi10_40cm_inst": ("x", [60.0]),
+            "RootMoist_inst": ("x", [200.0]),
+        }
+    )
+    for item in ("Surface_Soil_Moisture", "Soil_Moisture_Lev2", "Root_Zone_Soil_Moisture"):
+        mapping = profile.variables[item]
+        assert mapping.varunit == "m3 m-3"
+        result = execute_compute(ds, mapping.compute, item)
+        converted, base_unit = UnitProcessing.convert_unit(result, mapping.varunit)
+        np.testing.assert_allclose(converted, [0.2])
+        assert base_unit == UnitProcessing.convert_unit(None, "m3 m-3")[1]

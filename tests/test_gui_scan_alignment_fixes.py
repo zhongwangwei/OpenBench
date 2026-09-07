@@ -300,6 +300,9 @@ def test_gui_local_scan_keeps_detected_case_metadata(monkeypatch, tmp_path):
         "data_groupby": "Single",
         "fulllist": "",
         "station_layout": "flat",
+        "station_dropped_sites": [],
+        "unresolved": [],
+        "station_materialize_error": "station materialization failed: output directory is missing",
         "source_root": str(tmp_path),
     }
 

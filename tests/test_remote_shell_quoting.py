@@ -4,6 +4,8 @@ import re
 import shlex
 from pathlib import Path
 
+import pytest
+
 from openbench.gui.data_validator import FilePathGenerator, RemoteNetCDFValidator
 
 
@@ -17,6 +19,59 @@ class CapturingSSH:
     def execute(self, command, timeout=30):
         self.commands.append(command)
         return self.response
+
+
+@pytest.mark.parametrize(
+    "groupby,prefix,extension,metadata_valid",
+    [
+        ("Single", "tas", ".nc", True),
+        ("single", "tas", ".nc4", True),
+        ("Single", "tas", ".NC", True),
+        ("Single", "tas", ".NC4", True),
+        ("Single", "tas.nc", ".nc", True),
+        ("Single", "tas", None, True),
+        ("Single", "tas", ".nc", False),
+        ("Year", "tas", ".nc", True),
+    ],
+)
+def test_remote_validation_treats_single_extensions_as_alternatives(
+    monkeypatch, groupby, prefix, extension, metadata_valid
+):
+    from openbench.gui.data_validator import DataValidator
+
+    existing = f"/remote/data/tas{extension}" if extension else None
+
+    class SSH:
+        def execute(self, command, timeout=30):
+            assert command.startswith("test -f ")
+            return "", "", 0 if shlex.split(command)[-1] == existing else 1
+
+    validator = DataValidator(is_remote=True, ssh_manager=SSH())
+    inspected = []
+
+    def inspect(path):
+        inspected.append(path)
+        return {"success": True, "variables": ["tas"] if metadata_valid else [], "time_range": [2000, 2001]}
+
+    monkeypatch.setattr(validator._validator, "inspect_file", inspect)
+    if groupby == "Year":
+        # Unlike Single alternatives, every actual yearly sample must exist.
+        monkeypatch.setattr(FilePathGenerator, "get_sample_paths", lambda self: [existing, "/remote/data/missing.nc"])
+    result = validator.validate_source(
+        "Temperature",
+        "RemoteSource",
+        {"general": {"root_dir": "/remote/data", "data_groupby": groupby}, "prefix": prefix, "varname": "tas"},
+        {"syear": 2000, "eyear": 2001},
+    )
+
+    assert result.is_valid is (extension is not None and metadata_valid and groupby != "Year")
+    assert inspected == ([existing] if existing else [])
+    if result.is_valid:
+        assert not result.failed_checks
+    elif extension is None:
+        assert len(result.failed_checks) == 4
+    elif not metadata_valid:
+        assert [check.name for check in result.failed_checks] == ["variable_exists"]
 
 
 def test_remote_glob_quotes_directory_and_find_pattern():

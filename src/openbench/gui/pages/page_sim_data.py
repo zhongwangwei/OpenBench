@@ -251,6 +251,7 @@ def scan_simulation_cases_remote(
     ssh_manager,
     root: str,
     *,
+    output_dir: str = "",
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
@@ -279,7 +280,6 @@ def scan_simulation_cases_remote(
 import dataclasses
 import json
 import sys
-from hashlib import blake2s
 from pathlib import Path
 
 import openbench
@@ -297,14 +297,16 @@ else:
     station_materialize_error = ""
 
 root = {json.dumps(root)}
+station_output_dir = Path({json.dumps(output_dir)}).expanduser() if {json.dumps(output_dir)} else None
 result = scan_simulation_roots([root], model_name="auto")
 if any(case.station_layout for case in result.cases):
     if materialize_station_cases is None:
         pass
+    elif station_output_dir is None:
+        station_materialize_error = "station materialization failed: output directory is missing"
     else:
         try:
-            digest = blake2s(root.encode("utf-8"), digest_size=6).hexdigest()
-            materialize_station_cases(result, Path.home() / ".openbench" / "sim_station_lists" / digest, num_workers=1)
+            materialize_station_cases(result, station_output_dir, num_workers=1)
         except Exception as exc:
             station_materialize_error = "station materialization failed: %s: %s" % (type(exc).__name__, exc)
 
@@ -443,11 +445,20 @@ def _model_from_case_label(label: str, model_names: List[str]) -> str:
     return ""
 
 
-def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
+def _scan_local_cases(root: str, output_dir: str = "") -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
     """Use the shared CLI scanner so GUI discovery follows the same rules."""
-    from openbench.data.sim_scanner import scan_simulation_roots
+    from openbench.data.sim_scanner import materialize_station_cases, scan_simulation_roots
 
     result = scan_simulation_roots([root], model_name="auto")
+    station_materialize_error = ""
+    if any(scanned.station_layout for scanned in result.cases):
+        if output_dir:
+            try:
+                materialize_station_cases(result, output_dir, num_workers=1)
+            except Exception as exc:
+                station_materialize_error = f"station materialization failed: {type(exc).__name__}: {exc}"
+        else:
+            station_materialize_error = "station materialization failed: output directory is missing"
     discovered: List[tuple] = []
     case_meta: Dict[str, Dict[str, Any]] = {}
     for scanned in result.cases:
@@ -473,6 +484,9 @@ def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]
             "data_groupby": scanned.data_groupby,
             "fulllist": str(scanned.fulllist) if scanned.fulllist else "",
             "station_layout": scanned.station_layout,
+            "station_dropped_sites": [str(name) for name in (getattr(scanned, "station_dropped_sites", []) or [])],
+            "unresolved": [str(name) for name in (getattr(scanned, "unresolved", []) or [])],
+            "station_materialize_error": station_materialize_error or _station_materialize_error(scanned.__dict__),
             "source_root": str(scanned.source_root) if scanned.source_root else "",
         }
     return discovered, case_meta
@@ -782,9 +796,11 @@ class PageSimData(BasePage):
                 if callable(settings_fn):
                     remote_settings = settings_fn() or {}
                 try:
+                    output_dir_fn = getattr(self.controller, "get_output_dir", None)
                     discovered, case_meta = scan_simulation_cases_remote(
                         ssh_manager,
                         root,
+                        output_dir=output_dir_fn() if callable(output_dir_fn) else "",
                         python_path=remote_settings.get("python_path", ""),
                         conda_env=remote_settings.get("conda_env", ""),
                         openbench_source_path=remote_settings.get("openbench_source_path", ""),
@@ -797,7 +813,9 @@ class PageSimData(BasePage):
                     return
             else:
                 try:
-                    discovered, case_meta = call_responsive(lambda: _scan_local_cases(root))
+                    output_dir_fn = getattr(self.controller, "get_output_dir", None)
+                    output_dir = output_dir_fn() if callable(output_dir_fn) else ""
+                    discovered, case_meta = call_responsive(lambda: _scan_local_cases(root, output_dir))
                 except Exception as exc:
                     QMessageBox.critical(self, "Error", f"Cannot scan directory:\n{exc}")
                     return
@@ -1546,23 +1564,23 @@ class PageSimData(BasePage):
             remote_openbench_root = remote_settings().get("openbench_path", "")
         file_checker = RemoteNetCDFValidator(ssh_manager) if is_remote else LocalNetCDFValidator()
         for c in cases:
+            if is_remote and (not ssh_manager or not ssh_manager.is_connected):
+                issues.append(f"{c['label']}: remote server is not connected")
+                continue
+            if c.get("data_type") == "stn":
+                detail = c.get("station_materialize_error")
+                if detail:
+                    issues.append(f"{c['label']}: {detail}")
+                    continue
+                fulllist = c.get("fulllist", "")
+                if not fulllist:
+                    issues.append(f"{c['label']}: station fulllist is missing")
+                    continue
+                check = file_checker.check_file_exists(fulllist)
+                if not check.passed:
+                    issues.append(f"{c['label']}: {check.message}")
+                continue
             if is_remote:
-                if not ssh_manager or not ssh_manager.is_connected:
-                    issues.append(f"{c['label']}: remote server is not connected")
-                    continue
-                if c.get("data_type") == "stn":
-                    detail = c.get("station_materialize_error")
-                    if detail:
-                        issues.append(f"{c['label']}: {detail}")
-                        continue
-                    fulllist = c.get("fulllist", "")
-                    if not fulllist:
-                        issues.append(f"{c['label']}: station fulllist is missing")
-                        continue
-                    check = file_checker.check_file_exists(fulllist)
-                    if not check.passed:
-                        issues.append(f"{c['label']}: {check.message}")
-                    continue
                 try:
                     nc_dir = _remote_find_nc_dir(ssh_manager, c["nc_dir"])
                 except Exception as exc:

@@ -34,6 +34,16 @@ def normalize_name(value: object) -> str:
     return unicodedata.normalize("NFC", str(value).strip()).casefold()
 
 
+def canonical_variable_name(name: str) -> str:
+    """Normalize known OpenBench logical aliases, never external data identifiers."""
+    return {
+        "bare_soil_evaporation": "Soil_Evaporation",
+        "soil_evaporation": "Soil_Evaporation",
+        "water_evaporation": "Open_Water_Evaporation",
+        "open_water_evaporation": "Open_Water_Evaporation",
+    }.get(normalize_name(name), name)
+
+
 def find_name_case_insensitive(requested: object, candidates: Iterable[object]) -> object | None:
     """Find *requested* in *candidates* using exact-first, unique casefold fallback.
 

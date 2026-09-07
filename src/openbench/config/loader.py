@@ -31,6 +31,7 @@ from openbench.config.schema import (
 )
 from openbench.util.names import (
     AmbiguousNameError,
+    canonical_variable_name,
     get_mapping_key_case_insensitive,
     normalize_name,
 )
@@ -319,7 +320,7 @@ def _evaluation_variable_lookup(variables: list[str]) -> dict[str, str]:
 
 
 def _canonical_evaluation_variable(name: str, lookup: dict[str, str]) -> str | None:
-    return lookup.get(normalize_name(name))
+    return lookup.get(normalize_name(canonical_variable_name(name)))
 
 
 def _canonicalize_variable_mapping_keys(
@@ -332,7 +333,7 @@ def _canonicalize_variable_mapping_keys(
         return None
     result: dict[str, Any] = {}
     for key, value in raw.items():
-        canonical = _canonical_evaluation_variable(str(key), lookup) or key
+        canonical = _canonical_evaluation_variable(str(key), lookup) or canonical_variable_name(key)
         existing_key = get_mapping_key_case_insensitive(result, canonical)
         if existing_key is not None:
             raise ConfigError(f"{path} contains duplicate variable keys ignoring case: {existing_key}, {key}")
@@ -559,7 +560,7 @@ def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any
                     {"varname", "varunit", "convert"},
                     f"{path}.{var_name}.fallbacks[{index}]",
                 )
-    return raw
+    return _canonicalize_variable_mapping_keys(raw, {}, path=path)
 
 
 def _validated_required_string(raw: Any, path: str) -> str:
@@ -953,7 +954,8 @@ def _build_evaluation(raw: dict[str, Any]) -> EvaluationConfig:
     variables = raw["variables"]
     if not isinstance(variables, list) or len(variables) == 0:
         raise ConfigError("evaluation.variables must be a non-empty list")
-    return EvaluationConfig(variables=variables)
+    _evaluation_variable_lookup(variables)
+    return EvaluationConfig(variables=list(dict.fromkeys(canonical_variable_name(var) for var in variables)))
 
 
 _UNSAFE_SOURCE_CHARS = set('<>:"/\\|?*')
@@ -1005,9 +1007,11 @@ def _validate_reference_overrides(raw: Any) -> dict[str, dict[str, Any]]:
         if "root_dir" in override:
             _validated_required_string(override["root_dir"], f"reference.overrides.{source}.root_dir")
         variables = override.get("variables")
-        if variables is not None:
-            _validated_variables_mapping(variables, f"reference.overrides.{source}.variables")
         result[safe_source] = dict(override)
+        if variables is not None:
+            result[safe_source]["variables"] = _validated_variables_mapping(
+                variables, f"reference.overrides.{source}.variables"
+            )
     return result
 
 

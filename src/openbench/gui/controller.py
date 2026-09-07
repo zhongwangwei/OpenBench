@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal
 
 from openbench.config.schema import DEFAULT_NUM_CORES
-from openbench.gui.config_manager import ConfigManager
+from openbench.gui.config_manager import ConfigManager, migrate_gui_variable_config
 from openbench.gui.path_utils import get_openbench_root, is_windows_absolute_path
 from openbench.remote.ssh import expand_remote_home
 
@@ -168,7 +168,7 @@ class WizardController(QObject):
     @config.setter
     def config(self, value: Dict[str, Any]):
         """Set configuration and emit signal."""
-        self._config = value
+        self._config = migrate_gui_variable_config(value)
         self.config_updated.emit(self._config)
         self.pages_visibility_changed.emit()
 

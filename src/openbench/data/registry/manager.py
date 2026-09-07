@@ -15,6 +15,7 @@ Same for model_catalog.yaml / models/*.yaml.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from importlib.resources import files
 import logging
 import os
@@ -31,7 +32,7 @@ from openbench.data.registry.schema import (
     StationMatchingConfig,
     VariableMapping,
 )
-from openbench.util.names import get_mapping_key_case_insensitive, normalize_name
+from openbench.util.names import canonical_variable_name, get_mapping_key_case_insensitive, normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +258,7 @@ class RegistryManager:
         self._var_index.clear()
         for key, ref in self._references.items():
             for var_name in ref.variables:
-                self._var_index.setdefault(normalize_name(var_name), []).append(key)
+                self._var_index.setdefault(normalize_name(canonical_variable_name(var_name)), []).append(key)
 
     @staticmethod
     def _reference_entry_with_name(name: str, data: dict) -> dict:
@@ -608,7 +609,11 @@ class RegistryManager:
 
     def references_for_variable(self, variable: str) -> list[ReferenceDataset]:
         """Get all reference datasets that support a given variable (O(1) index lookup)."""
-        return [self._references[k] for k in self._var_index.get(normalize_name(variable), []) if k in self._references]
+        return [
+            self._references[k]
+            for k in self._var_index.get(normalize_name(canonical_variable_name(variable)), [])
+            if k in self._references
+        ]
 
     # --- Write methods ---
 
@@ -629,6 +634,7 @@ class RegistryManager:
                 raise ValueError(
                     f"Model name '{name}' conflicts with existing catalog entry '{existing_key}' case-insensitively"
                 )
+            profile = replace(profile, variables=_canonicalize_variable_mappings(profile.variables))
             catalog[name] = profile.to_dict()
             self._write_catalog(catalog_path, catalog)
         self._models[normalize_name(name)] = profile
@@ -678,6 +684,7 @@ class RegistryManager:
                 raise ValueError(
                     f"Reference name '{name}' conflicts with existing catalog entry '{existing_name}' case-insensitively"
                 )
+            dataset = replace(dataset, variables=_canonicalize_variable_mappings(dataset.variables))
             catalog[name] = dataset.to_dict()
             self._write_catalog(catalog_path, catalog)
         self._references[normalize_name(name)] = dataset
@@ -730,6 +737,47 @@ class RegistryManager:
             except OSError:
                 pass
             raise
+
+
+def _is_empty_value(value: Any) -> bool:
+    if value in (None, ""):
+        return True
+    if isinstance(value, (list, tuple, set)):
+        return all(_is_empty_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(_is_empty_value(item) for item in value.values())
+    return False
+
+
+def _variable_mapping_has_content(mapping: VariableMapping) -> bool:
+    return any(not _is_empty_value(value) for value in mapping.to_dict().values())
+
+
+def _add_canonical_variable(variables: dict[str, VariableMapping], raw_name: str, mapping: VariableMapping) -> None:
+    name = canonical_variable_name(raw_name)
+    if name not in variables:
+        variables[name] = mapping
+        return
+
+    existing = variables[name]
+    if existing.to_dict() == mapping.to_dict():
+        return
+
+    existing_has_content = _variable_mapping_has_content(existing)
+    mapping_has_content = _variable_mapping_has_content(mapping)
+    if not existing_has_content and mapping_has_content:
+        variables[name] = mapping
+        return
+    if existing_has_content and not mapping_has_content:
+        return
+    raise ValueError(f"Conflicting variable alias definitions for '{name}'")
+
+
+def _canonicalize_variable_mappings(raw_variables: dict[str, VariableMapping]) -> dict[str, VariableMapping]:
+    variables: dict[str, VariableMapping] = {}
+    for name, mapping in raw_variables.items():
+        _add_canonical_variable(variables, name, mapping)
+    return variables
 
 
 def _auto_resolve_variant(
@@ -834,18 +882,22 @@ def _build_reference(data: dict) -> ReferenceDataset:
     variables = {}
     for var_name, var_data in (data.get("variables") or {}).items():
         primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
-        variables[var_name] = VariableMapping(
-            varname=primary_varname,
-            varunit=var_data.get("varunit", ""),
-            prefix=var_data.get("prefix", ""),
-            suffix=var_data.get("suffix", ""),
-            sub_dir=var_data.get("sub_dir"),
-            fulllist=var_data.get("fulllist"),
-            max_uparea=var_data.get("max_uparea"),
-            min_uparea=var_data.get("min_uparea"),
-            fallbacks=fallbacks,
-            compute=var_data.get("compute"),
-            prefix_fallback=var_data.get("prefix_fallback"),
+        _add_canonical_variable(
+            variables,
+            var_name,
+            VariableMapping(
+                varname=primary_varname,
+                varunit=var_data.get("varunit", ""),
+                prefix=var_data.get("prefix", ""),
+                suffix=var_data.get("suffix", ""),
+                sub_dir=var_data.get("sub_dir"),
+                fulllist=var_data.get("fulllist"),
+                max_uparea=var_data.get("max_uparea"),
+                min_uparea=var_data.get("min_uparea"),
+                fallbacks=fallbacks,
+                compute=var_data.get("compute"),
+                prefix_fallback=var_data.get("prefix_fallback"),
+            ),
         )
 
     # Validate required fields
@@ -914,15 +966,19 @@ def _build_model(data: dict) -> ModelProfile:
     variables = {}
     for var_name, var_data in (data.get("variables") or {}).items():
         primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
-        variables[var_name] = VariableMapping(
-            varname=primary_varname,
-            varunit=var_data.get("varunit", ""),
-            prefix=var_data.get("prefix", ""),
-            suffix=var_data.get("suffix", ""),
-            sub_dir=var_data.get("sub_dir"),
-            fallbacks=fallbacks,
-            compute=var_data.get("compute"),
-            prefix_fallback=var_data.get("prefix_fallback"),
+        _add_canonical_variable(
+            variables,
+            var_name,
+            VariableMapping(
+                varname=primary_varname,
+                varunit=var_data.get("varunit", ""),
+                prefix=var_data.get("prefix", ""),
+                suffix=var_data.get("suffix", ""),
+                sub_dir=var_data.get("sub_dir"),
+                fallbacks=fallbacks,
+                compute=var_data.get("compute"),
+                prefix_fallback=var_data.get("prefix_fallback"),
+            ),
         )
 
     return ModelProfile(
@@ -934,6 +990,16 @@ def _build_model(data: dict) -> ModelProfile:
         variables=variables,
         time_offset=data.get("time_offset"),
     )
+
+
+def _canonical_variable_overlays(raw_variables: dict | None) -> dict[str, Any]:
+    overlays: dict[str, Any] = {}
+    for raw_name, var_data in (raw_variables or {}).items():
+        name = canonical_variable_name(raw_name)
+        if name in overlays and overlays[name] != var_data:
+            raise ValueError(f"Conflicting variable alias definitions for '{name}'")
+        overlays[name] = var_data
+    return overlays
 
 
 def _merge_variable_mapping(
@@ -985,10 +1051,10 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
     # deletion because overlays are merged.
     variables = dict(existing.variables)
     for deleted in overlay.get("_delete_variables", []) or []:
-        delete_key = get_mapping_key_case_insensitive(variables, deleted)
+        delete_key = get_mapping_key_case_insensitive(variables, canonical_variable_name(deleted))
         if delete_key is not None:
             variables.pop(delete_key, None)
-    for var_name, var_data in (overlay.get("variables") or {}).items():
+    for var_name, var_data in _canonical_variable_overlays(overlay.get("variables")).items():
         variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
         variables[variable_key] = _merge_variable_mapping(
             variables.get(variable_key),
@@ -1066,7 +1132,7 @@ def _deep_merge_reference(existing: ReferenceDataset, overlay: dict) -> Referenc
 
     # Deep-merge variables
     variables = dict(existing.variables)
-    for var_name, var_data in (overlay.get("variables") or {}).items():
+    for var_name, var_data in _canonical_variable_overlays(overlay.get("variables")).items():
         variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
         if var_data is None:
             variables.pop(variable_key, None)
