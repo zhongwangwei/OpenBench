@@ -39,7 +39,7 @@ def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
 
 def _write_lines_atomic(output_path: str, lines: list[str]) -> None:
     """Write a text table via same-directory temp file to avoid partial CSV/TXT outputs."""
-    _write_file_atomic(output_path, lambda tmp_path: tmp_path.write_text("".join(lines)), suffix=".tmp.csv")
+    _write_file_atomic(output_path, lambda tmp_path: tmp_path.write_text("".join(lines), encoding="utf-8"), suffix=".tmp.csv")
 
 
 def _groupby_pair_dir(root: str, groupby_name: str, sim_source: str, ref_source: str) -> str:
@@ -269,7 +269,24 @@ class CZ_groupby(metrics, scores):
                                 output_file_path = os.path.join(
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "metrics")
                                 )
-                                rows = []
+                                ref_unit = str(ref_nml[evaluation_item].get(f"{ref_source}_varunit") or "Unknown")
+                                sim_unit = str(sim_nml[evaluation_item].get(f"{sim_source}_varunit") or "Unknown")
+                                weight = str(self.weight or "none").lower()
+                                aggregation = "gridcell_metric -> classwise_clipped_median"
+                                rows = [
+                                    "# statistic_type: metric\n",
+                                    f"# ref_unit: {ref_unit}\n",
+                                    f"# sim_unit: {sim_unit}\n",
+                                    f"# weight: {weight}\n",
+                                    f"# aggregation: {aggregation}\n",
+                                ]
+                                # Keep each metadata entry on one comment line.
+                                rows = [
+                                    line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n"
+                                    for line in rows
+                                ]
+                                common_counts = None
+                                first_statistic = None
                                 # Print the table header with class names
                                 header_values = ["metric"]
                                 for CZ_class_name in CZ_class_names.values():
@@ -303,6 +320,7 @@ class CZ_groupby(metrics, scores):
                                         f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
                                     )
 
+                                    row_counts = []
                                     row_values = [metric]
                                     class_datasets = []
                                     class_names = []
@@ -311,6 +329,7 @@ class CZ_groupby(metrics, scores):
                                         CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                         class_datasets.append(ds1)
                                         class_names.append(CZ_class_name)
+                                        row_counts.append(int(np.isfinite(ds1[metric]).sum().item()))
                                         median_value = ds1[metric].median(skipna=True).values
                                         median_value_str = (
                                             f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
@@ -323,8 +342,21 @@ class CZ_groupby(metrics, scores):
                                             dir_path, evaluation_item, ref_source, sim_source, metric, "CZ"
                                         ),
                                     )
+                                    row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
+                                    if common_counts is None:
+                                        common_counts, first_statistic = row_counts, metric
+                                    else:
+                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
+                                            if old != new:
+                                                raise ValueError(
+                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
+                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
+                                                )
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
+                                if common_counts is None:
+                                    raise ValueError(f"{output_file_path}: no statistics available; CSV generation stopped")
+                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -346,7 +378,27 @@ class CZ_groupby(metrics, scores):
                                 output_file_path2 = os.path.join(
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "scores")
                                 )
-                                rows = []
+                                ref_unit = str(ref_nml[evaluation_item].get(f"{ref_source}_varunit") or "Unknown")
+                                sim_unit = str(sim_nml[evaluation_item].get(f"{sim_source}_varunit") or "Unknown")
+                                weight = str(self.weight or "none").lower()
+                                weight_method = {"area": "area_weighted", "mass": "mass_weighted"}.get(
+                                    weight, "unweighted"
+                                )
+                                aggregation = f"gridcell_score -> classwise_{weight_method}_mean"
+                                rows = [
+                                    "# statistic_type: score\n",
+                                    f"# ref_unit: {ref_unit}\n",
+                                    f"# sim_unit: {sim_unit}\n",
+                                    f"# weight: {weight}\n",
+                                    f"# aggregation: {aggregation}\n",
+                                ]
+                                # Keep each metadata entry on one comment line.
+                                rows = [
+                                    line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n"
+                                    for line in rows
+                                ]
+                                common_counts = None
+                                first_statistic = None
                                 # Print the table header with class names
                                 header_values = ["score"]
                                 for CZ_class_name in CZ_class_names.values():
@@ -371,6 +423,7 @@ class CZ_groupby(metrics, scores):
                                         ds = Convert_Type.convert_nc(ds_file.load())
 
                                     # Calculate and write the overall mean first
+                                    ds = ds.where(np.isfinite(ds), np.nan)
                                     if self.weight.lower() == "area":
                                         weights = np.cos(np.deg2rad(ds.lat))
                                         overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -404,6 +457,12 @@ class CZ_groupby(metrics, scores):
 
                                     overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
+                                    score_weights = None
+                                    if self.weight.lower() == "area":
+                                        score_weights = weights
+                                    elif self.weight.lower() == "mass":
+                                        score_weights = normalized_weights.fillna(0)
+                                    row_counts = []
                                     row_values = [score]
                                     class_datasets = []
                                     class_names = []
@@ -441,6 +500,10 @@ class CZ_groupby(metrics, scores):
                                         else:
                                             mean_value = ds1[score].mean(skipna=True).values
 
+                                        score_mask = np.isfinite(ds1[score])
+                                        if score_weights is not None:
+                                            score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
+                                        row_counts.append(int(score_mask.sum().item()))
                                         mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
                                         row_values.append(mean_value_str)
                                     _write_class_bundle_atomic(
@@ -450,8 +513,24 @@ class CZ_groupby(metrics, scores):
                                             dir_path, evaluation_item, ref_source, sim_source, score, "CZ"
                                         ),
                                     )
+                                    score_mask = np.isfinite(ds[score])
+                                    if score_weights is not None:
+                                        score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
+                                    row_counts.append(int(score_mask.sum().item()))
+                                    if common_counts is None:
+                                        common_counts, first_statistic = row_counts, score
+                                    else:
+                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
+                                            if old != new:
+                                                raise ValueError(
+                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
+                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
+                                                )
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
+                                if common_counts is None:
+                                    raise ValueError(f"{output_file_path2}: no statistics available; CSV generation stopped")
+                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores
