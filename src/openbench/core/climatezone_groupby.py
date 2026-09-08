@@ -39,7 +39,9 @@ def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
 
 def _write_lines_atomic(output_path: str, lines: list[str]) -> None:
     """Write a text table via same-directory temp file to avoid partial CSV/TXT outputs."""
-    _write_file_atomic(output_path, lambda tmp_path: tmp_path.write_text("".join(lines), encoding="utf-8"), suffix=".tmp.csv")
+    _write_file_atomic(
+        output_path, lambda tmp_path: tmp_path.write_text("".join(lines), encoding="utf-8"), suffix=".tmp.csv"
+    )
 
 
 def _groupby_pair_dir(root: str, groupby_name: str, sim_source: str, ref_source: str) -> str:
@@ -281,10 +283,7 @@ class CZ_groupby(metrics, scores):
                                     f"# aggregation: {aggregation}\n",
                                 ]
                                 # Keep each metadata entry on one comment line.
-                                rows = [
-                                    line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n"
-                                    for line in rows
-                                ]
+                                rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
                                 common_counts = None
                                 first_statistic = None
                                 # Print the table header with class names
@@ -355,7 +354,9 @@ class CZ_groupby(metrics, scores):
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
                                 if common_counts is None:
-                                    raise ValueError(f"{output_file_path}: no statistics available; CSV generation stopped")
+                                    raise ValueError(
+                                        f"{output_file_path}: no statistics available; CSV generation stopped"
+                                    )
                                 rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path, rows)
 
@@ -393,10 +394,7 @@ class CZ_groupby(metrics, scores):
                                     f"# aggregation: {aggregation}\n",
                                 ]
                                 # Keep each metadata entry on one comment line.
-                                rows = [
-                                    line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n"
-                                    for line in rows
-                                ]
+                                rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
                                 common_counts = None
                                 first_statistic = None
                                 # Print the table header with class names
@@ -529,7 +527,9 @@ class CZ_groupby(metrics, scores):
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
                                 if common_counts is None:
-                                    raise ValueError(f"{output_file_path2}: no statistics available; CSV generation stopped")
+                                    raise ValueError(
+                                        f"{output_file_path2}: no statistics available; CSV generation stopped"
+                                    )
                                 rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path2, rows)
 

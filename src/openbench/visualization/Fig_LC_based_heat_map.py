@@ -35,8 +35,17 @@ def _metric_color_scale(option, metric):
             vmin, vmax = -1, 1
         elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
             vmin, vmax = math.floor(low), 1
-        elif metric in ["RMSE", "CRMSD", "MSE", "ubRMSE", "nRMSE", "mean_absolute_error",
-                        "ssq", "ve", "absolute_percent_bias"]:
+        elif metric in [
+            "RMSE",
+            "CRMSD",
+            "MSE",
+            "ubRMSE",
+            "nRMSE",
+            "mean_absolute_error",
+            "ssq",
+            "ve",
+            "absolute_percent_bias",
+        ]:
             vmin, vmax = 0, math.ceil(high)
         else:
             vmin, vmax = 0, 1
@@ -213,10 +222,14 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
         from types import SimpleNamespace
         from .Fig_Basic_Plot import determine_display_unit
         from .Fig_toolbox import process_unit
-        unit = determine_display_unit(SimpleNamespace(
-            ref_varunit=metadata.get("ref_unit", ""), sim_varunit=metadata.get("sim_unit", ""),
-            item=option.get("item", [""])[0],
-        ))
+
+        unit = determine_display_unit(
+            SimpleNamespace(
+                ref_varunit=metadata.get("ref_unit", ""),
+                sim_varunit=metadata.get("sim_unit", ""),
+                item=option.get("item", [""])[0],
+            )
+        )
         return f"{label}\n{process_unit(unit, unit, metric)}"
 
     # Convert string values to numeric, replacing 'N/A' with NaN
@@ -320,8 +333,12 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     rcParams.update(params)
 
     column_labels = [
-        class_label(column, column.replace("_", " ").title()
-                    if option.get("x_ticklabel", "Normal") == "Normal" else get_short_label(column, option["groupby"]))
+        class_label(
+            column,
+            column.replace("_", " ").title()
+            if option.get("x_ticklabel", "Normal") == "Normal"
+            else get_short_label(column, option["groupby"]),
+        )
         for column in df_selected.columns
     ]
     row_labels = [metric_label(metric) for metric in df_selected.index]
@@ -335,6 +352,7 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
     make_LC_based_heat_map(file, selected_metrics, lb, option)
 
 
+@with_isolated_rc
 def _groupby_layout(column_labels, row_labels, lb, option):
     """Measure labels; keep LC continuous and split CZ after the first 16 columns.
 
@@ -353,8 +371,16 @@ def _groupby_layout(column_labels, row_labels, lb, option):
     def measure(labels, fontsize, rotation, ha):
         sizes = []
         for label in labels:
-            text = fig.text(0, 0, label, fontsize=fontsize, rotation=rotation,
-                            ha=ha, va="top", multialignment="center" if ha == "center" else "left")
+            text = fig.text(
+                0,
+                0,
+                label,
+                fontsize=fontsize,
+                rotation=rotation,
+                ha=ha,
+                va="top",
+                multialignment="center" if ha == "center" else "left",
+            )
             box = text.get_window_extent(renderer)
             sizes.append((box.width / fig.dpi, box.height / fig.dpi))
             text.remove()
@@ -401,8 +427,7 @@ def _groupby_layout(column_labels, row_labels, lb, option):
     row_count = len(row_labels) * len(panels)
     gap = 0.45
     label_space = len(panels) * tick_space + (len(panels) - 1) * gap
-    height = max(float(option["y_wise"]),
-                 top + bottom + row_count * row_height + label_space)
+    height = max(float(option["y_wise"]), top + bottom + row_count * row_height + label_space)
     fig.set_size_inches(width, height)
     panel_height = len(row_labels) * row_height
     panel_boxes = []
@@ -430,7 +455,9 @@ def _draw_groupby_heatmap(file, data, column_labels, row_labels, lb, option):
         for panel_index, (panel, box) in enumerate(zip(panels, panel_boxes)):
             left, bottom, panel_width, panel_height = box
             # Scores share a color scale; metrics retain a scale for each row.
-            row_groups = [slice(i, i + 1) for i in range(len(data.index))] if per_row_colorbar else [slice(0, len(data.index))]
+            row_groups = (
+                [slice(i, i + 1) for i in range(len(data.index))] if per_row_colorbar else [slice(0, len(data.index))]
+            )
             for rows in row_groups:
                 y = bottom + panel_height - rows.stop * row_height
                 ax = add_axes((left, y, panel_width, (rows.stop - rows.start) * row_height))
@@ -450,8 +477,13 @@ def _draw_groupby_heatmap(file, data, column_labels, row_labels, lb, option):
                 ax.set_yticklabels(row_labels[rows], rotation=option["y_rotation"], ha=option["y_ha"])
                 ax.set_xticks(range(len(values.columns)))
                 if rows.stop == len(data.index):
-                    ax.set_xticklabels(column_labels[panel], rotation=option["x_rotation"],
-                                       ha="center", va="top", multialignment="center")
+                    ax.set_xticklabels(
+                        column_labels[panel],
+                        rotation=option["x_rotation"],
+                        ha="center",
+                        va="top",
+                        multialignment="center",
+                    )
                     ax.set_xlabel(option["xlabel"], fontsize=option["xtick"] + 1)
                 else:
                     ax.xaxis.set_visible(False)
@@ -464,23 +496,46 @@ def _draw_groupby_heatmap(file, data, column_labels, row_labels, lb, option):
                 for i in range(len(values.index)):
                     for j in range(len(values.columns)):
                         value = values.iloc[i, j]
-                        ax.text(j, i, f"{value:{option['ticks_format']}}", ha="center", va="center",
-                                color=_annotation_color(value, high=high, low=low),
-                                fontsize=option["fontsize"] - (1 if lb != "score" and len(data.index) > 1 else 0))
+                        ax.text(
+                            j,
+                            i,
+                            f"{value:{option['ticks_format']}}",
+                            ha="center",
+                            va="center",
+                            color=_annotation_color(value, high=high, low=low),
+                            fontsize=option["fontsize"] - (1 if lb != "score" and len(data.index) > 1 else 0),
+                        )
                 if per_row_colorbar:
-                    cax = add_axes((left + panel_width + overhang + 0.25, y + row_height / 2,
-                                    option["colorbar_auto_width"], option["colorbar_auto_height"]))
-                    colorbar_options = {"extend": option["extend"]} if lb == "score" else {
-                        "ticks": ticks, "extend": extend
-                    }
-                    cbar = fig.colorbar(im, cax=cax, orientation="horizontal",
-                                        label=option["colorbar_label"] if len(data.index) == 1 else "",
-                                        **colorbar_options)
+                    cax = add_axes(
+                        (
+                            left + panel_width + overhang + 0.25,
+                            y + row_height / 2,
+                            option["colorbar_auto_width"],
+                            option["colorbar_auto_height"],
+                        )
+                    )
+                    colorbar_options = (
+                        {"extend": option["extend"]} if lb == "score" else {"ticks": ticks, "extend": extend}
+                    )
+                    cbar = fig.colorbar(
+                        im,
+                        cax=cax,
+                        orientation="horizontal",
+                        label=option["colorbar_label"] if len(data.index) == 1 else "",
+                        **colorbar_options,
+                    )
                     cbar.ax.tick_params(labelsize=option["colorbar_fontsize"])
                     cbar.ax.xaxis.label.set_size(option["colorbar_fontsize"])
 
-        fig.text(0.2 / width, 0.5, "Scores" if lb == "score" else "Metrics", rotation=90,
-                 ha="left", va="center", fontsize=option["ytick"] + 1)
+        fig.text(
+            0.2 / width,
+            0.5,
+            "Scores" if lb == "score" else "Metrics",
+            rotation=90,
+            ha="left",
+            va="center",
+            fontsize=option["ytick"] + 1,
+        )
         if not per_row_colorbar:
             if option["colorbar_position_set"]:
                 cax = _add_custom_colorbar_axes(fig, option)
@@ -490,15 +545,23 @@ def _draw_groupby_heatmap(file, data, column_labels, row_labels, lb, option):
             else:
                 left, _bottom, panel_width, _panel_height = panel_boxes[0]
                 cax = add_axes((left + panel_width / 6, 0.55, panel_width * 2 / 3, 0.2))
-            colorbar_options = {"extend": option["extend"]} if lb == "score" else {
-                "ticks": scales[data.index[0]][1], "extend": scales[data.index[0]][4]
-            }
-            cbar = fig.colorbar(images[0], cax=cax, label=option["colorbar_label"],
-                         orientation=option["colorbar_position"], **colorbar_options)
+            colorbar_options = (
+                {"extend": option["extend"]}
+                if lb == "score"
+                else {"ticks": scales[data.index[0]][1], "extend": scales[data.index[0]][4]}
+            )
+            cbar = fig.colorbar(
+                images[0],
+                cax=cax,
+                label=option["colorbar_label"],
+                orientation=option["colorbar_position"],
+                **colorbar_options,
+            )
             cbar.ax.tick_params(labelsize=option["colorbar_fontsize"])
             cbar.ax.xaxis.label.set_size(option["colorbar_fontsize"])
             cbar.ax.yaxis.label.set_size(option["colorbar_fontsize"])
-        save_figure(fig, f"{file[:-4]}_heatmap.{option['saving_format']}",
-                    format=option["saving_format"], dpi=option["dpi"])
+        save_figure(
+            fig, f"{file[:-4]}_heatmap.{option['saving_format']}", format=option["saving_format"], dpi=option["dpi"]
+        )
     finally:
         plt.close(fig)

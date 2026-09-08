@@ -10,7 +10,6 @@ import xarray as xr
 import yaml
 from PIL import Image
 
-
 # Representative cases replace the full group/count/angle/statistic product.
 # Each group still exercises single/multiple metrics and single/multiple scores.
 _LAYOUT_CASES = [
@@ -30,17 +29,21 @@ _LAYOUT_CASES = [
 
 
 @pytest.mark.parametrize("group,kind,row_count,column_count,rotation,font", _LAYOUT_CASES)
-def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, row_count,
-                                          column_count, rotation, font):
+def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, row_count, column_count, rotation, font):
     import openbench.visualization.Fig_LC_based_heat_map as plot
     import openbench.visualization.only_drawing as drawing
     from openbench.util.filenames import groupby_class_netcdf_stem
 
-    statistics = (["bias", "RMSE"] if kind == "metric" else
-                  ["Overall_Score", "nBiasScore", "nRMSEScore"])[:row_count]
+    statistics = (["bias", "RMSE"] if kind == "metric" else ["Overall_Score", "nBiasScore", "nRMSEScore"])[:row_count]
     columns = [f"Class_{i:02d}" for i in range(column_count - 1)] + ["Overall"]
-    rows = [f"# statistic_type: {kind}", "# ref_unit: mm day-1", "# sim_unit: mm day-1",
-            "# weight: none", "# aggregation: test", "\t".join([kind, *columns])]
+    rows = [
+        f"# statistic_type: {kind}",
+        "# ref_unit: mm day-1",
+        "# sim_unit: mm day-1",
+        "# weight: none",
+        "# aggregation: test",
+        "\t".join([kind, *columns]),
+    ]
     values = np.linspace(0.1, 0.9, column_count)
     for statistic in statistics:
         rows.append("\t".join([statistic, *[f"{value:.2f}" for value in values]]))
@@ -61,9 +64,19 @@ def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, r
     options = yaml.safe_load(
         Path(f"src/openbench/data/fignml/{group}_groupby_source.yaml").read_text(encoding="utf-8")
     )["general"]
-    options.update(x_wise=6, y_wise=2, dpi=72, saving_format="png", xtick=font,
-                   x_rotation=rotation, vmin_max_on=not (kind == "metric" and row_count > 1),
-                   vmin=0, vmax=1, colorbar_position="vertical", extend="both")
+    options.update(
+        x_wise=6,
+        y_wise=2,
+        dpi=72,
+        saving_format="png",
+        xtick=font,
+        x_rotation=rotation,
+        vmin_max_on=not (kind == "metric" and row_count > 1),
+        vmin=0,
+        vmax=1,
+        colorbar_position="vertical",
+        extend="both",
+    )
     toolbox_scales = []
     original_get_index = plot.get_index
 
@@ -84,10 +97,8 @@ def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, r
         assert [ax.images[0].get_array().shape[1] for ax in data_axes] == [
             count for count in expected_columns for _ in range(metric_rows)
         ]
-        cell_widths = [ax.get_window_extent(renderer).width / ax.images[0].get_array().shape[1]
-                       for ax in data_axes]
-        cell_heights = [ax.get_window_extent(renderer).height / ax.images[0].get_array().shape[0]
-                        for ax in data_axes]
+        cell_widths = [ax.get_window_extent(renderer).width / ax.images[0].get_array().shape[1] for ax in data_axes]
+        cell_heights = [ax.get_window_extent(renderer).height / ax.images[0].get_array().shape[0] for ax in data_axes]
         np.testing.assert_allclose(cell_heights, cell_widths)
         np.testing.assert_allclose(cell_widths, cell_widths[0])
         tick_boxes = []
@@ -143,12 +154,13 @@ def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, r
         saved.append(path)
 
     monkeypatch.setattr(plot, "save_figure", save)
-    main = {"general": dict(basedir=str(tmp_path.parent), basename=tmp_path.name,
-                            compare_grid_res=1, compare_tim_res="month")}
-    ref = {"general": {"Evapotranspiration_ref_source": "Ref"},
-           "Evapotranspiration": {"Ref_data_type": "grid"}}
-    sim = {"general": {"Evapotranspiration_sim_source": "Sim"},
-           "Evapotranspiration": {"Sim_data_type": "grid"}}
+    main = {
+        "general": dict(
+            basedir=str(tmp_path.parent), basename=tmp_path.name, compare_grid_res=1, compare_tim_res="month"
+        )
+    }
+    ref = {"general": {"Evapotranspiration_ref_source": "Ref"}, "Evapotranspiration": {"Ref_data_type": "grid"}}
+    sim = {"general": {"Evapotranspiration_sim_source": "Sim"}, "Evapotranspiration": {"Sim_data_type": "grid"}}
     metrics, scores = (statistics, []) if kind == "metric" else ([], statistics)
     handler = (drawing.CZ_groupby_only_drawing if group == "CZ" else drawing.LC_groupby_only_drawing)(
         main, scores, metrics
@@ -159,10 +171,16 @@ def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, r
     assert saved == [str(source.with_name(source.stem + "_heatmap.png"))]
 
 
-@pytest.mark.parametrize("metric,expected", [
-    ("bias", (-2, 4)), ("RMSE", (0, 4)), ("correlation", (-1, 1)),
-    ("KGE", (-1, 1)), ("MFM", (0, 1)),
-])
+@pytest.mark.parametrize(
+    "metric,expected",
+    [
+        ("bias", (-2, 4)),
+        ("RMSE", (0, 4)),
+        ("correlation", (-1, 1)),
+        ("KGE", (-1, 1)),
+        ("MFM", (0, 1)),
+    ],
+)
 def test_metric_scale_uses_basic_ranges_and_toolbox(monkeypatch, metric, expected):
     import openbench.visualization.Fig_LC_based_heat_map as plot
 
@@ -188,8 +206,8 @@ def test_metric_scale_custom_range_uses_toolbox_without_netcdf(monkeypatch):
         pytest.fail("A custom range should not need class NetCDF distributions")
 
     monkeypatch.setattr(plot, "_open_groupby_class_distribution", unexpected)
-    actual = plot._metric_color_scale({"vmin_max_on": True, "vmin": -.7, "vmax": .7, "cmap": "viridis"}, "bias")
-    expected = get_index(-.7, .7, "viridis", "bias")
+    actual = plot._metric_color_scale({"vmin_max_on": True, "vmin": -0.7, "vmax": 0.7, "cmap": "viridis"}, "bias")
+    expected = get_index(-0.7, 0.7, "viridis", "bias")
     assert actual[0].name == expected[0].name
     np.testing.assert_array_equal(actual[1], expected[1])
     assert (actual[2].vmin, actual[2].vmax, actual[4]) == (expected[2].vmin, expected[2].vmax, expected[4])
