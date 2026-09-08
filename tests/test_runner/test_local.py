@@ -4160,8 +4160,10 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
     lon = np.array([0.25, 0.75])
     class_values = np.array([[active_classes[0], active_classes[1]], [active_classes[0], active_classes[1]]])
     score_values = np.array([[1.0, 10.0], [3.0, np.nan]])
-    constant_values = np.array([[7.0, np.nan], [7.0, np.nan]])
-    all_nan_values = np.array([[np.nan, np.nan], [np.nan, np.nan]])
+    # A shared n_valid row is only meaningful when every score uses the
+    # same finite-cell mask.  Keep the distinct score values while matching
+    # Overall_Score's valid cells.
+    constant_values = np.where(np.isfinite(score_values), 7.0, np.nan)
     mass_ref_values = np.array([[[1.0, 9.0], [2.0, 4.0]]])
 
     xr.Dataset({static_var: (("lat", "lon"), class_values)}, coords={"lat": lat, "lon": lon}).to_netcdf(
@@ -4170,7 +4172,6 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
     for score_name, values in {
         "Overall_Score": score_values,
         "Constant_Score": constant_values,
-        "All_NaN_Score": all_nan_values,
     }.items():
         xr.Dataset({score_name: (("lat", "lon"), values)}, coords={"lat": lat, "lon": lon}).to_netcdf(
             case_dir / "scores" / f"Runoff_ref_RefA_sim_SimA_{score_name}.nc"
@@ -4209,7 +4210,7 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
         "Runoff": {"RefA_data_type": "grid", "RefA_varname": "runoff_ref"},
     }
 
-    score_names = ["Overall_Score", "Constant_Score", "All_NaN_Score"]
+    score_names = ["Overall_Score", "Constant_Score"]
     metric_names = ["bias"]
     groupby = CZ_groupby(main_nml, scores=score_names, metrics=metric_names)
     if groupby_name != "CZ_groupby":
@@ -4242,8 +4243,11 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
         assert "class" in bundle.dims
         assert bundle.sizes["class"] == class_count
 
-    rows = [line.split("\t") for line in table_path.read_text(encoding="utf-8").splitlines()[1:]]
-    weighted_row, constant_row, all_nan_row = rows
+    from openbench.visualization.Fig_LC_based_heat_map import _read_metrics_file
+
+    table = _read_metrics_file(str(table_path))
+    weighted_row = table.loc["Overall_Score"]
+    constant_row = table.loc["Constant_Score"]
     area_weights = np.cos(np.deg2rad(lat))[:, None]
     if weight == "area":
         weights = np.broadcast_to(area_weights, score_values.shape)
@@ -4259,23 +4263,20 @@ def test_lc_cz_groupby_score_weighting_and_empty_classes_are_consistent(
     second_valid = second_mask & finite
     expected_second = float((score_values[second_valid] * weights[second_valid]).sum() / weights[second_valid].sum())
 
-    assert weighted_row[0] == "Overall_Score"
-    assert weighted_row[1] == f"{expected_first:.3f}"
-    assert weighted_row[2] == f"{expected_second:.3f}"
-    assert weighted_row[3] == "N/A"
-    assert weighted_row[-1] == f"{expected_overall:.3f}"
+    assert weighted_row.iloc[0] == pytest.approx(expected_first, abs=0.00051)
+    assert weighted_row.iloc[1] == pytest.approx(expected_second, abs=0.00051)
+    assert np.isnan(weighted_row.iloc[2])
+    assert weighted_row.iloc[-1] == pytest.approx(expected_overall, abs=0.00051)
 
-    assert constant_row[0] == "Constant_Score"
-    assert constant_row[1] == "7.000"
-    assert constant_row[2] == "N/A"
-    assert constant_row[3] == "N/A"
-    assert constant_row[-1] == "7.000"
+    assert constant_row.iloc[0] == pytest.approx(7.0)
+    assert constant_row.iloc[1] == pytest.approx(7.0)
+    assert np.isnan(constant_row.iloc[2])
+    assert constant_row.iloc[-1] == pytest.approx(7.0)
 
-    assert all_nan_row[0] == "All_NaN_Score"
-    assert all_nan_row[1] == "N/A"
-    assert all_nan_row[2] == "N/A"
-    assert all_nan_row[3] == "N/A"
-    assert all_nan_row[-1] == "N/A"
+    assert table.attrs["n_valid"][table.columns[0]] == 2
+    assert table.attrs["n_valid"][table.columns[1]] == 1
+    assert table.attrs["n_valid"][table.columns[2]] == 0
+    assert table.attrs["n_valid"]["Overall"] == 3
 
 
 def test_igbp_groupby_only_drawing_falls_back_to_legacy_root_scores_csv(tmp_path, monkeypatch):

@@ -2,6 +2,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import pytest
 import xarray as xr
 
 
@@ -31,15 +32,6 @@ def test_groupby_metric_clip_skips_all_nan_quantiles_without_warning():
             assert clip(ds, "bias")["bias"].isnull().all()
 
 
-def test_groupby_metric_clip_keeps_small_classes():
-    from openbench.core.climatezone_groupby import _clip_metric_quantiles as clip_climate
-    from openbench.core.landcover_groupby import _clip_metric_quantiles as clip_landcover
-
-    ds = xr.Dataset({"bias": (("lat", "lon"), [[0.0, 100.0]])})
-    for clip in (clip_climate, clip_landcover):
-        np.testing.assert_allclose(clip(ds, "bias")["bias"], ds["bias"])
-
-
 def test_groupby_metric_loops_clip_each_class_after_masking():
     lc_source = Path("src/openbench/core/landcover_groupby.py").read_text(encoding="utf-8")
     cz_source = Path("src/openbench/core/climatezone_groupby.py").read_text(encoding="utf-8")
@@ -61,3 +53,19 @@ def test_groupby_class_netcdf_outputs_are_bundled_by_statistic():
     assert "__classes.nc" in lc_source
     assert "__classes.nc" in cz_source
     assert "_open_groupby_class_distribution(option, metric)" in heatmap_source
+
+
+@pytest.mark.parametrize("module", ["landcover_groupby", "climatezone_groupby"])
+@pytest.mark.parametrize("count", [2, 19, 20])
+def test_groupby_metric_clip_finite_count_boundary(module, count):
+    """Small classes stay intact; only finite cells count toward the 20-cell threshold."""
+    from importlib import import_module
+
+    clip = import_module(f"openbench.core.{module}")._clip_metric_quantiles
+    finite = np.array([0.0, 100.0]) if count == 2 else np.arange(count, dtype=float)
+    values = np.r_[finite, np.nan, np.inf, -np.inf]
+    ds = xr.Dataset({"bias": (("lat", "lon"), values.reshape(1, -1))})
+    result = clip(ds, "bias")["bias"].values
+    expected = finite if count < 20 else finite[1:-1]
+    np.testing.assert_array_equal(result[np.isfinite(result)], expected)
+    assert not np.isinf(result).any()
