@@ -154,7 +154,8 @@ Conda updates into an existing pip installation. Avoid installing into `base`.
 
 The versioned recipe in `conda/meta.yaml` builds a `noarch: python` CLI package
 from the checksummed GitHub Release source archive. This is a local build, not a claim of
-conda-forge publication. From a checkout of the matching release:
+conda-forge publication. Use an up-to-date checkout so the recipe includes any
+post-release compatibility patches:
 
 ```bash
 conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build

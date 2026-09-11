@@ -7,6 +7,8 @@ Patch release over 3.0.0 for release metadata and CLI output compatibility.
 ### Fixed
 - Prevent Unicode output crashes in redirected CP1252 and other legacy-encoded
   CLI streams while preserving UTF-8 output on normal terminals.
+- Backport the Windows-default `surrogateescape` correction into Conda builds
+  of the immutable GitHub 3.0.1 source; the held PyPI release will include it.
 - Correct distribution metadata and bundled third-party license coverage for
   vendored `cmaps` and NCL color-table resources.
 
