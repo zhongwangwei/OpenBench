@@ -24,7 +24,6 @@ import xarray as xr
 
 from openbench.util.netcdf import write_file_atomic, write_netcdf_atomic
 
-# Import dependencies
 try:
     from openbench.util.exceptions import FileSystemError, OutputError, ValidationError, error_handler
     from openbench.util.interfaces import BaseComponent, IOutputFormatter, IOutputManager
@@ -96,20 +95,16 @@ class NetCDFFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for NetCDF formatting")
 
-        # Ensure output directory exists (skip if path is bare filename:
-        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
-        # FileNotFoundError on some platforms).
+        # Skip makedirs for bare filenames; dirname("foo.nc") is "".
         out_dir = os.path.dirname(output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
         if isinstance(data, xr.DataArray):
-            # Add metadata attributes
             if metadata:
                 data.attrs.update(metadata)
             write_netcdf_atomic(data, output_path)
         elif isinstance(data, xr.Dataset):
-            # Add metadata attributes
             if metadata:
                 data.attrs.update(metadata)
             write_netcdf_atomic(data, output_path)
@@ -135,9 +130,7 @@ class CSVFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for CSV formatting")
 
-        # Ensure output directory exists (skip if path is bare filename:
-        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
-        # FileNotFoundError on some platforms).
+        # Skip makedirs for bare filenames; dirname("foo.nc") is "".
         out_dir = os.path.dirname(output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
@@ -145,10 +138,8 @@ class CSVFormatter(OutputFormatter):
         if isinstance(data, pd.DataFrame):
             df = data
         elif isinstance(data, dict):
-            # Convert dictionary to DataFrame
             df = pd.DataFrame(data)
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-            # Convert list of dictionaries to DataFrame
             df = pd.DataFrame(data)
         else:
             raise ValidationError(f"CSV formatter requires DataFrame, dict, or list of dicts, got {type(data)}")
@@ -173,14 +164,11 @@ class JSONFormatter(OutputFormatter):
         if not self.validate_data(data):
             raise ValidationError("Invalid data for JSON formatting")
 
-        # Ensure output directory exists (skip if path is bare filename:
-        # os.path.dirname("foo.nc") returns "" and makedirs("") raises
-        # FileNotFoundError on some platforms).
+        # Skip makedirs for bare filenames; dirname("foo.nc") is "".
         out_dir = os.path.dirname(output_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
-        # Convert numpy types to native Python types for JSON serialization
         def convert_numpy(obj):
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
@@ -376,7 +364,6 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
 
         formatter = self._formatters_registry[format_type]
 
-        # Build output path
         subdirs_list = subdirs or []
         output_dir = self.structure.get_path(category, *subdirs_list)
 
@@ -394,7 +381,6 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             else:
                 raise FileSystemError(f"File already exists: {output_path}")
 
-        # Save data
         formatter.format_data(data, str(output_path), metadata)
 
         return str(output_path)
@@ -558,7 +544,6 @@ class ModularOutputManager(BaseComponent if _HAS_DEPENDENCIES else object):
             },
         }
 
-        # Add file counts
         file_counts = {}
         for category, files in self.list_outputs().items():
             file_counts[category] = len(files)
@@ -581,7 +566,6 @@ def create_output_manager(base_dir: str, **config) -> ModularOutputManager:
     """
     manager = ModularOutputManager(base_dir)
 
-    # Apply configuration
     for key, value in config.items():
         if hasattr(manager, key):
             setattr(manager, key, value)

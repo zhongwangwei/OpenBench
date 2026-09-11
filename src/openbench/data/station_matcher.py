@@ -174,7 +174,6 @@ def _process_site_cama(
     lon_for_bounds = _normalize_lon_to_range(lon, info.min_lon, info.max_lon)
     cama_lon = _normalize_lon_to_range(cama_lon, -180.0, 180.0)
 
-    # Skip invalid CaMA allocations
     if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lon > 180 or cama_lat < -90 or cama_lat > 90:
         return None
 
@@ -269,7 +268,6 @@ def _process_site_direct(
 
     file_path = station_file_path(scratch_dir, station_id, index=idx, duplicate_ids=duplicate_station_ids)
 
-    # Build time coordinate
     if time_format == "YYYYMM":
         time_dates = pd.to_datetime([str(int(t)) for t in times], format="%Y%m")
         clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)

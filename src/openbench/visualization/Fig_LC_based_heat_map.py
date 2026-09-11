@@ -271,7 +271,6 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     rcParams.update(params)
 
     if lb == "score":
-        # Create the heatmap using Matplotlib
         fig, ax = plt.subplots(figsize=(option["x_wise"], option["y_wise"]))
         if option["vmin_max_on"]:
             vmin, vmax = option["vmin"], option["vmax"]
@@ -358,7 +357,6 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
         logger.info(metric)
         combined_dataset = _open_groupby_class_distribution(option, metric)
         quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
-        # consider 0.05 and 0.95 value as the max/min value
         custom_vmin_vmax = {}
         if not option["vmin_max_on"]:
             if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
@@ -471,14 +469,12 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
         fig, axes = plt.subplots(nrows=len(df_selected.index), ncols=1, figsize=mfigsize, sharex=True)
         fig.text(-0.01, 0.5, "Metrics", va="center", rotation="vertical", fontsize=option["ytick"] + 1)
         fig.subplots_adjust(hspace=0)
-        # get the minimal and maximal value
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
         custom_vmin_vmax = {}
         for i, (metric, row_data) in enumerate(df_selected.iterrows()):
             combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
-            # consider 0.05 and 0.95 value as the max/min value
 
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
@@ -513,7 +509,6 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
             vmin, vmax = custom_vmin_vmax[row_name][0], custom_vmin_vmax[row_name][1]
             x1, x2 = custom_vmin_vmax[row_name][2], custom_vmin_vmax[row_name][3]
             im = axes[i].imshow(row_data.values.reshape(1, -1), cmap=option["cmap"], vmin=vmin, vmax=vmax)
-            # Add numbers to each cell
             for j, value in enumerate(row_data):
                 axes[i].text(
                     j,
@@ -551,7 +546,6 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
                 [selected_metrics[i].replace("_", " ")], rotation=option["y_rotation"], ha=option["y_ha"]
             )
 
-        # 设置 x 轴标签
         axes[-1].set_xticks(np.arange(len(df_selected.columns)))
         if option["x_ticklabel"] == "Normal":
             axes[-1].set_xticklabels(
@@ -611,7 +605,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
     rcParams.update(params)
 
     if lb == "score":
-        # Create the heatmap using Matplotlib
         fig, axes = plt.subplots(nrows=2, figsize=(option["x_wise"], option["y_wise"]))
         if option["vmin_max_on"]:
             vmin, vmax = option["vmin"], option["vmax"]
@@ -710,7 +703,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         metric = df_selected.index[0]
         combined_dataset = _open_groupby_class_distribution(option, metric)
         quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
-        # consider 0.05 and 0.95 value as the max/min value
         custom_vmin_vmax = {}
         if not option["vmin_max_on"]:
             if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
@@ -777,7 +769,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                     color=_annotation_color(df_selected.iloc[i, j]),
                     fontsize=option["fontsize"],
                 )
-        #
         axes[1].set_xticks(range(len(df_selected.columns[16:])))
         axes[1].set_xticklabels(
             [columns.replace("_", " ").title() for columns in df_selected.columns[16:]],
@@ -867,7 +858,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         fig.subplots_adjust(hspace=0)  # 每部分内部无间隔
         fig.text(-0.01, 0.5, "Metrics", va="center", rotation="vertical", fontsize=option["ytick"] + 1)
 
-        # get the minimal and maximal value
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
 
@@ -876,7 +866,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         for i, (metric, row_data) in enumerate(df_1.iterrows()):
             combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
-            # consider 0.05 and 0.95 value as the max/min value
 
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
@@ -946,7 +935,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
                 [selected_metrics[i].replace("_", " ")], rotation=option["y_rotation"], ha=option["y_ha"]
             )
 
-        # 设置 x 轴标签
         axes_part1[-1].set_xticks(np.arange(len(df_1.columns)))
 
         axes_part1[-1].set_xticklabels(
@@ -961,7 +949,6 @@ def make_CZ_based_heat_map(file, selected_metrics, lb, option):
         for i, (metric, row_data) in enumerate(df_2.iterrows()):
             combined_dataset = _open_groupby_class_distribution(option, metric)
             quantiles = combined_dataset.quantile([0.05, 0.2, 0.8, 0.95], dim=["time", "lat", "lon"])
-            # consider 0.05 and 0.95 value as the max/min value
 
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:

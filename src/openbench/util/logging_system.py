@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-# Import dependencies
 try:
     import psutil
 
@@ -73,7 +72,6 @@ class StructuredFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        # Add exception info if present
         if record.exc_info:
             log_data["exception"] = {
                 "type": record.exc_info[0].__name__,
@@ -81,7 +79,6 @@ class StructuredFormatter(logging.Formatter):
                 "traceback": traceback.format_exception(*record.exc_info),
             }
 
-        # Add extra fields if enabled
         if self.include_extra_fields:
             # Standard fields to exclude
             exclude_fields = {
@@ -107,7 +104,6 @@ class StructuredFormatter(logging.Formatter):
                 "process",
             }
 
-            # Add any extra fields
             extra_fields = {k: v for k, v in record.__dict__.items() if k not in exclude_fields}
             if extra_fields:
                 log_data["extra"] = extra_fields
@@ -125,10 +121,8 @@ class PerformanceFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Add performance metrics to record."""
-        # Add timing information
         record.elapsed_time = time.time() - self.start_time
 
-        # Add memory usage if available
         if _HAS_PSUTIL:
             try:
                 process = psutil.Process()
@@ -237,7 +231,6 @@ class LoggingManager:
         # Loggers registry
         self.loggers = {}
 
-        # Initialize root logger
         self._setup_root_logger()
 
     def _setup_root_logger(self):
@@ -245,11 +238,9 @@ class LoggingManager:
         root_logger = logging.getLogger()
         root_logger.setLevel(self.config["log_level"])
 
-        # Remove existing handlers
         for handler in root_logger.handlers[:]:
             root_logger.removeHandler(handler)
 
-        # Add configured handlers
         if self.config["console_enabled"]:
             self.add_console_handler()
 
@@ -271,7 +262,6 @@ class LoggingManager:
 
         handler.setFormatter(formatter)
 
-        # Add performance filter if enabled
         if self.config["performance_tracking"]:
             handler.addFilter(PerformanceFilter())
 
@@ -294,7 +284,6 @@ class LoggingManager:
         else:
             filename = self.base_dir / filename
 
-        # Create handler with rotation
         if self.config["rotation_enabled"]:
             handler = logging.handlers.RotatingFileHandler(
                 filename, maxBytes=self.config["max_bytes"], backupCount=self.config["backup_count"]
@@ -312,7 +301,6 @@ class LoggingManager:
 
         handler.setFormatter(formatter)
 
-        # Add performance filter if enabled
         if self.config["performance_tracking"]:
             handler.addFilter(PerformanceFilter())
 
@@ -367,7 +355,6 @@ class LoggingManager:
         """Enable structured JSON logging."""
         self.config["structured_enabled"] = True
 
-        # Update existing handlers
         for handler in logging.getLogger().handlers:
             handler.setFormatter(StructuredFormatter())
 
@@ -397,7 +384,6 @@ class LoggingManager:
                     setattr(record, key, value)
                 return True
 
-        # Add to all handlers
         for handler in logging.getLogger().handlers:
             handler.addFilter(ContextFilter())
 
@@ -541,18 +527,15 @@ def setup_logging(
     """
     manager = get_logging_manager(base_dir)
 
-    # Update configuration
     manager.config["console_enabled"] = console
     manager.config["file_enabled"] = file
     manager.config["structured_enabled"] = structured
     manager.config["async_enabled"] = async_mode
 
-    # Set level
     if isinstance(level, str):
         level = getattr(logging, level.upper())
     manager.set_level(level)
 
-    # Reinitialize with new config
     manager._setup_root_logger()
 
     if structured:

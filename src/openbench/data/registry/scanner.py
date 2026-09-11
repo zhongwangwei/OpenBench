@@ -2642,7 +2642,6 @@ def get_compatible_resolutions(
     if not group.variants:
         return []
 
-    # Find the highest frequency rank among all variants
     max_rank = max(
         (_tim_res_rank(v.tim_res) for v in group.variants.values()),
         default=-1,
@@ -2799,11 +2798,9 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
 
         from openbench.data.coordinates import LAT_NAMES, LON_NAMES, STN_DIM_NAMES
 
-        # Check for station-like dimensions
         if STN_DIM_NAMES & set(dims.keys()):
             return "stn"
 
-        # Check lat/lon using shared fallback names
         lat_size = 0
         for name in LAT_NAMES:
             if name.lower() in dims:
@@ -3337,7 +3334,6 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
                 else:
                     station_id = stem
 
-            # Extract lat/lon using shared fallback names
             from openbench.data.coordinates import LAT_NAMES, LON_NAMES
 
             lat = lon = None
@@ -3365,7 +3361,6 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
             if years:
                 syear, eyear = min(years), max(years)
             elif "time" in nc.dimensions and nc.dimensions["time"].size > 0:
-                # Fallback: read time variable
                 try:
                     time_var = nc.variables["time"]
                     times = netCDF4.num2date(

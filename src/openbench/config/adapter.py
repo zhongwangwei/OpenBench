@@ -209,7 +209,6 @@ class RunnerBindings:
         unified_mask_active = bool(main_nl["general"].get("unified_mask", True))
         per_pair_files_exist = (time_alignment == "per_pair") and unified_mask_active
 
-        # Two-source statistics methods that compare sim vs ref
         TWO_SOURCE_METHODS = {
             "Hellinger_Distance",
             "Correlation",
@@ -217,7 +216,6 @@ class RunnerBindings:
             "ANOVA",
             "Partial_Least_Squares_Regression",
         }
-        # Three-source method
         THREE_SOURCE_METHODS = {"Three_Cornered_Hat"}
 
         def _base_entry(prefix_val: str, varname: str, varunit: str, data_type: str = "grid") -> dict[str, Any]:
@@ -252,13 +250,11 @@ class RunnerBindings:
                 if not ref_source_raw or not sim_sources:
                     continue
 
-                # Normalize ref to list (multi-ref support)
                 ref_sources_list = [ref_source_raw] if isinstance(ref_source_raw, str) else list(ref_source_raw)
 
                 ref_nml_var = self.namelists.reference.get(var_name, {})
                 sim_nml_var = self.namelists.simulation.get(var_name, {})
 
-                # Iterate every ref × sim pair (Cartesian product, matching v2.x)
                 for ref_source in ref_sources_list:
                     ref_varname = ref_nml_var.get(f"{ref_source}_varname", var_name)
                     ref_varunit = ref_nml_var.get(f"{ref_source}_varunit", "")
@@ -344,7 +340,6 @@ class RunnerBindings:
                             for key, val in _base_entry(sim_file_prefix, sim_varname, sim_varunit, sim_dtype).items():
                                 stat_section[f"{pair_label}_{key}"] = val
 
-            # Add method-specific default parameters
             _STAT_DEFAULTS: dict[str, dict[str, Any]] = {
                 "Hellinger_Distance": {"nbins": 25},
                 "Functional_Response": {"nbins": 25},
@@ -650,9 +645,7 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
         convert_expr is a Python expression string (e.g. "value * 12.011")
         to apply after reading the data, or "" if no conversion needed.
     """
-    # Extract primary varname and fallbacks from profile_var
     if hasattr(profile_var, "varname"):
-        # It's a VariableMapping object
         primary = profile_var.varname
         primary_unit = profile_var.varunit
         fallbacks = profile_var.fallbacks or []
@@ -663,11 +656,9 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
 
     all_names = [primary] + [fb.varname for fb in fallbacks]
 
-    # If no root_dir, return primary
     if not root_dir or not all_names:
         return primary, primary_unit, ""
 
-    # Check data files to find which variable exists
     from openbench.data.coordinates import glob_nc
 
     nc_files = glob_nc(root_dir)
@@ -682,12 +673,10 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
         with xr.open_dataset(nc_files[0], decode_timedelta=False) as ds:
             available = {str(name): str(name) for name in ds.data_vars}
 
-        # Try primary first
         actual_primary = get_mapping_value_case_insensitive(available, primary)
         if actual_primary is not None:
             return actual_primary, primary_unit, ""
 
-        # Try each fallback
         for fb in fallbacks:
             actual_fallback = get_mapping_value_case_insensitive(available, fb.varname)
             if actual_fallback is not None:
@@ -733,7 +722,6 @@ def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None) -> str:
     if os.path.isdir(ref_dir) and glob_nc(ref_dir):
         return ref_dir
 
-    # Strategy 1: check subdirectories (e.g., 0p25deg-daily/)
     if os.path.isdir(ref_dir):
         for child in sorted(os.listdir(ref_dir)):
             child_path = os.path.join(ref_dir, child)
@@ -895,7 +883,6 @@ def build_fig_nml() -> dict[str, Any]:
 
     fig_nml: dict[str, Any] = {}
 
-    # Process validation configs — keys go directly into fig_nml (flattened)
     for key, rel_path in figlib.get("validation_nml", {}).items():
         config_name = key.replace("_source", "")
         filename = Path(rel_path).name
@@ -907,7 +894,6 @@ def build_fig_nml() -> dict[str, Any]:
         else:
             logger.debug("Figure config not found: %s", config_path)
 
-    # Process comparison configs — nested under fig_nml["Comparison"]
     comparison = {}
     for key, rel_path in figlib.get("comparison_nml", {}).items():
         config_name = key.replace("_source", "")
@@ -919,7 +905,6 @@ def build_fig_nml() -> dict[str, Any]:
             comparison[config_name] = data.get("general", data)
     fig_nml["Comparison"] = comparison
 
-    # Process statistic configs — nested under fig_nml["Statistic"]
     statistic = {}
     for key, rel_path in figlib.get("statistic_nml", {}).items():
         config_name = key.replace("_source", "")

@@ -76,8 +76,6 @@ class CommonComparisonMixin:
         )
 
     def save_result(self, output_file, method_name, result):
-        # Remove the existing output directory
-        # logging.info(f"Saving {method_name} output to {output_file}")
         try:
             if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
                 if isinstance(result, xr.DataArray):
@@ -91,7 +89,6 @@ class CommonComparisonMixin:
                 result["lon"].attrs["units"] = "degrees_east"
                 result["lon"].attrs["axis"] = "X"
 
-                # Ensure the directory exists
                 output_dir = os.path.dirname(output_file)
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
@@ -100,5 +97,4 @@ class CommonComparisonMixin:
             else:
                 logging.info(f"Result of {method_name}: {result}")
         finally:
-            # Clean up memory
             gc.collect()

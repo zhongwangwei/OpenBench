@@ -43,7 +43,6 @@ class PageMetrics(BasePage):
         # Save current selection first
         self.save_to_config()
 
-        # Get combined selection
         combined = self.controller.get_combined_metrics_scores_selection()
 
         error = FieldValidator.selection_required(

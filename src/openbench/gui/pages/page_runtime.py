@@ -117,7 +117,6 @@ class PageRuntime(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        # === Execution Mode ===
         mode_group = QGroupBox("Execution Mode")
         mode_layout = QFormLayout(mode_group)
         mode_layout.setSpacing(12)
@@ -135,7 +134,6 @@ class PageRuntime(BasePage):
         mode_buttons.addWidget(self.radio_remote)
         mode_buttons.addStretch()
 
-        # Save/Load Settings buttons
         self.btn_save_settings = QPushButton("Save Settings")
         self.btn_save_settings.setToolTip("Save runtime settings to a file")
         self.btn_save_settings.clicked.connect(self._save_runtime_settings)
@@ -155,7 +153,6 @@ class PageRuntime(BasePage):
 
         self.content_layout.addWidget(mode_group)
 
-        # === Parallel Processing (always visible) ===
         self.parallel_group = QGroupBox("Parallel Processing")
         parallel_layout = QFormLayout(self.parallel_group)
         parallel_layout.setSpacing(12)
@@ -176,7 +173,6 @@ class PageRuntime(BasePage):
 
         self.content_layout.addWidget(self.parallel_group)
 
-        # === Local Python Environment ===
         self.local_env_group = QGroupBox("Local Python Environment")
         local_layout = QFormLayout(self.local_env_group)
         local_layout.setSpacing(12)
@@ -575,7 +571,6 @@ class PageRuntime(BasePage):
                     detected.append((path, "PATH"))
                 detected_paths.add(path)
 
-        # Update combo box
         current_text = self.python_combo.currentText()
         self.python_combo.blockSignals(True)
         self.python_combo.clear()
@@ -599,7 +594,6 @@ class PageRuntime(BasePage):
 
         self.python_combo.blockSignals(False)
 
-        # Also refresh conda environments
         self._refresh_conda()
 
     def _browse_python(self):
@@ -682,14 +676,11 @@ class PageRuntime(BasePage):
             QButtonGroup,
         )
 
-        # Get installation path from input field
         install_path = self.local_openbench_input.text().strip()
         if not install_path:
-            # Set default path if empty
             install_path = os.path.join(os.path.expanduser("~"), "OpenBench")
             self.local_openbench_input.setText(install_path)
 
-        # Check if git is available
         git_path = shutil.which("git")
         if not git_path:
             QMessageBox.critical(
@@ -703,7 +694,6 @@ class PageRuntime(BasePage):
             )
             return
 
-        # Check if path already exists
         is_update = False
         if os.path.exists(install_path):
             git_dir = os.path.join(install_path, ".git")
@@ -933,14 +923,12 @@ class PageRuntime(BasePage):
             execution_mode = general.get("execution_mode", "local")
             self._set_execution_mode("remote" if execution_mode == "remote" else "local")
 
-            # Load num_cores (for local mode)
             self.num_cores_spin.blockSignals(True)
             try:
                 self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
             finally:
                 self.num_cores_spin.blockSignals(False)
 
-            # Load Python path
             python_path = general.get("python_path", "")
             self.python_combo.blockSignals(True)
             try:
@@ -956,7 +944,6 @@ class PageRuntime(BasePage):
             finally:
                 self.python_combo.blockSignals(False)
 
-            # Load conda environment
             conda_env = general.get("conda_env", "")
             self.conda_combo.blockSignals(True)
             try:
@@ -968,7 +955,6 @@ class PageRuntime(BasePage):
             finally:
                 self.conda_combo.blockSignals(False)
 
-            # Load local OpenBench path
             local_openbench_path = general.get("local_openbench_path", "")
             self.local_openbench_input.blockSignals(True)
             try:
@@ -991,10 +977,8 @@ class PageRuntime(BasePage):
             config["general"] = {}
         general = config["general"]
 
-        # Save execution mode
         general["execution_mode"] = "local" if self.radio_local.isChecked() else "remote"
 
-        # Save Python path, conda env, and OpenBench path for local mode
         general["python_path"] = self._selected_conda_python_path() or self._python_path_from_combo()
         general["conda_env"] = self.conda_combo.currentText() if self.conda_combo.currentIndex() > 0 else ""
         general["local_openbench_path"] = self.local_openbench_input.text().strip()
@@ -1102,14 +1086,12 @@ class PageRuntime(BasePage):
             execution_mode = settings.get("execution_mode", "local")
             self._set_execution_mode("remote" if execution_mode == "remote" else "local")
 
-            # Apply num_cores
             self.num_cores_spin.blockSignals(True)
             try:
                 self.num_cores_spin.setValue(settings.get("num_cores", DEFAULT_NUM_CORES))
             finally:
                 self.num_cores_spin.blockSignals(False)
 
-            # Apply Python path
             python_path = settings.get("python_path", "")
             self.python_combo.blockSignals(True)
             try:
@@ -1125,7 +1107,6 @@ class PageRuntime(BasePage):
             finally:
                 self.python_combo.blockSignals(False)
 
-            # Apply conda environment
             conda_env = settings.get("conda_env", "")
             self.conda_combo.blockSignals(True)
             try:
@@ -1137,7 +1118,6 @@ class PageRuntime(BasePage):
             finally:
                 self.conda_combo.blockSignals(False)
 
-            # Apply local OpenBench path
             local_openbench_path = settings.get("local_openbench_path", "")
             self.local_openbench_input.blockSignals(True)
             try:
@@ -1154,7 +1134,6 @@ class PageRuntime(BasePage):
         finally:
             self._loading_config = False
 
-        # Save to controller config
         self.save_to_config()
 
     def _auto_load_settings(self):
@@ -1236,7 +1215,6 @@ class PageRuntime(BasePage):
                 os.remove(default_path)
                 logger.info(f"Removed cached settings: {default_path}")
 
-            # Reset UI to defaults
             self.radio_local.setChecked(True)
             self.num_cores_spin.setValue(min(DEFAULT_NUM_CORES, effective_cpu_count(os.cpu_count() or 1)))
             self.python_combo.setCurrentIndex(0)

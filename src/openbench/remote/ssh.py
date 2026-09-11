@@ -167,13 +167,10 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
             key: The host key to save
         """
         try:
-            # Ensure directory exists
             os.makedirs(os.path.dirname(self._known_hosts_path), exist_ok=True)
 
-            # Add the key
             self._host_keys.add(hostname, key.get_name(), key)
 
-            # Save to file
             self._host_keys.save(self._known_hosts_path)
 
             # Set restrictive permissions (Unix only)
@@ -218,7 +215,6 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
         key_type = key.get_name()
         fingerprint = self.get_fingerprint(key)
 
-        # Check if we already have a key for this host
         existing_key = self._host_keys.lookup(hostname)
         if existing_key is not None:
             # Host exists but key is different - potential MITM attack!
@@ -553,7 +549,6 @@ class SSHManager:
             local_addr = ("127.0.0.1", 0)
             self._jump_channel = transport.open_channel("direct-tcpip", dest_addr, local_addr)
 
-            # Connect through the channel
             self._jump_client = paramiko.SSHClient()
 
             # Use secure host key policy for jump connection
@@ -978,7 +973,6 @@ class SSHManager:
         """
         remote_path = self.resolve_remote_path(remote_path)
         sftp = self.open_sftp()
-        # Ensure local directory exists
         local_dir = os.path.dirname(local_path)
         if local_dir:
             os.makedirs(local_dir, exist_ok=True)
@@ -1082,7 +1076,6 @@ class SSHManager:
 
         # Method 1: Find conda/miniconda directories in home (handles miniconda3-3.12 etc.)
         try:
-            # Find all conda-like directories
             cmd = f"ls -d {home_glob}/miniconda*/bin/python {home_glob}/miniforge*/bin/python {home_glob}/anaconda*/bin/python {home_glob}/mambaforge*/bin/python 2>/dev/null"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
@@ -1163,7 +1156,6 @@ class SSHManager:
         if not conda_exe:
             return envs
 
-        # Get environment list
         try:
             quoted_conda = shlex.quote(conda_exe)
             stdout, _, exit_code = self.execute(f"{quoted_conda} env list", timeout=10)

@@ -51,7 +51,6 @@ def _read_comparison_file(file):
 
 @with_isolated_rc
 def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option):
-    # Read the SMPI data
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
@@ -72,7 +71,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     # Read file with fallback and auto-detection
     df = _read_comparison_file(data_path)
     df = Convert_Type.convert_Frame(df)
-    # Prepare the subplot grid
     n_items = len(evaluation_items)
 
     fig, axs = plt.subplots(
@@ -87,7 +85,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
     # max_I2 = min(5, df['SMPI'].max() + 0.5)
     min_I2 = 0
 
-    # Create a color map for subplots
     # color_map = plt.cm.get_cmap('tab20')
 
     for i, item in enumerate(evaluation_items):
@@ -100,7 +97,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
         ax = axs[i, 0]
 
         for j, ref_source in enumerate(ref_sources):
-            # Filter data for this item and reference source
             item_data = df[(df["Item"] == item) & (df["Reference"] == ref_source)]
 
             if item_data.empty:
@@ -123,8 +119,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
                 sem = 0.0
                 conf_interval = 0.0
             sizes = [150 * conf_interval] * len(I2_values)  # Reduced circle size
-
-            # Get color for this subplot
 
             # Plot. Pre-initialize k so the later `generate_colors(k+1, j)`
             # call doesn't raise NameError if the inner loop never executes
@@ -154,7 +148,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
                 transform=ax.transAxes,
                 fontsize=option["fontsize"],
             )
-            # Annotate labels
             # for k, value in enumerate(I2_values):
             #     ax.annotate(
             #         str(k + 1),  # Use numbers starting from 1
@@ -167,11 +160,9 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             #         rotation=45
             #     )
 
-            # Mean (black circle)
             MCOLORS = generate_colors(k + 1, j)
             ax.scatter(mean, 0, color=MCOLORS["selected_color"]["Color"], s=50, marker="s", alpha=0.6)
             ax.scatter(mean, 0, color="white", s=2, marker="s", alpha=0.6)
-            # Add mean label
             # ax.annotate(
             #     'Mean',
             #     (mean, 0),
@@ -185,7 +176,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
 
             # )
 
-            # Set up axes and ticks
             ax.spines["bottom"].set_position("zero")
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
@@ -205,7 +195,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
                 ax.set_xticks(np.arange(min_I2, max_I2 + 0.125, 0.125))
                 ax.xaxis.set_minor_locator(MultipleLocator(0.0625))
 
-            # Set titles
             # if i == 0:
             #    ax.set_title(f"Reference: {ref_source}", fontsize=16)
         ax.text(
@@ -220,7 +209,6 @@ def make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation
             weight="bold",
         )
 
-        # Overall title
         if i == (len(evaluation_items) - 1):
             for k, value in enumerate(I2_values):
                 legend_elements = []
@@ -353,7 +341,6 @@ def generate_colors(color_index, list_index, name="selected_color"):
     Returns:
     - dict: A dictionary with the format {name: {"Color": color}}.
     """
-    # Define color lists
     colors1 = ["#a30327", "#d53126", "#f0734b", "#fbae62", "#fde28e"]
     colors2 = ["#303692", "#4376b7", "#76aecf", "#2c75ea", "#aadae7"]
     colors3 = ["#727a5f", "#95a07c", "#b8c699", "#aadae7", "#e8ffc4"]
@@ -361,7 +348,6 @@ def generate_colors(color_index, list_index, name="selected_color"):
     colors5 = ["#b6a772", "#dcca89", "#fff09e", "#fff69e", "#fffc9e"]
     colorslist = [colors1, colors2, colors3, colors4, colors5]
 
-    # Validate inputs
     if not isinstance(list_index, int) or list_index < 0 or list_index >= len(colorslist):
         raise ValueError(f"list_index must be an integer between 0 and {len(colorslist) - 1}")
 
@@ -370,10 +356,8 @@ def generate_colors(color_index, list_index, name="selected_color"):
     if not isinstance(color_index, int) or color_index < 0 or color_index >= len(selected_colors):
         raise ValueError(f"color_index must be an integer between 0 and {len(selected_colors) - 1}")
 
-    # Select the color
     selected_color = selected_colors[color_index]
 
-    # Create the output dictionary
     gcolors = {name: {"Color": selected_color}}
 
     return gcolors

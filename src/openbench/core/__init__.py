@@ -42,6 +42,5 @@ __all__ = [
 __author__ = "Zhongwang Wei"
 __email__ = "zhongwang007@gmail.com"
 
-# Provide convenient access to the main classes
 Metrics = metrics
 Scores = scores

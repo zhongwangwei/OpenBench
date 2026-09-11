@@ -16,7 +16,6 @@ from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 from openbench.util.static_datasets import static_dataset_path
 
-# Check the platform
 from openbench.core._visualization_bridge import visualization_callable
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
@@ -135,18 +134,12 @@ class LC_groupby(metrics, scores):
         self.general_config = self.main_nml["general"]
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
         self._pft_station_warning_shown = False  # Track if PFT station data warning has been shown
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "Month").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
-        # Set default weight method to 'none'
         # Handle null/None values from config by defaulting to 'none'
         self.weight = self.main_nml["general"].get("weight", "none") or "none"
-        # this should be done in read_namelist
-        # adjust the time frequency
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.debug(
                 f"LC_groupby: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
@@ -195,7 +188,6 @@ class LC_groupby(metrics, scores):
             """
             with _open_dataset_safe(self.IGBP_dir) as igbp_ds:
                 IGBPtype = igbp_ds["IGBP"].load()
-            # convert IGBP type to int
             IGBPtype = IGBPtype.astype(int)
 
             igbp_class_names = {
@@ -218,12 +210,10 @@ class LC_groupby(metrics, scores):
                 17: "water_bodies",
             }
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 logging.info(f"Processing evaluation item: {evaluation_item}")
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -250,14 +240,12 @@ class LC_groupby(metrics, scores):
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "metrics")
                                 )
                                 rows = []
-                                # Print the table header with class names
                                 header_values = ["metric"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
                                 header_values.append("Overall")
                                 rows.append("\t".join(header_values) + "\n")
 
-                                # Calculate and print mean values
                                 for metric in self.metrics:
                                     metric_file = _evaluation_netcdf_path(
                                         self.casedir, "metrics", evaluation_item, ref_source, sim_source, metric
@@ -327,7 +315,6 @@ class LC_groupby(metrics, scores):
                                 )
 
                                 rows = []
-                                # Print the table header with class names
                                 header_values = ["score"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
@@ -339,7 +326,6 @@ class LC_groupby(metrics, scores):
                                 # same .nc file 18 times per IGBP class.
                                 cached_mass_ref = None
 
-                                # Calculate and print mean values
                                 for score in self.scores:
                                     score_file = _evaluation_netcdf_path(
                                         self.casedir, "scores", evaluation_item, ref_source, sim_source, score
@@ -367,19 +353,14 @@ class LC_groupby(metrics, scores):
                                                 cached_mass_ref = ref_ds[f"{ref_varname}"].load()
                                         o = cached_mass_ref
 
-                                        # Calculate area weights (cosine of latitude)
                                         area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                        # Calculate absolute flux weights
                                         flux_weights = np.abs(o.mean("time"))
 
-                                        # Combine area and flux weights
                                         combined_weights = area_weights * flux_weights
 
-                                        # Normalize weights to sum to 1
                                         normalized_weights = combined_weights / combined_weights.sum()
 
-                                        # Calculate weighted mean
                                         overall_mean = (
                                             ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         )
@@ -404,19 +385,14 @@ class LC_groupby(metrics, scores):
                                             # cached_mass_ref reused from outer score loop
                                             o = cached_mass_ref
 
-                                            # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                            # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean("time"))
 
-                                            # Combine area and flux weights
                                             combined_weights = area_weights * flux_weights
 
-                                            # Normalize weights to sum to 1
                                             normalized_weights = combined_weights / combined_weights.sum()
 
-                                            # Calculate weighted mean
                                             mean_value = (
                                                 ds1[score]
                                                 .weighted(normalized_weights.fillna(0))
@@ -446,21 +422,14 @@ class LC_groupby(metrics, scores):
                                 option["item"] = [evaluation_item, sim_source, ref_source]
                                 option["groupby"] = "IGBP_groupby"
                                 make_LC_based_heat_map(output_file_path2, selected_scores, "score", option)
-                                # print(f"IGBP class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.debug("No scores requested for IGBP class comparison")
 
         metricsdir_path = os.path.join(f"{casedir}", "comparisons", "IGBP_groupby")
-        # if os.path.exists(metricsdir_path):
-        #    shutil.rmtree(metricsdir_path)
-        # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
         scoresdir_path = os.path.join(f"{casedir}", "comparisons", "IGBP_groupby")
-        # if os.path.exists(scoresdir_path):
-        #    shutil.rmtree(scoresdir_path)
-        # print(f"Re-creating output directory: {scoresdir_path}")
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 
@@ -501,7 +470,6 @@ class LC_groupby(metrics, scores):
             """
             with _open_dataset_safe(self.PFT_dir) as pft_ds:
                 PFTtype = pft_ds["PFT"].load()
-            # convert PFT type to int
             PFTtype = PFTtype.astype(int)
             PFT_class_names = {
                 0: "bare_soil",
@@ -522,12 +490,10 @@ class LC_groupby(metrics, scores):
                 15: "c3_crop",
             }
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 logging.info(f"now processing the evaluation item: {evaluation_item}")
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -555,14 +521,12 @@ class LC_groupby(metrics, scores):
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "metrics")
                                 )
                                 rows = []
-                                # Print the table header with class names
                                 header_values = ["metric"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
                                 header_values.append("Overall")
                                 rows.append("\t".join(header_values) + "\n")
 
-                                # Calculate and print median values
                                 for metric in self.metrics:
                                     metric_file = _evaluation_netcdf_path(
                                         self.casedir, "metrics", evaluation_item, ref_source, sim_source, metric
@@ -620,7 +584,6 @@ class LC_groupby(metrics, scores):
                                 option["item"] = [evaluation_item, sim_source, ref_source]
                                 option["groupby"] = "PFT_groupby"
                                 make_LC_based_heat_map(output_file_path, selected_metrics, "metric", option)
-                                # print(f"PFT class metrics comparison results are saved to {output_file_path}")
                             else:
                                 logging.debug("No metrics requested for PFT class comparison")
 
@@ -632,7 +595,6 @@ class LC_groupby(metrics, scores):
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "scores")
                                 )
                                 rows = []
-                                # Print the table header with class names
                                 header_values = ["score"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
@@ -643,7 +605,6 @@ class LC_groupby(metrics, scores):
                                 # pair; same pattern as IGBP branch above.
                                 cached_mass_ref = None
 
-                                # Calculate and print mean values
                                 for score in self.scores:
                                     score_file = _evaluation_netcdf_path(
                                         self.casedir, "scores", evaluation_item, ref_source, sim_source, score
@@ -657,7 +618,6 @@ class LC_groupby(metrics, scores):
                                     with _open_dataset_safe(score_file) as ds_file:
                                         ds = Convert_Type.convert_nc(ds_file.load())
 
-                                    # Calculate and write the overall mean first
                                     if self.weight.lower() == "area":
                                         weights = np.cos(np.deg2rad(ds.lat))
                                         overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -671,19 +631,14 @@ class LC_groupby(metrics, scores):
                                                 cached_mass_ref = ref_ds[f"{ref_varname}"].load()
                                         o = cached_mass_ref
 
-                                        # Calculate area weights (cosine of latitude)
                                         area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                        # Calculate absolute flux weights
                                         flux_weights = np.abs(o.mean("time"))
 
-                                        # Combine area and flux weights
                                         combined_weights = area_weights * flux_weights
 
-                                        # Normalize weights to sum to 1
                                         normalized_weights = combined_weights / combined_weights.sum()
 
-                                        # Calculate weighted mean
                                         overall_mean = (
                                             ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         )
@@ -700,7 +655,6 @@ class LC_groupby(metrics, scores):
                                         PFT_class_name = PFT_class_names.get(i, f"PFT_{i}")
                                         class_datasets.append(ds1)
                                         class_names.append(PFT_class_name)
-                                        # Calculate mean value
                                         if self.weight.lower() == "area":
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             mean_value = ds1[score].weighted(weights).mean(skipna=True).values
@@ -708,19 +662,14 @@ class LC_groupby(metrics, scores):
                                             # cached_mass_ref reused from outer score loop
                                             o = cached_mass_ref
 
-                                            # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                            # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean("time"))
 
-                                            # Combine area and flux weights
                                             combined_weights = area_weights * flux_weights
 
-                                            # Normalize weights to sum to 1
                                             normalized_weights = combined_weights / combined_weights.sum()
 
-                                            # Calculate weighted mean
                                             mean_value = (
                                                 ds1[score]
                                                 .weighted(normalized_weights.fillna(0))
@@ -750,21 +699,14 @@ class LC_groupby(metrics, scores):
                                 option["item"] = [evaluation_item, sim_source, ref_source]
                                 option["groupby"] = "PFT_groupby"
                                 make_LC_based_heat_map(output_file_path2, selected_scores, "score", option)
-                                # print(f"PFT class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.debug("No scores requested for PFT class comparison")
 
         metricsdir_path = os.path.join(f"{casedir}", "comparisons", "PFT_groupby")
-        # if os.path.exists(metricsdir_path):
-        #     shutil.rmtree(metricsdir_path)
-        # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 
         scoresdir_path = os.path.join(f"{casedir}", "comparisons", "PFT_groupby")
-        # if os.path.exists(scoresdir_path):
-        #     shutil.rmtree(scoresdir_path)
-        # print(f"Re-creating output directory: {scoresdir_path}")
         if not os.path.exists(scoresdir_path):
             os.makedirs(scoresdir_path)
 

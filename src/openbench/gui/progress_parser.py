@@ -70,7 +70,6 @@ def parse_progress_line(
         or "failed evaluation" in natural_line_lower
     )
 
-    # Detect variable being processed
     if "processing" in natural_line_lower or "evaluating" in natural_line_lower:
         for keyword in ["Processing", "Evaluating", "processing", "evaluating"]:
             if keyword in natural_line:
@@ -137,7 +136,6 @@ def parse_progress_line(
     elif not stage and "statistic" in natural_line_lower:
         stage = "Statistics"
 
-    # Detect task completions
     task_completed = False
 
     if (
@@ -165,7 +163,6 @@ def parse_progress_line(
             state["completed_statistics_tasks"].add(stat_name)
             task_completed = True
 
-    # Calculate progress
     total_tasks = state.get("total_tasks", 0)
     num_comparisons = state.get("num_comparisons", 0)
     num_statistics = state.get("num_statistics", 0)

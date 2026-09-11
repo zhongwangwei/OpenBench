@@ -131,15 +131,12 @@ class StationProcessingCoreMixin:
         original_convert = getattr(self, f"_fb_convert_{datasource}", None)
 
         try:
-            # Validate varname list is not empty
             if not current_var_list:
                 logging.error("Variable name list is empty")
                 raise ValueError("Variable name list cannot be empty for station data")
 
-            # Check if the variable exists in the dataset
             actual_station_var = get_xarray_key_case_insensitive(stn_data, current_var_list[0])
             if actual_station_var is None:
-                # Try to apply custom filter for variable fallback
                 source_key = self.sim_source if datasource == "sim" else self.ref_source
                 try:
                     source_name = getattr(self, f"{source_key}_model")
@@ -206,8 +203,7 @@ class StationProcessingCoreMixin:
             else:
                 ds = stn_data[actual_station_var]
 
-            # Apply fallback conversion expression if set (e.g., mol→g for GPP)
-            # Supports multi-variable expressions: 'value' is current var,
+            # Apply fallback conversion expressions. Supports multi-variable expressions: 'value' is current var,
             # other NC variables are accessible by name (e.g., f_assim).
             fb_convert = getattr(self, f"_fb_convert_{datasource}", None)
             if fb_convert:
@@ -227,7 +223,6 @@ class StationProcessingCoreMixin:
                         f"Station fallback conversion {fb_convert!r} failed; refusing to continue with unconverted units"
                     ) from e
 
-            # Check the time dimension
             if "time" not in ds.dims:
                 logging.error("Time dimension not found in the station data.")
                 raise ValueError("Time dimension not found in the station data.")
@@ -242,7 +237,6 @@ class StationProcessingCoreMixin:
             # Select the time range before resampling
             ds = ds.sel(time=slice(f"{start_year}-01-01", f"{end_year}-12-31"))
 
-            # Check if there's data in the selected time range
             if len(ds.time) == 0:
                 logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
                 return None
@@ -251,11 +245,9 @@ class StationProcessingCoreMixin:
             if not self._is_climatology_mode():
                 ds = self._resample_to_compare_resolution(ds, f"{datasource} station data")
 
-            # ds = ds.resample(time=self.compare_tim_res).mean()
             ds = self.check_coordinate(ds)
             ds = self.check_dataset_time_integrity(ds, start_year, end_year, self.compare_tim_res, datasource)
 
-            # Apply unit conversion for station data
             current_varunit = getattr(self, f"{datasource}_varunit")
             if current_varunit:
                 try:
@@ -389,22 +381,17 @@ class StationProcessingCoreMixin:
                     logging.info(
                         f"Renaming variable '{current_varname}' back to '{original_varname}' before saving (station {station['ID']})"
                     )
-                    # Convert DataArray to Dataset with the original variable name
                     if current_varname:
                         data_to_save = data.to_dataset(name=original_varname)
                     else:
-                        # If no current name, convert to dataset and rename the variable
                         data_to_save = data.to_dataset()
-                        # Get the first (and should be only) data variable name
                         current_var_list = list(data_to_save.data_vars)
                         if current_var_list:
                             data_to_save = data_to_save.rename({current_var_list[0]: original_varname})
-                    # Remove the temporary attribute
                     if "_original_varname" in data_to_save.attrs:
                         del data_to_save.attrs["_original_varname"]
                     _write_netcdf_atomic(data_to_save, output_file, compression=False)
                 else:
-                    # Remove the temporary attribute
                     if "_original_varname" in data.attrs:
                         del data.attrs["_original_varname"]
                     _write_netcdf_atomic(data, output_file, compression=False)

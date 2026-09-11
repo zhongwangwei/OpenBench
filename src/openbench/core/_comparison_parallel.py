@@ -46,12 +46,10 @@ class ParallelCoordinatesComparisonMixin:
                         output_file.write(f"{metric}\t")
                     output_file.write("\n")
 
-                    # read the simulation source and reference source
                     for evaluation_item in evaluation_items:
                         try:
                             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                            # if the sim_sources and ref_sources are not list, then convert them to list
                             if isinstance(sim_sources, str):
                                 sim_sources = [sim_sources]
                             if isinstance(ref_sources, str):

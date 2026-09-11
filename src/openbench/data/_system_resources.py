@@ -71,7 +71,6 @@ def get_system_resources():
     """
     import platform
 
-    # Initialize default values
     result = {
         "total_memory_gb": 8,  # Default values
         "available_memory_gb": 4,
@@ -144,6 +143,7 @@ def _get_macos_cpu_freq():
         try:
             result = subprocess.run(["sysctl", "-n", "hw.cpufrequency"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout.strip().isdigit():
+                # Convert Hz to MHz
                 return float(result.stdout.strip()) / 1000000
         except Exception as e:
             logger.debug("sysctl hw.cpufrequency failed: %s", e)
@@ -244,7 +244,6 @@ def calculate_optimal_cores(cpu_count: int, available_memory_gb: float, dataset_
     Returns:
         int: Optimal number of cores to use
     """
-    # Calculate memory per core needed
     memory_per_core = dataset_size_gb / cpu_count
 
     # If memory per core is too high, reduce number of cores

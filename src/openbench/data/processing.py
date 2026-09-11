@@ -16,7 +16,6 @@ from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic  #
 
 logger = logging.getLogger(__name__)
 
-# Import caching system (required for data processing)
 try:
     from openbench.data.cache import DataCache, get_cache_manager
 except ImportError:
@@ -25,10 +24,6 @@ except ImportError:
         "Please ensure openbench.data.cache is available. "
         "This module provides essential caching functionality for data processing performance."
     )
-
-
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-# logging.getLogger("xarray").setLevel(logging.WARNING)
 
 
 class BaseDatasetProcessing(BaseProcessingMixin, SelectionMixin, TimeIntegrityMixin, BaseProcessor):

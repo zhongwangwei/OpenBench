@@ -44,14 +44,12 @@ class PathCompleterModel(QStringListModel):
             self.setStringList([])
             return []
 
-        # Get directory part and prefix
         if "/" in text:
             dir_part, prefix = text.rsplit("/", 1)
         else:
             dir_part = ""
             prefix = text
 
-        # Check cache
         cache_key = dir_part
         if cache_key not in self._cache:
             try:
@@ -62,7 +60,6 @@ class PathCompleterModel(QStringListModel):
 
         items = self._cache.get(cache_key, [])
 
-        # Filter by prefix and build full paths
         completions = []
         for item in items:
             if item.lower().startswith(prefix.lower()):

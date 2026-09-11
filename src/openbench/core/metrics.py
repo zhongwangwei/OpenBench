@@ -59,7 +59,6 @@ class metrics:
         # Align time dimensions
         s, o = xr.align(s, o, join="inner")
 
-        # Remove NaN values
         mask = np.isfinite(s) & np.isfinite(o)
         return s.where(mask), o.where(mask)
 
@@ -93,7 +92,6 @@ class metrics:
         Returns:
             xr.DataArray: Absolute percent bias
         """
-        # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
         # Calculate absolute percent bias (guard against zero observed sum)
@@ -112,10 +110,8 @@ class metrics:
         Returns:
             xr.DataArray: Root mean squared error
         """
-        # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
-        # Calculate RMSE
         rmse = np.sqrt(((s - o) ** 2).mean(dim="time"))
         return rmse
 
@@ -130,7 +126,6 @@ class metrics:
         Returns:
             xr.DataArray: Unbiased root mean squared error
         """
-        # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
         # Calculate unbiased RMSE
@@ -158,7 +153,6 @@ class metrics:
             s = s.where(np.isfinite(s))
             return np.sqrt(((s - s.mean(dim="time")) ** 2).mean(dim="time"))
 
-        # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
         # Calculate standard deviations
@@ -604,7 +598,6 @@ class metrics:
         df_sim = data_array.to_pandas().to_frame(name="simulated")
         df_obs = obs_array.to_pandas().to_frame(name="observed")
 
-        # Apply transformation function
         if fun is not None:
             if epsilon_type == "Pushpalatha2012":
                 epsilon = df_obs["observed"].mean() / 100
@@ -666,7 +659,6 @@ class metrics:
         # pairwise NaNs.
         data_array, obs_array = self._validate_inputs(data_array, obs_array)
 
-        # Apply transformation function
         if fun is not None:
             if epsilon_type == "Pushpalatha2012":
                 epsilon = obs_array.mean(dim="time") / 100
@@ -680,7 +672,6 @@ class metrics:
             data_array = fun(data_array + epsilon)
             obs_array = fun(obs_array + epsilon)
 
-        # Calculate R-squared and regression slope
         def calculate_for_single_time(sim, obs):
             mask = np.isfinite(sim) & np.isfinite(obs)
             sim = sim[mask]
@@ -741,7 +732,6 @@ class metrics:
             raise TypeError("Inputs must be xarray DataArrays")
         data_array, obs_array = xr.align(data_array, obs_array, join="inner")
 
-        # Apply transformation function
         if fun is not None:
             if epsilon_type == "Pushpalatha2012":
                 epsilon = obs_array.mean(dim="time") / 100
@@ -794,7 +784,6 @@ class metrics:
         # are skipped by xarray reductions below.
         data_array, obs_array = self._validate_inputs(data_array, obs_array)
 
-        # Apply transformation function
         if fun is not None:
             if epsilon_type == "Pushpalatha2012":
                 epsilon = obs_array.mean(dim="time") / 100
@@ -808,11 +797,9 @@ class metrics:
             data_array = fun(data_array + epsilon)
             obs_array = fun(obs_array + epsilon)
 
-        # Calculate differences and mean of observations
         diff = np.abs(data_array - obs_array)
         obs_mean = obs_array.mean(dim="time")
 
-        # Calculate terms A and B
         A = diff.sum(dim="time")
         B = 2 * np.abs(obs_array - obs_mean).sum(dim="time")
 
@@ -828,12 +815,10 @@ class metrics:
 
     def smpi(self, s, o, n_bootstrap=100, seed=None):
         # Calculate the Single Model Performance Index (SMPI).
-        #
         # The comparison workflow defines SMPI from the climatological mean
         # model-observation difference normalized by observed temporal
         # variance. Keep this API consistent with that path instead of using
         # instantaneous per-time-step differences.
-        #
         # `seed` makes the bootstrap reproducible; pass an int (or pre-seeded
         # Generator) for regression tests. Default None keeps prior behavior.
         s, o = self._validate_inputs(s, o)
@@ -905,7 +890,6 @@ class metrics:
             # Selects the strongest observed Fourier component representing at least two cycles across the record
             dominant_freq_idx = np.argmax(np.abs(fft_obs[2:])) + 2
 
-            # Calculate phase difference
             phase_obs = np.angle(fft_obs)
             phase_sim = np.angle(fft_sim)
             phase_difference_rad = phase_sim[dominant_freq_idx] - phase_obs[dominant_freq_idx]
@@ -1056,7 +1040,6 @@ class metrics:
         """Return MFM's distribution similarity component (eta)."""
         s, o = self._validate_inputs(s, o)
 
-        # Helper functions for single time series
         def PHI_component(sim, obs, bins_phi):
             """Calculate Percentage of Histogram Intersection"""
             if len(sim) == 0 or len(obs) == 0:
@@ -1075,7 +1058,6 @@ class metrics:
             return min_sum / obs_total
 
         def calculate_mfm_eta_1d(sim, obs):
-            # Remove NaN values
             mask = np.isfinite(sim) & np.isfinite(obs)
             sim_clean = sim[mask]
             obs_clean = obs[mask]
@@ -1083,7 +1065,6 @@ class metrics:
             if len(sim_clean) < 3 or len(obs_clean) < 3:
                 return np.nan
 
-            # Distribution similarity
             mfm_eta = PHI_component(sim_clean, obs_clean, bins_phi)
             if np.isnan(mfm_eta):
                 return np.nan
@@ -1138,10 +1119,8 @@ class metrics:
             xr.DataArray: Model Fidelity Metric value (lat, lon)
         """
 
-        # Validate and align inputs
         s, o = self._validate_inputs(s, o)
 
-        # Helper functions for single time series
         def PHI_component(sim, obs, bins_phi):
             """Calculate Percentage of Histogram Intersection"""
             if len(sim) == 0 or len(obs) == 0:
@@ -1219,7 +1198,6 @@ class metrics:
             # Selects the strongest observed Fourier component representing at least two cycles across the record
             dominant_freq_idx = np.argmax(np.abs(fft_obs[2:])) + 2
 
-            # Calculate phase difference
             phase_obs = np.angle(fft_obs)
             phase_sim = np.angle(fft_sim)
             phase_difference_rad = phase_sim[dominant_freq_idx] - phase_obs[dominant_freq_idx]
@@ -1229,7 +1207,6 @@ class metrics:
 
         def calculate_mfm_1d(sim, obs):
             """Calculate MFM for a single time series"""
-            # Remove NaN values
             mask = np.isfinite(sim) & np.isfinite(obs)
             sim_clean = sim[mask]
             obs_clean = obs[mask]
@@ -1240,7 +1217,6 @@ class metrics:
             if np.mean(obs_clean) == 0:
                 return np.nan
 
-            # Calculate components
             # 1. Normalized error with phase penalty
             nmaep = np.power(np.mean(np.power(np.abs(sim_clean - obs_clean), p)), 1 / p) / abs(np.mean(obs_clean))
 
@@ -1262,15 +1238,12 @@ class metrics:
             if np.isnan(distribution_similarity):
                 return np.nan
 
-            # Calculate MFM
             mfm_value = 1 - np.sqrt(
                 ((1 - normalized_error) ** 2 + (1 - variability_capture) ** 2 + (1 - distribution_similarity) ** 2) / 3
             )
 
             return mfm_value
 
-        # Apply MFM to each grid cell
-        # Get dimensions
         if "time" in s.dims:
             # Rechunk time dimension to single chunk for apply_ufunc with dask
             # This is required because time is a core dimension

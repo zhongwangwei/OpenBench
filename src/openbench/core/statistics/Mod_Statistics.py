@@ -312,7 +312,6 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             f.write(f"yinc = {self.compare_grid_res}\n")
 
     def save_result(self, method_name: str, result, data_sources: List[str]) -> xr.Dataset:
-        # Remove the existing output directory
         filename_parts = [method_name] + data_sources
         filename = "_".join(filename_parts) + "_output.nc"
         output_file = os.path.join(self.output_dir, f"{method_name}", filename)
@@ -385,18 +384,14 @@ class StatisticsProcessing(BasicProcessing):
         self.output_dir = output_dir
         self.num_cores = num_cores
 
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "Month").lower()
 
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.info(
                 f"StatisticsProcessing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
             )
         else:
-            # this should be done in read_namelist
-            # adjust the time frequency
             match = re.match(r"(\d*)\s*([a-zA-Z]+)", self.compare_tim_res)
             if not match:
                 logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
@@ -406,7 +401,6 @@ class StatisticsProcessing(BasicProcessing):
                 value = 1
             else:
                 value = int(value)  # Convert the numerical value to an integer
-            # Get the corresponding pandas frequency
             freq = self.freq_map.get(unit.lower())
             if not freq:
                 logging.error(f"Unsupported time unit: {unit}")

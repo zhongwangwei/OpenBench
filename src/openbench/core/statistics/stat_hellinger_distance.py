@@ -30,7 +30,6 @@ def stat_hellinger_distance(self, v, u):
         u = list(u.data_vars.values())[0]
 
     def calc_hellinger_distance(v_series, u_series):
-        # Remove NaN values
         mask = ~np.isnan(v_series) & ~np.isnan(u_series)
         v_valid = v_series[mask]
         u_valid = u_series[mask]
@@ -67,7 +66,6 @@ def stat_hellinger_distance(self, v, u):
     if hasattr(u, "chunks") and u.chunks is not None:
         u = u.chunk({"time": -1})
 
-    # Apply the function to each grid point
     score = xr.apply_ufunc(
         calc_hellinger_distance,
         v,
@@ -78,7 +76,6 @@ def stat_hellinger_distance(self, v, u):
         output_dtypes=[float],
     )
 
-    # Add attributes to the DataArray
     v_name = v.name if v.name is not None else "unknown"
     u_name = u.name if u.name is not None else "unknown"
     score.name = "hellinger_distance_score"
@@ -86,10 +83,8 @@ def stat_hellinger_distance(self, v, u):
     score.attrs["units"] = "-"
     score.attrs["description"] = "Hellinger Distance score calculated between variables " + u_name + " and " + v_name
 
-    # Create a dataset with the score
     ds = xr.Dataset({"hellinger_distance_score": score})
     del score
-    # Add global attributes
     ds.attrs["title"] = "Hellinger Distance Score"
     ds.attrs["description"] = "Hellinger Distance score calculated between variables " + u_name + " and " + v_name
     ds.attrs["created_by"] = "ILAMB var_hellinger_distance function"

@@ -279,7 +279,6 @@ def run_scan(
             click.secho(f"Skipped {final_skipped_count} folder(s) during scan.", fg="yellow")
         click.echo("Verify: openbench ref list")
 
-        # Warn about unverified defaults
         click.echo()
         click.secho(
             "Note: Some fields (tim_res, grid_res, years) may be defaults and not verified from data.",

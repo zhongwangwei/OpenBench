@@ -48,7 +48,6 @@ class StationExtractionMixin:
             station_data = self.extract_single_station_data(dataset, station, datasource)
             processed_data = self.process_extracted_data(station_data, start_year, end_year)
 
-            # Only save if processed_data is not None (i.e., had valid time range)
             if processed_data is not None:
                 self.save_extracted_data(processed_data, station, datasource)
             else:
@@ -132,7 +131,6 @@ class StationExtractionMixin:
         data = mask_station_missing(data)
         data = data.sel(time=slice(f"{start_year}-01-01T00:00:00", f"{end_year}-12-31T23:59:59"))
 
-        # Check if time dimension is empty after slicing
         if len(data.time) == 0:
             logging.warning(f"No data available in time range {start_year}-{end_year}. Skipping this station.")
             return None

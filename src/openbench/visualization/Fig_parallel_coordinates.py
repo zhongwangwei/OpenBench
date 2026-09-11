@@ -66,14 +66,11 @@ def _read_comparison_file(file):
 @with_isolated_rc
 def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_items, scores, metrics, option):
     option = option.copy()
-    # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
     #                               Start the main loop                                #
     #                                                                                  #
     #                                                                                  #
-    # ----------------------------------------------------------------------------------#
-    # Set figure size
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
@@ -89,7 +86,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         "text.usetex": False,
     }
     rcParams.update(params)
-    # Set figure size
     figsize = (option["x_wise"], option["y_wise"])
 
     # Read the data from the file with fallback and auto-detection
@@ -98,36 +94,24 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
     evaluation_items = df["Item"].unique()
-    # Get unique `Reference` values for each `Item` and store them in `item_references`.
     item_references = df.groupby("Item")["Reference"].unique()
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
-    # Specify the scores to be plotted
 
-    # Iterate over each evaluation item
     option["situation"] = 1
     if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.15)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
     for evaluation_item in evaluation_items:
-        # Get the corresponding references for the current evaluation item
         references = item_references[evaluation_item]
-        # Iterate over each reference
         for ref_source in references:
-            # Select rows where 'Item' matches the evaluation item and 'Reference' matches the reference
             df_selected = df.loc[(df["Item"] == evaluation_item) & (df["Reference"] == ref_source)]
 
-            # Get the model names
             model_names = df_selected["Simulation"].values
 
-            # Iterate over each score
-            # Select the columns with the names of the score
             data = df_selected[scores].values
 
-            # Create a new figure
             try:
-                # Create the parallel coordinate plot
                 fig, ax = parallel_coordinate_plot(
                     data,
                     list(scores),
@@ -150,7 +134,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 ax.set_title(option["title"], fontsize=option["title_size"])
-                # Save the plot
 
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot_scores', evaluation_item, ref_source)}.{option['saving_format']}"
                 save_figure(
@@ -167,51 +150,36 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
         legend_bbox_to_anchor = (0.5, -0.25)
     else:
         legend_bbox_to_anchor = (option["bbox_to_anchor_x"], option["bbox_to_anchor_y"])
-    # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = filtered_df["Item"].unique()
 
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
 
-    # Specify the scores to be plotted
     # scores = sco['nBiasScore', 'overall_score']
 
-    # Generate all combinations of `Reference` values from `filtered_df`.
     all_combinations = list(limited_product(filtered_df["Reference"], option, context="Parallel Coordinates scores"))
 
-    # Iterate over each score
     for score in scores:
-        # Iterate over each `item_combination` in the generated combinations.
         for item_combination in all_combinations:
-            # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
                 mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
-            # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
 
-            # Create an empty list to store the data for each simulation
             data_list = []
             model_names = []
 
-            # Iterate over each simulation
             for sim_source in sim_sources:
-                # Select rows where 'Simulation' matches the current simulation
                 df_selected = filtered_df.loc[filtered_df["Simulation"] == sim_source]
 
-                # Extract the score values for each item in the current simulation
                 score_values = df_selected.set_index("Item")[score].reindex(unique_items).values.reshape(1, -1)
                 data_list.append(score_values)
                 model_names.append(sim_source)
 
-            # Concatenate the data from all simulations
             data = np.concatenate(data_list, axis=0)
 
-            # Create the parallel coordinate plot
             try:
                 fig, ax = parallel_coordinate_plot(
                     data,
@@ -233,7 +201,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                     option=option,
                 )
 
-                # Set the title of the plot
                 title = option["title"]
                 ypad = 0
                 if option["title"] == "":
@@ -242,7 +209,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_title(title, fontsize=option["title_size"], pad=ypad)
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
-                # Save the plot
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot', score, *item_combination)}.{option['saving_format']}"
                 save_figure(
                     fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
@@ -253,10 +219,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 raise
     # ------------in the end of the function----------------
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # interate over each metric item
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Read the data from the file
     option["situation"] = 1
     if not option["set_legend"]:
         legend_bbox_to_anchor = (0.5, -0.15)
@@ -268,26 +230,16 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     # -------第一种情况：只有一个reference，一个item，多个模型，多个score-------
     # Get unique `Item` values and store them in `evaluation_items`.
     evaluation_items = df["Item"].unique()
-    # Get unique `Reference` values for each `Item` and store them in `item_references`.
     item_references = df.groupby("Item")["Reference"].unique()
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
-    # Specify the scores to be plotted
 
-    # Iterate over each evaluation item
     for evaluation_item in evaluation_items:
-        # Get the corresponding references for the current evaluation item
         references = item_references[evaluation_item]
-        # Iterate over each reference
         for ref_source in references:
-            # Select rows where 'Item' matches the evaluation item and 'Reference' matches the reference
             df_selected = df.loc[(df["Item"] == evaluation_item) & (df["Reference"] == ref_source)]
 
-            # Get the model names
             model_names = df_selected["Simulation"].values
 
-            # Iterate over each score
-            # Select the columns with the names of the score
             data = df_selected[metrics].values
             try:
                 # # Create the parallel coordinate plot
@@ -311,7 +263,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                     option=option,
                 )
 
-                # Save the plot
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
                 ax.set_title(option["title"], fontsize=option["title_size"])
@@ -335,51 +286,36 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
 
-    # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = filtered_df["Item"].unique()
 
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
 
-    # Specify the scores to be plotted
     # scores = ['nBiasScore', 'overall_score']
 
-    # Generate all combinations of `Reference` values from `filtered_df`.
     all_combinations = list(limited_product(filtered_df["Reference"], option, context="Parallel Coordinates metrics"))
 
-    # Iterate over each metric
     for metric in metrics:
-        # Iterate over each `item_combination` in the generated combinations.
         for item_combination in all_combinations:
-            # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
                 mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
-            # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
 
-            # Create an empty list to store the data for each simulation
             data_list = []
             model_names = []
 
-            # Iterate over each simulation
             for sim_source in sim_sources:
-                # Select rows where 'Simulation' matches the current simulation
                 df_selected = filtered_df.loc[filtered_df["Simulation"] == sim_source]
 
-                # Extract the score values for each item in the current simulation
                 metric_values = df_selected.set_index("Item")[metric].reindex(unique_items).values.reshape(1, -1)
                 data_list.append(metric_values)
                 model_names.append(sim_source)
 
-            # Concatenate the data from all simulations
             data = np.concatenate(data_list, axis=0)
             try:
-                # Create the parallel coordinate plot
                 fig, ax = parallel_coordinate_plot(
                     data,
                     unique_items,
@@ -400,7 +336,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                     option=option,
                 )
 
-                # Set the title of the plot
                 title = option["title"]
                 ypad = 0
                 if option["title"] == "":
@@ -409,7 +344,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
                 ax.set_title(title, fontsize=option["title_size"], pad=ypad)
                 ax.set_ylabel(option["yticklabel"], fontsize=option["yticksize"] + 1)
                 ax.set_xlabel(option["xticklabel"], fontsize=option["xticksize"] + 1)
-                # Save the plot
                 output_file_path = f"{basedir}/comparisons/Parallel_Coordinates/{join_filename_components('Parallel_Coordinates_Plot', metric, *item_combination)}.{option['saving_format']}"
                 save_figure(
                     fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight"
@@ -421,7 +355,6 @@ def make_scenarios_comparison_parallel_coordinates(file, basedir, evaluation_ite
 
 
 def _quick_qc(data, model_names, metric_names, model_names2=None):
-    # Quick initial QC
     if data.shape[0] != len(model_names):
         raise ValueError(
             "Error: data.shape[0], " + str(data.shape[0]) + ", mismatch to len(model_names), " + str(len(model_names))
@@ -437,7 +370,6 @@ def _quick_qc(data, model_names, metric_names, model_names2=None):
                 raise ValueError(
                     "Error: model_names2 should be a subset of model_names, but " + model + " is not in model_names"
                 )
-    # print("Passed a quick QC")
 
 
 def _data_transform(
@@ -451,7 +383,6 @@ def _data_transform(
     ymax=None,
     ymin=None,
 ):
-    # Data to plot
     ys = data  # stacked y-axis values
     N = ys.shape[1]  # number of vertical axis (i.e., =len(metric_names))
     require_finite_columns(ys, metric_names, label="Parallel Coordinates")
@@ -512,7 +443,6 @@ def _data_transform(
                 ymaxs[idx] += np.abs(ymaxs[idx]) * 0.05
         dys = ymaxs - ymins
 
-    # Transform all data to be compatible with the main axis
     zs = np.zeros_like(ys)
     zs[:, 0] = ys[:, 0]
     zs[:, 1:] = (ys[:, 1:] - ymins[1:]) / dys[1:] * dys[0] + ymins[0]
@@ -524,7 +454,6 @@ def _data_transform(
 
     if model_names2 is not None:
         logger.info("Models in the second group:", model_names2)
-    # Pandas dataframe for seaborn plotting
     df_stacked = _to_pd_dataframe(
         data,
         metric_names,
@@ -553,9 +482,7 @@ def _to_pd_dataframe(
     group1_name="group1",
     group2_name="group2",
 ):
-    # Pandas dataframe for seaborn plotting
     df = pd.DataFrame(data, columns=metric_names, index=model_names)
-    # Stack
     # df_stacked = df.stack(dropna=False).reset_index()
     # df_stacked = df.stack(dropna=False, future_stack=True).reset_index()
     df_stacked = df.stack(future_stack=True).reset_index()
@@ -699,10 +626,8 @@ def parallel_coordinate_plot(
     }
     pylab.rcParams.update(params)
 
-    # Quick initial QC
     _quick_qc(data, model_names, metric_names, model_names2=model_names2)
 
-    # Transform data for plotting
     zs, zs_middle, N, ymins, ymaxs, df_stacked, df2_stacked = _data_transform(
         data,
         metric_names,
@@ -718,7 +643,6 @@ def parallel_coordinate_plot(
     if debug:
         logger.info("ymins:", ymins)
         logger.info("ymaxs:", ymaxs)
-    # Prepare plot
     if N > 20:
         if xtick_labelsize is None:
             xtick_labelsize = "large"
@@ -758,12 +682,10 @@ def parallel_coordinate_plot(
             ax_y.yaxis.set_ticks_position("right")
             ax_y.spines["right"].set_position(("data", i))
 
-    # Population distribuion on each vertical axis
     if show_boxplot or show_violin:
         y = [zs[:, i] for i in range(N)]
         y_filtered = [y_i[~np.isnan(y_i)] for y_i in y]  # Remove NaN value for box/violin plot
 
-        # Box plot
         if show_boxplot:
             box = ax.boxplot(y_filtered, positions=range(N), patch_artist=True, widths=0.15)
             for item in ["boxes", "whiskers", "fliers", "medians", "caps"]:
@@ -771,10 +693,8 @@ def parallel_coordinate_plot(
             setp(box["boxes"], facecolor="None")
             setp(box["fliers"], markeredgecolor="darkgrey")
 
-        # Violin plot
         if show_violin:
             if model_names2 is None:
-                # matplotlib for regular violin plot
                 violin = ax.violinplot(
                     y_filtered,
                     positions=range(N),
@@ -791,7 +711,6 @@ def parallel_coordinate_plot(
                     pc.set_edgecolor("None")
                     pc.set_alpha(0.8)
             else:
-                # seaborn for split violin plot
                 if sns is None:
                     raise ImportError(
                         "seaborn is required for split-violin plots in "
@@ -812,8 +731,6 @@ def parallel_coordinate_plot(
                         group2_name: violin_colors[1],
                     },
                 )
-
-    # Line or marker
 
     colormap_obj = matplotlib.colormaps.get_cmap(colormap) if isinstance(colormap, str) else colormap
     colors = [colormap_obj(c) for c in np.linspace(0, 1, len(model_names) + 1)]
@@ -882,7 +799,6 @@ def parallel_coordinate_plot(
             vertical_center_line_label = None
         ax.plot(range(N), zs_middle, "-", c="k", label=vertical_center_line_label, lw=1)
 
-    # Compare two models
     if comparing_models is not None:
         if isinstance(comparing_models, tuple) or (isinstance(comparing_models, list) and len(comparing_models) == 2):
             x = range(N)
@@ -891,7 +807,6 @@ def parallel_coordinate_plot(
             y1 = zs[m1, :]
             y2 = zs[m2, :]
 
-            # Fill between lines
             if fill_between_lines:
                 ax.fill_between(
                     x,
@@ -912,7 +827,6 @@ def parallel_coordinate_plot(
                     alpha=0.5,
                 )
 
-            # Add vertical arrows
             if arrow_between_lines:
                 for xi, yi1, yi2 in zip(x, y1, y2):
                     if yi2 > yi1:
@@ -961,14 +875,11 @@ def parallel_coordinate_plot(
 
     if not legend_off:
         if violin_label is not None:
-            # Get all lines for legend
             lines = [violin["bodies"][0]] + ax.lines
-            # Get labels for legend
             labels = [violin_label] + [line.get_label() for line in ax.lines]
             # Remove unnessasary lines that its name starts with '_' to avoid the burden of warning message
             lines = [aa for aa, bb in zip(lines, labels) if not bb.startswith("_")]
             labels = [bb for bb in labels if not bb.startswith("_")]
-            # Add legend
             ax.legend(
                 lines,
                 labels,
@@ -978,7 +889,6 @@ def parallel_coordinate_plot(
                 fontsize=legend_fontsize,
             )
         else:
-            # Add legend
             ax.legend(
                 loc=legend_loc,
                 ncol=legend_ncol,

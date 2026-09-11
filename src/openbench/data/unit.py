@@ -250,17 +250,14 @@ class UnitProcessing:
         global _UNIT_LOOKUP_CACHE
         if _UNIT_LOOKUP_CACHE is None:
             with _UNIT_CACHE_LOCK:
-                # Double-check after acquiring lock
                 if _UNIT_LOOKUP_CACHE is None:
                     temp_cache = {}
 
-                    # All keys are already lowercase, just build the lookup
                     for base_unit, conversions in conversion_factors.items():
                         # Add base unit itself (None means no conversion needed)
                         if base_unit not in temp_cache:
                             temp_cache[base_unit] = (base_unit, None)
 
-                        # Add all conversion units
                         for conv_unit, conv_func in conversions.items():
                             # Only add if not already present (prefer first match)
                             if conv_unit not in temp_cache:
@@ -284,7 +281,6 @@ class UnitProcessing:
                 logging.info(f"No conversion needed for {input_unit} -> {base_unit}")
                 return data, base_unit
 
-            # Apply conversion
             if data is None:
                 logging.info(f"Unit mapping found (case-insensitive): {input_unit} -> {base_unit}")
                 return None, base_unit

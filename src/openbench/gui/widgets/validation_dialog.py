@@ -218,7 +218,6 @@ class ValidationResultsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        # Summary
         summary = QLabel(f"Validation complete: {self._report.passed_count} passed, {self._report.failed_count} failed")
         summary.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(summary)
@@ -230,7 +229,6 @@ class ValidationResultsDialog(QDialog):
         self._populate_tree()
         layout.addWidget(self.tree)
 
-        # Buttons
         btn_box = QDialogButtonBox()
         self.export_btn = QPushButton("Export")
         self.export_btn.clicked.connect(self._export_results)
@@ -242,7 +240,6 @@ class ValidationResultsDialog(QDialog):
     def _populate_tree(self):
         """Populate results tree."""
         for result in self._report.results:
-            # Create source item
             status = "✓" if result.is_valid else "✗"
             item = QTreeWidgetItem([f"{result.var_name} / {result.source_name}", status])
 
@@ -251,7 +248,6 @@ class ValidationResultsDialog(QDialog):
             else:
                 item.setForeground(1, QColor("#e74c3c"))
 
-            # Add failed checks as children
             for check in result.failed_checks:
                 child = QTreeWidgetItem([f"  └─ {check.message}", ""])
                 child.setForeground(0, QColor("#666"))

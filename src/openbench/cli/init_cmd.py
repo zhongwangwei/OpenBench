@@ -1647,7 +1647,6 @@ def init_cmd(
                     step = 2
                 click.secho(f"  Returning to step {step}.", fg="yellow")
 
-    # Build config
     # NOTE: reference uses flat var→source mapping (matches loader._build_reference);
     # not {"sources": {...}} which loader rejects as "reference.sources must be a string".
     project = {
@@ -1674,7 +1673,6 @@ def init_cmd(
         },
     }
 
-    # Write
     rendered = _render_init_config_template(
         config,
         all_refs=all_refs,

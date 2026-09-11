@@ -35,7 +35,6 @@ class DistributionComparisonMixin:
                 try:
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -50,7 +49,6 @@ class DistributionComparisonMixin:
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -69,7 +67,6 @@ class DistributionComparisonMixin:
                                                     "scores",
                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                                 )
-                                                # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
@@ -120,7 +117,6 @@ class DistributionComparisonMixin:
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -139,7 +135,6 @@ class DistributionComparisonMixin:
                                                     "metrics",
                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                                 )
-                                                # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 data = df[metric].values
                                             else:
@@ -200,7 +195,6 @@ class DistributionComparisonMixin:
                 try:
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # If the sim_sources and ref_sources are not lists, convert them to lists
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -215,7 +209,6 @@ class DistributionComparisonMixin:
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # Create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -234,7 +227,6 @@ class DistributionComparisonMixin:
                                                     "scores",
                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                                 )
-                                                # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
@@ -285,7 +277,6 @@ class DistributionComparisonMixin:
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # Create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -304,7 +295,6 @@ class DistributionComparisonMixin:
                                                     "metrics",
                                                     f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                                 )
-                                                # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 data = df[metric].values
                                             else:
@@ -358,16 +348,12 @@ class DistributionComparisonMixin:
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f"{basedir}", "comparisons", "Ridgeline_Plot")
-        # if os.path.exists(dir_path):
-        #    shutil.rmtree(dir_path)
-        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
         for evaluation_item in evaluation_items:
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-            # if the sim_sources and ref_sources are not list, then convert them to list
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
@@ -379,7 +365,6 @@ class DistributionComparisonMixin:
                     continue
                 for ref_source in ref_sources:
                     datasets_filtered = []
-                    # create a numpy matrix to store the data
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
@@ -387,7 +372,6 @@ class DistributionComparisonMixin:
                             sim_sources = [sim_sources]
                         if isinstance(ref_sources, str):
                             ref_sources = [ref_sources]
-                        # create a numpy matrix to store the data
 
                         if ref_data_type == "stn" or sim_data_type == "stn":
                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
@@ -399,7 +383,6 @@ class DistributionComparisonMixin:
                             file_path = os.path.join(
                                 basedir, "scores", f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             )
-                            # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=",", header=0)
                             df = Convert_Type.convert_Frame(df)
                             data = df[score].values
@@ -438,7 +421,6 @@ class DistributionComparisonMixin:
                         os.makedirs(dir_path)
 
                     datasets_filtered = []
-                    # create a numpy matrix to store the data
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
@@ -446,7 +428,6 @@ class DistributionComparisonMixin:
                             sim_sources = [sim_sources]
                         if isinstance(ref_sources, str):
                             ref_sources = [ref_sources]
-                        # create a numpy matrix to store the data
                         if ref_data_type == "stn" or sim_data_type == "stn":
                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
                             sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
@@ -457,7 +438,6 @@ class DistributionComparisonMixin:
                             file_path = os.path.join(
                                 basedir, "metrics", f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
                             )
-                            # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=",", header=0)
                             data = df[metric].values
                         else:

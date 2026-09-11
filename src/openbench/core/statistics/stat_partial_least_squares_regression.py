@@ -27,7 +27,6 @@ def stat_partial_least_squares_regression(self, *variables):
         raise ImportError("scikit-learn is required for this function")
     from scipy.stats import t
 
-    # Prepare Dependent and Independent data
     configured_max_components = self.stats_nml["Partial_Least_Squares_Regression"]["max_components"]
     n_splits = self.stats_nml["Partial_Least_Squares_Regression"]["n_splits"]
     n_jobs = self.stats_nml["Partial_Least_Squares_Regression"]["n_jobs"]
@@ -97,7 +96,6 @@ def stat_partial_least_squares_regression(self, *variables):
         where=Y_std != 0,
     )
 
-    # Define helper functions for parallel processing
     def compute_best_components(lat, lon):
         x = X_stand[:, :, lat, lon]
         y = Y_stand[:, lat, lon]
@@ -162,7 +160,6 @@ def stat_partial_least_squares_regression(self, *variables):
         r_squared = pls.score(x, y)
 
         return lat, lon, coef.ravel(), intercept.ravel(), p_vals, r_squared
-        # Compute best number of components
 
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_best_components)(lat, lon) for lat in range(Y_data.shape[1]) for lon in range(Y_data.shape[2])
@@ -173,7 +170,6 @@ def stat_partial_least_squares_regression(self, *variables):
         if not np.isnan(n_components):
             best_n_components[lat, lon] = n_components
 
-    # Compute PLSR results
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_plsr)(lat, lon, best_n_components[lat, lon])
         for lat in range(Y_data.shape[1])
@@ -201,7 +197,6 @@ def stat_partial_least_squares_regression(self, *variables):
         where=X_std != 0,
     )
     anomaly = coef_values * scale
-    # Create output dataset
     ds = xr.Dataset(
         data_vars={
             "best_n_components": (["lat", "lon"], best_n_components),
@@ -214,7 +209,6 @@ def stat_partial_least_squares_regression(self, *variables):
         coords={"lat": Y_aligned.lat, "lon": Y_aligned.lon, "variable": [f"x{i + 1}" for i in range(len(X_vars))]},
     )
 
-    # Add metadata
     ds["best_n_components"].attrs["long_name"] = "Best number of components"
     ds["coefficients"].attrs["long_name"] = "PLSR coefficients"
     ds["intercepts"].attrs["long_name"] = "PLSR intercepts"

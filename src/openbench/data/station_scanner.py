@@ -96,12 +96,10 @@ def _detect_layout(root: Path) -> str:
 
     Returns: "flat", "nested_single", "nested_multi", or "unknown".
     """
-    # Check root for NC files directly
     root_nc = _glob_nc(root)
     if root_nc:
         return "flat"
 
-    # Check subdirectories
     multi_file_sites = 0
     single_file_sites = 0
     total_sites = 0

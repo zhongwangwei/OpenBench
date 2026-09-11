@@ -163,7 +163,6 @@ def make_plot_index_grid(self):
         except Exception:
             logger.exception(f"ERROR: {key} {metric} plotting error, please check!")
             raise
-    # print("\033[1;32m" + "=" * 80 + "\033[0m")
     for score in self.scores:
         # Skip global map plotting for nSpatialScore since it's constant globally
         if score == "nSpatialScore":
@@ -184,7 +183,6 @@ def make_plot_index_grid(self):
 @with_isolated_rc
 def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     option = option.copy()
-    # Plot settings
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     import numpy as np
@@ -209,7 +207,6 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     }
     rcParams.update(params)
 
-    # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
     with xr.open_dataset(
         f"{self.casedir}/{k}/{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{xitem}.nc"
     ) as _ds:
@@ -348,7 +345,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     import matplotlib
     import matplotlib.pyplot as plt
     from pylab import rcParams
-    ### Plot settings
 
     # font = {'family': 'Times-Roman'}
     font = {"family": "DejaVu Sans"}
@@ -470,7 +466,6 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from pylab import rcParams
 
-    ### Plot settings
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
@@ -622,7 +617,6 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
 
 
 def make_plot_index_stn(self):
-    # read the data
     station_eval_name = f"{self.item}_stn_{self.ref_source}_{self.sim_source}_evaluations.csv"
     csv_candidates = []
     if self.metrics:
@@ -641,7 +635,6 @@ def make_plot_index_stn(self):
     df = pd.read_csv(csv_path, header=0)
     df = Convert_Type.convert_Frame(df)
 
-    # loop the keys in self.variables to get the metric output
     for metric in self.metrics:
         option = self.fig_nml["make_stn_plot_index"].copy()
         option["extend"] = self.fig_nml["make_geo_plot_index"].get("extend", "both")
@@ -651,10 +644,8 @@ def make_plot_index_stn(self):
         option["colorbar_label"] = metric.replace("_", "\n") + "\n" + process_unit(display_unit, display_unit, metric)
         min_metric = -999.0
         max_metric = 100000.0
-        # print(df['%s'%(metric)])
         ind0 = df[df["%s" % (metric)] > min_metric].index
         data_select0 = df.loc[ind0]
-        # print(data_select0[data_select0['%s'%(metric)] < max_metric])
         ind1 = data_select0[data_select0["%s" % (metric)] < max_metric].index
         data_select = data_select0.loc[ind1]
 
@@ -717,10 +708,8 @@ def make_plot_index_stn(self):
         option["colorbar_label"] = score.replace("_", "\n")
         min_score = -999.0
         max_score = 100000.0
-        # print(df['%s'%(score)])
         ind0 = df[df["%s" % (score)] > min_score].index
         data_select0 = df.loc[ind0]
-        # print(data_select0[data_select0['%s'%(score)] < max_score])
         ind1 = data_select0[data_select0["%s" % (score)] < max_score].index
         data_select = data_select0.loc[ind1]
         # if key=='discharge':
@@ -757,9 +746,6 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     import xarray as xr
     from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
-    # filename_parts = [method_name] + data_sources
-    # filename = "_".join(filename_parts) + "_output"
-    # file = os.path.join(output_dir, f"{method_name}", filename)
 
     with xr.open_dataset(file) as _ds:
         ds = _ds.load()

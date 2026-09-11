@@ -226,7 +226,6 @@ class GeneralInfoReader:
                 else:
                     setattr(self, f"{source_type}_{attr}", str(value))
 
-            # Handle suffix and prefix separately to ensure they're always strings
             for attr in ["suffix", "prefix"]:
                 value = nml[item].get(f"{source}_{attr}")
                 setattr(self, f"{source_type}_{attr}", str(value) if value is not None else "")
@@ -272,7 +271,6 @@ class GeneralInfoReader:
             and self.ref_data_type == "stn"
             and (not self.ref_tim_res or self.ref_tim_res == "")
         ):
-            # Set GRDC time resolution to match comparison resolution
             self.ref_tim_res = getattr(self, "compare_tim_res", "D")
             logging.info(f"GRDC reference time resolution set to comparison resolution: {self.ref_tim_res}")
 
@@ -312,7 +310,6 @@ class GeneralInfoReader:
         if not self._is_valid_resolution(self.ref_freq) or not self._is_valid_resolution(self.sim_freq):
             logging.warning(f"Invalid time resolution detected: ref={self.ref_freq}, sim={self.sim_freq}")
 
-        # Check if resolutions are compatible
         if self.ref_freq != self.sim_freq:
             logging.info(f"Different time resolutions: ref={self.ref_freq}, sim={self.sim_freq}")
             # Try to determine if they can be aligned
@@ -374,7 +371,6 @@ class GeneralInfoReader:
                 # rather than a misleading empty-list message.
                 self._station_list_error = e
                 logging.error(f"Error processing station data: {e}")
-                # Set empty dataframe as fallback
                 self.stn_list = pd.DataFrame()
             self._filter_stations()
 
@@ -393,7 +389,6 @@ class GeneralInfoReader:
         """
         if self.ref_data_type == "stn" and self.sim_data_type == "stn":
             # Both ref and sim are station data
-            # Only read if fulllist paths are provided
             if self.sim_fulllist and self.ref_fulllist:
                 self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
                 self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
@@ -469,7 +464,6 @@ class GeneralInfoReader:
             spatial_threshold_deg,
         )
 
-        # Find lat/lon columns
         sim_lat = sim_stn.get("sim_lat", sim_stn.get("lat"))
         sim_lon = sim_stn.get("sim_lon", sim_stn.get("lon"))
         ref_lat = ref_stn.get("ref_lat", ref_stn.get("lat"))
@@ -612,7 +606,6 @@ class GeneralInfoReader:
             }
             column_mapping.update(VERTICAL_COORDINATE_MAP)
 
-            # Apply column renaming
             for old_name, new_name in column_mapping.items():
                 if old_name in self.stn_list.columns:
                     self.stn_list.rename(columns={old_name: new_name}, inplace=True)
@@ -645,7 +638,6 @@ class GeneralInfoReader:
             logging.debug("No station list available for filtering; attempting to generate one.")
 
         initial_count = len(self.stn_list)
-        # Get custom filter if available
         custom_filter = self._get_custom_filter()
         if custom_filter is not None:
             logging.info(f"Applying custom filter for {self.ref_source}")
@@ -655,10 +647,8 @@ class GeneralInfoReader:
                 logging.error(f"Custom filter failed: {e}")
                 self._apply_default_filter()
         else:
-            # Apply default filters
             self._apply_default_filter()
 
-        # Save the filtered station list
         if hasattr(self, "stn_list"):
             if self.stn_list.empty:
                 cause = getattr(self, "_station_list_error", None)
@@ -797,13 +787,10 @@ class GeneralInfoReader:
         self.stn_list["use_syear"] = self.use_syear
         self.stn_list["use_eyear"] = self.use_eyear
 
-        # Apply basic filtering criteria based on time range validity
-        # Only select stations where the time range is valid and meaningful
+        # Basic validity filter: only select stations with a meaningful time range.
         valid_time_range = (self.stn_list["use_eyear"] - self.stn_list["use_syear"]) >= 0
         self.stn_list["Flag"] = valid_time_range
 
-        # Apply geographical filters if available
-        # Check for different possible longitude column names
         lon_col = None
         for col in ["lon", "LON", "longitude", "Longitude"]:
             if col in self.stn_list.columns:
@@ -828,7 +815,6 @@ class GeneralInfoReader:
             )
             self.stn_list["Flag"] = self.stn_list["Flag"] & lat_filter
 
-        # Apply minimum year criteria if available
         if hasattr(self, "min_year") and self.min_year:
             try:
                 min_year_val = int(self.min_year)
@@ -838,7 +824,6 @@ class GeneralInfoReader:
             except (ValueError, AttributeError):
                 pass
 
-        # Filter by upstream area if available
         if hasattr(self, "ref_max_uparea") and hasattr(self, "ref_min_uparea"):
             try:
                 max_uparea = float(self.ref_max_uparea) if self.ref_max_uparea else float("inf")
@@ -853,8 +838,7 @@ class GeneralInfoReader:
         # For grid reference data (like GLEAM4.2a) used with station simulation data,
         # apply additional validation to ensure data availability
         if self.ref_data_type == "grid" and self.sim_data_type == "stn":
-            # Check if reference data covers the station locations and time period
-            # This is more conservative than flagging all stations as True
+            # Check reference coverage; this is more conservative than flagging all stations as True.
             ref_sy = self._safe_int(self.ref_syear, 1900)
             ref_ey = self._safe_int(self.ref_eyear, 2100)
             ref_time_coverage = (self.stn_list["use_syear"] >= ref_sy) & (self.stn_list["use_eyear"] <= ref_ey)

@@ -19,7 +19,6 @@ class TimeAdjustmentMixin:
     def apply_model_specific_time_adjustment(
         self, ds: xr.Dataset, datasource: str, syear: int, eyear: int, tim_res: str
     ) -> xr.Dataset:
-        # Get model name from _model attribute (e.g., TE-routing_model = "TE")
         source = self.sim_source if datasource == "sim" else self.ref_source
         try:
             model = getattr(self, f"{source}_model")
@@ -66,7 +65,6 @@ class TimeAdjustmentMixin:
                     }
                     res_key = key_map.get(time_unit.lower(), "")
 
-                    # Build file context string for pattern matching
                     current_prefix = getattr(self, f"{datasource}_prefix", "")
                     current_dir = getattr(self, f"{datasource}_dir", "")
                     file_context = f"{current_dir}/{current_prefix}"

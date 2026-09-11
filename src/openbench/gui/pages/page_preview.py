@@ -161,11 +161,9 @@ class PagePreview(BasePage):
 
         config = self.controller.config
 
-        # Update output directory display
         output_dir = self.controller.get_output_dir()
         self.output_dir_label.setText(output_dir)
 
-        # Generate unified config preview
         generate_kwargs = {"case_output_dir": output_dir}
         from openbench.remote.storage import RemoteStorage
 
@@ -198,7 +196,6 @@ class PagePreview(BasePage):
 
     def _export_and_run_once(self) -> bool:
         """Export files and trigger one run attempt."""
-        # Use the controller's output directory
         output_dir = self.controller.get_output_dir()
 
         # Execution mode is authoritative. Storage can still be local while a
@@ -238,14 +235,12 @@ class PagePreview(BasePage):
 
     def _export_and_run_local(self, output_dir: str) -> bool:
         """Export files locally and trigger run."""
-        # Create output directory
         os.makedirs(output_dir, exist_ok=True)
 
         try:
             openbench_root = self._get_openbench_root()
             files = self.config_manager.export_all(self.controller.config, output_dir, openbench_root=openbench_root)
 
-            # Navigate to run page
             self.controller.go_to_page("run_monitor")
 
             # Emit signal with config path
@@ -338,7 +333,6 @@ class PagePreview(BasePage):
                 _ensure_remote_target(ssh_manager, target_identity)
                 self._mark_remote_upload_synced(local_config_path, f"{output_dir}/openbench.yaml")
 
-            # Navigate to run page
             _ensure_remote_target(ssh_manager, target_identity)
             self.controller.go_to_page("run_monitor")
 
@@ -381,7 +375,6 @@ class PagePreview(BasePage):
         config = self.controller.config
         basename = config.get("general", {}).get("basename", "config")
 
-        # Create local nml directories
         nml_dir = os.path.join(local_dir, "nml")
         sim_nml_dir = os.path.join(nml_dir, "sim")
         ref_nml_dir = os.path.join(nml_dir, "ref")
@@ -477,7 +470,6 @@ class PagePreview(BasePage):
         eval_items = config.get("evaluation_items", {})
         selected_items = [k for k, v in eval_items.items() if v]
 
-        # Process simulation data namelists - group by source_name
         sim_data = config.get("sim_data", {})
         sim_source_configs = sim_data.get("source_configs", {})
 
@@ -495,7 +487,6 @@ class PagePreview(BasePage):
             sim_grouped[source_name]["configs"].append(source_config)
             sim_grouped[source_name]["var_names"].append(var_name)
 
-        # Write grouped sim configs
         for source_name, group_data in sim_grouped.items():
             # Merge configs for the same source
             merged_config = self._merge_source_configs(group_data["configs"], group_data["var_names"])
@@ -561,7 +552,6 @@ class PagePreview(BasePage):
                         "(not a registered model name and no matching file on the remote server)"
                     )
 
-                # Extract model name from path
                 model_basename = actual_path.rstrip("/").split("/")[-1]
                 model_name = os.path.splitext(model_basename)[0] + ".yaml"
                 dest_path = os.path.join(sim_models_dir, model_name)
@@ -574,7 +564,6 @@ class PagePreview(BasePage):
                     raise RemoteNamelistSyncError(f"Failed to copy remote model definition: {actual_path}")
                 logger.debug("model copy done, file exists: %s", os.path.exists(dest_path))
 
-        # Process reference data namelists - group by source_name
         ref_data = config.get("ref_data", {})
         ref_source_configs = ref_data.get("source_configs", {})
 
@@ -592,7 +581,6 @@ class PagePreview(BasePage):
             ref_grouped[source_name]["configs"].append(source_config)
             ref_grouped[source_name]["var_names"].append(var_name)
 
-        # Write grouped ref configs
         for source_name, group_data in ref_grouped.items():
             # Merge configs for the same source
             merged_config = self._merge_source_configs(group_data["configs"], group_data["var_names"])
@@ -620,13 +608,11 @@ class PagePreview(BasePage):
         merged = {}
         var_mapping_keys = ["sub_dir", "varname", "varunit", "prefix", "suffix"]
 
-        # Use the first config's general section
         for cfg in configs:
             if "general" in cfg and isinstance(cfg["general"], dict):
                 merged["general"] = cfg["general"].copy()
                 break
 
-        # Create per-variable entries from each config
         for cfg, var_name in zip(configs, var_names or [None] * len(configs)):
             names = [var_name] if var_name else []
             variables = cfg.get("variables", {}) if isinstance(cfg.get("variables"), dict) else {}
@@ -636,7 +622,6 @@ class PagePreview(BasePage):
                 if not name:
                     continue
 
-                # Build variable-specific config from top-level fields
                 var_config = {}
                 for key in var_mapping_keys:
                     if key in cfg:
@@ -807,7 +792,6 @@ class PagePreview(BasePage):
             if not content and last_error:
                 logger.warning("Could not read remote model definition %s: %s", src_path, last_error)
         else:
-            # Read from local file
             try:
                 with open(src_path, "r", encoding="utf-8") as f:
                     content = yaml.safe_load(f) or {}
@@ -827,7 +811,6 @@ class PagePreview(BasePage):
         if "general" in content and isinstance(content["general"], dict):
             filtered["general"] = content["general"].copy()
 
-        # Include selected evaluation items
         for item in selected_items:
             if item in content and isinstance(content[item], dict):
                 filtered[item] = content[item].copy()
@@ -952,11 +935,9 @@ class PagePreview(BasePage):
         # Internal fields that should NOT be written to output (UI-only or internal)
         internal_fields = ["def_nml_path", "per_var_time_range", "_var_name", "source_configs"]
 
-        # Process general section
         if "general" in source_data and isinstance(source_data["general"], dict):
             general = source_data["general"].copy()
 
-            # Remove internal fields from general
             for field in internal_fields:
                 general.pop(field, None)
 
@@ -978,7 +959,6 @@ class PagePreview(BasePage):
                 models_dir = remote_join(dest_dir, "models")
                 general["model_namelist"] = remote_join(models_dir, model_basename + ".yaml")
 
-            # Check if any variable has per_var_time_range enabled
             any_per_var = any(
                 source_data.get(item, {}).get("per_var_time_range", False)
                 for item in selected_items
@@ -992,13 +972,11 @@ class PagePreview(BasePage):
 
             filtered["general"] = general
 
-        # Include selected evaluation items that exist in source_data
         for item in selected_items:
             if item in source_data:
                 item_data = source_data[item]
                 if isinstance(item_data, dict):
                     var_config = item_data.copy()
-                    # Remove internal fields from variable config
                     for field in internal_fields:
                         var_config.pop(field, None)
                     # Convert path fields in variable config to absolute remote paths

@@ -539,7 +539,6 @@ class SyncEngine:
 
     def exists(self, path: str) -> bool:
         """Check if remote path exists."""
-        # Check cache first
         with self._lock:
             self._ensure_remote_io_allowed()
             if path in self._cache:
@@ -696,7 +695,6 @@ class SyncEngine:
 
         Call this when opening a remote project.
         """
-        # Load nml directory structure
         nml_files = self.glob("nml/**/*.yaml")
         for path in nml_files:
             try:

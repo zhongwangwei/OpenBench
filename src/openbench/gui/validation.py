@@ -254,5 +254,4 @@ class ValidationManager:
         if not errors:
             return True
 
-        # Show first error with option to skip
         return self.show_error_and_focus(errors[0], allow_skip=allow_skip)

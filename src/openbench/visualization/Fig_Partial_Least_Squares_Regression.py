@@ -166,7 +166,6 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
         orientation=option["colorbar_position"],
     )
     cb.solids.set_edgecolor("face")
-    # 绘制地图
     file2 = file[:-3]
     save_figure(
         fig,
@@ -181,10 +180,6 @@ def make_Partial_Least_Squares_Regression(
     file, method_name, data_sources, main_nml, statistic_nml, option
 ):  # outpath, source
     option = option.copy()
-
-    # filename_parts = [method_name] + data_sources
-    # filename = "_".join(filename_parts) + "_output"
-    # file = os.path.join(output_dir, f"{method_name}", filename)
 
     info = {
         "best_n_components": "both",

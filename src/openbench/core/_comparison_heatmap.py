@@ -38,14 +38,12 @@ class HeatMapComparisonMixin:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
                 with _atomic_text_writer(output_file_path) as output_file:
                     writer = csv.writer(output_file, lineterminator="\n")
-                    # Collect all unique sim_sources across all evaluation items
                     all_sim_sources = []
                     for evaluation_item in evaluation_items:
                         sim_sources = _as_list(sim_nml["general"][f"{evaluation_item}_sim_source"])
                         for s in sim_sources:
                             if s not in all_sim_sources:
                                 all_sim_sources.append(s)
-                    # Write header without trailing tab
                     header = ["Item", "Reference"] + all_sim_sources
                     writer.writerow(header)
 
@@ -75,7 +73,6 @@ class HeatMapComparisonMixin:
 
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 values.append(overall_mean_str)
-                            # Write values without trailing tab
                             writer.writerow([evaluation_item, ref_source, *values])
 
                 _comparison_callable("make_scenarios_scores_comparison_heat_map")(output_file_path, score, option)

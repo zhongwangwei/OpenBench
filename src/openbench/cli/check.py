@@ -609,7 +609,6 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
     for message in config_warnings:
         click.secho(f"  ⚠ {message}", fg="yellow")
 
-    # Count total resolved entries (sum of single + list values per variable)
     _n_ref_total = sum(1 if isinstance(v, str) else len(v) for v in cfg.reference.sources.values())
     _n_ref_vars = len(cfg.reference.sources)
     _ref_summary = (
@@ -632,7 +631,7 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
     try:
         resolved = resolve_all_references(cfg, mgr, strict=strict)
     except Exception as e:
-        # Multi-line context (resolver hint + remediation) already emitted; exit silently.
+        # Report resolver guidance without Click adding a second error message.
         emit_reference_resolution_error(str(e), prefix="  ✗ ")
         raise SystemExit(1) from e
 
@@ -783,7 +782,6 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
         has_errors = True
 
     if has_errors:
-        # Per-error context emitted above; exit silently with non-zero status.
         click.secho("\n✗ Config has errors. Please fix and re-check.", fg="red", bold=True)
         raise SystemExit(1)
 

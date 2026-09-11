@@ -228,7 +228,6 @@ class FilePathGenerator:
                 path = os.path.join(self.root_dir, self.sub_dir)
             else:
                 path = self.root_dir
-            # Convert to absolute path using OpenBench root as base
             return to_absolute_path(path, get_openbench_root())
 
     def _build_path(self, filename: str) -> str:
@@ -304,7 +303,6 @@ class FilePathGenerator:
         self.last_error = None
         pattern_desc = patterns[0] if len(patterns) == 1 else "{" + ",".join(patterns) + "}"
         try:
-            # Use find command to match files
             if len(patterns) == 1:
                 name_expr = f"-name {shlex.quote(patterns[0])}"
             else:
@@ -635,7 +633,6 @@ except Exception as e:
                 "time_range", False, f"Time dimension not found, tried: {LocalNetCDFValidator.TIME_DIMS}"
             )
 
-        # Check for time conversion error
         if "time_error" in result:
             return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
 
@@ -750,7 +747,6 @@ class DataValidator:
         """
         checks = []
 
-        # Extract config values
         general = source_config.get("general", source_config)
         var_config = source_config.get("var_config", source_config)
 
@@ -813,7 +809,6 @@ class DataValidator:
                 checks.append(self._check_file_exists(self._resolve_aux_path(fulllist, root_dir)))
             return SourceValidationResult(var_name, source_name, checks)
 
-        # Generate file paths
         path_gen = FilePathGenerator(
             root_dir=root_dir,
             sub_dir=sub_dir,
@@ -828,7 +823,6 @@ class DataValidator:
         )
         sample_paths = path_gen.get_sample_paths()
 
-        # Check file existence
         first_existing_path = None
         if not sample_paths:
             # No files found matching the pattern, or remote listing failed.
@@ -866,7 +860,6 @@ class DataValidator:
             else None
         )
 
-        # Check variable name
         if varname:
             check = self._validator.check_variable(first_existing_path, varname, inspection)
             checks.append(check)

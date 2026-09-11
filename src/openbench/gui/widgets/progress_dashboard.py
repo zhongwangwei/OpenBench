@@ -66,7 +66,6 @@ class ProgressDashboard(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        # === Progress & Resources in one row ===
         top_row = QHBoxLayout()
         top_row.setSpacing(15)
 
@@ -126,7 +125,6 @@ class ProgressDashboard(QWidget):
 
         layout.addLayout(top_row)
 
-        # === Log Output (expanded to fill available space) ===
         log_group = QGroupBox("Log Output")
         log_layout = QVBoxLayout(log_group)
         log_layout.setContentsMargins(5, 5, 5, 5)
@@ -140,7 +138,6 @@ class ProgressDashboard(QWidget):
         # Give log_group higher stretch factor to maximize vertical space
         layout.addWidget(log_group, 3)
 
-        # === Control Buttons ===
         btn_layout = QHBoxLayout()
 
         self.btn_stop = QPushButton("Stop")

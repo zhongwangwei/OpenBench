@@ -132,7 +132,6 @@ def parse_ssh_config() -> List[Dict[str, str]]:
                     if not line or line.startswith("#"):
                         continue
 
-                    # Parse key-value pairs
                     match = re.match(r"^(\S+)\s+(.+)$", line, re.IGNORECASE)
                     if not match:
                         continue
@@ -281,7 +280,6 @@ class RemoteFileBrowser(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # Path bar
         path_layout = QHBoxLayout()
         path_layout.addWidget(QLabel("Path:"))
         self.path_input = QLineEdit()
@@ -292,12 +290,10 @@ class RemoteFileBrowser(QWidget):
         path_layout.addWidget(self.btn_go)
         layout.addLayout(path_layout)
 
-        # File list
         self.file_list = QListWidget()
         self.file_list.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.file_list)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         self.btn_new_folder = QPushButton("New Folder")
         self.btn_new_folder.clicked.connect(self._on_new_folder)
@@ -379,7 +375,6 @@ class RemoteFileBrowser(QWidget):
             self._current_path = path
             self.path_input.setText(path)
 
-            # Add parent directory entry
             if path != "/":
                 item = QListWidgetItem("📁 ..")
                 item.setData(Qt.UserRole, {"name": "..", "is_dir": True, "is_link": False})
@@ -403,7 +398,6 @@ class RemoteFileBrowser(QWidget):
                 perms = parts[0]
                 name = parts[8]  # whole remaining string, spacing preserved
 
-                # Handle symlink display (name -> target)
                 is_link = perms.startswith("l")
                 display_name = name
                 if is_link and " -> " in name:
@@ -481,7 +475,6 @@ class RemoteFileBrowser(QWidget):
         if data["is_dir"]:
             # Navigate to directory (use forward slashes for remote Linux paths)
             if name == "..":
-                # Get parent directory
                 current = self._current_path.rstrip("/")
                 new_path = "/".join(current.split("/")[:-1])
                 if not new_path:
@@ -578,7 +571,6 @@ class RemoteFileBrowser(QWidget):
                 stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
 
                 if exit_code == 0:
-                    # Refresh directory and navigate to new folder
                     self._load_directory(self._current_path)
                 else:
                     QMessageBox.warning(self, "Error", f"Failed to create folder:\n{stderr}")
@@ -609,7 +601,6 @@ class RemoteConfigWidget(QWidget):
         config_changed(): Emitted when any configuration value changes
     """
 
-    # Signals
     connection_status_changed = Signal(bool)  # Connection state changed
     credentials_saved = Signal(str)  # Credentials saved for host
     config_changed = Signal()  # Configuration changed
@@ -676,7 +667,6 @@ class RemoteConfigWidget(QWidget):
 
         server_layout.addRow("Host:", host_layout)
 
-        # Authentication type radio buttons
         auth_layout = QHBoxLayout()
         auth_layout.setSpacing(15)
         self.auth_group = QButtonGroup(self)
@@ -733,7 +723,6 @@ class RemoteConfigWidget(QWidget):
 
         layout.addWidget(server_group)
 
-        # === Compute Node Group (Optional) ===
         node_group = QGroupBox("Compute Node (Optional)")
         node_group.setCheckable(True)
         node_group.setChecked(False)
@@ -815,7 +804,6 @@ class RemoteConfigWidget(QWidget):
 
         layout.addWidget(node_group)
 
-        # === Parallel Processing Group ===
         parallel_group = QGroupBox("Parallel Processing")
         parallel_layout = QFormLayout(parallel_group)
         parallel_layout.setSpacing(8)
@@ -842,7 +830,6 @@ class RemoteConfigWidget(QWidget):
         env_layout = QFormLayout(env_group)
         env_layout.setSpacing(8)
 
-        # Conda environment with Refresh button
         conda_layout = QHBoxLayout()
         conda_layout.setSpacing(8)
         self.conda_combo = NoScrollComboBox()
@@ -865,7 +852,6 @@ class RemoteConfigWidget(QWidget):
 
         env_layout.addRow("Conda:", conda_layout)
 
-        # Python path with Detect and Browse buttons
         python_layout = QHBoxLayout()
         python_layout.setSpacing(8)
         self.python_combo = NoScrollComboBox()
@@ -946,7 +932,6 @@ class RemoteConfigWidget(QWidget):
             action = menu.addAction(display)
             action.setData(host)
 
-        # Show menu below the input field
         action = menu.exec(self.host_input.mapToGlobal(QPoint(0, self.host_input.height())))
 
         if action:
@@ -963,7 +948,6 @@ class RemoteConfigWidget(QWidget):
         hostname = host_data.get("hostname", host_data["name"])
         port = host_data.get("port", "22")
 
-        # Build host string
         if user:
             if port and port != "22":
                 host_str = f"{user}@{hostname}:{port}"
@@ -1196,7 +1180,6 @@ class RemoteConfigWidget(QWidget):
             self.node_status_label.setText("Connecting...")
             self.node_status_label.setStyleSheet("color: orange;")
 
-            # Get authentication details
             node_password = None
             node_key_file = None
             if self.radio_node_password.isChecked():
@@ -1254,11 +1237,9 @@ class RemoteConfigWidget(QWidget):
             if self._ssh_manager.is_jump_connected:
                 self.node_status_label.setText(f"✓ Connected to {node_name}")
                 self.node_status_label.setStyleSheet("color: green; font-weight: bold;")
-                # Toggle buttons - connected
                 self._confirmed_node_config = node_config
                 self.btn_confirm_node.setEnabled(False)
                 self.btn_disconnect_node.setEnabled(True)
-                # Update CPU count for compute node
                 self._update_remote_cpu_count()
                 self.connection_status_changed.emit(True)
             else:
@@ -1372,7 +1353,6 @@ class RemoteConfigWidget(QWidget):
         package_path = ""
         openbench_root = ""
 
-        # Get Python path directly from conda
         if self._has_connected_target():
             # A combo change during the in-flight round trip supersedes this
             # query; the stale result must not be applied afterwards.
@@ -1478,7 +1458,6 @@ if spec is not None:
                 if cpu_count is None:
                     raise ValueError(f"No numeric CPU count in remote output: {stdout!r}")
                 self.cpu_available_label.setText(f"(Available on remote: {cpu_count})")
-                # Update the max range
                 self.num_cores_spin.setRange(1, max(128, cpu_count))
         except Exception:
             self.cpu_available_label.setText("(Available: Could not detect)")
@@ -1554,7 +1533,6 @@ if spec is not None:
                 return
         node_config = self._current_node_config()
 
-        # Update status
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #f39c12;")  # Orange
         self.btn_test.setEnabled(False)
@@ -1605,12 +1583,10 @@ if spec is not None:
             self._confirmed_node_config = node_config
             self._confirmed_project_path = project_path
 
-            # Update status to connected
             self.status_label.setText("Connected")
             self.status_label.setStyleSheet("color: #27ae60;")  # Green
             self.connection_status_changed.emit(True)
 
-            # Toggle buttons
             self.btn_test.setEnabled(False)
             self.btn_disconnect.setEnabled(True)
 
@@ -1668,7 +1644,6 @@ if spec is not None:
         # First disconnect compute node if connected
         self._disconnect_node(silent=True)
 
-        # Disconnect main server
         if self._ssh_manager:
             try:
                 self._ssh_manager.disconnect()
@@ -1680,7 +1655,6 @@ if spec is not None:
         self._confirmed_server_config = None
         self._confirmed_project_path = None
 
-        # Update UI
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
         self.btn_test.setEnabled(True)
@@ -1719,7 +1693,6 @@ if spec is not None:
             del blocker
         self._confirmed_node_config = () if using_main_target else None
 
-        # Update UI
         self.node_status_label.setText("Not connected")
         self.node_status_label.setStyleSheet("color: #999;")
         self.btn_confirm_node.setEnabled(True)
@@ -1777,7 +1750,6 @@ if spec is not None:
         )
         if not path:
             return
-        # Add to combo if not already there
         if self.python_combo.findText(path) < 0:
             self.python_combo.addItem(path)
         self.python_combo.setCurrentText(path)
@@ -1879,13 +1851,11 @@ if spec is not None:
 
         env_name = "openbench"
 
-        # Check if environment already exists
         try:
             envs = call_responsive(self._ssh_manager.detect_conda_envs)
             env_exists = any(name.lower() == env_name for name, _ in envs)
 
             if env_exists:
-                # Create custom message box with clear options
                 msg_box = QMessageBox(self)
                 msg_box.setWindowTitle("Environment Exists")
                 msg_box.setText(f"Conda environment '{env_name}' already exists.")
@@ -1901,7 +1871,6 @@ if spec is not None:
                 if clicked == btn_cancel:
                     return
                 elif clicked == btn_use:
-                    # Use existing environment
                     self.conda_combo.clear()
                     self.conda_combo.addItem("(Not using conda environment)")
                     for name, path in envs:
@@ -1917,7 +1886,6 @@ if spec is not None:
             QMessageBox.warning(self, "Error", f"Failed to check environments: {e}")
             return
 
-        # Get Python path to find conda
         python_path = self.python_combo.currentText().strip()
         if not python_path:
             QMessageBox.warning(self, "Error", "Please detect or select a Python interpreter first")
@@ -2151,7 +2119,6 @@ if spec is not None:
             return
         ssh_manager = self._ssh_manager
 
-        # Get installation path
         install_path = self.openbench_input.text().strip()
         if not install_path:
             try:
@@ -2163,13 +2130,11 @@ if spec is not None:
                 QMessageBox.warning(self, "Error", "Please specify an installation path for OpenBench")
                 return
 
-        # Check if git is available
         stdout, stderr, exit_code = execute_responsive(ssh_manager, "which git", timeout=10)
         if exit_code != 0:
             QMessageBox.warning(self, "Error", "Git is not installed on the remote server. Please install git first.")
             return
 
-        # Check if path already exists
         is_update = False
         try:
             quoted_install_path = _safe_remote_path(install_path)
@@ -2180,7 +2145,6 @@ if spec is not None:
             ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
         )
         if exit_code == 0 and _has_exact_stdout_line(stdout, "exists"):
-            # Check if it's a git repository
             quoted_git_dir = _safe_remote_path(f"{install_path}/.git")
             stdout2, stderr2, exit_code2 = execute_responsive(
                 ssh_manager,
@@ -2257,7 +2221,6 @@ if spec is not None:
             if source_dialog.exec() != QDialog.Accepted:
                 return
 
-            # Build repo URL based on protocol selection
             if radio_ssh.isChecked():
                 repo_url = "git@github.com:zhongwangwei/OpenBench.git"
             else:
@@ -2289,7 +2252,6 @@ if spec is not None:
 
         progress_dialog.show()
 
-        # Run installation
         self.btn_install_ob.setEnabled(False)
 
         if is_update:
@@ -2456,7 +2418,6 @@ if spec is not None:
         conda_env = ""
         conda_env_text = self.conda_combo.currentText()
         if conda_env_text and not conda_env_text.startswith("(Not"):
-            # Extract env name from "envname (type)" format
             conda_env = conda_env_text.split()[0]
 
         package_path = self.openbench_package_input.text().strip()
@@ -2689,7 +2650,6 @@ if spec is not None:
         # First disconnect compute node if connected
         self._disconnect_node(silent=True)
 
-        # Disconnect main server
         if self._ssh_manager:
             try:
                 self._ssh_manager.disconnect()
@@ -2701,7 +2661,6 @@ if spec is not None:
         self._confirmed_server_config = None
         self._confirmed_project_path = None
 
-        # Update UI - reset all button states
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
         self.btn_test.setEnabled(True)
@@ -2716,21 +2675,18 @@ if spec is not None:
 
     def reset_to_defaults(self):
         """Reset all remote config fields to defaults."""
-        # Host and authentication
         self.host_input.clear()
         self.password_input.clear()
         self.key_input.clear()
         self.radio_password.setChecked(True)
         self.cb_save_password.setChecked(False)
 
-        # Compute node
         self.node_group.setChecked(False)
         self.node_input.clear()
         self.node_password_input.clear()
         self.node_key_input.clear()
         self.radio_node_none.setChecked(True)
 
-        # Environment
         self.num_cores_spin.setValue(DEFAULT_NUM_CORES)
         self.conda_combo.clear()
         self.conda_combo.addItem("(Not using conda environment)")
