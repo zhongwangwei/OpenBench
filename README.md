@@ -100,7 +100,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 ```
 
-Install from PyPI:
+Install from PyPI (current release: **3.0.1**):
 
 ```bash
 # Default install — fully featured (CLI, statistics, plotting, HTML reports,
@@ -118,6 +118,14 @@ pip install "colm-openbench[report]"
 
 # Optional: all of the above
 pip install "colm-openbench[all]"
+```
+
+Upgrade an existing installation to the Windows CLI compatibility fix:
+
+```bash
+python -m pip install --upgrade "colm-openbench==3.0.1"
+openbench --version
+openbench smoke-test
 ```
 
 Using `uv`:
