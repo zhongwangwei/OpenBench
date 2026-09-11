@@ -144,13 +144,10 @@ class TaylorDiagramComparisonMixin:
             dir_path = os.path.join(casedir, "comparisons", "Taylor_Diagram")
             os.makedirs(dir_path, exist_ok=True)
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 try:
-                    # read the simulation source and reference source
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -186,8 +183,6 @@ class TaylorDiagramComparisonMixin:
                                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                                         ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
                                         sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                        # ugly code, need to be improved
-                                        # if self.sim_varname is empty, then set it to item
                                         if sim_varname is None or sim_varname == "":
                                             sim_varname = evaluation_item
                                         if ref_varname is None or ref_varname == "":
@@ -207,7 +202,6 @@ class TaylorDiagramComparisonMixin:
                                                 raise KeyError(
                                                     f"Station evaluation CSV missing required Taylor columns: {sorted(missing_cols)}"
                                                 )
-                                            # this should be moved to other place
                                             if ref_source.lower() == "grdc" and {"lon", "lat"}.issubset(
                                                 station_list.columns
                                             ):

@@ -25,7 +25,7 @@ from openbench.gui.widgets.no_scroll_widgets import NoScrollSpinBox, NoScrollDou
 
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.gui.pages.base_page import BasePage
-from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
+from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager, is_windows_absolute_path
 from openbench.gui.widgets import PathSelector
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,6 @@ class PageGeneral(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        # === Project Info ===
         project_group = QGroupBox("Project Information")
         project_layout = QFormLayout(project_group)
         project_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -58,6 +57,7 @@ class PageGeneral(BasePage):
         self.basename_input = QLineEdit()
         self.basename_input.setPlaceholderText("Project name (e.g., Initial_test)")
         self.basename_input.textChanged.connect(self._on_project_name_changed)
+        self._confirmed_project = None
         name_layout.addWidget(self.basename_input)
 
         self.btn_confirm_name = QPushButton("Confirm")
@@ -69,7 +69,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(project_group)
 
-        # === Spatial-Temporal Settings ===
         st_group = QGroupBox("Spatial-Temporal Settings")
         st_layout = QGridLayout(st_group)
 
@@ -167,7 +166,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(st_group)
 
-        # === Feature Toggles ===
         toggle_group = QGroupBox("Feature Toggles")
         toggle_layout = QGridLayout(toggle_group)
 
@@ -205,7 +203,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(toggle_group)
 
-        # === Groupby Options ===
         groupby_group = QGroupBox("Groupby Options")
         groupby_layout = QHBoxLayout(groupby_group)
 
@@ -225,7 +222,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(groupby_group)
 
-        # === Performance Settings ===
         performance_group = QGroupBox("Performance Settings")
         performance_layout = QGridLayout(performance_group)
 
@@ -357,14 +353,12 @@ class PageGeneral(BasePage):
 
     def _has_per_var_time_range(self) -> bool:
         """Check if any source has per_var_time_range enabled."""
-        # Check ref_data source_configs
         ref_source_configs = self.controller.config.get("ref_data", {}).get("source_configs", {})
         for source_config in ref_source_configs.values():
             general = source_config.get("general", {})
             if general.get("per_var_time_range", False):
                 return True
 
-        # Check sim_data source_configs
         sim_source_configs = self.controller.config.get("sim_data", {}).get("source_configs", {})
         for source_config in sim_source_configs.values():
             general = source_config.get("general", {})
@@ -410,6 +404,7 @@ class PageGeneral(BasePage):
         Note: Only saves to config without triggering sync_namelists.
         Directory creation happens only when Confirm button is clicked.
         """
+        self._confirmed_project = None
         self._save_to_config_no_sync()
 
     def _on_basedir_changed(self, path):
@@ -418,6 +413,7 @@ class PageGeneral(BasePage):
         Note: Only saves to config without triggering sync_namelists.
         Directory creation happens only when Confirm button is clicked.
         """
+        self._confirmed_project = None
         self._save_to_config_no_sync()
 
     def _on_confirm_project(self):
@@ -474,7 +470,6 @@ class PageGeneral(BasePage):
             QMessageBox.warning(self, "Invalid Name", f"'{basename}' is a reserved system name.")
             return
 
-        # Check if output directory is set
         basedir = self.basedir_input.path().strip()
         if not basedir:
             QMessageBox.warning(self, "Error", "Please select an output directory first.")
@@ -493,7 +488,8 @@ class PageGeneral(BasePage):
 
         if is_remote:
             # Create directories on remote server
-            self._create_remote_project_folder(output_dir)
+            if self._create_remote_project_folder(output_dir):
+                self._confirmed_project = (basedir, basename)
         else:
             # Create the output directory and nml subdirectories locally
             try:
@@ -503,6 +499,7 @@ class PageGeneral(BasePage):
 
                 # Trigger namelist sync
                 self.controller.sync_namelists()
+                self._confirmed_project = (basedir, basename)
 
                 QMessageBox.information(self, "Project Created", f"Project folder created:\n{output_dir}")
             except Exception as e:
@@ -515,7 +512,7 @@ class PageGeneral(BasePage):
             QMessageBox.warning(
                 self, "Not Connected", "Please connect to the remote server first in the Runtime Environment page."
             )
-            return
+            return False
 
         try:
             # Create directories on remote server
@@ -530,12 +527,14 @@ class PageGeneral(BasePage):
                 QMessageBox.information(
                     self, "Project Created", f"Project folder created on remote server:\n{output_dir}"
                 )
+                return True
             else:
                 QMessageBox.critical(
                     self, "Error", f"Failed to create project folder on remote server:\n{stderr or stdout}"
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create project folder:\n{str(e)}")
+        return False
 
     def load_from_config(self):
         """Load settings from controller config."""
@@ -593,6 +592,8 @@ class PageGeneral(BasePage):
                 ssh_manager = get_remote_ssh_manager(self.controller)
                 if remote_openbench:
                     remote_openbench = expand_remote_home(ssh_manager, remote_openbench)
+                if is_windows_absolute_path(basedir):
+                    basedir = "./output"
                 if not basedir or basedir == "./output":
                     # Set default to remote OpenBench/output
                     if remote_openbench:
@@ -617,7 +618,6 @@ class PageGeneral(BasePage):
                     # Set default to OpenBench/output (without project name)
                     basedir = os.path.join(openbench_root, "output")
                 elif not os.path.isabs(basedir):
-                    # Convert relative path to absolute
                     if basedir.startswith("./"):
                         basedir = basedir[2:]
                     basedir = os.path.normpath(os.path.join(openbench_root, basedir))
@@ -682,7 +682,6 @@ class PageGeneral(BasePage):
         # Note: Runtime Environment settings (execution_mode, remote config, python_path, conda_env)
         # are now handled by PageRuntime
 
-        # Update Year Range state based on per_var_time_range settings
         self.update_year_range_state()
 
     def _set_combo_by_data(self, combo, value):
@@ -859,7 +858,6 @@ class PageGeneral(BasePage):
         old_basename = old_general.get("basename", "")
         old_basedir = old_general.get("basedir", "")
 
-        # Save config first
         self._save_to_config_no_sync()
 
         new_basename = self.basename_input.text().strip()
@@ -871,12 +869,11 @@ class PageGeneral(BasePage):
 
     def validate(self) -> bool:
         """Validate page input."""
-        from openbench.gui.validation import FieldValidator, ValidationManager
+        from openbench.gui.validation import FieldValidator, ValidationError, ValidationManager
 
         errors = []
         manager = ValidationManager(self)
 
-        # Project name required
         error = FieldValidator.required(
             self.basename_input.text().strip(),
             "basename",
@@ -885,9 +882,9 @@ class PageGeneral(BasePage):
             widget=self.basename_input,
         )
         if error:
-            errors.append(error)
+            manager.show_error_and_focus(error, allow_skip=False)
+            return False
 
-        # Output directory required
         error = FieldValidator.required(
             self.basedir_input.path().strip(),
             "basedir",
@@ -896,9 +893,22 @@ class PageGeneral(BasePage):
             widget=self.basedir_input,
         )
         if error:
-            errors.append(error)
+            manager.show_error_and_focus(error, allow_skip=False)
+            return False
 
-        # Year range validation
+        project = (self.basedir_input.path().strip(), self.basename_input.text().strip())
+        if self._confirmed_project != project:
+            manager.show_error_and_focus(
+                ValidationError(
+                    "project",
+                    "Enter a project name and click Confirm before continuing.",
+                    self.PAGE_ID,
+                    self.btn_confirm_name,
+                ),
+                allow_skip=False,
+            )
+            return False
+
         error = FieldValidator.min_max(
             self.syear_spin.value(),
             self.eyear_spin.value(),
@@ -910,7 +920,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Latitude range validation
         error = FieldValidator.number_range(
             self.min_lat_spin.value(),
             -90.0,
@@ -946,7 +955,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Longitude range validation
         error = FieldValidator.number_range(
             self.min_lon_spin.value(),
             -180.0,
@@ -982,7 +990,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Show first error if any, allow user to skip
         if errors:
             if not manager.show_error_and_focus(errors[0]):
                 return False

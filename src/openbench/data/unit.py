@@ -12,40 +12,74 @@ SECONDS_PER_DAY = 86400.0
 LATENT_HEAT_VAPORIZATION_J_KG = 2.5e6
 
 
-def _per_day_to_per_year(x):
-    """Convert mm/day → mm/year using calendar-aware factor when possible.
+def _time_coord(x):
+    if hasattr(x, "coords") and "time" in x.coords:
+        return x.time
+    return None
 
-    If `x` is an xarray DataArray with a time coordinate, multiply by
-    the year length implied by each timestamp (365 or 366 for leap).
-    Otherwise fall back to the Julian year (365.25), which averages
-    leap-year drift out.
-    """
-    try:
-        if hasattr(x, "time") and "time" in getattr(x, "coords", {}):
-            years = x.time.dt.year
-            # Days in year vector aligned with time axis
-            is_leap = ((years % 4 == 0) & (years % 100 != 0)) | (years % 400 == 0)
-            days = is_leap.astype("float64") + 365.0
+
+def _original_calendar(time):
+    return str(getattr(time, "attrs", {}).get("original_calendar", "")).lower()
+
+
+def _cftime_calendar_class(calendar: str):
+    aliases = {
+        "noleap": "DatetimeNoLeap",
+        "365_day": "DatetimeNoLeap",
+        "all_leap": "DatetimeAllLeap",
+        "366_day": "DatetimeAllLeap",
+        "360_day": "Datetime360Day",
+        "julian": "DatetimeJulian",
+    }
+    class_name = aliases.get(calendar)
+    if not class_name:
+        return None
+    import cftime
+
+    return getattr(cftime, class_name)
+
+
+def _calendar_day_counts(time, period: str):
+    cls = _cftime_calendar_class(_original_calendar(time))
+    if cls is None:
+        return None
+
+    years = time.dt.year.values
+    if period == "month":
+        months = time.dt.month.values
+        values = [cls(int(year), int(month), 1).daysinmonth for year, month in zip(years, months)]
+    else:
+        values = [sum(cls(int(year), month, 1).daysinmonth for month in range(1, 13)) for year in years]
+    return time.copy(data=values).astype("float64")
+
+
+def _per_day_to_per_year(x):
+    """Convert mm/day → mm/year using the source calendar when known."""
+    time = _time_coord(x)
+    if time is not None:
+        days = _calendar_day_counts(time, "year")
+        if days is not None:
             return x * days
-    except Exception:
-        pass
+        try:
+            years = time.dt.year
+            is_leap = ((years % 4 == 0) & (years % 100 != 0)) | (years % 400 == 0)
+            return x * (is_leap.astype("float64") + 365.0)
+        except (AttributeError, TypeError, ValueError):
+            pass
     return x * 365.25
 
 
 def _per_month_to_per_day(x):
-    """Convert mm/month → mm/day using calendar-aware days-in-month.
-
-    Mirror of `_per_day_to_per_year`. The fixed 30.44 (mean Gregorian
-    month length) used previously gave up to ±10% per-step error in
-    months with 28/31 days. When `x` is an xarray DataArray with a
-    time coordinate we use `x.time.dt.days_in_month`; otherwise fall
-    back to 30.4375 (= 365.25/12) which averages leap drift.
-    """
-    try:
-        if hasattr(x, "time") and "time" in getattr(x, "coords", {}):
-            return x / x.time.dt.days_in_month
-    except Exception:
-        pass
+    """Convert mm/month → mm/day using the source calendar when known."""
+    time = _time_coord(x)
+    if time is not None:
+        days = _calendar_day_counts(time, "month")
+        if days is not None:
+            return x / days
+        try:
+            return x / time.dt.days_in_month
+        except (AttributeError, TypeError, ValueError):
+            pass
     return x / 30.4375
 
 
@@ -116,6 +150,7 @@ class UnitProcessing:
                 "mm mon-1": lambda x: _per_month_to_per_day(x),
                 "mm month-1": lambda x: _per_month_to_per_day(x),
                 "w m-2 heat": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
+                "w m-2": lambda x: x * SECONDS_PER_DAY / LATENT_HEAT_VAPORIZATION_J_KG,
                 "mm 3hour-1": lambda x: x * 8,
                 "mm 3h-1": lambda x: x * 8,
                 "m hr-1": lambda x: x * 1000 * 24,
@@ -216,17 +251,14 @@ class UnitProcessing:
         global _UNIT_LOOKUP_CACHE
         if _UNIT_LOOKUP_CACHE is None:
             with _UNIT_CACHE_LOCK:
-                # Double-check after acquiring lock
                 if _UNIT_LOOKUP_CACHE is None:
                     temp_cache = {}
 
-                    # All keys are already lowercase, just build the lookup
                     for base_unit, conversions in conversion_factors.items():
                         # Add base unit itself (None means no conversion needed)
                         if base_unit not in temp_cache:
                             temp_cache[base_unit] = (base_unit, None)
 
-                        # Add all conversion units
                         for conv_unit, conv_func in conversions.items():
                             # Only add if not already present (prefer first match)
                             if conv_unit not in temp_cache:
@@ -250,7 +282,6 @@ class UnitProcessing:
                 logging.info(f"No conversion needed for {input_unit} -> {base_unit}")
                 return data, base_unit
 
-            # Apply conversion
             if data is None:
                 logging.info(f"Unit mapping found (case-insensitive): {input_unit} -> {base_unit}")
                 return None, base_unit

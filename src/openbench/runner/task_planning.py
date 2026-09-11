@@ -7,6 +7,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
+from openbench.runner.pair_ref import pair_ref_path
+
 logger = logging.getLogger(__name__)
 
 TaskHashPayload = Callable[..., dict[str, Any]]
@@ -65,6 +67,9 @@ def build_evaluation_tasks(
                 },
             }
         )
+        pair_ref = pair_ref_path(output_dir, tasks[-1])
+        if pair_ref is not None:
+            tasks[-1]["ref_file_override"] = str(pair_ref)
         logger.info("Queued %s: sim=%s ref=%s", var_name, sim_source, ref_source)
     return tasks
 

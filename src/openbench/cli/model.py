@@ -503,7 +503,6 @@ def show(name, fmt, history):
     click.secho(f"{'Variable':<35} {'Source':<25} {'Unit':<15} {'Path/Notes'}", bold=True)
     click.echo("─" * 100)
     for var_name, mapping in sorted(m.variables.items()):
-        # Determine source type and display
         vn_str = str(mapping.varname)
 
         notes_parts = []
@@ -817,7 +816,6 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
         return
     _invalidate_registry_caches()
 
-    # Report
     if creating_user_overlay:
         click.secho(f"~ Creating user overlay over bundled model profile '{catalog_name}'", fg="cyan")
     if latest_is_new:

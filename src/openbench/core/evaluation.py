@@ -10,7 +10,6 @@ from joblib import Parallel, delayed
 
 from openbench.data._system_resources import effective_cpu_count, get_system_resources
 
-# Import chunked dataset loader for memory efficiency
 try:
     from openbench.util.dataset_loader import open_dataset as open_dataset_chunked
 except ImportError:
@@ -22,7 +21,6 @@ except ImportError:
         return xr.open_dataset(path, *args, **kwargs)
 
 
-# Import parallel engine
 try:
     from openbench.util.parallel import (  # noqa: F401  feature-detection imports
         ParallelEngine,
@@ -57,7 +55,6 @@ except ImportError:
         "Please ensure openbench.data.cache is available."
     )
 
-# Check the platform
 from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
@@ -70,7 +67,6 @@ make_plot_index_grid = visualization_callable("make_plot_index_grid")
 make_plot_index_stn = visualization_callable("make_plot_index_stn")
 plot_stn = visualization_callable("plot_stn")
 
-# Import climatology processor
 try:
     from openbench.data.climatology import ClimatologyProcessor, process_climatology_evaluation
 
@@ -83,7 +79,6 @@ except ImportError:
         return args[0], args[1], args[2]
 
 
-# Import output manager
 try:
     from openbench.util.output import ModularOutputManager, create_output_manager, save_evaluation_results
 
@@ -221,7 +216,6 @@ class Evaluation_grid(metrics, scores):
         # wired into runtime execution. The active evaluation path is kept
         # here rather than shadowed by an unused public engine abstraction.
 
-        # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(self.casedir)
             logging.debug("Output manager initialized")
@@ -258,7 +252,6 @@ class Evaluation_grid(metrics, scores):
         # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
         pb_da = pb_da.load()
 
-        # Use output manager if available, otherwise fallback to original method
         if self.output_manager:
             filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{metric}{vkey}"
             metadata = {
@@ -270,7 +263,6 @@ class Evaluation_grid(metrics, scores):
             }
             self.output_manager.save_data(pb_da, "metrics", filename, "netcdf", metadata)
         else:
-            # Original method
             output_path = os.path.join(
                 self.casedir,
                 "metrics",
@@ -311,7 +303,6 @@ class Evaluation_grid(metrics, scores):
         # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
         pb_da = pb_da.load()
 
-        # Use output manager if available, otherwise fallback to original method
         if self.output_manager:
             filename = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}"
             metadata = {
@@ -323,7 +314,6 @@ class Evaluation_grid(metrics, scores):
             }
             self.output_manager.save_data(pb_da, "scores", filename, "netcdf", metadata)
         else:
-            # Original method
             output_path = os.path.join(
                 self.casedir, "scores", f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_{score}{vkey}.nc"
             )
@@ -340,7 +330,6 @@ class Evaluation_grid(metrics, scores):
             )
             sim_path = os.path.join(self.casedir, "data", f"{self.item}_sim_{self.sim_source}_{self.sim_varname}.nc")
 
-            # Open datasets and keep references for proper cleanup
             ref_ds = open_dataset_chunked(ref_path)
             sim_ds = open_dataset_chunked(sim_path)
             # Resolve the variable robustly: a fallback/convert may have stored
@@ -354,15 +343,12 @@ class Evaluation_grid(metrics, scores):
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
-            # Process climatology if applicable
             if _HAS_CLIMATOLOGY:
                 original_metrics = self.metrics.copy() if hasattr(self.metrics, "copy") else list(self.metrics)
                 original_scores = self.scores.copy() if hasattr(self.scores, "copy") else list(self.scores)
 
-                # Combine metrics and scores for filtering
                 all_evaluations = list(self.metrics) + list(self.scores)
 
-                # Get compare_tim_res and syear from instance attributes
                 compare_tim_res = getattr(self, "compare_tim_res", None)
                 syear = getattr(self, "syear", None)
                 if syear:
@@ -382,7 +368,6 @@ class Evaluation_grid(metrics, scores):
                 )
 
                 if o_clim is not None and s_clim is not None:
-                    # Climatology evaluation mode
                     logging.info("=" * 80)
                     logging.info("CLIMATOLOGY EVALUATION MODE DETECTED")
                     logging.info("=" * 80)
@@ -412,7 +397,6 @@ class Evaluation_grid(metrics, scores):
 
                     logging.info("=" * 80)
                 else:
-                    # Regular time series evaluation
                     s, o = self._align_grid_times(s, o)
             else:
                 s, o = self._align_grid_times(s, o)
@@ -456,7 +440,6 @@ class Evaluation_grid(metrics, scores):
                     max_workers=metric_workers,
                     backend="threading",
                 )
-                # Process results
                 for metric, result in zip(self.metrics, metric_results):
                     if result is not None:
                         logging.info(f"Calculated metric: {metric}")
@@ -477,7 +460,6 @@ class Evaluation_grid(metrics, scores):
             logging.info("=" * 80)
             make_plot_index_grid(self)
         finally:
-            # Close datasets to free memory and file handles
             if ref_ds is not None:
                 ref_ds.close()
             if sim_ds is not None:
@@ -503,7 +485,6 @@ class Evaluation_stn(metrics, scores):
         # engine was never actually used; the dead station-side
         # assignment is removed for the same reason.
 
-        # Initialize output manager if available
         if _HAS_OUTPUT_MANAGER:
             self.output_manager = create_output_manager(self.casedir)
             logging.debug("Output manager initialized")
@@ -558,7 +539,6 @@ class Evaluation_stn(metrics, scores):
             raise
 
     def _apply_station_custom_filter(self, dataset, datasource, attr_name, canonical_name):
-        # Get model name from _model attribute (e.g., TE-routing_model = "TE")
         source = self.sim_source if datasource == "sim" else self.ref_source
         try:
             model = getattr(self, f"{source}_model")
@@ -668,7 +648,6 @@ class Evaluation_stn(metrics, scores):
                 f"{self.item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
             )
 
-            # Check if both files exist before processing
             if not os.path.exists(sim_path) or not os.path.exists(ref_path):
                 station_id = station_list["ID"][iik]
                 logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
@@ -702,7 +681,6 @@ class Evaluation_stn(metrics, scores):
             row = {}
             shared_mfm_names = _mfm_shared_metric_names(self.metrics)
             shared_mfm = self._MFM_shared_components(s, o) if shared_mfm_names else {}
-            # for based plot
             try:
                 row["KGESS"] = self.KGESS(s, o).values
             except (ValueError, RuntimeError, AttributeError) as e:
@@ -765,7 +743,6 @@ class Evaluation_stn(metrics, scores):
             )
             return row
         finally:
-            # Close datasets to free memory and file handles
             if sim_ds is not None:
                 sim_ds.close()
             if ref_ds is not None:
@@ -774,14 +751,12 @@ class Evaluation_stn(metrics, scores):
 
     def make_evaluation_P(self):
         try:
-            # Use ref_fulllist if available, otherwise use dataset-specific filename
             if hasattr(self, "ref_fulllist") and self.ref_fulllist and os.path.exists(self.ref_fulllist):
                 stnlist = self.ref_fulllist
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
             station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
 
-            # Use enhanced parallel engine if available
             station_indices = list(range(len(station_list["ID"])))
             n_jobs = getattr(self, "num_cores", -1)
             if n_jobs == 1:
@@ -789,12 +764,10 @@ class Evaluation_stn(metrics, scores):
             elif _HAS_PARALLEL_ENGINE:
                 logging.info("Using enhanced parallel engine for station evaluation")
 
-                # Create partial function with station_list
                 from functools import partial
 
                 eval_func = partial(self.make_evaluation_parallel, station_list)
 
-                # Process stations in parallel
                 try:
                     max_workers = n_jobs if isinstance(n_jobs, int) and n_jobs > 0 else None
                     results = parallel_map(

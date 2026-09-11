@@ -113,22 +113,15 @@ def test_sim_data_does_not_create_variable_mappings_when_evaluation_selection_is
     from openbench.gui.pages import page_sim_data
     from tests.gui_fakes import FakeLineEdit as FakeText
 
-    class FakeCombo:
-        def __init__(self, value):
-            self.value = value
-
-        def currentText(self):
-            return self.value
-
     controller = _FakeController({"evaluation_items": {}, "sim_data": {"general": {}}})
     page = SimpleNamespace(
         controller=controller,
         get_selected_cases=lambda: [{"label": "CaseA", "model": "CoLM2024", "nc_dir": "/sim", "prefix": "hist_"}],
         _prefix_input=FakeText(""),
-        _data_type_combo=FakeCombo("grid"),
+        _data_type_combo=FakeText("grid"),
         _grid_res_input=FakeText("0.5"),
-        _tim_res_combo=FakeCombo("Month"),
-        _data_groupby_combo=FakeCombo("Month"),
+        _tim_res_combo=FakeText("Month"),
+        _data_groupby_combo=FakeText("Month"),
         _suffix_input=FakeText(".nc"),
         _root_input=FakeText("/sim"),
         _get_available_variables=lambda: {"Runoff", "Latent_Heat"},
@@ -137,3 +130,37 @@ def test_sim_data_does_not_create_variable_mappings_when_evaluation_selection_is
     page_sim_data.PageSimData.save_to_config(page)
 
     assert controller.config["sim_data"]["general"] == {}
+
+
+def test_evaluation_menu_uses_supported_water_variable_names():
+    from openbench.gui.pages.page_evaluation import EVALUATION_ITEMS
+
+    water = EVALUATION_ITEMS["Water Cycle"]
+
+    assert "Open_Water_Evaporation" in water
+    assert "Transpiration" in water
+    assert "Water_Evaporation" not in water
+
+
+def test_evaluation_menu_hides_unsupported_crop_doy_items():
+    from openbench.gui.pages.page_evaluation import EVALUATION_ITEMS
+
+    agriculture = EVALUATION_ITEMS["Agriculture"]
+
+    assert "Crop_Yield_Corn" in agriculture
+    assert "Total_Irrigation_Amount" in agriculture
+    assert not any(item.endswith("_DOY_Wheat") or item.endswith("_DOY_Corn") for item in agriculture)
+
+
+def test_evaluation_load_migrates_legacy_water_evaporation_selection(qapp):
+    from openbench.gui.pages.page_evaluation import PageEvaluation
+    from openbench.gui.widgets import CheckboxGroup
+
+    controller = _FakeController({"evaluation_items": {"Water_Evaporation": True}})
+    page = PageEvaluation.__new__(PageEvaluation)
+    page.controller = controller
+    page.checkbox_group = CheckboxGroup({"Water Cycle": ["Open_Water_Evaporation"]})
+
+    page.load_from_config()
+
+    assert page.checkbox_group.get_selection()["Open_Water_Evaporation"] is True

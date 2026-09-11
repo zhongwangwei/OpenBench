@@ -78,7 +78,6 @@ class ModelDefinitionEditor(QDialog):
         self._saved_path = file_path or ""
         self._ssh_manager = ssh_manager  # SSH manager for remote mode
 
-        # Set title based on mode
         if file_path:
             self.setWindowTitle(f"Edit Model Definition - {os.path.basename(file_path)}")
         else:
@@ -126,7 +125,6 @@ class ModelDefinitionEditor(QDialog):
         self.var_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.var_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
 
-        # Populate with common variables
         self.var_table.setRowCount(len(EVALUATION_VARIABLES))
         for i, var_name in enumerate(EVALUATION_VARIABLES):
             # Variable name (read-only)
@@ -145,7 +143,6 @@ class ModelDefinitionEditor(QDialog):
 
         layout.addWidget(var_group, 1)
 
-        # Dialog buttons
         btn_layout = QHBoxLayout()
 
         # Save button (only when editing existing file)
@@ -175,7 +172,6 @@ class ModelDefinitionEditor(QDialog):
         if "model" in general:
             self.model_name.setText(general["model"])
 
-        # Load variable mappings
         for i in range(self.var_table.rowCount()):
             var_item = self.var_table.item(i, 0)
             var_name = var_item.data(Qt.UserRole)
@@ -242,7 +238,6 @@ class ModelDefinitionEditor(QDialog):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
         else:
-            # Save to local file
             try:
                 with open(self.file_path, "w", encoding="utf-8") as f:
                     yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -288,7 +283,6 @@ class ModelDefinitionEditor(QDialog):
         if not file_path:
             return
 
-        # Generate and save YAML
         data = self.get_data()
 
         try:
@@ -321,7 +315,6 @@ class ModelDefinitionEditor(QDialog):
 
         layout = QVBoxLayout(dialog)
 
-        # Add hint label
         hint = QLabel(f"Select directory to save '{model_name}.yaml':")
         layout.addWidget(hint)
 
@@ -339,11 +332,9 @@ class ModelDefinitionEditor(QDialog):
         if dialog.exec() != QDialog.Accepted or not selected_path[0]:
             return
 
-        # Build full file path
         remote_dir = selected_path[0].rstrip("/")
         remote_file = f"{remote_dir}/{model_name}.yaml"
 
-        # Generate YAML content
         data = self.get_data()
         yaml_content = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
 

@@ -77,10 +77,8 @@ class ComparisonProcessing(
         self.author = "Zhongwang Wei"
         self.main_nml = main_nml
         self.general_config = self.main_nml["general"]
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
         self.compare_nml = {}
-        # Add default weight attribute
         self.weight = self.main_nml["general"].get("weight", "none")  # Default to 'none' if not specified
         self.time_alignment = self.main_nml["general"].get("time_alignment", "intersection")
 
@@ -102,19 +100,15 @@ class ComparisonProcessing(
             "h": "H",
         }
 
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
 
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.info(
                 f"ComparisonProcessing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
             )
         else:
-            # this should be done in read_namelist
-            # adjust the time frequency
             match = re.match(r"(\d*)\s*([a-zA-Z]+)", self.compare_tim_res)
             if not match:
                 logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
@@ -125,7 +119,6 @@ class ComparisonProcessing(
                 value = 1
             else:
                 value = int(value)  # Convert the numerical value to an integer
-            # Get the corresponding pandas frequency
             freq = self.freq_map.get(unit.lower())
             if not freq:
                 raise ValueError(f"Unsupported time unit: {unit}")

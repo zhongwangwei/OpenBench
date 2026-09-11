@@ -61,7 +61,6 @@ def performance_monitor(func: Callable = None, *, silent_on_error: bool = False)
     def decorator(f: Callable) -> Callable:
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
-            # Get initial memory usage
             start_time = time.time()
             if _HAS_PSUTIL:
                 try:
@@ -80,7 +79,6 @@ def performance_monitor(func: Callable = None, *, silent_on_error: bool = False)
                 # Execute the function
                 result = f(*args, **kwargs)
 
-                # Calculate execution time and memory usage
                 end_time = time.time()
                 execution_time = end_time - start_time
 

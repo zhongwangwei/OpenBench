@@ -175,11 +175,9 @@ def error_handler(
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                # Check if we should catch this specific error type
                 if error_types and not isinstance(e, error_types):
                     raise
 
-                # Create context information
                 context = {
                     "function": func.__name__,
                     "module": func.__module__,
@@ -194,7 +192,6 @@ def error_handler(
                     # Log OpenBench exceptions with full context
                     logger.log(log_level, f"Error in {func.__name__}: {e.format_message()}")
                 else:
-                    # Convert regular exceptions to OpenBench exceptions
                     wrapped_error = OpenBenchException(
                         f"Unexpected error in {func.__name__}: {str(e)}", context=context, original_error=e
                     )

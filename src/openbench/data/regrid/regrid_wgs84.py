@@ -80,7 +80,6 @@ def convert_to_wgs84_xesmf(
     *,
     cache_dir: str | None = None,
 ) -> xr.Dataset:
-    # Step 2: Create a new regular lon-lat grid (WGS84)
     import xesmf as xe
 
     min_lon, max_lon = ds.lon.min().item(), ds.lon.max().item()
@@ -89,7 +88,6 @@ def convert_to_wgs84_xesmf(
     new_lon = np.arange(min_lon, max_lon, resolution)
     new_lat = np.arange(min_lat, max_lat, resolution)
 
-    # Create the target grid
     target_grid = xr.Dataset(
         {
             "lat": (["lat"], new_lat),
@@ -97,7 +95,6 @@ def convert_to_wgs84_xesmf(
         }
     )
 
-    # Create the regridder
     from openbench.data.regrid.xesmf_cache import cached_regridder, default_weight_cache_dir
 
     regridder = cached_regridder(
@@ -116,7 +113,6 @@ def convert_to_wgs84_xesmf(
         regridded_data = regridder(data)
         new_data_vars[var_name] = regridded_data
 
-    # Step 4: Create a new dataset with regridded data.
     # Build coords explicitly — putting None as a coord value silently
     # creates a None-valued coordinate that breaks downstream sortby /
     # alignment ops. Only include time when ds actually has it.
@@ -125,7 +121,6 @@ def convert_to_wgs84_xesmf(
         coords["time"] = ds.time.values
     new_ds = xr.Dataset(new_data_vars, coords=coords)
 
-    # Update attributes for latitude and longitude
     new_ds.lat.attrs.update(
         {"standard_name": "latitude", "long_name": "latitude", "units": "degrees_north", "axis": "Y"}
     )

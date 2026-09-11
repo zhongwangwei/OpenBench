@@ -16,7 +16,6 @@ from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 from openbench.util.static_datasets import static_dataset_path
 
-# Check the platform
 from openbench.core._visualization_bridge import visualization_callable
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
@@ -39,7 +38,9 @@ def _open_dataset_safe(path: str, **kwargs) -> xr.Dataset:
 
 def _write_lines_atomic(output_path: str, lines: list[str]) -> None:
     """Write a text table via same-directory temp file to avoid partial CSV/TXT outputs."""
-    _write_file_atomic(output_path, lambda tmp_path: tmp_path.write_text("".join(lines)), suffix=".tmp.csv")
+    _write_file_atomic(
+        output_path, lambda tmp_path: tmp_path.write_text("".join(lines), encoding="utf-8"), suffix=".tmp.csv"
+    )
 
 
 def _groupby_pair_dir(root: str, groupby_name: str, sim_source: str, ref_source: str) -> str:
@@ -134,18 +135,12 @@ class CZ_groupby(metrics, scores):
         self.author = "Zhongwang Wei"
         self.main_nml = main_nml
         self.general_config = self.main_nml["general"]
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "Month").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
-        # Set default weight method to 'none'
         # Handle null/None values from config by defaulting to 'none'
         self.weight = self.main_nml["general"].get("weight", "none") or "none"
-        # this should be done in read_namelist
-        # adjust the time frequency
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.debug(
                 f"CZ_groupby: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
@@ -202,7 +197,6 @@ class CZ_groupby(metrics, scores):
             """
             with _open_dataset_safe(self.CZ_dir) as cz_ds:
                 CZtype = cz_ds["climate_zone"].load()
-            # convert CZ type to int
             CZtype = CZtype.astype(int)
             CZ_class_names = {
                 1: "Af",
@@ -237,12 +231,10 @@ class CZ_groupby(metrics, scores):
                 30: "EF",
             }
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 logging.info(f"now processing the evaluation item: {evaluation_item}")
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -269,15 +261,27 @@ class CZ_groupby(metrics, scores):
                                 output_file_path = os.path.join(
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "metrics")
                                 )
-                                rows = []
-                                # Print the table header with class names
+                                ref_unit = str(ref_nml[evaluation_item].get(f"{ref_source}_varunit") or "Unknown")
+                                sim_unit = str(sim_nml[evaluation_item].get(f"{sim_source}_varunit") or "Unknown")
+                                weight = str(self.weight or "none").lower()
+                                aggregation = "gridcell_metric -> classwise_clipped_median"
+                                rows = [
+                                    "# statistic_type: metric\n",
+                                    f"# ref_unit: {ref_unit}\n",
+                                    f"# sim_unit: {sim_unit}\n",
+                                    f"# weight: {weight}\n",
+                                    f"# aggregation: {aggregation}\n",
+                                ]
+                                # Keep each metadata entry on one comment line.
+                                rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
+                                common_counts = None
+                                first_statistic = None
                                 header_values = ["metric"]
                                 for CZ_class_name in CZ_class_names.values():
                                     header_values.append(CZ_class_name)
                                 header_values.append("Overall")
                                 rows.append("\t".join(header_values) + "\n")
 
-                                # Calculate and print median values
                                 for metric in self.metrics:
                                     metric_file = _evaluation_netcdf_path(
                                         self.casedir, "metrics", evaluation_item, ref_source, sim_source, metric
@@ -303,6 +307,7 @@ class CZ_groupby(metrics, scores):
                                         f"{overall_median:.3f}" if not np.isnan(overall_median) else "N/A"
                                     )
 
+                                    row_counts = []
                                     row_values = [metric]
                                     class_datasets = []
                                     class_names = []
@@ -311,6 +316,7 @@ class CZ_groupby(metrics, scores):
                                         CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                         class_datasets.append(ds1)
                                         class_names.append(CZ_class_name)
+                                        row_counts.append(int(np.isfinite(ds1[metric]).sum().item()))
                                         median_value = ds1[metric].median(skipna=True).values
                                         median_value_str = (
                                             f"{median_value:.3f}" if not np.isnan(median_value) else "N/A"
@@ -323,8 +329,23 @@ class CZ_groupby(metrics, scores):
                                             dir_path, evaluation_item, ref_source, sim_source, metric, "CZ"
                                         ),
                                     )
+                                    row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
+                                    if common_counts is None:
+                                        common_counts, first_statistic = row_counts, metric
+                                    else:
+                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
+                                            if old != new:
+                                                raise ValueError(
+                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
+                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
+                                                )
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
+                                if common_counts is None:
+                                    raise ValueError(
+                                        f"{output_file_path}: no statistics available; CSV generation stopped"
+                                    )
+                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -335,7 +356,6 @@ class CZ_groupby(metrics, scores):
                                 option["item"] = [evaluation_item, sim_source, ref_source]
                                 option["groupby"] = "CZ_groupby"
                                 make_CZ_based_heat_map(output_file_path, selected_metrics, "metric", option)
-                                # print(f"CZ class metrics comparison results are saved to {output_file_path}")
                             else:
                                 logging.debug("No metrics requested for climate zone class comparison")
 
@@ -346,8 +366,24 @@ class CZ_groupby(metrics, scores):
                                 output_file_path2 = os.path.join(
                                     dir_path, groupby_table_filename(evaluation_item, sim_source, ref_source, "scores")
                                 )
-                                rows = []
-                                # Print the table header with class names
+                                ref_unit = str(ref_nml[evaluation_item].get(f"{ref_source}_varunit") or "Unknown")
+                                sim_unit = str(sim_nml[evaluation_item].get(f"{sim_source}_varunit") or "Unknown")
+                                weight = str(self.weight or "none").lower()
+                                weight_method = {"area": "area_weighted", "mass": "mass_weighted"}.get(
+                                    weight, "unweighted"
+                                )
+                                aggregation = f"gridcell_score -> classwise_{weight_method}_mean"
+                                rows = [
+                                    "# statistic_type: score\n",
+                                    f"# ref_unit: {ref_unit}\n",
+                                    f"# sim_unit: {sim_unit}\n",
+                                    f"# weight: {weight}\n",
+                                    f"# aggregation: {aggregation}\n",
+                                ]
+                                # Keep each metadata entry on one comment line.
+                                rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
+                                common_counts = None
+                                first_statistic = None
                                 header_values = ["score"]
                                 for CZ_class_name in CZ_class_names.values():
                                     header_values.append(CZ_class_name)
@@ -356,7 +392,6 @@ class CZ_groupby(metrics, scores):
 
                                 cached_mass_ref = None
 
-                                # Calculate and print mean values
                                 for score in self.scores:
                                     score_file = _evaluation_netcdf_path(
                                         self.casedir, "scores", evaluation_item, ref_source, sim_source, score
@@ -370,7 +405,7 @@ class CZ_groupby(metrics, scores):
                                     with _open_dataset_safe(score_file) as ds_file:
                                         ds = Convert_Type.convert_nc(ds_file.load())
 
-                                    # Calculate and write the overall mean first
+                                    ds = ds.where(np.isfinite(ds), np.nan)
                                     if self.weight.lower() == "area":
                                         weights = np.cos(np.deg2rad(ds.lat))
                                         overall_mean = ds[score].weighted(weights).mean(skipna=True).values
@@ -383,19 +418,14 @@ class CZ_groupby(metrics, scores):
                                                 cached_mass_ref = ref_ds[f"{ref_varname}"].load()
                                         o = cached_mass_ref
 
-                                        # Calculate area weights (cosine of latitude)
                                         area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                        # Calculate absolute flux weights
                                         flux_weights = np.abs(o.mean("time"))
 
-                                        # Combine area and flux weights
                                         combined_weights = area_weights * flux_weights
 
-                                        # Normalize weights to sum to 1
                                         normalized_weights = combined_weights / combined_weights.sum()
 
-                                        # Calculate weighted mean
                                         overall_mean = (
                                             ds[score].weighted(normalized_weights.fillna(0)).mean(skipna=True).values
                                         )
@@ -404,6 +434,12 @@ class CZ_groupby(metrics, scores):
 
                                     overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
 
+                                    score_weights = None
+                                    if self.weight.lower() == "area":
+                                        score_weights = weights
+                                    elif self.weight.lower() == "mass":
+                                        score_weights = normalized_weights.fillna(0)
+                                    row_counts = []
                                     row_values = [score]
                                     class_datasets = []
                                     class_names = []
@@ -412,26 +448,20 @@ class CZ_groupby(metrics, scores):
                                         CZ_class_name = CZ_class_names.get(i, f"CZ_{i}")
                                         class_datasets.append(ds1)
                                         class_names.append(CZ_class_name)
-                                        # Calculate mean value
                                         if self.weight.lower() == "area":
                                             weights = np.cos(np.deg2rad(ds.lat))
                                             mean_value = ds1[score].weighted(weights).mean(skipna=True).values
                                         elif self.weight.lower() == "mass":
                                             o = cached_mass_ref
 
-                                            # Calculate area weights (cosine of latitude)
                                             area_weights = np.cos(np.deg2rad(ds.lat))
 
-                                            # Calculate absolute flux weights
                                             flux_weights = np.abs(o.mean("time"))
 
-                                            # Combine area and flux weights
                                             combined_weights = area_weights * flux_weights
 
-                                            # Normalize weights to sum to 1
                                             normalized_weights = combined_weights / combined_weights.sum()
 
-                                            # Calculate weighted mean
                                             mean_value = (
                                                 ds1[score]
                                                 .weighted(normalized_weights.fillna(0))
@@ -441,6 +471,10 @@ class CZ_groupby(metrics, scores):
                                         else:
                                             mean_value = ds1[score].mean(skipna=True).values
 
+                                        score_mask = np.isfinite(ds1[score])
+                                        if score_weights is not None:
+                                            score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
+                                        row_counts.append(int(score_mask.sum().item()))
                                         mean_value_str = f"{mean_value:.3f}" if not np.isnan(mean_value) else "N/A"
                                         row_values.append(mean_value_str)
                                     _write_class_bundle_atomic(
@@ -450,8 +484,26 @@ class CZ_groupby(metrics, scores):
                                             dir_path, evaluation_item, ref_source, sim_source, score, "CZ"
                                         ),
                                     )
+                                    score_mask = np.isfinite(ds[score])
+                                    if score_weights is not None:
+                                        score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
+                                    row_counts.append(int(score_mask.sum().item()))
+                                    if common_counts is None:
+                                        common_counts, first_statistic = row_counts, score
+                                    else:
+                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
+                                            if old != new:
+                                                raise ValueError(
+                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
+                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
+                                                )
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
+                                if common_counts is None:
+                                    raise ValueError(
+                                        f"{output_file_path2}: no statistics available; CSV generation stopped"
+                                    )
+                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores
@@ -461,14 +513,10 @@ class CZ_groupby(metrics, scores):
                                 option["item"] = [evaluation_item, sim_source, ref_source]
                                 option["groupby"] = "CZ_groupby"
                                 make_CZ_based_heat_map(output_file_path2, selected_scores, "score", option)
-                                # print(f"CZ class scores comparison results are saved to {output_file_path2}")
                             else:
                                 logging.debug("No scores requested for climate zone class comparison")
 
         metricsdir_path = os.path.join(f"{casedir}", "comparisons", "CZ_groupby")
-        # if os.path.exists(metricsdir_path):
-        #     shutil.rmtree(metricsdir_path)
-        # print(f"Re-creating output directory: {metricsdir_path}")
         if not os.path.exists(metricsdir_path):
             os.makedirs(metricsdir_path)
 

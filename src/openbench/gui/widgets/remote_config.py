@@ -90,6 +90,7 @@ from openbench.remote.credentials import CredentialManager, CredentialStorageErr
 logger = logging.getLogger(__name__)
 
 _DETACHED_TASK_WORKERS = []
+_CREDENTIAL_LOAD_FAILED = object()
 
 
 def parse_ssh_config() -> List[Dict[str, str]]:
@@ -131,7 +132,6 @@ def parse_ssh_config() -> List[Dict[str, str]]:
                     if not line or line.startswith("#"):
                         continue
 
-                    # Parse key-value pairs
                     match = re.match(r"^(\S+)\s+(.+)$", line, re.IGNORECASE)
                     if not match:
                         continue
@@ -184,13 +184,13 @@ class ClickableLineEdit(QLineEdit):
     def mousePressEvent(self, event):
         """Handle mouse press event."""
         super().mousePressEvent(event)
-        if not self.text():  # Only show menu if empty
-            self.clicked.emit()
+        self.clicked.emit()
 
 
 # Delimits the resolve/ls/find sections of the combined listing command.
 _SECTION_MARKER = "__OPENBENCH_SECTION__"
 _CONDA_PYTHON_MARKER = "__OPENBENCH_PYTHON__="
+_CONDA_PACKAGE_PATH_MARKER = "__OPENBENCH_PACKAGE_PATH__="
 _CONDA_SOURCE_ROOT_MARKER = "__OPENBENCH_SOURCE_ROOT__="
 
 
@@ -214,7 +214,7 @@ def _build_conda_create_task(ssh_manager, quoted_conda_exe, quoted_env_name, env
         if interrupted():
             output_chunks.append("\nInterrupted before environment creation.\n")
             return {"exit_code": 130, "output": "".join(output_chunks), "envs": []}
-        cmd = f"{quoted_conda_exe} create -n {quoted_env_name} python=3.12 -y 2>&1"
+        cmd = f"{quoted_conda_exe} create -n {quoted_env_name} -c conda-forge python=3.12 -y 2>&1"
         stdout, stderr, exit_code = ssh_manager.execute(cmd, timeout=300, should_abort=interrupted)
         output_chunks.append(f"$ {cmd}\n{stdout}{stderr}\n")
         envs = ssh_manager.detect_conda_envs() if exit_code == 0 and not interrupted() else []
@@ -280,7 +280,6 @@ class RemoteFileBrowser(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # Path bar
         path_layout = QHBoxLayout()
         path_layout.addWidget(QLabel("Path:"))
         self.path_input = QLineEdit()
@@ -291,12 +290,10 @@ class RemoteFileBrowser(QWidget):
         path_layout.addWidget(self.btn_go)
         layout.addLayout(path_layout)
 
-        # File list
         self.file_list = QListWidget()
         self.file_list.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.file_list)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         self.btn_new_folder = QPushButton("New Folder")
         self.btn_new_folder.clicked.connect(self._on_new_folder)
@@ -378,7 +375,6 @@ class RemoteFileBrowser(QWidget):
             self._current_path = path
             self.path_input.setText(path)
 
-            # Add parent directory entry
             if path != "/":
                 item = QListWidgetItem("📁 ..")
                 item.setData(Qt.UserRole, {"name": "..", "is_dir": True, "is_link": False})
@@ -402,7 +398,6 @@ class RemoteFileBrowser(QWidget):
                 perms = parts[0]
                 name = parts[8]  # whole remaining string, spacing preserved
 
-                # Handle symlink display (name -> target)
                 is_link = perms.startswith("l")
                 display_name = name
                 if is_link and " -> " in name:
@@ -480,7 +475,6 @@ class RemoteFileBrowser(QWidget):
         if data["is_dir"]:
             # Navigate to directory (use forward slashes for remote Linux paths)
             if name == "..":
-                # Get parent directory
                 current = self._current_path.rstrip("/")
                 new_path = "/".join(current.split("/")[:-1])
                 if not new_path:
@@ -577,7 +571,6 @@ class RemoteFileBrowser(QWidget):
                 stdout, stderr, exit_code = execute_responsive(self._ssh_manager, cmd, timeout=10)
 
                 if exit_code == 0:
-                    # Refresh directory and navigate to new folder
                     self._load_directory(self._current_path)
                 else:
                     QMessageBox.warning(self, "Error", f"Failed to create folder:\n{stderr}")
@@ -608,7 +601,6 @@ class RemoteConfigWidget(QWidget):
         config_changed(): Emitted when any configuration value changes
     """
 
-    # Signals
     connection_status_changed = Signal(bool)  # Connection state changed
     credentials_saved = Signal(str)  # Credentials saved for host
     config_changed = Signal()  # Configuration changed
@@ -628,6 +620,7 @@ class RemoteConfigWidget(QWidget):
         self._confirmed_node_config = None
         self._confirmed_server_config = None
         self._confirmed_project_path = None
+        self._openbench_source_path = ""
         self.prepare_target_change = None
         self._setup_ui()
         self.destroyed.connect(lambda *_: self._cleanup_conda_create_worker(detach=True))
@@ -674,7 +667,6 @@ class RemoteConfigWidget(QWidget):
 
         server_layout.addRow("Host:", host_layout)
 
-        # Authentication type radio buttons
         auth_layout = QHBoxLayout()
         auth_layout.setSpacing(15)
         self.auth_group = QButtonGroup(self)
@@ -731,7 +723,6 @@ class RemoteConfigWidget(QWidget):
 
         layout.addWidget(server_group)
 
-        # === Compute Node Group (Optional) ===
         node_group = QGroupBox("Compute Node (Optional)")
         node_group.setCheckable(True)
         node_group.setChecked(False)
@@ -813,7 +804,6 @@ class RemoteConfigWidget(QWidget):
 
         layout.addWidget(node_group)
 
-        # === Parallel Processing Group ===
         parallel_group = QGroupBox("Parallel Processing")
         parallel_layout = QFormLayout(parallel_group)
         parallel_layout.setSpacing(8)
@@ -840,7 +830,6 @@ class RemoteConfigWidget(QWidget):
         env_layout = QFormLayout(env_group)
         env_layout.setSpacing(8)
 
-        # Conda environment with Refresh button
         conda_layout = QHBoxLayout()
         conda_layout.setSpacing(8)
         self.conda_combo = NoScrollComboBox()
@@ -863,14 +852,12 @@ class RemoteConfigWidget(QWidget):
 
         env_layout.addRow("Conda:", conda_layout)
 
-        # Python path with Detect and Browse buttons
         python_layout = QHBoxLayout()
         python_layout.setSpacing(8)
         self.python_combo = NoScrollComboBox()
         self.python_combo.setEditable(True)
         self.python_combo.setMinimumWidth(250)
-        self.python_combo.currentTextChanged.connect(self._infer_conda_from_python)
-        self.python_combo.currentTextChanged.connect(self._on_config_changed)
+        self.python_combo.currentTextChanged.connect(self._on_python_path_changed)
         python_layout.addWidget(self.python_combo, 1)
 
         self.btn_detect_python = QPushButton("Detect")
@@ -887,12 +874,21 @@ class RemoteConfigWidget(QWidget):
 
         env_layout.addRow("Python:", python_layout)
 
-        # OpenBench path with Browse and Install buttons
+        self.openbench_package_input = QLineEdit()
+        self.openbench_package_input.setReadOnly(True)
+        self.openbench_package_input.setPlaceholderText("Detected from the selected Python environment")
+        self.openbench_package_input.setToolTip(
+            "OpenBench package imported by the selected remote Python. This is informational and is not used as a workspace."
+        )
+        env_layout.addRow("Package:", self.openbench_package_input)
+
+        # Remote workspace with Browse and Install buttons
         ob_layout = QHBoxLayout()
         ob_layout.setSpacing(8)
         self.openbench_input = QLineEdit()
         self.openbench_input.setPlaceholderText("/home/user/OpenBench")
         self.openbench_input.setText("~/OpenBench")
+        self.openbench_input.setToolTip("Writable remote workspace used for configs, outputs, and source installs")
         self.openbench_input.textChanged.connect(self._on_config_changed)
         ob_layout.addWidget(self.openbench_input, 1)
 
@@ -908,7 +904,7 @@ class RemoteConfigWidget(QWidget):
         self.btn_install_ob.clicked.connect(self._install_openbench)
         ob_layout.addWidget(self.btn_install_ob)
 
-        env_layout.addRow("OpenBench:", ob_layout)
+        env_layout.addRow("Workspace:", ob_layout)
 
         layout.addWidget(env_group)
         layout.addStretch()
@@ -936,7 +932,6 @@ class RemoteConfigWidget(QWidget):
             action = menu.addAction(display)
             action.setData(host)
 
-        # Show menu below the input field
         action = menu.exec(self.host_input.mapToGlobal(QPoint(0, self.host_input.height())))
 
         if action:
@@ -953,7 +948,6 @@ class RemoteConfigWidget(QWidget):
         hostname = host_data.get("hostname", host_data["name"])
         port = host_data.get("port", "22")
 
-        # Build host string
         if user:
             if port and port != "22":
                 host_str = f"{user}@{hostname}:{port}"
@@ -1051,6 +1045,8 @@ class RemoteConfigWidget(QWidget):
         )
 
     def _prepare_target_change(self) -> bool:
+        if getattr(self, "_target_change_preapproved", False):
+            return True
         if self.has_active_setup_flow():
             return False
         callback = getattr(self, "prepare_target_change", None)
@@ -1184,7 +1180,6 @@ class RemoteConfigWidget(QWidget):
             self.node_status_label.setText("Connecting...")
             self.node_status_label.setStyleSheet("color: orange;")
 
-            # Get authentication details
             node_password = None
             node_key_file = None
             if self.radio_node_password.isChecked():
@@ -1242,11 +1237,9 @@ class RemoteConfigWidget(QWidget):
             if self._ssh_manager.is_jump_connected:
                 self.node_status_label.setText(f"✓ Connected to {node_name}")
                 self.node_status_label.setStyleSheet("color: green; font-weight: bold;")
-                # Toggle buttons - connected
                 self._confirmed_node_config = node_config
                 self.btn_confirm_node.setEnabled(False)
                 self.btn_disconnect_node.setEnabled(True)
-                # Update CPU count for compute node
                 self._update_remote_cpu_count()
                 self.connection_status_changed.emit(True)
             else:
@@ -1344,6 +1337,9 @@ class RemoteConfigWidget(QWidget):
         # probe that may still be inside execute_responsive's nested event loop.
         seq = getattr(self, "_conda_env_sync_seq", 0) + 1
         self._conda_env_sync_seq = seq
+        self._set_openbench_probe_paths()
+        if hasattr(self, "node_group"):
+            self._on_config_changed()
         if index <= 0:
             # "(Not using conda environment)" selected, don't change Python path
             return
@@ -1354,9 +1350,9 @@ class RemoteConfigWidget(QWidget):
             return
 
         python_path = ""
+        package_path = ""
         openbench_root = ""
 
-        # Get Python path directly from conda
         if self._has_connected_target():
             # A combo change during the in-flight round trip supersedes this
             # query; the stale result must not be applied afterwards.
@@ -1372,12 +1368,15 @@ import sys
 print({_CONDA_PYTHON_MARKER!r} + sys.executable)
 spec = find_spec("openbench")
 if spec is not None:
-    for location in spec.submodule_search_locations or ():
+    locations = list(spec.submodule_search_locations or ())
+    if not locations and spec.origin:
+        locations = [Path(spec.origin).parent]
+    for location in locations:
         package_dir = Path(location).resolve()
+        print({_CONDA_PACKAGE_PATH_MARKER!r} + str(package_dir))
         for root in package_dir.parents:
-            if (root / "pyproject.toml").is_file() and (
-                (root / "src" / "openbench").is_dir() or (root / "openbench").is_dir()
-            ):
+            source_dirs = ((root / "src" / "openbench").resolve(), (root / "openbench").resolve())
+            if (root / "pyproject.toml").is_file() and package_dir in source_dirs:
                 print({_CONDA_SOURCE_ROOT_MARKER!r} + str(root))
                 raise SystemExit
 """
@@ -1406,6 +1405,8 @@ if spec is not None:
                     line = line.strip()
                     if line.startswith(_CONDA_PYTHON_MARKER):
                         python_path = line[len(_CONDA_PYTHON_MARKER) :].strip()
+                    elif line.startswith(_CONDA_PACKAGE_PATH_MARKER):
+                        package_path = line[len(_CONDA_PACKAGE_PATH_MARKER) :].strip()
                     elif line.startswith(_CONDA_SOURCE_ROOT_MARKER):
                         openbench_root = line[len(_CONDA_SOURCE_ROOT_MARKER) :].strip()
 
@@ -1416,10 +1417,27 @@ if spec is not None:
         if idx < 0:
             self.python_combo.addItem(python_path)
         self.python_combo.setCurrentText(python_path)
+        self._set_openbench_probe_paths(
+            package_path if package_path.startswith("/") else "",
+            openbench_root if openbench_root.startswith("/") else "",
+        )
         # A wheel-only install resolves inside site-packages, which is not a
         # writable Remote workspace. Only a verified source root is applied.
         if openbench_root.startswith("/"):
             self.openbench_input.setText(openbench_root)
+        self._on_config_changed()
+
+    def _set_openbench_probe_paths(self, package_path: str = "", source_path: str = "") -> None:
+        self._openbench_source_path = (source_path or "").strip()
+        if hasattr(self, "openbench_package_input"):
+            self.openbench_package_input.setText((package_path or "").strip())
+
+    def _on_python_path_changed(self, text: str) -> None:
+        # A manually selected interpreter must never inherit another
+        # environment's source checkout override.
+        self._set_openbench_probe_paths()
+        self._infer_conda_from_python(text)
+        self._on_config_changed()
 
     def _update_remote_cpu_count(self):
         """Query remote server for CPU count and update label."""
@@ -1440,7 +1458,6 @@ if spec is not None:
                 if cpu_count is None:
                     raise ValueError(f"No numeric CPU count in remote output: {stdout!r}")
                 self.cpu_available_label.setText(f"(Available on remote: {cpu_count})")
-                # Update the max range
                 self.num_cores_spin.setRange(1, max(128, cpu_count))
         except Exception:
             self.cpu_available_label.setText("(Available: Could not detect)")
@@ -1516,7 +1533,6 @@ if spec is not None:
                 return
         node_config = self._current_node_config()
 
-        # Update status
         self.status_label.setText("Connecting...")
         self.status_label.setStyleSheet("color: #f39c12;")  # Orange
         self.btn_test.setEnabled(False)
@@ -1567,12 +1583,10 @@ if spec is not None:
             self._confirmed_node_config = node_config
             self._confirmed_project_path = project_path
 
-            # Update status to connected
             self.status_label.setText("Connected")
             self.status_label.setStyleSheet("color: #27ae60;")  # Green
             self.connection_status_changed.emit(True)
 
-            # Toggle buttons
             self.btn_test.setEnabled(False)
             self.btn_disconnect.setEnabled(True)
 
@@ -1630,7 +1644,6 @@ if spec is not None:
         # First disconnect compute node if connected
         self._disconnect_node(silent=True)
 
-        # Disconnect main server
         if self._ssh_manager:
             try:
                 self._ssh_manager.disconnect()
@@ -1642,7 +1655,6 @@ if spec is not None:
         self._confirmed_server_config = None
         self._confirmed_project_path = None
 
-        # Update UI
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
         self.btn_test.setEnabled(True)
@@ -1681,7 +1693,6 @@ if spec is not None:
             del blocker
         self._confirmed_node_config = () if using_main_target else None
 
-        # Update UI
         self.node_status_label.setText("Not connected")
         self.node_status_label.setStyleSheet("color: #999;")
         self.btn_confirm_node.setEnabled(True)
@@ -1739,7 +1750,6 @@ if spec is not None:
         )
         if not path:
             return
-        # Add to combo if not already there
         if self.python_combo.findText(path) < 0:
             self.python_combo.addItem(path)
         self.python_combo.setCurrentText(path)
@@ -1841,13 +1851,11 @@ if spec is not None:
 
         env_name = "openbench"
 
-        # Check if environment already exists
         try:
             envs = call_responsive(self._ssh_manager.detect_conda_envs)
             env_exists = any(name.lower() == env_name for name, _ in envs)
 
             if env_exists:
-                # Create custom message box with clear options
                 msg_box = QMessageBox(self)
                 msg_box.setWindowTitle("Environment Exists")
                 msg_box.setText(f"Conda environment '{env_name}' already exists.")
@@ -1863,7 +1871,6 @@ if spec is not None:
                 if clicked == btn_cancel:
                     return
                 elif clicked == btn_use:
-                    # Use existing environment
                     self.conda_combo.clear()
                     self.conda_combo.addItem("(Not using conda environment)")
                     for name, path in envs:
@@ -1879,7 +1886,6 @@ if spec is not None:
             QMessageBox.warning(self, "Error", f"Failed to check environments: {e}")
             return
 
-        # Get Python path to find conda
         python_path = self.python_combo.currentText().strip()
         if not python_path:
             QMessageBox.warning(self, "Error", "Please detect or select a Python interpreter first")
@@ -2113,7 +2119,6 @@ if spec is not None:
             return
         ssh_manager = self._ssh_manager
 
-        # Get installation path
         install_path = self.openbench_input.text().strip()
         if not install_path:
             try:
@@ -2125,13 +2130,11 @@ if spec is not None:
                 QMessageBox.warning(self, "Error", "Please specify an installation path for OpenBench")
                 return
 
-        # Check if git is available
         stdout, stderr, exit_code = execute_responsive(ssh_manager, "which git", timeout=10)
         if exit_code != 0:
             QMessageBox.warning(self, "Error", "Git is not installed on the remote server. Please install git first.")
             return
 
-        # Check if path already exists
         is_update = False
         try:
             quoted_install_path = _safe_remote_path(install_path)
@@ -2142,7 +2145,6 @@ if spec is not None:
             ssh_manager, f"test -d {quoted_install_path} && echo exists", timeout=10
         )
         if exit_code == 0 and _has_exact_stdout_line(stdout, "exists"):
-            # Check if it's a git repository
             quoted_git_dir = _safe_remote_path(f"{install_path}/.git")
             stdout2, stderr2, exit_code2 = execute_responsive(
                 ssh_manager,
@@ -2170,14 +2172,23 @@ if spec is not None:
                 else:
                     return
             else:
-                # Never delete an arbitrary remote directory on the user's behalf.
-                QMessageBox.warning(
-                    self,
-                    "Directory Exists",
-                    f"Directory {install_path} already exists but is not an OpenBench git repository.\n\n"
-                    "Choose an empty path or move/remove that directory manually.",
+                stdout3, stderr3, exit_code3 = execute_responsive(
+                    ssh_manager,
+                    (
+                        f"first_entry=$(find {quoted_install_path} -mindepth 1 -maxdepth 1 -print -quit "
+                        f'2>/dev/null) && test -z "$first_entry" && test -w {quoted_install_path} && echo is_empty'
+                    ),
+                    timeout=10,
                 )
-                return
+                if exit_code3 != 0 or not _has_exact_stdout_line(stdout3, "is_empty"):
+                    # Never delete an arbitrary remote directory on the user's behalf.
+                    QMessageBox.warning(
+                        self,
+                        "Directory Exists",
+                        f"Directory {install_path} already exists but is not an OpenBench git repository.\n\n"
+                        "Choose an empty path or move/remove that directory manually.",
+                    )
+                    return
 
         # Protocol selection dialog
         if not is_update:
@@ -2210,7 +2221,6 @@ if spec is not None:
             if source_dialog.exec() != QDialog.Accepted:
                 return
 
-            # Build repo URL based on protocol selection
             if radio_ssh.isChecked():
                 repo_url = "git@github.com:zhongwangwei/OpenBench.git"
             else:
@@ -2242,7 +2252,6 @@ if spec is not None:
 
         progress_dialog.show()
 
-        # Run installation
         self.btn_install_ob.setEnabled(False)
 
         if is_update:
@@ -2306,6 +2315,8 @@ if spec is not None:
                 status_label.setText("Installation cancelled")
                 status_label.setStyleSheet("color: gray; font-weight: bold;")
             elif exit_code == 0:
+                self._set_openbench_probe_paths(posixpath.join(install_path.rstrip("/"), "src/openbench"), install_path)
+                self._on_config_changed()
                 status_label.setText("✓ Installation complete with all dependencies!")
                 status_label.setStyleSheet("color: green; font-weight: bold;")
             else:
@@ -2407,8 +2418,13 @@ if spec is not None:
         conda_env = ""
         conda_env_text = self.conda_combo.currentText()
         if conda_env_text and not conda_env_text.startswith("(Not"):
-            # Extract env name from "envname (type)" format
             conda_env = conda_env_text.split()[0]
+
+        package_path = self.openbench_package_input.text().strip()
+        source_path = self._openbench_source_path
+        normalized_package_path = package_path.replace("\\", "/").rstrip("/")
+        if not source_path and normalized_package_path.endswith("/src/openbench"):
+            source_path = normalized_package_path[: -len("/src/openbench")]
 
         return {
             "host": self.host_input.text().strip(),
@@ -2422,7 +2438,18 @@ if spec is not None:
             "python_path": self.python_combo.currentText().strip(),
             "conda_env": conda_env,
             "openbench_path": self.openbench_input.text().strip(),
+            "openbench_source_path": source_path,
+            "openbench_package_path": package_path,
         }
+
+    def _get_saved_credential(self, host: str):
+        if not host:
+            return None
+        try:
+            return self._credential_manager.get_credential(host)
+        except CredentialStorageError as exc:
+            QMessageBox.warning(self, "Credential Load Failed", str(exc))
+            return _CREDENTIAL_LOAD_FAILED
 
     def set_config(self, config: Dict[str, Any]):
         """Set configuration from dictionary.
@@ -2430,64 +2457,150 @@ if spec is not None:
         Args:
             config: Configuration dictionary
         """
-        # Block signals during batch update
-        self.blockSignals(True)
-
-        # Set host
-        self.host_input.setText(config.get("host", ""))
-
-        # Set auth type
-        if config.get("auth_type") == "key":
-            self.radio_key.setChecked(True)
-        else:
-            self.radio_password.setChecked(True)
-
-        # Set key file
-        self.key_input.setText(config.get("key_file", ""))
-
-        # Set jump/compute node settings
-        self.node_group.setChecked(config.get("use_jump", False))
-        self.node_input.setText(config.get("jump_node", ""))
-
-        if config.get("jump_auth") == "password":
-            self.radio_node_password.setChecked(True)
-        elif config.get("jump_auth") == "key":
-            self.radio_node_key.setChecked(True)
-        else:
-            self.radio_node_none.setChecked(True)
-        self.node_key_input.setText(config.get("node_key_file", ""))
-
-        # Set num_cores
-        self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
-
-        # Set Python environment
-        python_path = config.get("python_path", "")
-        if python_path:
-            idx = self.python_combo.findText(python_path)
-            if idx >= 0:
-                self.python_combo.setCurrentIndex(idx)
-            else:
-                self.python_combo.setCurrentText(python_path)
-
-        # Set conda environment
-        conda_env = config.get("conda_env", "")
-        if conda_env:
-            idx = self.conda_combo.findText(conda_env)
-            if idx >= 0:
-                self.conda_combo.setCurrentIndex(idx)
-        else:
-            self.conda_combo.setCurrentIndex(0)
-
-        # Set OpenBench path
-        self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
-
-        # Restore signals
-        self.blockSignals(False)
-
-        # Try to load saved credentials for this host
         host = config.get("host", "")
-        if host:
-            self._load_saved_credentials(host)
+        auth_type = "key" if config.get("auth_type") == "key" else "password"
+        key_file = config.get("key_file", "")
+        password = ""
+        save_password = False
+        use_jump = config.get("use_jump", False)
+        jump_node = config.get("jump_node", "")
+        jump_auth = config.get("jump_auth") or "none"
+        node_key_file = config.get("node_key_file", "")
+        node_password = ""
+
+        cred = self._get_saved_credential(host)
+        if cred is not _CREDENTIAL_LOAD_FAILED and cred:
+            auth_type = "key" if cred.get("auth_type") == "key" else "password"
+            password = cred.get("password") or ""
+            save_password = bool(password)
+            key_file = cred.get("key_file") or key_file
+            if cred.get("jump_node"):
+                use_jump = True
+                jump_node = cred["jump_node"]
+                jump_auth = cred.get("jump_auth") or "none"
+                node_password = cred.get("node_password") or ""
+                node_key_file = cred.get("node_key_file") or node_key_file
+
+        def final_server_config():
+            return (
+                host,
+                auth_type,
+                password if auth_type == "password" else "",
+                key_file if auth_type == "key" else "",
+            )
+
+        def final_node_config():
+            if not use_jump:
+                return ()
+            if not jump_node:
+                return None
+            return (
+                jump_node,
+                jump_auth,
+                node_password if jump_auth == "password" else "",
+                node_key_file if jump_auth == "key" else "",
+            )
+
+        target_changed = (
+            (
+                getattr(self, "_confirmed_server_config", None) is not None
+                and final_server_config() != self._confirmed_server_config
+            )
+            or (
+                getattr(self, "_confirmed_node_config", None) is not None
+                and final_node_config() != self._confirmed_node_config
+            )
+            or (
+                getattr(self, "_confirmed_project_path", None) is not None
+                and (config.get("openbench_path") or "~/OpenBench") != self._confirmed_project_path
+            )
+        )
+        if target_changed:
+            if not self._prepare_target_change():
+                return
+            self._target_change_preapproved = True
+
+        blockers = [
+            QSignalBlocker(widget)
+            for widget in (
+                self,
+                self.host_input,
+                self.radio_password,
+                self.radio_key,
+                self.password_input,
+                self.cb_save_password,
+                self.key_input,
+                self.node_group,
+                self.node_input,
+                self.radio_node_password,
+                self.radio_node_key,
+                self.radio_node_none,
+                self.node_password_input,
+                self.node_key_input,
+                self.num_cores_spin,
+                self.python_combo,
+                self.conda_combo,
+                self.openbench_input,
+                self.openbench_package_input,
+            )
+        ]
+        self._restoring_confirmed_config = True
+
+        try:
+            self.host_input.setText(host)
+            self.radio_key.setChecked(auth_type == "key")
+            self.radio_password.setChecked(auth_type != "key")
+            self.password_input.setText(password)
+            self.cb_save_password.setChecked(save_password)
+            self.key_input.setText(key_file)
+            self.password_row_widget.setVisible(self.radio_password.isChecked())
+            self.key_row_widget.setVisible(self.radio_key.isChecked())
+
+            self.node_group.setChecked(use_jump)
+            self.node_input.setText(jump_node)
+            self.radio_node_password.setChecked(jump_auth == "password")
+            self.radio_node_key.setChecked(jump_auth == "key")
+            self.radio_node_none.setChecked(jump_auth not in {"password", "key"})
+            self.node_password_input.setText(node_password)
+            self.node_key_input.setText(node_key_file)
+            self.node_password_input.setVisible(self.radio_node_password.isChecked())
+            self.node_key_widget.setVisible(self.radio_node_key.isChecked())
+
+            self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
+
+            python_path = config.get("python_path", "")
+            if python_path:
+                idx = self.python_combo.findText(python_path)
+                if idx >= 0:
+                    self.python_combo.setCurrentIndex(idx)
+                else:
+                    self.python_combo.setCurrentText(python_path)
+
+            conda_env = config.get("conda_env", "")
+            if conda_env:
+                idx = self.conda_combo.findText(conda_env)
+                if idx >= 0:
+                    self.conda_combo.setCurrentIndex(idx)
+            else:
+                self.conda_combo.setCurrentIndex(0)
+
+            self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
+            self._set_openbench_probe_paths(
+                config.get("openbench_package_path", ""), config.get("openbench_source_path", "")
+            )
+        except Exception:
+            if target_changed:
+                self._target_change_preapproved = False
+            raise
+        finally:
+            self._restoring_confirmed_config = False
+            blockers.clear()
+
+        try:
+            self._on_config_changed()
+        finally:
+            if target_changed:
+                self._target_change_preapproved = False
 
     def _load_saved_credentials(self, host: str):
         """Load saved credentials for a host.
@@ -2495,58 +2608,48 @@ if spec is not None:
         Args:
             host: Host string to load credentials for
         """
-        try:
-            cred = self._credential_manager.get_credential(host)
-        except CredentialStorageError as exc:
-            QMessageBox.warning(self, "Credential Load Failed", str(exc))
+        cred = self._get_saved_credential(host)
+        if cred is _CREDENTIAL_LOAD_FAILED:
             return
-
         if not cred:
             self.password_input.clear()
+            self.node_password_input.clear()
             self.cb_save_password.setChecked(False)
             return
 
-        # Clear credential-derived fields only after we know credentials exist.
-        # Otherwise a config file that explicitly contains key/jump settings is
-        # silently wiped just because this machine has no saved secret for host.
         self.password_input.clear()
         self.cb_save_password.setChecked(False)
         self.node_password_input.clear()
 
-        auth_type = cred.get("auth_type")
-        if auth_type == "key":
-            self.radio_key.setChecked(True)
-        else:
-            self.radio_password.setChecked(True)
+        self.radio_key.setChecked(cred.get("auth_type") == "key")
+        self.radio_password.setChecked(cred.get("auth_type") != "key")
+        self.password_row_widget.setVisible(self.radio_password.isChecked())
+        self.key_row_widget.setVisible(self.radio_key.isChecked())
 
-        # Load password if saved
         if cred.get("password"):
             self.password_input.setText(cred["password"])
             self.cb_save_password.setChecked(True)
-        # Load key file if saved
         if cred.get("key_file"):
             self.key_input.setText(cred["key_file"])
-        # Load jump node settings
         if cred.get("jump_node"):
             self.node_group.setChecked(True)
             self.node_input.setText(cred["jump_node"])
-            if cred.get("jump_auth") == "password":
-                self.radio_node_password.setChecked(True)
-                if cred.get("node_password"):
-                    self.node_password_input.setText(cred["node_password"])
-            elif cred.get("jump_auth") == "key":
-                self.radio_node_key.setChecked(True)
-                if cred.get("node_key_file"):
-                    self.node_key_input.setText(cred["node_key_file"])
-            else:
-                self.radio_node_none.setChecked(True)
+            jump_auth = cred.get("jump_auth")
+            self.radio_node_password.setChecked(jump_auth == "password")
+            self.radio_node_key.setChecked(jump_auth == "key")
+            self.radio_node_none.setChecked(jump_auth not in {"password", "key"})
+            if jump_auth == "password" and cred.get("node_password"):
+                self.node_password_input.setText(cred["node_password"])
+            if jump_auth == "key" and cred.get("node_key_file"):
+                self.node_key_input.setText(cred["node_key_file"])
+        self.node_password_input.setVisible(self.radio_node_password.isChecked())
+        self.node_key_widget.setVisible(self.radio_node_key.isChecked())
 
     def disconnect(self):
         """Disconnect from remote server."""
         # First disconnect compute node if connected
         self._disconnect_node(silent=True)
 
-        # Disconnect main server
         if self._ssh_manager:
             try:
                 self._ssh_manager.disconnect()
@@ -2558,7 +2661,6 @@ if spec is not None:
         self._confirmed_server_config = None
         self._confirmed_project_path = None
 
-        # Update UI - reset all button states
         self.status_label.setText("Not connected")
         self.status_label.setStyleSheet("color: #999;")
         self.btn_test.setEnabled(True)
@@ -2573,24 +2675,22 @@ if spec is not None:
 
     def reset_to_defaults(self):
         """Reset all remote config fields to defaults."""
-        # Host and authentication
         self.host_input.clear()
         self.password_input.clear()
         self.key_input.clear()
         self.radio_password.setChecked(True)
         self.cb_save_password.setChecked(False)
 
-        # Compute node
         self.node_group.setChecked(False)
         self.node_input.clear()
         self.node_password_input.clear()
         self.node_key_input.clear()
         self.radio_node_none.setChecked(True)
 
-        # Environment
         self.num_cores_spin.setValue(DEFAULT_NUM_CORES)
         self.conda_combo.clear()
         self.conda_combo.addItem("(Not using conda environment)")
         self.conda_combo.setCurrentIndex(0)
         self.python_combo.clear()
         self.openbench_input.setText("~/OpenBench")
+        self._set_openbench_probe_paths()

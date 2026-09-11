@@ -22,13 +22,11 @@ def process_site(station_idx, dataset, info, varname, duplicate_station_ids=None
     if pd.isna(lon) or pd.isna(lat):
         return None
 
-    # Get time series data for this station and variable
     if varname not in dataset:
         return None
 
     data_var = dataset[varname].isel(station=station_idx)
 
-    # Find valid time range (non-missing data)
     valid_mask = ~data_var.isnull()
     if not valid_mask.any():
         return None
@@ -40,7 +38,6 @@ def process_site(station_idx, dataset, info, varname, duplicate_station_ids=None
     use_syear = max(start_year, int(info.sim_syear), int(info.syear))
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
-    # Apply filters: time range, spatial extent
     if (
         (use_eyear - use_syear) < info.min_year
         or lon < info.min_lon
@@ -54,7 +51,6 @@ def process_site(station_idx, dataset, info, varname, duplicate_station_ids=None
     scratch_dir.mkdir(parents=True, exist_ok=True)
     file_path = station_file_path(scratch_dir, station_id, index=station_idx, duplicate_ids=duplicate_station_ids)
 
-    # Save data
     data_out = data_var.squeeze(drop=True)
     ds_out = xr.Dataset({varname: data_out})
     write_netcdf_atomic(ds_out, file_path)
@@ -77,7 +73,6 @@ def filter_GEBA(info, ds=None):
         For data filtering mode: Tuple of (info, filtered_data)
         For initialization mode: None (modifies info in place)
     """
-    # Get the variable name from info
     varname = getattr(info, "varname", "Rn")
 
     # If ds is provided, we're in data filtering mode
@@ -85,7 +80,6 @@ def filter_GEBA(info, ds=None):
         if varname in ds:
             return info, ds[varname]
         else:
-            # Return the first data variable
             data_vars = list(ds.data_vars)
             if data_vars:
                 return info, ds[data_vars[0]]

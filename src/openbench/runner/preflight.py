@@ -15,6 +15,8 @@ from itertools import product
 from pathlib import Path
 from typing import Any, Callable
 
+from openbench.runner.pair_ref import pair_ref_path
+
 logger = logging.getLogger(__name__)
 
 RuntimeInfoBuilder = Callable[[dict[str, Any]], dict[str, Any]]
@@ -134,6 +136,9 @@ def expected_output_paths(
     stem = f"{var_name}_ref_{ref_source}_sim_{sim_source}"
     expected.extend(output_dir / "metrics" / f"{stem}_{metric}.nc" for metric in metric_vars)
     expected.extend(output_dir / "scores" / f"{stem}_{score}.nc" for score in score_vars)
+    pair_ref = pair_ref_path(output_dir, task)
+    if pair_ref is not None:
+        expected.append(pair_ref)
     return expected
 
 

@@ -30,15 +30,12 @@ def make_scenarios_comparison_Ridgeline_Plot(
         rcParams.update(params)
 
         n_plots = len(sim_sources)
-        # create a figure and axis
         fig, axes = plt.subplots(figsize=(option["x_wise"], option["y_wise"] * len(sim_sources) / 2))
 
-        # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
 
         datasets_filtered = sample_distribution_series(datasets_filtered, option, purpose="kde")
 
-        # Find global min and max for x-axis
         def remove_outliers(data_list):
             q1, q3 = np.percentile(data_list, [1.5, 98.5])
             return [q1, q3]
@@ -82,7 +79,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                 y_range = np.zeros_like(y_range)
             y_shift = i * y_shift_increment
 
-            # Plot the KDE
             axes.fill_between(
                 x_range,
                 y_shift,
@@ -99,7 +95,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                 linewidth=MLINES[sim_source]["linewidth"] * 1.5,
             )
 
-            # Add labels
             axes.text(
                 global_min - (global_max - global_min) / 100,
                 y_shift,
@@ -109,7 +104,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                 ha="right",
                 va="center",
             )
-            # Calculate and plot median
             median = np.median(data)
             if varname in ["KGE", "NSE", "KGESS"] and median <= global_min:
                 pass
@@ -126,7 +120,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                     zorder=n_plots + 1,
                 )
 
-                # Add median value text
                 axes.text(
                     median,
                     y_shift + y_target * 1.02,
@@ -137,7 +130,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                     zorder=n_plots + 2,
                 )
 
-        # Customize the plot
         axes.set_yticks([])
         xlabel = option["xlabel"]
         title = option["title"]
@@ -152,24 +144,19 @@ def make_scenarios_comparison_Ridgeline_Plot(
         axes.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
         axes.set_title(title, fontsize=option["title_fontsize"], pad=30, weight="bold")
 
-        # Remove top and right spines
         axes.spines["top"].set_visible(False)
         axes.spines["right"].set_visible(False)
         axes.spines["left"].set_visible(False)
 
-        # Extend the bottom spine to the left
         axes.spines["bottom"].set_visible(False)
 
-        # Set y-axis limits
         axes.set_ylim(0, (n_plots - 1) * y_shift_increment + scale_factor)
         axes.set_xlim(global_min - dx, global_max + dx)
 
-        # Adjust layout and save
         fig.tight_layout()
         output_file_path = f"{basedir}/{join_filename_components('Ridgeline_Plot', evaluation_item, ref_source, varname)}.{option['saving_format']}"
         save_figure(fig, output_file_path, format=f"{option['saving_format']}", dpi=option["dpi"], bbox_inches="tight")
 
-        # Clean up
         plt.close(fig)
         return
 
@@ -180,7 +167,6 @@ def generate_lines(data_names, option):
     import matplotlib.colors as mcolors
 
     lines = {}
-    # add colors and symbols
     hex_colors = [
         "#b1c5e1",
         "#c2b3d4",

@@ -96,7 +96,6 @@ def evaluate_single(
             info["num_cores"] = task["num_cores_override"]
         evaluation_fig_nml = bindings.build_evaluation_fig_nml().to_fig_nml()
 
-        # Step 1: Preprocess data (skip if already done by _preprocess_variable)
         if not only_drawing and not task.get("ref_preprocessed"):
             from openbench.data.processing import DatasetProcessing
 
@@ -104,7 +103,6 @@ def evaluate_single(
             dataset_processor.prepare_source("ref")
             dataset_processor.prepare_source("sim")
 
-        # Step 2: Run evaluation
         ref_dtype = info.get("ref_data_type", "grid")
         sim_dtype = info.get("sim_data_type", "grid")
 

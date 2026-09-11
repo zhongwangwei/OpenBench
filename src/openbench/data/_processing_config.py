@@ -21,20 +21,15 @@ try:
 except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
-_HAS_INTERFACES = True
-
 
 class ProcessingConfigMixin:
     def initialize_resource_parameters(self):
         """Initialize resource-related parameters based on system capabilities."""
-        # Get system resources
         resources = get_system_resources()
 
-        # Set default num_cores if not specified
         if not hasattr(self, "num_cores") or self.num_cores <= 0:
             self.num_cores = resources["cpu_count"]
 
-        # Store resource information
         self.system_resources = resources
 
         # Default chunk size (will be adjusted per operation)
@@ -57,14 +52,12 @@ class ProcessingConfigMixin:
         if year is None or (isinstance(year, str) and year.strip() == ""):
             return default if default is not None else min_year
 
-        # Try to convert to integer
         try:
             year_int = int(float(year))
         except (ValueError, TypeError):
             logging.warning(f"Invalid year value: {year}. Using default: {default if default else min_year}")
             return default if default is not None else min_year
 
-        # Validate range
         if year_int < min_year:
             logging.warning(f"Year {year_int} is before {min_year}. Adjusting to {min_year}.")
             return min_year
@@ -206,7 +199,6 @@ class ProcessingConfigMixin:
                 "weekly": "W",
             }
 
-        # Convert to lowercase for case-insensitive matching
         normalized_freq = freq.lower().strip()
 
         compound = re.fullmatch(
@@ -217,19 +209,15 @@ class ProcessingConfigMixin:
             number, unit = compound.groups()
             return number + freq_map[unit]
 
-        # Get mapped frequency or use original if no mapping found
         result_freq = freq_map.get(normalized_freq, freq)
 
-        # Don't convert if we already got a mapped frequency from freq_map
-        # Only convert if we're returning the original frequency
         if result_freq == freq:
             result_freq = self._convert_legacy_freq_alias(result_freq)
 
         return result_freq
 
     def initialize_attributes(self, config: Dict[str, Any]) -> None:
-        # Set default values for optional config keys before updating
-        self.debug_mode = False  # Default debug_mode to False
+        self.debug_mode = False
         for key, value in config.items():
             if key.startswith("__") or callable(getattr(self, key, None)):
                 logging.debug("Skipping protected/method key in config: %s", key)
@@ -254,7 +242,6 @@ class ProcessingConfigMixin:
                         f"Warning: '{attr}' was not provided in the config. Using value from 'tim_res': {getattr(self, attr)}"
                     )
 
-        # Apply frequency normalization to timing resolution attributes
         if hasattr(self, "compare_tim_res"):
             original_freq = self.compare_tim_res
             self.compare_tim_res = self._normalize_frequency(self.compare_tim_res)
@@ -436,11 +423,9 @@ class ProcessingConfigMixin:
             Processed dataset
         """
         if isinstance(data, xr.Dataset):
-            if _HAS_INTERFACES and hasattr(super(), "validate_input"):
-                if not self.validate_input(data):
-                    raise ValueError("Input dataset validation failed")
+            if not self.validate_input(data):
+                raise ValueError("Input dataset validation failed")
 
-            # Apply basic processing steps
             processed_data = self.check_dataset(data)
             processed_data = self.check_coordinate(processed_data)
 
@@ -455,6 +440,8 @@ class ProcessingConfigMixin:
             f"{datasource}_varname",
             f"{datasource}_varunit",
             f"_fb_convert_{datasource}",
+            "minyear",
+            "maxyear",
         )
         state_before = {name: getattr(self, name, None) for name in state_names}
         state_existed = {name: hasattr(self, name) for name in state_names}
@@ -471,6 +458,17 @@ class ProcessingConfigMixin:
 
         try:
             if data_params["data_type"] != "stn":
+                if (
+                    getattr(self, "ref_data_type", "grid") != "stn"
+                    and getattr(self, "sim_data_type", "grid") != "stn"
+                    and getattr(self, "time_alignment", "intersection") != "strict"
+                ):
+                    # Grid source files are shared across pairs. Crop to the
+                    # source/project range here, not the first pair's overlap.
+                    self.minyear = max(int(data_params["syear"]), int(getattr(self, "syear", data_params["syear"])))
+                    self.maxyear = min(int(data_params["eyear"]), int(getattr(self, "eyear", data_params["eyear"])))
+                    if self.minyear > self.maxyear:
+                        raise ValueError(f"{datasource} has no years in the requested project range")
                 logging.debug(f"Processing {data_params['data_type']} data")
                 self.process_grid_data(data_params)
             else:

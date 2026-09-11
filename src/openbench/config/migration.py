@@ -65,7 +65,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
     if not main_config_path.exists():
         raise FileNotFoundError(f"Config file not found: {main_config_path}")
 
-    # Read main config
     main = _read_old_config(main_config_path)
     files_read = 1
 
@@ -85,7 +84,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
     general = main.get("general", {})
     base_dir = main_config_path.parent
 
-    # Read reference config
     ref_sources = {}
     # Per-source data paths from the legacy two-level nml (top-level def_nml
     # → per-source nml → general.root_dir). Without this, migrated configs
@@ -133,7 +131,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
                 except Exception as e:
                     logger.warning("Migration: failed to read per-source ref nml %s: %s", sub_path, e)
 
-    # Read simulation config
     sim_entries = {}
     sim_nml_path = general.get("simulation_nml")
     if sim_nml_path:
@@ -151,7 +148,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
                     sources = value if isinstance(value, list) else [value]
                     all_sim_sources.update(sources)
 
-            # Read each simulation definition file
             for source_name in sorted(all_sim_sources):
                 if source_name in sim_def_nml:
                     def_path = _resolve_path(sim_def_nml[source_name], base_dir)
@@ -201,7 +197,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
 
                         sim_entries[label] = entry
 
-    # Build new config
     eval_items = main.get("evaluation_items") or {}
     enabled_variables = [k for k, v in eval_items.items() if v]
 
@@ -214,7 +209,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
     comparisons_dict = main.get("comparisons") or {}
     enabled_comparisons = [k for k, v in comparisons_dict.items() if v]
 
-    # Filter reference to only enabled variables
     filtered_ref: dict[str, Any] = {var: ref_sources[var] for var in enabled_variables if var in ref_sources}
 
     # Compute reference.data_root from per-source root_dir values discovered
@@ -292,7 +286,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
     if options:
         new_config["project"].update(options)
 
-    # Add non-default spatial/temporal bounds
     if general.get("min_year") is not None:
         new_config["project"]["min_year_threshold"] = general["min_year"]
     lat_range = [general.get("min_lat", -90), general.get("max_lat", 90)]
@@ -347,7 +340,6 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
             **({"items": stats_items} if stats_items else {}),
         }
 
-    # Write output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _write_yaml_atomic(output_path, new_config)
 
@@ -422,7 +414,6 @@ def _build_simulation_section(sim_entries: dict[str, Any]) -> dict[str, Any]:
     if len(sim_entries) < 2:
         return sim_entries
 
-    # Find common fields across all entries
     common_keys = ["model", "data_type", "grid_res", "tim_res", "data_groupby"]
     defaults: dict[str, Any] = {}
 
@@ -435,7 +426,6 @@ def _build_simulation_section(sim_entries: dict[str, Any]) -> dict[str, Any]:
     if not defaults:
         return sim_entries
 
-    # Build section with _defaults
     result: dict[str, Any] = {"_defaults": defaults}
     for label, entry in sim_entries.items():
         cleaned = {}
@@ -485,17 +475,14 @@ def _derive_case_label(source_name: str, root_dir: str, prefix: str) -> str:
     """
     import re
 
-    # Try to extract CaseXX from root_dir
     match = re.search(r"(Case\d+)", root_dir)
     if match:
         return match.group(1)
 
-    # Try to extract from prefix: "01_case_hist_" → Case01
     match = re.search(r"(\d+)_case", prefix)
     if match:
         return f"Case{match.group(1).zfill(2)}"
 
-    # Try to extract from source_name: "01_case" → Case01
     match = re.search(r"(\d+)_case", source_name)
     if match:
         return f"Case{match.group(1).zfill(2)}"

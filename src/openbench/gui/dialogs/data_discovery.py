@@ -66,7 +66,6 @@ class DataDiscoveryDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Header
         header = QLabel(
             f"<b>{len(new_groups)} dataset group(s)</b> found in the reference data directory.\n"
             "Select which to register or update in the OpenBench registry."
@@ -74,7 +73,6 @@ class DataDiscoveryDialog(QDialog):
         header.setWordWrap(True)
         layout.addWidget(header)
 
-        # Tree view
         self.tree = QTreeWidget()
         self.tree.setProperty("i18n_items", True)
         self.tree.setHeaderLabels(["Dataset", "Resolution", "Status", "Type", "Variables", "Files"])
@@ -121,7 +119,6 @@ class DataDiscoveryDialog(QDialog):
 
         layout.addWidget(self.tree)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         select_all = QPushButton("Select All")
         select_all.clicked.connect(self._select_all)

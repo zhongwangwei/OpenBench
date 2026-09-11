@@ -101,6 +101,21 @@ def _longitude_metadata(values) -> Dict[str, Any]:
         return {}
 
 
+def _remote_latitude_range_covers(
+    data_min: float, data_max: float, required_min: float, required_max: float, metadata: Dict[str, Any]
+) -> bool:
+    """Allow global remote grids stored as cell centers to cover pole-edge requests."""
+    if data_min <= required_min and data_max >= required_max:
+        return True
+    if not metadata.get("lat_is_global") or required_min > -90.0 or required_max < 90.0:
+        return False
+    try:
+        half_cell = abs(float(metadata.get("lat_resolution", 0.0))) / 2.0
+    except (TypeError, ValueError):
+        return False
+    return half_cell > 0 and data_min <= required_min + half_cell + 1e-9 and data_max >= required_max - half_cell - 1e-9
+
+
 # String version of safe_open for embedding in remote scripts
 SAFE_OPEN_CODE = '''
 def safe_open(path):
@@ -213,7 +228,6 @@ class FilePathGenerator:
                 path = os.path.join(self.root_dir, self.sub_dir)
             else:
                 path = self.root_dir
-            # Convert to absolute path using OpenBench root as base
             return to_absolute_path(path, get_openbench_root())
 
     def _build_path(self, filename: str) -> str:
@@ -289,7 +303,6 @@ class FilePathGenerator:
         self.last_error = None
         pattern_desc = patterns[0] if len(patterns) == 1 else "{" + ",".join(patterns) + "}"
         try:
-            # Use find command to match files
             if len(patterns) == 1:
                 name_expr = f"-name {shlex.quote(patterns[0])}"
             else:
@@ -491,7 +504,27 @@ try:
     lon_dims = ['lon', 'longitude', 'Lon', 'LON', 'x']
     for ld in lat_dims:
         if ld in ds.dims or ld in ds.coords:
-            result["lat_range"] = [float(ds[ld].values.min()), float(ds[ld].values.max())]
+            lat_values = ds[ld].values
+            result["lat_range"] = [float(lat_values.min()), float(lat_values.max())]
+            try:
+                import numpy as np
+                array = np.asarray(lat_values, dtype=float)
+                if array.ndim == 1:
+                    finite = np.unique(array[np.isfinite(array)])
+                    if finite.size > 1:
+                        gaps = np.diff(np.sort(finite))
+                        positive_gaps = gaps[gaps > 0]
+                        resolution = float(np.median(positive_gaps)) if positive_gaps.size else 0.0
+                        result["lat_resolution"] = resolution
+                        result["lat_is_global"] = bool(
+                            finite.size >= 4
+                            and resolution > 0
+                            and float(np.max(np.abs(gaps - resolution))) <= resolution * 0.01 + 1e-9
+                            and float(finite.min()) <= -90.0 + resolution / 2.0 + 1e-9
+                            and float(finite.max()) >= 90.0 - resolution / 2.0 - 1e-9
+                        )
+            except Exception:
+                pass
             break
     for ld in lon_dims:
         if ld in ds.dims or ld in ds.coords:
@@ -600,7 +633,6 @@ except Exception as e:
                 "time_range", False, f"Time dimension not found, tried: {LocalNetCDFValidator.TIME_DIMS}"
             )
 
-        # Check for time conversion error
         if "time_error" in result:
             return ValidationCheck("time_range", True, "Time check skipped (non-standard calendar)")
 
@@ -639,7 +671,7 @@ except Exception as e:
         data_min_lat, data_max_lat = lat_range
         data_min_lon, data_max_lon = lon_range
 
-        lat_ok = data_min_lat <= min_lat and data_max_lat >= max_lat
+        lat_ok = _remote_latitude_range_covers(data_min_lat, data_max_lat, min_lat, max_lat, result)
         lon_ok = _longitude_range_covers(
             data_min_lon,
             data_max_lon,
@@ -651,7 +683,12 @@ except Exception as e:
         if lat_ok and lon_ok:
             return ValidationCheck("spatial_range", True, "Spatial range OK")
 
-        return ValidationCheck("spatial_range", False, "Spatial range insufficient")
+        msg_parts = []
+        if not lat_ok:
+            msg_parts.append(f"Lat: data {data_min_lat:.1f}~{data_max_lat:.1f}, required {min_lat:.1f}~{max_lat:.1f}")
+        if not lon_ok:
+            msg_parts.append(f"Lon: data {data_min_lon:.1f}~{data_max_lon:.1f}, required {min_lon:.1f}~{max_lon:.1f}")
+        return ValidationCheck("spatial_range", False, "Spatial range insufficient: " + "; ".join(msg_parts))
 
 
 class DataValidator:
@@ -710,7 +747,6 @@ class DataValidator:
         """
         checks = []
 
-        # Extract config values
         general = source_config.get("general", source_config)
         var_config = source_config.get("var_config", source_config)
 
@@ -773,7 +809,6 @@ class DataValidator:
                 checks.append(self._check_file_exists(self._resolve_aux_path(fulllist, root_dir)))
             return SourceValidationResult(var_name, source_name, checks)
 
-        # Generate file paths
         path_gen = FilePathGenerator(
             root_dir=root_dir,
             sub_dir=sub_dir,
@@ -788,7 +823,6 @@ class DataValidator:
         )
         sample_paths = path_gen.get_sample_paths()
 
-        # Check file existence
         first_existing_path = None
         if not sample_paths:
             # No files found matching the pattern, or remote listing failed.
@@ -801,11 +835,16 @@ class DataValidator:
                     ValidationCheck("file_exists", False, f"No files found matching pattern '{pattern}' in {base_dir}")
                 )
         else:
+            file_checks = []
             for path in sample_paths:
                 check = self._validator.check_file_exists(path)
-                checks.append(check)
+                file_checks.append(check)
                 if check.passed and first_existing_path is None:
                     first_existing_path = path
+            # Single suffixes are alternatives, not separate required files.
+            if first_existing_path is not None and str(data_groupby).lower() == "single":
+                file_checks = [check for check in file_checks if check.passed]
+            checks.extend(file_checks)
 
         # If no files found, skip other checks
         if first_existing_path is None:
@@ -821,7 +860,6 @@ class DataValidator:
             else None
         )
 
-        # Check variable name
         if varname:
             check = self._validator.check_variable(first_existing_path, varname, inspection)
             checks.append(check)

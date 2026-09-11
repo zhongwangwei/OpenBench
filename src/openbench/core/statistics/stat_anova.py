@@ -44,7 +44,6 @@ def stat_anova(self, *variables):
         logging.error(f"{e.name} is required for this function")
         raise ImportError(f"{e.name} is required for this function")
 
-    # Separate dependent and independent variables
     Y_vars = variables[0]  # [var for var in variables if '_Y' in var.name]
     X_vars = variables[1:]  # [var for var in variables if '_Y' not in var.name]
 
@@ -57,15 +56,12 @@ def stat_anova(self, *variables):
             return data  # DataArray → 直接取值
         else:
             raise TypeError(f"Unsupported type: {type(data)}. Expected xarray.Dataset or xarray.DataArray")
-            # If it's a dataset, apply the test to each data variable
 
     Y_data = extract_xarray_data(Y_vars)
-    # Align and combine datasets
     combined_data = xr.merge(
         [Y_data.rename("Y_data")] + [extract_xarray_data(var).rename(f"var_{i}") for i, var in enumerate(X_vars)]
     )
 
-    # Prepare data for analysis
     data_array = np.stack([combined_data[var].values for var in combined_data.data_vars if var != "Y_data"], axis=-1)
     Y_data_array = combined_data["Y_data"].values
 
@@ -91,7 +87,6 @@ def stat_anova(self, *variables):
 
             def OLS(data_slice, Y_data_slice):
                 """Perform OLS analysis on a single lat-lon point."""
-                # Check for invalid data
                 if (
                     np.any(np.isnan(data_slice))
                     or np.any(np.isnan(Y_data_slice))
@@ -104,15 +99,12 @@ def stat_anova(self, *variables):
                     return np.full(data_slice.shape[1] * 2, np.nan), np.full(data_slice.shape[1] * 2, np.nan)
 
                 try:
-                    # Normalize data
                     norm_data = np.apply_along_axis(normalize_data, 0, data_slice)
                     norm_Y_data = normalize_data(Y_data_slice)
 
-                    # Create DataFrame
                     df = pd.DataFrame(norm_data, columns=[f"var_{i}" for i in range(norm_data.shape[1])])
                     df["Y_data"] = norm_Y_data
 
-                    # Construct formula with main effects only
                     var_names = df.columns[:-1]
                     main_effects = "+".join(var_names)
 
@@ -126,7 +118,6 @@ def stat_anova(self, *variables):
 
                     formula = f"Y_data ~ {main_effects}{interactions}"
 
-                    # Perform OLS
                     model = smf.ols(formula, data=df).fit()
                     anova_results = sm.stats.anova_lm(model, typ=2)
 
@@ -136,7 +127,6 @@ def stat_anova(self, *variables):
                     n_factors = data_slice.shape[1] * 2
                     return np.full(n_factors, np.nan), np.full(n_factors, np.nan)
 
-            # Parallel processing with chunking to conserve memory
             chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
             results = []
 
@@ -148,15 +138,12 @@ def stat_anova(self, *variables):
                     for j in range(data_array.shape[-2])
                 )
                 results.extend(chunk_results)
-                # Force garbage collection
                 gc.collect()
 
-            # Process results
             if not results:
                 logging.error("No valid results from ANOVA analysis")
                 raise ValueError("No valid results from ANOVA analysis")
 
-            # Determine number of factors from first non-NaN result
             valid_result = next((r for r in results if not np.all(np.isnan(r[0]))), None)
             if valid_result is None:
                 logging.error("All ANOVA results are NaN")
@@ -164,7 +151,6 @@ def stat_anova(self, *variables):
 
             n_factors = len(valid_result[0])
 
-            # Reshape results
             sum_sq = np.array(
                 [r[0] if len(r[0]) == n_factors else np.full(n_factors, np.nan) for r in results]
             ).reshape(data_array.shape[-3], data_array.shape[-2], -1)
@@ -172,13 +158,11 @@ def stat_anova(self, *variables):
                 [r[1] if len(r[1]) == n_factors else np.full(n_factors, np.nan) for r in results]
             ).reshape(data_array.shape[-3], data_array.shape[-2], -1)
 
-            # Create output dataset
             output_ds = xr.Dataset(
                 {"sum_sq": (["lat", "lon", "factors"], sum_sq), "p_value": (["lat", "lon", "factors"], p_values)},
                 coords={"lat": combined_data.lat, "lon": combined_data.lon, "factors": np.arange(n_factors)},
             )
 
-            # Add metadata
             output_ds["sum_sq"].attrs["long_name"] = "Sum of Squares from ANOVA"
             output_ds["sum_sq"].attrs["description"] = "Sum of squares for each factor in the ANOVA"
             output_ds["p_value"].attrs["long_name"] = "P-values from ANOVA"
@@ -220,10 +204,8 @@ def stat_anova(self, *variables):
                         if len(x_valid) < 4:  # Not enough data for quartiles
                             continue
 
-                        # Calculate quartiles
                         q1, q2, q3 = np.percentile(x_valid, [25, 50, 75])
 
-                        # Group Y by X's quartile bins
                         g1 = Y_data_slice[(x <= q1) & ~np.isnan(Y_data_slice)]
                         g2 = Y_data_slice[(x > q1) & (x <= q2) & ~np.isnan(Y_data_slice)]
                         g3 = Y_data_slice[(x > q2) & (x <= q3) & ~np.isnan(Y_data_slice)]
@@ -249,7 +231,6 @@ def stat_anova(self, *variables):
                     logging.debug(f"Error in one-way ANOVA: {e}")
                     return np.nan, np.nan, np.nan
 
-            # Parallel processing with chunking to conserve memory
             chunk_size = max(1, data_array.shape[-3] // (num_cores * 2))
             results = []
 
@@ -261,15 +242,12 @@ def stat_anova(self, *variables):
                     for j in range(data_array.shape[-2])
                 )
                 results.extend(chunk_results)
-                # Force garbage collection
                 gc.collect()
 
-            # Reshape results
             f_statistics = np.array([r[0] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
             raw_p_values = np.array([r[1] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
             p_values = np.array([r[2] for r in results]).reshape(data_array.shape[-3], data_array.shape[-2])
 
-            # Create output dataset
             output_ds = xr.Dataset(
                 {
                     "F_statistic": (["lat", "lon"], f_statistics),
@@ -282,7 +260,6 @@ def stat_anova(self, *variables):
                 },
             )
 
-            # Add metadata
             output_ds["F_statistic"].attrs["long_name"] = "F-statistic from one-way ANOVA"
             output_ds["F_statistic"].attrs["description"] = "F-statistic for the one-way ANOVA"
             output_ds["raw_p_value"].attrs["long_name"] = "Raw p-values from one-way ANOVA"
@@ -294,7 +271,6 @@ def stat_anova(self, *variables):
         return output_ds
 
     finally:
-        # Clean up memory
         del data_array
         del Y_data_array
         del results

@@ -43,7 +43,6 @@ class YearlyPreprocessingMixin:
                 gc.collect()
 
         try:
-            # Calculate dataset size in GB
             dataset_size_gb = ds.nbytes / (1024**3)
 
             years = list(range(use_syear, use_eyear + 1))
@@ -58,7 +57,6 @@ class YearlyPreprocessingMixin:
                 _processing_attr("delayed", delayed)(save_year)(casedir, suffix, prefix, ds, year) for year in years
             )
         finally:
-            # Ensure main dataset is closed
             if hasattr(ds, "close"):
                 ds.close()
             gc.collect()

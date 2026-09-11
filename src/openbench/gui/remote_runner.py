@@ -192,7 +192,6 @@ class RemoteRunner(QThread):
                 self.finished_signal.emit(False, error_msg)
                 return
 
-            # Check for stop request
             if self._is_stop_requested():
                 self._handle_stop()
                 return
@@ -210,7 +209,6 @@ class RemoteRunner(QThread):
                 if not self._create_remote_temp_dir():
                     return
 
-                # Check for stop request
                 if self._is_stop_requested():
                     self._handle_stop()
                     return
@@ -224,7 +222,6 @@ class RemoteRunner(QThread):
                 if not self._upload_config():
                     return
 
-            # Check for stop request
             if self._is_stop_requested():
                 self._handle_stop()
                 return
@@ -333,7 +330,6 @@ class RemoteRunner(QThread):
             True if successful, False otherwise
         """
         try:
-            # Get config filename
             config_filename = os.path.basename(self.config_path)
             self._remote_config_path = f"{self._remote_temp_dir}/{config_filename}"
 
@@ -486,7 +482,6 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
             f"else exec sh -c {shlex.quote(cmd)}; fi"
         )
 
-        # Execute and stream output
         try:
             progress = self.PROGRESS_INIT
             output_tail = deque(maxlen=5)
@@ -749,7 +744,6 @@ path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encod
         self._do_statistics = do_statistics
         self._num_statistics = max(0, int(num_statistics or 0))
 
-        # Calculate total tasks
         self._total_tasks = 0
 
         if do_evaluation:

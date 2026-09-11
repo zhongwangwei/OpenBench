@@ -46,7 +46,6 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     """
     from openbench.config import ConfigError, load_config
 
-    # Load and validate config
     try:
         cfg = load_config(config)
     except ConfigError as e:
@@ -118,7 +117,6 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     if dump_config:
         _dump_debug_config(cfg)
 
-    # Run evaluation
     from openbench.runner.local import run_evaluation
 
     if comparison_only:
@@ -322,7 +320,7 @@ def _resolve_references_for_run(cfg):
     try:
         resolved = resolve_all_references(cfg, get_registry(), strict=cfg.project.strict_reference)
     except Exception as e:
-        # Multi-line context (resolver hint + remediation) already emitted; exit silently.
+        # Report resolver guidance without Click adding a second error message.
         emit_reference_resolution_error(str(e), prefix="Reference resolution failed: ")
         raise SystemExit(1) from e
 

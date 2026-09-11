@@ -109,7 +109,6 @@ class SelectionMixin:
                 ds = self.apply_custom_filter(datasource, ds, varname)
                 ds = _convert_type().convert_nc(ds)
             except Exception:
-                # Check if varname list is empty
                 if not varname or len(varname) == 0:
                     logging.error("Variable name list is empty")
                     raise ValueError("Variable name list cannot be empty")
@@ -226,8 +225,7 @@ class SelectionMixin:
                     pass
             raise
 
-        # Apply fallback conversion expression if set (from adapter or runtime fallback)
-        # The expression can reference 'value' (current variable) and any other
+        # Apply fallback conversion expressions. The expression can reference 'value' (current variable) and any other
         # variable in the NC file by name (e.g., 'f_assim', 'f_respc').
         # NOTE: This must be outside the except block so it runs even when the
         # primary varname is found without error (adapter-resolved fallbacks).

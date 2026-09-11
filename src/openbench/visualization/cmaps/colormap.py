@@ -14,13 +14,10 @@ class Colormap(colors.ListedColormap):
         else:
             self._N = n
 
-        # call parent __init__
         super(Colormap, self).__init__(self._colors, name=self._name, N=self._N)
 
     def __getitem__(self, item):
         return Colormap(self._colors[item], name="sliced_" + self._name)
-
-        # adding two objects
 
     def __add__(self, o):
         return Colormap(np.vstack([self.colors, o.colors]), self.name + "_" + o.name)

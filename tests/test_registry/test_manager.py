@@ -1,5 +1,6 @@
 """Tests for RegistryManager."""
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -850,16 +851,16 @@ def test_get_reference_exact_variant_name_wins_over_auto_resolve():
     assert ref.name == "CARE_LowRes"
 
 
-def test_get_reference_base_name_no_context():
+def test_get_reference_base_name_no_context(tmp_path):
     """Base name without sim context: returns exact match if exists, None otherwise."""
-    mgr = RegistryManager()
-    # If standalone entry exists, exact match returns it
+    mgr = RegistryManager(user_dir=tmp_path)
+    standalone = replace(mgr._references["gleam_v4.2a_lowres"], name="GLEAM_v4.2a")
+    mgr._references["gleam_v4.2a"] = standalone
+
     ref = mgr.get_reference("GLEAM_v4.2a")
-    if ref is not None:
-        assert ref.name == "GLEAM_v4.2a"
-    # Non-existent base name with variants but no context → None
-    ref2 = mgr.get_reference("TotallyFakeDataset")
-    assert ref2 is None
+    assert ref is standalone
+    assert ref.name == "GLEAM_v4.2a"
+    assert mgr.get_reference("TotallyFakeDataset") is None
 
 
 def test_get_reference_base_name_requires_context_when_only_variants_exist():

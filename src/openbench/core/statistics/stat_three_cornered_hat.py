@@ -168,7 +168,6 @@ def stat_three_cornered_hat(self, *variables):
                     uct.values[:, lat_idx, lon_idx] = uct_values
                     r_uct.values[:, lat_idx, lon_idx] = r_uct_values
 
-            # Clean up
             del all_results
             gc.collect()
         else:
@@ -198,10 +197,8 @@ def stat_three_cornered_hat(self, *variables):
                 if lat_iter_idx % 32 == 0:
                     gc.collect()
 
-        # Create output dataset
         ds = xr.Dataset({"uncertainty": uct, "relative_uncertainty": r_uct})
 
-        # Add metadata
         ds["uncertainty"].attrs["long_name"] = "Uncertainty from Three-Cornered Hat method"
         ds["uncertainty"].attrs["units"] = "Same as input variables"
         ds["uncertainty"].attrs["description"] = "Absolute uncertainty estimated using the Three-Cornered Hat method"
@@ -217,5 +214,4 @@ def stat_three_cornered_hat(self, *variables):
         return ds
 
     finally:
-        # Clean up memory
         gc.collect()

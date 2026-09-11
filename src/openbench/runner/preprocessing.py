@@ -48,7 +48,6 @@ def preprocess_variable(
     #     dir (stn_<ref>_<sim>) and deletes the flat NC; cannot be shared
     preproc_done: set[tuple[str, str]] = set()
     sim_preproc_done: set[tuple[str, str]] = set()
-    # Track first-time-seen per ref_source for unified_mask accumulation
     # For stn×stn symlink optimization: first stn dir per ref_source
     ref_stn_data_dirs: dict[str, str] = {}
     # ref_source -> flat ref NC path (only valid while a grid-only path lives there)
@@ -205,7 +204,6 @@ def preprocess_variable(
                             ),
                         )
                     else:
-                        # Grid prep produced a flat NC; remember its path
                         ref_varname = info.get("ref_varname", "")
                         ref_flat_paths[ref_source] = os.path.join(
                             info["casedir"],
@@ -288,7 +286,6 @@ def preprocess_variable(
                             )
                             apply_unified_mask_fn(info, var_name, ref_source, sim_source, ref_override=pair_ref)
                             _backup_flat_ref(ref_source)
-                            # Record per-pair ref path so evaluation uses this copy
                             task["ref_file_override"] = pair_ref
                         elif time_alignment != "per_pair":
                             # intersection/strict: apply once per shared ref after all sibling sims are ready.

@@ -1,32 +1,31 @@
 """Tests for reference definition converter."""
 
-import tempfile
 from pathlib import Path
+
+import yaml
 
 from openbench.data.registry.converter import convert_old_reference
 
-OLD_REF_DIR = Path("OpenBench-wei/nml/nml-yaml/Ref_variables_definition_LowRes")
 
+def test_convert_gleam(tmp_path):
+    """Convert the bundled legacy GLEAM definition without a private checkout."""
+    old_path = Path(__file__).resolve().parents[1] / "test_config/fixtures/old_json/ref_def/GLEAM.json"
+    out_path = tmp_path / "converted" / "GLEAM_v4.2a.yaml"
+    convert_old_reference(old_path, out_path, name="GLEAM_v4.2a", category="Water")
 
-def test_convert_gleam():
-    """Convert old GLEAM definition to new format."""
-    old_path = OLD_REF_DIR / "GLEAM_v4.2a.yaml"
-    if not old_path.exists():
-        return  # Skip if old code not present
-
-    import yaml
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        out_path = Path(tmpdir) / "GLEAM_v4.2a.yaml"
-        convert_old_reference(old_path, out_path, name="GLEAM_v4.2a", category="Water")
-
-        assert out_path.exists()
-
-        with open(out_path) as f:
-            data = yaml.safe_load(f)
-
-        assert data["name"] == "GLEAM_v4.2a"
-        assert data["data_type"] == "grid"
-        assert "variables" in data
-        assert "Evapotranspiration" in data["variables"]
-        assert data["variables"]["Evapotranspiration"]["varname"] == "E"
+    assert out_path.exists()
+    data = yaml.safe_load(out_path.read_text(encoding="utf-8"))
+    assert data["name"] == "GLEAM_v4.2a"
+    assert data["category"] == "Water"
+    assert data["data_type"] == "grid"
+    assert data["grid_res"] == 0.25
+    assert data["years"] == [1980, 2023]
+    assert data["tim_res"] == "Month"
+    assert data["data_groupby"] == "Year"
+    assert data["variables"]["Evapotranspiration"] == {
+        "varname": "E",
+        "varunit": "mm day-1",
+        "prefix": "E_",
+        "suffix": "_GLEAM",
+        "sub_dir": "Water/Evapotranspiration/GLEAM",
+    }

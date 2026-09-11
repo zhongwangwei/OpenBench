@@ -387,6 +387,7 @@ class PageRegistry(BasePage):
             return
         kwargs = {"parent": self, **context}
         kwargs.pop("openbench_path", None)  # the importer inspects files, not the package
+        kwargs.pop("openbench_source_path", None)
 
         dlg = NCImporterDialog(**kwargs)
         if dlg.exec():

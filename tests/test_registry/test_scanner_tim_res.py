@@ -60,6 +60,32 @@ def test_scan_reference_directory_registers_unprofiled_grid_composite(tmp_path: 
     assert variant.file_count == 1
 
 
+def test_scan_reference_directory_accepts_grid_directory(tmp_path: Path):
+    dataset = tmp_path / "ref" / "Grid" / "LowRes" / "Water" / "Runoff" / "Demo"
+    dataset.mkdir(parents=True)
+    (dataset / "demo.nc").write_text("")
+    station = tmp_path / "ref" / "Station" / "Composite" / "Daily"
+    station.mkdir(parents=True)
+    (station / "daily.nc").write_text("")
+
+    groups = scan_reference_directory(tmp_path / "ref" / "Grid")
+
+    assert [group.base_name for group in groups] == ["Demo"]
+
+
+def test_scan_reference_directory_accepts_station_directory(tmp_path: Path):
+    station = tmp_path / "ref" / "Station" / "Water" / "Runoff" / "Gauge"
+    station.mkdir(parents=True)
+    (station / "gauge.nc").write_text("")
+    grid = tmp_path / "ref" / "Grid" / "LowRes" / "Water" / "Runoff" / "Demo"
+    grid.mkdir(parents=True)
+    (grid / "demo.nc").write_text("")
+
+    groups = scan_reference_directory(tmp_path / "ref" / "Station")
+
+    assert [group.base_name for group in groups] == ["Gauge"]
+
+
 def test_scan_reference_directory_registers_multiple_standard_composite_datasets(tmp_path: Path):
     """Composite/<variable>/<dataset> with several datasets is standard layout."""
     import numpy as np

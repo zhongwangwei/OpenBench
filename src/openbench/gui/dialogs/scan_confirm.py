@@ -52,7 +52,6 @@ class ScanConfirmDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # --- Summary ---
         detected_models = {model for model in self._case_models.values() if model}
         if auto_model or detected_models:
             summary = QLabel(f"Found <b>{len(discovered)}</b> cases with <b>{nc_var_count}</b> NC variables.\n")
@@ -65,7 +64,6 @@ class ScanConfirmDialog(QDialog):
         summary.setWordWrap(True)
         layout.addWidget(summary)
 
-        # --- Match info ---
         if match_info:
             match_box = QPlainTextEdit(match_info)
             match_box.setReadOnly(True)
@@ -73,7 +71,6 @@ class ScanConfirmDialog(QDialog):
             match_box.setStyleSheet("background: #f8f8f8; padding: 6px; border-radius: 4px;")
             layout.addWidget(match_box)
 
-        # --- Case table ---
         layout.addWidget(QLabel("Select cases to run and assign models:"))
 
         self._table = QTableWidget(len(discovered), 4)
@@ -123,7 +120,6 @@ class ScanConfirmDialog(QDialog):
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self._table, stretch=1)
 
-        # --- Select all / none ---
         sel_row = QHBoxLayout()
         btn_all = QPushButton("Select All")
         btn_all.clicked.connect(lambda: self._set_all(True))
@@ -139,7 +135,6 @@ class ScanConfirmDialog(QDialog):
         sel_row.addStretch()
         layout.addLayout(sel_row)
 
-        # --- OK / Cancel ---
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
