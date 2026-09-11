@@ -130,8 +130,10 @@ uv pip install "colm-openbench[all]"
 
 OpenBench **3.0.0** can be installed in an isolated Conda environment. A
 `colm-openbench` package is not currently published on conda-forge, so do not use
-`conda install -c conda-forge colm-openbench` yet. Install the native scientific
-libraries from conda-forge first, then OpenBench from PyPI:
+`conda install -c conda-forge colm-openbench` yet. The conda-forge submission is
+[under review](https://github.com/conda-forge/staged-recipes/pull/34807).
+Until it is published, install the native scientific libraries from conda-forge
+first, then OpenBench from PyPI:
 
 ```bash
 conda create -n openbench --override-channels -c conda-forge python=3.12 pip cartopy netcdf4 scipy pandas xarray matplotlib-base
