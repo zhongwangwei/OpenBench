@@ -1,8 +1,7 @@
 # Releasing OpenBench 3.0
 
 This is a preparation checklist, not a record of publication or a version change.
-Do not upload a rebuilt beta over the existing release, or reuse old local `dist/`
-artifacts.
+Do not overwrite an existing release or reuse old local `dist/` artifacts.
 
 ## 1. Finalize the release inputs
 
@@ -34,6 +33,7 @@ headless tests do not prove real SSH/HPC connectivity or every optional backend.
 ## 3. Build and inspect fresh artifacts
 
 Install the build tools in the release environment (`build`, `twine`, `pytest`).
+Use a clean checkout of the release commit, not a working tree with local files.
 The following shell commands use a new directory and leave existing `dist/` alone:
 
 ```sh
@@ -72,6 +72,21 @@ it is an installed-wheel check, not proof of a clean dependency resolution.
 ## 5. Publish deliberately
 
 Only after review and CI pass: use the approved release/tag and upload process.
+Upload the exact verified wheel and sdist with `python -m twine upload`, using the
+configured credential store rather than putting tokens in commands or logs.
+Verify PyPI's version-specific JSON metadata and download hashes after upload.
 The manual publish workflow runs the same artifact gate before uploading and
 requires separately configured PyPI/TestPyPI environments. No local cleanup or
 build command should trigger publication.
+
+## 6. Validate Conda installation
+
+The README documents both Conda-plus-PyPI installation and a native local Conda
+build. Test in a fresh environment, not `base`. The recipe's pip step must not
+resolve runtime dependencies or fetch build tools outside Conda's host environment.
+
+Before publishing, a temporary copy of the recipe may point to the verified local
+sdist for build/testing; the committed recipe must retain its PyPI URL and the
+same SHA-256. After PyPI publication, verify that URL resolves to the same archive.
+Run the recipe's dependency, CLI and bundled-data smoke checks. Do not claim a
+conda-forge release until the feedstock and channel package actually exist.

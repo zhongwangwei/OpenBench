@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased] — 3.0 release preparation
+## [3.0.0] - 2026-09-11
+
+First stable 3.0 release, including the main-branch fixes validated across Linux,
+macOS and Windows on Python 3.10–3.12. The opt-in uncertainty-aware pipeline
+remains on its separate development branch.
 
 ### Fixed
 - Shared grid preprocessing no longer depends on which reference is evaluated
@@ -17,6 +21,10 @@
   credential handling without removing public compatibility entry points.
 - Share wheel/sdist resource checks between CI and publishing, require explicitly
   selected artifacts to exist, and document fresh-build release verification.
+- Remove redundant comments and duplicate test scaffolding while retaining
+  meaningful scientific documentation and deterministic regression coverage.
+- Align the Conda recipe with the stable PyPI version and verify its dependency,
+  command-line and bundled-data installation contracts.
 
 ## [3.0.0b16] - 2026-08-31
 

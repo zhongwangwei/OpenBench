@@ -1,6 +1,6 @@
 {% set name = "colm-openbench" %}
 {% set dist_name = name|replace("-", "_") %}
-{% set version = "3.0.0b16" %}
+{% set version = "3.0.0" %}
 
 package:
   name: {{ name|lower }}
@@ -8,12 +8,12 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: bd1f78abe46e0e7598c6f58184bdbec1a3359551a8a4682d6f9f597fa02a0eb9
+  sha256: 9774243ae91ca72d52f79e1aa0887a2507d157f3fe7fae336074284740b72bff
 
 build:
   noarch: python
   number: 0
-  script: {{ PYTHON }} -m pip install . -vv
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
   entry_points:
     - openbench = openbench.cli.main:cli
 
@@ -48,10 +48,17 @@ requirements:
     - f90nml >=1.4.4
 
 test:
+  requires:
+    - pip
   imports:
     - openbench
+    - openbench.config
+    - openbench.data.registry
   commands:
+    - python -m pip check
     - openbench --version
+    - openbench model list
+    - openbench smoke-test
 
 about:
   home: https://github.com/CoLM-SYSU/OpenBench
