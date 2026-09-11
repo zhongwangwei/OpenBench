@@ -1,5 +1,6 @@
 """Real NetCDF regressions for source reuse and per-pair cache artifacts."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -105,14 +106,21 @@ def test_multireference_years_do_not_depend_on_reference_order(
         np.testing.assert_allclose(result.bias, -1)
 
 
-def test_per_pair_outputs_survive_cache_reuse_and_comparison_only(tmp_path, monkeypatch):
+@pytest.mark.parametrize("uncertainty_enabled", [False, True])
+def test_per_pair_outputs_survive_cache_reuse_and_comparison_only(tmp_path, monkeypatch, uncertainty_enabled):
     cfg, bindings, case = _case(tmp_path, monkeypatch, {"Ref": (2000, 2001)}, masked=True)
+    cfg.uncertainty.enabled = uncertainty_enabled
+    cfg.uncertainty.metrics = ["bias"]
+    cfg.uncertainty.n_resamples = 10
+    cfg.uncertainty.block_length = 1
     cfg.comparison.enabled = True
     cfg.comparison.items = ["Mean"]
     bindings.runner_cfg.comparisons[:] = ["Mean"]
     monkeypatch.setattr("openbench.core.comparison.make_geo_plot_index", lambda *args, **kwargs: None)
     pair = case / "data/Runoff_ref_Ref_Sim_v.nc"
     mean_path = case / "comparisons/Mean/Runoff_ref_Ref_sim_Sim_v_Mean.nc"
+    summary_path = case / "uncertainty/summary.json"
+    summary_mtime = None
     for run_index, comparison_only in enumerate([False, False, True]):
         result = local._run_evaluation_impl(cfg, comparison_only=comparison_only, dask_distributed_active=False)
         assert result["status"] == "success", result["errors"]
@@ -121,6 +129,13 @@ def test_per_pair_outputs_survive_cache_reuse_and_comparison_only(tmp_path, monk
             assert all(task["skipped"] for task in result["evaluated"])
         with xr.open_dataset(mean_path) as means:
             np.testing.assert_allclose(means.Mean, 3.5)
+        if uncertainty_enabled:
+            summary = json.loads(summary_path.read_text())
+            assert summary["bootstrap"][0]["status"] == "available"
+            if run_index == 0:
+                summary_mtime = summary_path.stat().st_mtime_ns
+            else:
+                assert summary_path.stat().st_mtime_ns == summary_mtime
 
 
 def test_missing_pair_ref_invalidates_cache_and_output_only_preflight(tmp_path, monkeypatch):
