@@ -206,7 +206,8 @@ def test_ci_runs_zipimport_smoke_against_built_wheel():
     """CI should exercise the built wheel as a zip on PYTHONPATH."""
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "python -m build --wheel" in ci
+    # The default build checks the sdist-to-wheel path before ZIP import.
+    assert "- run: python -m build\n" in ci
     assert 'PYTHONPATH="$WHEEL" python -m openbench --help' in ci
     assert 'PYTHONPATH="$WHEEL" python -m openbench model list' in ci
     assert "ensure_user_registry_overlays(tmpdir)" in ci

@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] — 3.0 release preparation
+
+### Fixed
+- Shared grid preprocessing no longer depends on which reference is evaluated
+  first; per-pair masked references survive cache reuse and post-processing errors.
+- Statistics respect preprocessed units, finite observations and coordinate
+  alignment; ANOVA, PLSR and Three-Cornered Hat receive the correct source layout.
+- Non-Gregorian monthly conversions, computed reference variables and mixed
+  flat/resolution-specific reference directories retain their intended data.
+- Remote configuration changes apply atomically without retaining another
+  host's passwords; recursive deletes clear matching cached and pending files.
+
+### Maintenance
+- Remove obsolete processing scaffolding and consolidate calendar and saved
+  credential handling without removing public compatibility entry points.
+- Share wheel/sdist resource checks between CI and publishing, require explicitly
+  selected artifacts to exist, and document fresh-build release verification.
+
 ## [3.0.0b15] - 2026-08-26
 
 Beta release over 3.0.0b14 for GUI/runtime reliability, truthful reporting,
