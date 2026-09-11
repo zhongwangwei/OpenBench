@@ -22,10 +22,8 @@ def process_grid_diff_plot(
     metrics: list[str],
     scores: list[str],
 ) -> None:
-    # Calculate ensemble means and anomalies for metrics
     for metric in metrics:
         try:
-            # Load all simulation data for this metric
             datasets = []
             for sim_source in sim_sources:
                 with xr.open_dataset(
@@ -37,10 +35,8 @@ def process_grid_diff_plot(
                 ) as ds_file:
                     ds = Convert_Type.convert_nc(ds_file.load())
                 datasets.append(ds[metric])
-            # Calculate ensemble mean
             ensemble_mean = xr.concat(datasets, dim="ensemble").mean("ensemble")
 
-            # Save ensemble mean
             ds_mean = xr.Dataset()
             ds_mean[f"{metric}_ensemble_mean"] = Convert_Type.convert_nc(ensemble_mean)
             ds_mean.attrs["description"] = f"Ensemble mean of {metric} across all simulations"
@@ -48,7 +44,6 @@ def process_grid_diff_plot(
             ds_mean = Convert_Type.convert_nc(ds_mean)
             _write_netcdf_atomic(ds_mean, output_file)
 
-            # Calculate and save anomalies for each simulation
             for sim_source, ds in zip(sim_sources, datasets):
                 anomaly = ds - ensemble_mean
                 ds_anom = xr.Dataset()
@@ -64,10 +59,8 @@ def process_grid_diff_plot(
             logging.error(f"Error processing ensemble calculations for metric {metric}: {e}")
             raise
 
-    # Calculate ensemble means and anomalies for scores
     for score in scores:
         try:
-            # Load all simulation data for this score
             datasets = []
             for sim_source in sim_sources:
                 with xr.open_dataset(
@@ -80,10 +73,8 @@ def process_grid_diff_plot(
                     ds = Convert_Type.convert_nc(ds_file.load())
                 datasets.append(ds[score])
 
-            # Calculate ensemble mean
             ensemble_mean = xr.concat(datasets, dim="ensemble").mean("ensemble")
 
-            # Save ensemble mean
             ds_mean = xr.Dataset()
             ds_mean[f"{score}_ensemble_mean"] = ensemble_mean
             ds_mean.attrs["description"] = f"Ensemble mean of {score} across all simulations"
@@ -91,7 +82,6 @@ def process_grid_diff_plot(
             ds_mean = Convert_Type.convert_nc(ds_mean)
             _write_netcdf_atomic(ds_mean, output_file)
 
-            # Calculate and save anomalies for each simulation
             for sim_source, ds in zip(sim_sources, datasets):
                 anomaly = ds - ensemble_mean
                 ds_anom = xr.Dataset()
@@ -107,7 +97,6 @@ def process_grid_diff_plot(
             logging.error(f"Error processing ensemble calculations for score {score}: {e}")
             raise
     if len(sim_sources) >= 2:
-        # Compare metrics between pairs
         for metric in metrics:
             for i, sim1 in enumerate(sim_sources):
                 for j, sim2 in enumerate(sim_sources[i + 1 :], i + 1):
@@ -145,7 +134,6 @@ def process_grid_diff_plot(
                         logging.error(f"Error processing metric {metric} for {sim1} vs {sim2}: {e}")
                         raise
 
-        # Compare scores between pairs
         for score in scores:
             for i, sim1 in enumerate(sim_sources):
                 for j, sim2 in enumerate(sim_sources[i + 1 :], i + 1):

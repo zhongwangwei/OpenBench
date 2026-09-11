@@ -141,14 +141,12 @@ class EvaluationCache:
         """Save cache atomically (write to temp file, then rename)."""
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         try:
-            # Atomic write: temp file + rename prevents race conditions
             fd, tmp_path = tempfile.mkstemp(dir=str(self._cache_dir), suffix=".tmp", prefix=".cache_")
             try:
                 with os.fdopen(fd, "w") as f:
                     json.dump(self._cache, f, indent=2)
                 os.replace(tmp_path, str(self._cache_file))  # Atomic on POSIX
             except Exception:
-                # Clean up temp file on failure
                 try:
                     os.unlink(tmp_path)
                 except OSError:

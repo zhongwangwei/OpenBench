@@ -135,3 +135,147 @@ def test_gldas_fixed_soil_layers_convert_to_volumetric_moisture(tmp_path):
         converted, base_unit = UnitProcessing.convert_unit(result, mapping.varunit)
         np.testing.assert_allclose(converted, [0.2])
         assert base_unit == UnitProcessing.convert_unit(None, "m3 m-3")[1]
+
+
+def test_month_rate_uses_preserved_noleap_calendar_days():
+    import pandas as pd
+    import xarray as xr
+
+    unit._UNIT_LOOKUP_CACHE = None
+    data = xr.DataArray(
+        [28.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-02-01"])},
+    )
+    data.time.attrs["original_calendar"] = "noleap"
+
+    converted, base_unit = UnitProcessing.convert_unit(data, "mm month-1")
+
+    assert base_unit == "mm day-1"
+    np.testing.assert_allclose(converted.values, [1.0])
+
+
+def test_month_rate_uses_preserved_360_day_calendar_days():
+    import pandas as pd
+    import xarray as xr
+
+    unit._UNIT_LOOKUP_CACHE = None
+    data = xr.DataArray(
+        [30.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-02-01"])},
+    )
+    data.time.attrs["original_calendar"] = "360_day"
+
+    converted, base_unit = UnitProcessing.convert_unit(data, "mm month-1")
+
+    assert base_unit == "mm day-1"
+    np.testing.assert_allclose(converted.values, [1.0])
+
+
+def test_day_rate_uses_preserved_noleap_calendar_year_days():
+    import pandas as pd
+    import xarray as xr
+
+    data = xr.DataArray(
+        [1.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-01-01"])},
+    )
+    data.time.attrs["original_calendar"] = "noleap"
+
+    converted = unit._per_day_to_per_year(data)
+
+    np.testing.assert_allclose(converted.values, [365.0])
+
+
+def test_day_rate_uses_preserved_360_day_calendar_year_days():
+    import pandas as pd
+    import xarray as xr
+
+    data = xr.DataArray(
+        [1.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-01-01"])},
+    )
+    data.time.attrs["original_calendar"] = "360_day"
+
+    converted = unit._per_day_to_per_year(data)
+
+    np.testing.assert_allclose(converted.values, [360.0])
+
+
+def test_day_rate_uses_gregorian_leap_year_days_without_original_calendar():
+    import pandas as pd
+    import xarray as xr
+
+    data = xr.DataArray(
+        [1.0, 1.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-01-01", "2001-01-01"])},
+    )
+
+    converted = unit._per_day_to_per_year(data)
+
+    np.testing.assert_allclose(converted.values, [366.0, 365.0])
+
+
+def test_rate_conversions_keep_scalar_fallbacks_without_time_coordinate():
+    yearly = unit._per_day_to_per_year(2.0)
+    daily = unit._per_month_to_per_day(60.875)
+
+    assert yearly == 730.5
+    assert daily == 2.0
+
+
+def test_declared_calendar_errors_are_not_silently_downgraded(monkeypatch):
+    import pandas as pd
+    import xarray as xr
+
+    class BrokenCalendar:
+        def __init__(self, *args):
+            raise RuntimeError("bad declared calendar")
+
+    data = xr.DataArray(
+        [1.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-01-01"])},
+    )
+    data.time.attrs["original_calendar"] = "360_day"
+    monkeypatch.setattr(unit, "_cftime_calendar_class", lambda calendar: BrokenCalendar)
+
+    try:
+        unit._per_day_to_per_year(data)
+    except RuntimeError as exc:
+        assert "bad declared calendar" in str(exc)
+    else:
+        raise AssertionError("declared calendar failure was silently downgraded")
+
+
+def test_declared_calendar_requires_cftime(monkeypatch):
+    import builtins
+
+    import pandas as pd
+    import xarray as xr
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "cftime":
+            raise ImportError("missing cftime")
+        return real_import(name, *args, **kwargs)
+
+    data = xr.DataArray(
+        [30.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2000-02-01"])},
+    )
+    data.time.attrs["original_calendar"] = "360_day"
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    try:
+        unit._per_month_to_per_day(data)
+    except ImportError as exc:
+        assert "missing cftime" in str(exc)
+    else:
+        raise AssertionError("declared calendar without cftime was silently downgraded")

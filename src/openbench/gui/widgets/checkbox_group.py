@@ -69,13 +69,11 @@ class CheckboxGroup(QWidget):
         self.search_input.textChanged.connect(self._filter_items)
         toolbar.addWidget(self.search_input, 1)
 
-        # Select all button
         self.btn_select_all = QPushButton("Select All")
         self.btn_select_all.setProperty("secondary", True)
         self.btn_select_all.clicked.connect(self._select_all)
         toolbar.addWidget(self.btn_select_all)
 
-        # Select none button
         self.btn_select_none = QPushButton("Select None")
         self.btn_select_none.setProperty("secondary", True)
         self.btn_select_none.clicked.connect(self._select_none)
@@ -100,7 +98,6 @@ class CheckboxGroup(QWidget):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(15)
 
-        # Create checkbox groups
         for group_name, group_items in self.items.items():
             group_box = QGroupBox(group_name)
             group_layout = QGridLayout(group_box)
@@ -114,7 +111,6 @@ class CheckboxGroup(QWidget):
             else:
                 flat_items = group_items
 
-            # Create checkboxes in grid (3 columns)
             col_count = self.columns
             for i, item_name in enumerate(flat_items):
                 cb = QCheckBox(self.labels.get(item_name, item_name.replace("_", " ")))
@@ -125,7 +121,6 @@ class CheckboxGroup(QWidget):
 
             container_layout.addWidget(group_box)  # No stretch - maintain natural size
 
-        # Add stretch at end to push groups to top
         container_layout.addStretch()
         scroll.setWidget(container)
         layout.addWidget(scroll, 1)

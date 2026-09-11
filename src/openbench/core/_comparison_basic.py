@@ -82,11 +82,9 @@ class BasicComparisonMixin:
             return row
 
         for evaluation_item in evaluation_items:
-            # Get simulation sources
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-            # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):

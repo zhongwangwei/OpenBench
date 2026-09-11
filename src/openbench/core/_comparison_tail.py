@@ -42,19 +42,15 @@ class TailComparisonMixin:
         self.compare_nml["Mann_Kendall_Trend_Test"] = {}
         self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"] = option["significance_level"]
         for evaluation_item in evaluation_items:
-            # Get simulation sources
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-            # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
                 ref_sources = [ref_sources]
 
             for sim_source in sim_sources:
-                # Skip if only one simulation source
-
                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                 sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
 
@@ -126,11 +122,9 @@ class TailComparisonMixin:
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -142,7 +136,6 @@ class TailComparisonMixin:
                         sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
 
                         if sim_data_type != "stn":
-                            # Use os.path.join for file paths
                             sim_path = os.path.join(
                                 basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                             )
@@ -175,7 +168,6 @@ class TailComparisonMixin:
                         )
                         raise
                     finally:
-                        # Clean up memory after each simulation source
                         gc.collect()
 
                 for ref_source in ref_sources:
@@ -184,7 +176,6 @@ class TailComparisonMixin:
                         ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
 
                         if ref_data_type != "stn":
-                            # Use os.path.join for file paths
                             ref_path = os.path.join(
                                 basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                             )
@@ -217,10 +208,8 @@ class TailComparisonMixin:
                         )
                         raise
                     finally:
-                        # Clean up memory after each reference source
                         gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()
 
     def scenarios_Functional_Response_comparison(
@@ -236,11 +225,9 @@ class TailComparisonMixin:
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -252,7 +239,6 @@ class TailComparisonMixin:
                         ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
 
                         if ref_data_type != "stn":
-                            # Use os.path.join for file paths
                             ref_path = os.path.join(
                                 basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                             )
@@ -265,7 +251,6 @@ class TailComparisonMixin:
                                     sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                                     sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
                                     if sim_data_type != "stn":
-                                        # Use os.path.join for file paths
                                         sim_path = os.path.join(
                                             basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                         )
@@ -290,13 +275,10 @@ class TailComparisonMixin:
                                     )
                                     raise
                                 finally:
-                                    # Clean up memory after each simulation source
                                     gc.collect()
                     finally:
-                        # Clean up memory after each reference source
                         gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
@@ -311,7 +293,6 @@ class TailComparisonMixin:
                 output_file_path = os.path.join(dir_path, f"scenarios_{score}_comparison.csv")
                 with _atomic_text_writer(output_file_path) as output_file:
                     writer = csv.writer(output_file, lineterminator="\n")
-                    # Collect all unique sim_sources across all evaluation items
                     all_sim_sources = []
                     for evaluation_item in evaluation_items:
                         sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
@@ -320,7 +301,6 @@ class TailComparisonMixin:
                         for s in sim_sources:
                             if s not in all_sim_sources:
                                 all_sim_sources.append(s)
-                    # Write header without trailing tab
                     header = ["Item", "Reference"] + all_sim_sources
                     writer.writerow(header)
 
@@ -328,7 +308,6 @@ class TailComparisonMixin:
                         sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                         ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                        # if the sim_sources and ref_sources are not list, then convert them to list
                         if isinstance(sim_sources, str):
                             sim_sources = [sim_sources]
                         if isinstance(ref_sources, str):
@@ -356,12 +335,8 @@ class TailComparisonMixin:
 
                                 overall_mean_str = f"{overall_mean:.3f}" if not np.isnan(overall_mean) else "N/A"
                                 values.append(overall_mean_str)
-                            # Write values without trailing tab
                             writer.writerow([evaluation_item, ref_source, *values])
-                # try:
                 _comparison_callable("make_scenarios_comparison_radar_map")(output_file_path, score, option)
-                # except Exception as e:
-                #     logging.error(f"Error processing RadarMap for {score}: {e}")
         finally:
             gc.collect()  # Clean up memory after processing
 
@@ -374,9 +349,7 @@ class TailComparisonMixin:
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if len(sim_sources) < 2:
@@ -404,7 +377,6 @@ class TailComparisonMixin:
                                 sim_varname1 = evaluation_item
                             if sim_varname2 is None or sim_varname2 == "":
                                 sim_varname2 = evaluation_item
-                            # Use os.path.join for file paths
 
                             ds1_path = os.path.join(basedir, "data", f"{evaluation_item}_sim_{sim1}_{sim_varname1}.nc")
                             ds2_path = os.path.join(basedir, "data", f"{evaluation_item}_sim_{sim2}_{sim_varname2}.nc")
@@ -434,8 +406,6 @@ class TailComparisonMixin:
                             )
                             raise
                         finally:
-                            # Clean up memory after each iteration
                             gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()

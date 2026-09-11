@@ -736,7 +736,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     """Build and validate an OpenBenchConfig from a raw dict."""
     _reject_unknown_keys(raw, _TOP_LEVEL_KEYS)
 
-    # --- project (required) ---
     if "project" not in raw:
         raise ConfigError("Missing required section: 'project'")
     if not isinstance(raw["project"], dict):
@@ -776,7 +775,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
 
     project = _build_project(raw_project)
 
-    # --- evaluation (required) ---
     if "evaluation" not in raw:
         raise ConfigError("Missing required section: 'evaluation'")
     if not isinstance(raw["evaluation"], dict):
@@ -784,7 +782,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
     evaluation = _build_evaluation(raw["evaluation"])
     evaluation_lookup = _evaluation_variable_lookup(evaluation.variables)
 
-    # --- reference (required) ---
     if "reference" not in raw:
         raise ConfigError("Missing required section: 'reference'")
     if not isinstance(raw["reference"], dict):
@@ -814,7 +811,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
         raw_reference.pop("data_root", None)
     reference = _build_reference(raw_reference)
 
-    # Check all evaluation variables have a reference
     for var in evaluation.variables:
         if var not in reference.sources:
             raise ConfigError(
@@ -822,7 +818,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
                 f"Add: reference.{var}: <source_name>"
             )
 
-    # --- simulation (required) ---
     if "simulation" not in raw:
         raise ConfigError("Missing required section: 'simulation'")
     if not isinstance(raw["simulation"], dict):
@@ -835,7 +830,6 @@ def _build_config(raw: dict[str, Any]) -> OpenBenchConfig:
             path=f"simulation.{label}.variables",
         )
 
-    # --- optional sections ---
     metrics = _validated_optional_string_list(raw.get("metrics"), "metrics")
     scores = _validated_optional_string_list(raw.get("scores"), "scores")
     if metrics == [] and scores == []:
@@ -904,15 +898,13 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
 
     return ProjectConfig(
         name=str(name),
-        # Apply $VAR + ~ expansion (matches adapter._resolve_root_relative_path).
-        # Without expandvars, `output_dir: $SCRATCH/results` would be taken
+        # Expand $VAR and ~ first; without expandvars, `output_dir: $SCRATCH/results` would be taken
         # literally and fail at directory creation time on HPC.
         output_dir=str(Path(os.path.expandvars(str(raw["output_dir"]))).expanduser()),
         years=years,
         min_year_threshold=raw.get("min_year_threshold", 1),
         lat_range=lat_range,
         lon_range=lon_range,
-        # Target resolution
         tim_res=_validated_optional_tim_res(raw.get("tim_res"), "project.tim_res"),
         grid_res=_validated_optional_positive_number(raw.get("grid_res"), "project.grid_res"),
         timezone=_validated_optional_number(raw.get("timezone"), "project.timezone"),
@@ -1074,7 +1066,6 @@ def _build_simulation(raw: dict[str, Any]) -> dict[str, SimulationEntry]:
     if not isinstance(raw, dict):
         raise ConfigError("'simulation' must be a mapping")
 
-    # Extract and remove _defaults before iterating
     raw_copy = dict(raw)
     defaults = raw_copy.pop("_defaults", {})
     if defaults is None:

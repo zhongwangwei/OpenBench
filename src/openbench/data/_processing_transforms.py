@@ -116,11 +116,9 @@ class ProcessingTransformMixin:
 
     def apply_custom_filter(self, datasource: str, ds: xr.Dataset, varname: List) -> xr.Dataset:
         if datasource == "stat":
-            # Validate varname list is not empty
             if not varname or len(varname) == 0:
                 raise ValueError("Variable name list cannot be empty for station data")
 
-            # Validate variable exists in dataset
             actual_var = get_xarray_key_case_insensitive(ds, varname[0])
             if actual_var is None:
                 available_vars = list(ds.data_vars) + list(ds.coords)
@@ -128,7 +126,6 @@ class ProcessingTransformMixin:
 
             return ds[actual_var]
         else:
-            # Resolve source name (model name for sim, dataset name for ref)
             source_key = self.sim_source if datasource == "sim" else self.ref_source
             try:
                 source_name = getattr(self, f"{source_key}_model")
@@ -191,7 +188,6 @@ class ProcessingTransformMixin:
 
     @performance_monitor
     def resample_data(self, dfx1: xr.Dataset, tim_res: str, startx: int, endx: int) -> xr.Dataset:
-        # Check if climatology mode - skip resampling
         tim_res_lower = str(tim_res).strip().lower()
         if tim_res_lower in ["climatology-year", "climatology-month"]:
             logging.debug(f"resample_data: Climatology mode detected ({tim_res}), returning data unchanged")
@@ -205,7 +201,6 @@ class ProcessingTransformMixin:
         value, unit = match.groups()
         value = int(value)
 
-        # Get frequency map based on pandas version
         if USE_NEW_FREQ_ALIASES:
             freq_map = {"month": "ME", "day": "D", "hour": "h", "year": "YE", "week": "W"}
         else:
@@ -216,7 +211,6 @@ class ProcessingTransformMixin:
             logging.error(f"Unsupported time unit: {unit}")
             raise ValueError(f"Unsupported time unit: {unit}")
 
-        # Build frequency string
         freq_str = f"{value}{freq}"
         time_index = pd.date_range(start=f"{startx}-01-01T00:00:00", end=f"{endx}-12-31T23:59:59", freq=freq_str)
         ds = xr.Dataset({"data": ("time", np.nan * np.ones(len(time_index)))}, coords={"time": time_index})

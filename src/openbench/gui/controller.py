@@ -19,12 +19,10 @@ if TYPE_CHECKING:
 class WizardController(QObject):
     """Controls wizard page flow and configuration state."""
 
-    # Signals
     page_changed = Signal(str)  # Emitted when current page changes
     config_updated = Signal(dict)  # Emitted when config is modified
     pages_visibility_changed = Signal()  # Emitted when visible pages change
 
-    # All possible pages in order
     ALL_PAGES = [
         "runtime",
         "general",
@@ -42,7 +40,6 @@ class WizardController(QObject):
         "run_monitor",
     ]
 
-    # Page display names
     PAGE_NAMES = {
         "general": "General",
         "registry": "Data Registry",
@@ -179,7 +176,6 @@ class WizardController(QObject):
         self._config[section][key] = value
         self.config_updated.emit(self._config)
 
-        # Check if this affects page visibility
         if section == "general" and key in self.CONDITIONAL_PAGES.values():
             self.pages_visibility_changed.emit()
 
@@ -188,7 +184,6 @@ class WizardController(QObject):
         self._config[section] = data
         self.config_updated.emit(self._config)
 
-        # Check if this affects page visibility
         if section == "general":
             self.pages_visibility_changed.emit()
 
@@ -344,7 +339,6 @@ class WizardController(QObject):
                     f"{remote_root}/{relative_basedir}/{basename}" if relative_basedir else f"{remote_root}/{basename}"
                 )
             else:
-                # Use project root to construct output path
                 openbench_root = self._project_root or get_openbench_root()
                 relative_basedir = basedir or "./output"
                 if relative_basedir.startswith("./"):
@@ -367,13 +361,11 @@ class WizardController(QObject):
         if not self._auto_sync_enabled:
             return
 
-        # Check if we have enough config to sync
         general = self._config.get("general", {})
         basename = general.get("basename", "")
         if not basename:
             return  # No project name yet, skip sync
 
-        # Use storage if available
         if self._storage:
             self._sync_namelists_with_storage()
         else:
@@ -382,12 +374,10 @@ class WizardController(QObject):
             openbench_root = self._project_root or get_openbench_root()
 
             try:
-                # Sync data source namelists
                 self._config_manager.sync_namelists(self._config, output_dir, openbench_root)
                 # Also cleanup unused files
                 self._config_manager.cleanup_unused_namelists(self._config, output_dir)
 
-                # Save main config file to nml folder
                 self._save_main_config(output_dir, basename, openbench_root)
             except Exception as e:
                 # Log error but don't crash
@@ -405,7 +395,6 @@ class WizardController(QObject):
         if self.is_remote_mode():
             remote_openbench_path = self.remote_settings().get("openbench_path")
 
-        # Generate YAML content
         main_content = self._config_manager.generate_main_nml(
             self._config, openbench_root, output_dir, remote_openbench_path
         )
@@ -440,7 +429,6 @@ class WizardController(QObject):
                 rel_path = output_dir
             nml_path = os.path.join(rel_path, "nml")
 
-        # Write via storage to the case output directory
         try:
             self._storage.mkdir(nml_path)
             if self.is_remote_mode():

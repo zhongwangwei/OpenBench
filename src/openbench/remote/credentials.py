@@ -42,6 +42,7 @@ class CredentialManager:
         self._config_dir = config_dir
         self._credentials_path = os.path.join(config_dir, self.CREDENTIALS_FILE)
         self._salt_path = os.path.join(config_dir, self.SALT_FILE)
+        self._salt_is_persisted = False
         self._fernet = self._create_fernet()
 
     def _ensure_config_dir(self) -> None:
@@ -64,6 +65,7 @@ class CredentialManager:
                         os.chmod(self._salt_path, 0o600)
                     except (OSError, AttributeError):
                         pass
+                    self._salt_is_persisted = True
                     return salt
                 logger.warning("Invalid salt file size, regenerating")
             except Exception as e:
@@ -73,12 +75,12 @@ class CredentialManager:
 
         try:
             self._atomic_write(self._salt_path, salt, binary=True)
+            self._salt_is_persisted = True
             logger.info("Generated new encryption salt")
         except Exception as e:
             logger.warning(
                 "Failed to save salt file (%s). Using an ephemeral in-memory "
-                "salt for this session — credentials saved now will NOT be "
-                "decryptable in future sessions.",
+                "salt for this session; encrypted credentials cannot be saved.",
                 e,
             )
 
@@ -212,6 +214,10 @@ class CredentialManager:
     ) -> None:
         """Save credential for a host."""
         data = self._load_credentials_for_update()
+        if (password or node_password) and not self._salt_is_persisted:
+            raise CredentialStorageError(
+                "Refusing to save encrypted credentials because the encryption salt could not be persisted."
+            )
 
         encrypted_password = None
         if password:

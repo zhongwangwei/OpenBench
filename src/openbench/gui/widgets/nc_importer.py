@@ -107,14 +107,11 @@ class NCImporterDialog(QDialog):
         self._conda_env = conda_env
         self._setup_ui()
 
-    # ------------------------------------------------------------------
     # UI
-    # ------------------------------------------------------------------
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # --- File picker ---
         file_layout = QHBoxLayout()
         file_layout.addWidget(QLabel("NC file:"))
         self.edit_path = QLineEdit()
@@ -131,12 +128,10 @@ class NCImporterDialog(QDialog):
 
         layout.addLayout(file_layout)
 
-        # --- Info label ---
         self.info_label = QLabel("")
         self.info_label.setStyleSheet("color: #666; font-style: italic;")
         layout.addWidget(self.info_label)
 
-        # --- Variable table ---
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["", "Variable", "dtype", "Dimensions", "Units"])
         header = self.table.horizontalHeader()
@@ -148,7 +143,6 @@ class NCImporterDialog(QDialog):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         layout.addWidget(self.table, stretch=1)
 
-        # --- Select / Deselect buttons ---
         sel_layout = QHBoxLayout()
         btn_all = QPushButton("Select All")
         btn_all.clicked.connect(self._select_all)
@@ -160,7 +154,6 @@ class NCImporterDialog(QDialog):
         sel_layout.addStretch()
         layout.addLayout(sel_layout)
 
-        # --- Import / Cancel ---
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -174,9 +167,7 @@ class NCImporterDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-    # ------------------------------------------------------------------
     # Actions
-    # ------------------------------------------------------------------
 
     def _browse(self):
         if self._is_remote_mode():
@@ -361,9 +352,7 @@ print(json.dumps(payload))
                 )
         return result
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def get_selected_variables(self) -> list[dict]:
         """Return the list of selected variables.

@@ -545,7 +545,6 @@ class RegistryManager:
                 label = suffix[1:]  # Strip leading underscore
                 variants[label] = self._references[full_key]
 
-        # Also check if base_name itself is a standalone entry (no resolution suffix)
         if base_key in self._references and not variants:
             variants["default"] = self._references[base_key]
 
@@ -800,7 +799,6 @@ def _auto_resolve_variant(
     sim_rank = _tim_res_rank(sim_tim_res) if sim_tim_res else -1
     reasons = []
 
-    # Step 1: filter to refs with sufficient time frequency
     candidates = []
     for label, ref in variants.items():
         ref_rank = _tim_res_rank(ref.tim_res)
@@ -900,7 +898,6 @@ def _build_reference(data: dict) -> ReferenceDataset:
             ),
         )
 
-    # Validate required fields
     name = data.get("name")
     if not name:
         raise ValueError("Reference dataset missing 'name' field")
@@ -911,7 +908,6 @@ def _build_reference(data: dict) -> ReferenceDataset:
     if not tim_res:
         raise ValueError(f"Reference '{name}' missing 'tim_res' field")
 
-    # Validate grid_res
     grid_res = data.get("grid_res")
     if grid_res is not None:
         grid_res = float(grid_res)
@@ -919,12 +915,10 @@ def _build_reference(data: dict) -> ReferenceDataset:
             logger.warning("Reference '%s' has invalid grid_res=%s, ignoring", name, grid_res)
             grid_res = None
 
-    # Validate years
     years = data.get("years", [])
     if years and len(years) >= 2 and years[0] > years[1]:
         logger.warning("Reference '%s' has start year > end year: %s", name, years)
 
-    # Parse station_matching config if present
     sm_data = data.get("station_matching")
     station_matching = None
     if sm_data and isinstance(sm_data, dict):

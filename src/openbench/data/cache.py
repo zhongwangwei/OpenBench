@@ -25,7 +25,6 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
-# Import dependencies
 try:
     import numpy as np
     import pandas as pd
@@ -350,7 +349,6 @@ class MemoryCache:
                 self.stats.record_miss()
                 return None
 
-            # Update access time
             self.access_times[key] = time.time()
             self.stats.record_hit()
             return self.cache[key]
@@ -367,7 +365,6 @@ class MemoryCache:
                 logging.warning("Cache item %s exceeds memory cache size limit; not caching", key)
                 return False
 
-            # Check if we need to evict
             if self._current_size - old_size + size > self.max_size:
                 self._evict_lru(size)
                 old_size = self.sizes.get(key, 0)
@@ -439,7 +436,6 @@ class FileSystemCache:
         # the cache root with mode 0600.
         self._hmac_key = self._load_or_create_hmac_key()
 
-        # Initialize disk cache if available
         if _HAS_DISKCACHE:
             self.disk_cache = DiskCache(
                 str(self.cache_dir), size_limit=self.max_size, eviction_policy="least-recently-used"
@@ -497,7 +493,6 @@ class FileSystemCache:
             self.stats.record_miss()
             return None
 
-        # Check expiry
         if self.ttl is not None:
             age = time.time() - file_path.stat().st_mtime
             if age > self.ttl:
@@ -596,7 +591,6 @@ class FileSystemCache:
             size_mb = self.disk_cache.volume() / (1024 * 1024)
             entries = len(self.disk_cache)
         else:
-            # Calculate manually
             files = list(self.cache_dir.glob("*.pkl"))
             entries = len(files)
             size_mb = sum(f.stat().st_size for f in files) / (1024 * 1024)
@@ -766,7 +760,6 @@ def cached(key_prefix: str = "", ttl: Optional[int] = None, level: str = "memory
 
             return result
 
-        # Add cache control methods
         wrapper.clear_cache = lambda: get_cache_manager().clear(level)
         wrapper.cache_info = lambda: get_cache_manager().get_info()
 
@@ -802,7 +795,6 @@ class DataCache:
             prefix="dataset",
         )
 
-        # Store dataset and metadata
         cache_data = {
             "dataset": dataset,
             "metadata": metadata or {},
@@ -832,7 +824,6 @@ class DataCache:
 
 # Example usage
 if __name__ == "__main__":
-    # Initialize cache manager
     cache_mgr = get_cache_manager(memory_size_mb=512, disk_size_mb=2048, ttl_seconds=3600)
 
     # Example 1: Basic caching

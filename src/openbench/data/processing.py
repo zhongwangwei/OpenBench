@@ -15,9 +15,7 @@ from openbench.util.interfaces import BaseProcessor
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic  # noqa: F401
 
 logger = logging.getLogger(__name__)
-_HAS_INTERFACES = True
 
-# Import caching system (required for data processing)
 try:
     from openbench.data.cache import DataCache, get_cache_manager
 except ImportError:
@@ -28,15 +26,9 @@ except ImportError:
     )
 
 
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-# logging.getLogger("xarray").setLevel(logging.WARNING)
-
-
 class BaseDatasetProcessing(BaseProcessingMixin, SelectionMixin, TimeIntegrityMixin, BaseProcessor):
     def __init__(self, config: Dict[str, Any]):
-        # Initialize base processor if available
-        if _HAS_INTERFACES:
-            BaseProcessor.__init__(self, name=config.get("name", "BaseDatasetProcessing"))
+        BaseProcessor.__init__(self, name=config.get("name", "BaseDatasetProcessing"))
 
         self.initialize_attributes(config)
         self.setup_output_directories()
@@ -70,7 +62,3 @@ class DatasetProcessing(StationDatasetProcessing, GridDatasetProcessing):
                 logging.error(f"Failed to initialize required cache system: {e}")
                 raise RuntimeError(f"CacheSystem initialization failed: {e}")
         return self.cache_manager
-
-    def prepare_source(self, datasource: str) -> None:
-        super().prepare_source(datasource)
-        # Add any additional processing specific to this class if needed

@@ -114,7 +114,6 @@ class ReportGenerator:
         self.comparisons_dir = os.path.join(output_dir, "comparisons")
         self.data_dir = os.path.join(output_dir, "data")
 
-        # Create reports directory if it doesn't exist
         os.makedirs(self.report_dir, exist_ok=True)
 
         # Report metadata - only include enabled evaluation items
@@ -124,11 +123,9 @@ class ReportGenerator:
         elif isinstance(config.get("evaluation_items"), list):
             enabled_items = config["evaluation_items"]
 
-        # Get enabled metrics and scores from configuration
         self.enabled_metrics = [metric for metric, enabled in config.get("metrics", {}).items() if enabled]
         self.enabled_scores = [score for score, enabled in config.get("scores", {}).items() if enabled]
 
-        # Get enabled comparisons from configuration
         self.enabled_comparisons = [comp for comp, enabled in config.get("comparisons", {}).items() if enabled]
 
         self.metadata = {
@@ -263,7 +260,6 @@ class ReportGenerator:
                     continue
                 try:
                     with xr.open_dataset(nc_file) as ds:
-                        # Get the main data variable (skip coordinate variables)
                         data_vars = [var for var in ds.data_vars if var not in ds.coords]
                         if data_vars:
                             main_var = ds[data_vars[0]]
@@ -276,7 +272,6 @@ class ReportGenerator:
                                 # If we can extract ref and sim sources from filename, try to get better name from config
                                 if "ref_" in key and "sim_" in key:
                                     try:
-                                        # Extract ref and sim sources from filename
                                         parts = key.split("_")
                                         ref_source = None
                                         sim_source = None
@@ -765,7 +760,6 @@ class ReportGenerator:
         """Collect statistical analysis results"""
         stats = {}
 
-        # Check for statistical outputs in comparisons directory
         stat_dirs = ["Mean", "Median", "Min", "Max", "Standard_Deviation", "Mann_Kendall_Trend_Test"]
 
         for stat_dir in stat_dirs:
@@ -793,7 +787,6 @@ class ReportGenerator:
         }
 
         for groupby_name, groupby_dirs in groupby_types.items():
-            # Check in metrics, scores, and comparisons directories
             csv_files = []
             nc_files = []
             txt_files = []
@@ -820,12 +813,10 @@ class ReportGenerator:
             csv_files = _dedupe_paths(csv_files)
             nc_files = _dedupe_paths(nc_files)
 
-            # Process txt files if found
             if txt_files:
                 stats_data = []
                 for txt_file in txt_files:
                     try:
-                        # Read txt file and parse it
                         with open(txt_file, "r") as f:
                             content = f.read()
                         stats_data.append(
@@ -844,7 +835,6 @@ class ReportGenerator:
                         "description": self._get_groupby_description(groupby_name),
                     }
 
-            # Process CSV files if found
             elif csv_files:
                 stats_data = []
                 for csv_file in csv_files:
@@ -869,7 +859,6 @@ class ReportGenerator:
                     else:
                         groupby_stats[groupby_name]["statistics"].extend(stats_data)
 
-            # Add spatial files info if found
             if nc_files:
                 if groupby_name not in groupby_stats:
                     groupby_stats[groupby_name] = {
@@ -925,9 +914,7 @@ class ReportGenerator:
                 summary["group_count"] = len(summary["groups"])
                 summary["group_column"] = col
 
-                # Add performance ranking if metrics are available
                 if len(numeric_cols) > 0:
-                    # Find the best and worst performing groups
                     metric_col = numeric_cols[0]  # Use first numeric column
                     group_performance = df.groupby(col)[metric_col].mean().sort_values()
                     summary["worst_performing_groups"] = group_performance.head(3).index.tolist()
@@ -944,7 +931,6 @@ class ReportGenerator:
         for line in lines:
             # Common patterns for group names in txt files
             if "IGBP_" in line or "PFT_" in line or "CZ_" in line:
-                # Extract the group name
                 parts = line.split()
                 for part in parts:
                     if "IGBP_" in part or "PFT_" in part or "CZ_" in part:
@@ -1066,7 +1052,6 @@ class ReportGenerator:
             "overall_scores": {},
         }
 
-        # Calculate average scores across all items
         for item, item_data in report_data["evaluation_items"].items():
             for score_key, score_data in item_data.get("scores", {}).items():
                 score_names = ["Overall_Score"] if "Overall_Score" in self.enabled_scores else self.enabled_scores
@@ -1080,7 +1065,6 @@ class ReportGenerator:
                         summary["overall_scores"][f"{item}_{score_key}"] = score_mean
                         break
 
-        # Calculate grand average if scores exist
         if summary["overall_scores"]:
             summary["grand_average"] = np.mean(list(summary["overall_scores"].values()))
 
@@ -1098,7 +1082,6 @@ class ReportGenerator:
             "total_groupby_analyses": 0,
         }
 
-        # Check each evaluation item for groupby analyses
         for item, item_data in report_data.get("evaluation_items", {}).items():
             if item_data.get("figures", {}).get("igbp_groupby") or item_data.get("statistics", {}).get("IGBP_groupby"):
                 summary["has_igbp"] = True
@@ -1151,8 +1134,7 @@ class ReportGenerator:
 
     def _extract_comparison_pair(self, filename: str) -> str:
         """Extract comparison pair from filename (reference vs simulation)"""
-        # Extract reference and simulation sources from filename
-        # Format: ItemName_ref_RefSource_sim_SimSource_Metric
+        # Extract pair from filename format: ItemName_ref_RefSource_sim_SimSource_Metric.
         parts = filename.split("_")
 
         ref_source = "Unknown"
@@ -1160,7 +1142,6 @@ class ReportGenerator:
 
         for i, part in enumerate(parts):
             if part == "ref" and i + 1 < len(parts):
-                # Find continuous reference name (may contain underscores)
                 ref_parts = []
                 j = i + 1
                 while j < len(parts) and parts[j] != "sim":
@@ -1169,7 +1150,6 @@ class ReportGenerator:
                 ref_source = "_".join(ref_parts)
 
             elif part == "sim" and i + 1 < len(parts):
-                # Find continuous simulation name (may contain underscores)
                 sim_parts = []
                 j = i + 1
                 while j < len(parts) and not self._is_metric_or_score(parts[j]):
@@ -1183,7 +1163,6 @@ class ReportGenerator:
     def _get_comparison_pair_from_config(self, item: str, ref_source: str, sim_source: str) -> str:
         """Get comparison pair from configuration instead of filename parsing"""
         try:
-            # Get display names from configuration if available
             ref_display_name = self._get_source_display_name(item, ref_source, "ref")
             sim_display_name = self._get_source_display_name(item, sim_source, "sim")
 
@@ -1198,17 +1177,14 @@ class ReportGenerator:
         try:
             config_key = f"{source_type}_nml"
             if config_key in self.config and item in self.config[config_key]:
-                # Try to get a display name or description
                 display_key = f"{source}_display_name"
                 if display_key in self.config[config_key][item]:
                     return self.config[config_key][item][display_key]
 
-                # Try to get from varname as display name
                 varname_key = f"{source}_varname"
                 if varname_key in self.config[config_key][item]:
                     return self.config[config_key][item][varname_key]
 
-            # If no display name found, return the source name
             return source
 
         except Exception as e:
@@ -1221,7 +1197,6 @@ class ReportGenerator:
         """Generate comprehensive grid vs grid statistics like station case format."""
         grid_stats = {}
 
-        # Get reference and simulation sources from configuration
         ref_sources = self._get_reference_sources(item)
         sim_sources = self._get_simulation_sources(item)
 
@@ -1246,7 +1221,6 @@ class ReportGenerator:
                 comparison_pairs.append((ref_source, sim_source))
 
         for ref_source, sim_source in comparison_pairs:
-            # Get year information from data files
             syear = self._get_year_info(item, ref_source, sim_source, "syear")
             eyear = self._get_year_info(item, ref_source, sim_source, "eyear")
 
@@ -1317,7 +1291,6 @@ class ReportGenerator:
             if not all_files:
                 continue  # No files for this comparison pair
 
-            # Process each metric/score file
             for nc_file in all_files:
                 metric_name = self._extract_metric_type(os.path.basename(nc_file))
                 if metric_name == "Unknown":
@@ -1336,7 +1309,6 @@ class ReportGenerator:
                     logger.warning(f"Error reading {nc_file}: {e}")
 
             if len(pair_data) > 2:  # More than just the year entries
-                # Calculate average data coverage across all metrics
                 coverages = [
                     metric_info.get("coverage", 0.0)
                     for metric_name, metric_info in pair_data.items()
@@ -1345,7 +1317,6 @@ class ReportGenerator:
                 ]
                 avg_coverage = float(np.mean(coverages)) if coverages else None
 
-                # Get comparison pair from configuration
                 comparison_pair = self._get_comparison_pair_from_config(item, ref_source, sim_source)
                 pair_key = comparison_pair
 
@@ -1442,7 +1413,6 @@ class ReportGenerator:
         try:
             ref_sources = []
 
-            # Get from general reference configuration
             if "ref_nml" in self.config and "general" in self.config["ref_nml"]:
                 general = self.config["ref_nml"]["general"]
                 value = general.get(f"{item}_ref_source", general.get(item))
@@ -1465,7 +1435,6 @@ class ReportGenerator:
         try:
             sim_sources = []
 
-            # Get from general simulation configuration
             if "sim_nml" in self.config and "general" in self.config["sim_nml"]:
                 general = self.config["sim_nml"]["general"]
                 value = general.get(f"{item}_sim_source", general.get("Case_lib"))
@@ -1527,7 +1496,6 @@ class ReportGenerator:
         """Copy all referenced figures to the report directory"""
         logger.info("Copying figures to report directory...")
 
-        # Create figures subdirectory in reports
         figures_dir = os.path.join(self.report_dir, "figures")
         if os.path.exists(figures_dir):
             _remove_report_tree(figures_dir)
@@ -1604,15 +1572,12 @@ class ReportGenerator:
         missing_figures = []
         total_figures = 0
 
-        # Check figures for each evaluation item
         for item, item_data in report_data.get("evaluation_items", {}).items():
             figures = item_data.get("figures", {})
 
-            # Check all figure types
             for fig_type, fig_list in figures.items():
                 for fig_path in fig_list:
                     total_figures += 1
-                    # Build the expected path in the reports directory
                     if fig_type == "metrics":
                         expected_path = os.path.join(figures_dir, "metrics", fig_path)
                     elif fig_type == "scores":
@@ -1629,7 +1594,6 @@ class ReportGenerator:
                         missing_figures.append(f"{item}/{fig_type}: {fig_path} -> {expected_path}")
                         logger.warning(f"Missing figure: {expected_path}")
 
-        # Check comparison figures
         comparisons = report_data.get("comparisons", {})
         if "figures" in comparisons:
             for fig_key, fig_path in comparisons["figures"].items():
@@ -2201,7 +2165,6 @@ class ReportGenerator:
         # Render HTML
         html_content = html_template.render(**report_data)
 
-        # Save HTML file
         html_path = os.path.join(self.report_dir, f"{report_name}.html")
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
@@ -2228,19 +2191,16 @@ class ReportGenerator:
             logger.info("Generating PDF report using xhtml2pdf...")
             pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
 
-            # Read the HTML file
             with open(html_path, "r", encoding="utf-8") as f:
                 html_content = f.read()
 
             # Modify HTML content for better PDF generation
-            # Convert relative image paths to absolute paths
             import re
 
             # Replace relative image paths with absolute paths
             def replace_img_src(match):
                 src = match.group(1)
 
-                # Skip if already an absolute path or URL
                 if src.startswith(("http://", "https://", "file://", "/")):
                     return match.group(0)
 
@@ -2273,7 +2233,6 @@ class ReportGenerator:
             if sample_matches:
                 logger.debug(f"Sample converted image paths: {sample_matches[:5]}")  # Show first 5
 
-            # Add PDF-specific CSS
             pdf_css = """
             <style type="text/css" media="print">
                 @page {
@@ -2366,7 +2325,6 @@ class ReportGenerator:
 
         # Handle other relative paths (like ./output/...)
         elif uri.startswith("./") and "figures" in uri:
-            # Extract the figures part
             if "reports/figures" in uri:
                 figures_part = uri.split("reports/figures/")[-1]
                 abs_path = os.path.join(self.report_dir, "figures", figures_part)

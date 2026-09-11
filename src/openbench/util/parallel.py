@@ -33,7 +33,6 @@ except ImportError:
     _HAS_PSUTIL = False
     logging.warning("psutil not available. Resource monitoring will be limited.")
 
-# Import dependencies
 try:
     from joblib import Parallel, delayed, parallel_backend
 

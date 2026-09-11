@@ -62,9 +62,7 @@ SIM_TIM_RES_OPTIONS = [
 from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _case_file_patterns(file_names: List[str]) -> tuple:
@@ -585,9 +583,7 @@ def _grid_res_value(value: Any) -> Any:
         return value
 
 
-# ---------------------------------------------------------------------------
 # Page
-# ---------------------------------------------------------------------------
 
 
 class PageSimData(BasePage):
@@ -627,12 +623,9 @@ class PageSimData(BasePage):
             logger.warning("Could not load registry model %s: %s", model_name, exc)
             return []
 
-    # ------------------------------------------------------------------
     # Setup
-    # ------------------------------------------------------------------
 
     def _setup_content(self):
-        # === Scan section ===
         scan_group = QGroupBox("Scan for Cases")
         scan_form = QFormLayout(scan_group)
         scan_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -657,7 +650,6 @@ class PageSimData(BasePage):
 
         self.content_layout.addWidget(scan_group)
 
-        # === Case list (scrollable) ===
         self._case_scroll = QScrollArea()
         self._case_scroll.setWidgetResizable(True)
         self._case_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -677,7 +669,6 @@ class PageSimData(BasePage):
         # Cached model names
         self._model_names: List[str] = PageSimData._registry_model_names(self)
 
-        # === Shared settings ===
         self._settings_group = QGroupBox("Optional Overrides for Selected Cases")
         settings_form = QFormLayout(self._settings_group)
 
@@ -713,7 +704,6 @@ class PageSimData(BasePage):
         self._settings_group.setVisible(False)
         self.content_layout.addWidget(self._settings_group)
 
-        # === Validate button ===
         validate_layout = QHBoxLayout()
         validate_layout.addStretch()
         self.validate_btn = QPushButton("Validate Data")
@@ -725,9 +715,7 @@ class PageSimData(BasePage):
         # Legacy compat
         self._source_configs: Dict[str, Dict[str, Any]] = {}
 
-    # ------------------------------------------------------------------
     # Browse & Scan
-    # ------------------------------------------------------------------
 
     def _browse_root(self):
         path = browse_directory(
@@ -845,7 +833,6 @@ class PageSimData(BasePage):
             QMessageBox.information(self, "No Cases Found", message)
             return
 
-        # Refresh model names
         self._model_names = PageSimData._registry_model_names(self)
         case_models = {}
         for label, _nc_dir, _prefix in discovered:
@@ -859,7 +846,6 @@ class PageSimData(BasePage):
         )
         nc_var_count = len({variable for meta in case_meta.values() for variable in meta.get("variables", [])})
 
-        # Show confirmation dialog
         from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
 
         dlg = ScanConfirmDialog(
@@ -879,7 +865,6 @@ class PageSimData(BasePage):
 
         confirmed = dlg.get_results()
 
-        # Build per-case rows from confirmed results
         for case in confirmed:
             meta = case_meta.get(case["label"], {})
             if case["model"] == meta.get("model"):
@@ -1163,9 +1148,7 @@ class PageSimData(BasePage):
             case["row_widget"].deleteLater()
         self._cases.clear()
 
-    # ------------------------------------------------------------------
     # Selection changed → derive available variables
-    # ------------------------------------------------------------------
 
     def _on_selection_changed(self):
         """Called when any checkbox or model combo changes."""
@@ -1241,9 +1224,7 @@ class PageSimData(BasePage):
             )
         return result
 
-    # ------------------------------------------------------------------
     # Config persistence
-    # ------------------------------------------------------------------
 
     def save_to_config(self):
         cases = self.get_selected_cases()
@@ -1524,9 +1505,7 @@ class PageSimData(BasePage):
         if saved_configs:
             self._settings_group.setVisible(True)
 
-    # ------------------------------------------------------------------
     # Validation
-    # ------------------------------------------------------------------
 
     def validate(self) -> bool:
         cases = self.get_selected_cases()

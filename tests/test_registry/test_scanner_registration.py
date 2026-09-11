@@ -1345,6 +1345,34 @@ def test_scan_supports_flat_grid_without_resolution_directories(tmp_path: Path):
     assert variant.nc_inspections["Runoff"]["detected_grid_res"] == 0.25
 
 
+def test_scan_supports_mixed_named_and_flat_grid_roots(tmp_path: Path):
+    """Do not drop legacy flat Grid categories just because LowRes/MidRes dirs also exist."""
+    import numpy as np
+    import xarray as xr
+
+    from openbench.data.registry.scanner import scan_reference_directory
+
+    grid_dir = tmp_path / "Reference" / "Grid"
+    low_dir = grid_dir / "LowRes" / "Energy" / "Latent_Heat" / "LowDemo"
+    flat_dir = grid_dir / "Water" / "Runoff" / "FlatDemo"
+    low_dir.mkdir(parents=True)
+    flat_dir.mkdir(parents=True)
+    xr.Dataset(
+        {"le": (["lat", "lon"], np.zeros((2, 2), dtype=np.float32))},
+        coords={"lat": [0, 1], "lon": [0, 1]},
+    ).to_netcdf(low_dir / "le.nc")
+    xr.Dataset(
+        {"runoff": (["lat", "lon"], np.zeros((3, 3), dtype=np.float32))},
+        coords={"lat": [0.0, 0.25, 0.5], "lon": [0.0, 0.25, 0.5]},
+    ).to_netcdf(flat_dir / "runoff.nc")
+
+    groups = {group.base_name: group for group in scan_reference_directory(grid_dir)}
+
+    assert set(groups) == {"LowDemo", "FlatDemo"}
+    assert groups["LowDemo"].variants["LowRes"].variables == {"Latent_Heat": "Energy/Latent_Heat/LowDemo"}
+    assert groups["FlatDemo"].variants["MidRes"].variables == {"Runoff": "Water/Runoff/FlatDemo"}
+
+
 def test_scan_skips_dataset_with_multiple_nc_bearing_children(tmp_path: Path, caplog):
     """When dataset_dir/<multi>/*.nc has multiple NC-bearing children
     (composite/multi-variant), the scanner must skip with a warning rather

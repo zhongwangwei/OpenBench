@@ -279,7 +279,6 @@ class ConfigManager:
             config: Configuration dictionary
             path: Output file path
         """
-        # Ensure directory exists
         dir_name = os.path.dirname(path)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
@@ -495,7 +494,6 @@ class ConfigManager:
         # Check if in remote mode
         is_remote = general.get("execution_mode") == "remote"
 
-        # Use provided output_dir, or compute from config
         if output_dir is None:
             basedir = general.get("basedir", "")
             if basedir and (os.path.isabs(basedir) or basedir.startswith("/")):
@@ -583,19 +581,14 @@ class ConfigManager:
             "generate_report": general.get("generate_report", True),
         }
 
-        # Evaluation items
         main_config["evaluation_items"] = config.get("evaluation_items", {})
 
-        # Metrics
         main_config["metrics"] = config.get("metrics", {})
 
-        # Scores
         main_config["scores"] = config.get("scores", {})
 
-        # Comparisons
         main_config["comparisons"] = config.get("comparisons", {})
 
-        # Statistics
         main_config["statistics"] = config.get("statistics", {})
 
         return yaml.dump(main_config, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -747,20 +740,17 @@ class ConfigManager:
 
         general = config.get("general", {})
 
-        # Check required fields
         if not general.get("basename"):
             errors.append("Project name is required")
 
         if not general.get("basedir"):
             errors.append("Output directory is required")
 
-        # Check year range
         syear = general.get("syear", 0)
         eyear = general.get("eyear", 0)
         if syear > eyear:
             errors.append("Start year must be less than or equal to end year")
 
-        # Check evaluation items
         eval_items = config.get("evaluation_items", {})
         selected_items = [k for k, v in eval_items.items() if v]
         if not selected_items:
@@ -774,7 +764,6 @@ class ConfigManager:
         if not selected_metrics and not selected_scores:
             errors.append("At least one metric or score must be selected")
 
-        # Check ref data if any items selected
         if selected_items:
             ref_data = config.get("ref_data", {}).get("general", {})
             for item in selected_items:
@@ -874,7 +863,6 @@ class ConfigManager:
         output_dir = _case_parent(case_output_dir) if case_output_dir else general.get("basedir", "./output")
         project_output_dir = _maybe_transform_path(output_dir)
 
-        # --- project ---
         project: Dict[str, Any] = {
             "name": general.get("basename", "config"),
             "output_dir": project_output_dir,
@@ -895,7 +883,6 @@ class ConfigManager:
         if weight is not None and str(weight).lower() != "":
             project["weight"] = "none" if str(weight).lower() == "none" else weight
 
-        # Runtime
         num_cores = general.get("num_cores", DEFAULT_NUM_CORES)
         if num_cores:
             project["num_cores"] = int(num_cores)
@@ -938,11 +925,9 @@ class ConfigManager:
         if time_alignment and time_alignment != "intersection":
             project["time_alignment"] = time_alignment
 
-        # --- evaluation ---
         eval_items = config.get("evaluation_items", {})
         variables = [k for k, v in eval_items.items() if v]
 
-        # --- reference ---
         reference: Dict[str, Any] = {}
         ref_data = config.get("ref_data", {})
         ref_general = ref_data.get("general", {})
@@ -1034,7 +1019,6 @@ class ConfigManager:
         if ref_overrides:
             reference["overrides"] = ref_overrides
 
-        # --- simulation ---
         sim_data = config.get("sim_data", {})
         sim_general = sim_data.get("general", {})
         sim_def_nml = sim_data.get("def_nml", {})
@@ -1051,13 +1035,11 @@ class ConfigManager:
                 if s and s not in all_sources:
                     all_sources.append(s)
 
-        # Build simulation entries from source configs or def_nml
         sim_entries: Dict[str, Dict[str, Any]] = {}
         for source_name in all_sources:
             src_cfg = sim_source_configs.get(source_name, {})
             src_general = src_cfg.get("general", {}) if src_cfg else {}
 
-            # Try to read from def_nml file if no source_config
             if not src_general and source_name in sim_def_nml:
                 def_path = sim_def_nml[source_name]
                 if os.path.exists(def_path):
@@ -1068,7 +1050,6 @@ class ConfigManager:
                     except Exception:
                         pass
 
-            # Detect model
             model_nml = src_general.get("model_namelist", "") or src_general.get("model", "")
             model = self._detect_model_from_path(model_nml) if model_nml else "unknown"
 
@@ -1102,28 +1083,24 @@ class ConfigManager:
 
         simulation = self._extract_sim_defaults(sim_entries)
 
-        # --- metrics / scores ---
         metrics_dict = config.get("metrics", {})
         metrics_list = [k for k, v in metrics_dict.items() if v]
 
         scores_dict = config.get("scores", {})
         scores_list = [k for k, v in scores_dict.items() if v]
 
-        # --- comparison ---
         comparison: Optional[Dict[str, Any]] = None
         if general.get("comparison"):
             comp_items = [k for k, v in config.get("comparisons", {}).items() if v]
             if comp_items:
                 comparison = {"enabled": True, "items": comp_items}
 
-        # --- statistics ---
         stats_section: Optional[Dict[str, Any]] = None
         if general.get("statistics"):
             stat_items = [k for k, v in config.get("statistics", {}).items() if v]
             if stat_items:
                 stats_section = {"enabled": True, "items": stat_items}
 
-        # --- assemble ---
         output: Dict[str, Any] = {
             "project": project,
             "evaluation": {"variables": variables},
@@ -1238,7 +1215,6 @@ class ConfigManager:
 
         files = {}
 
-        # Generate unified openbench.yaml
         config_path = os.path.join(output_dir, "openbench.yaml")
         config_content = self.generate_config_yaml(config, case_output_dir=output_dir)
         with open(config_path, "w", encoding="utf-8") as f:
@@ -1264,20 +1240,17 @@ class ConfigManager:
         if openbench_root is None:
             openbench_root = get_openbench_root()
 
-        # Create nml subdirectories
         nml_dir = os.path.join(output_dir, "nml")
         sim_nml_dir = os.path.join(nml_dir, "sim")
         ref_nml_dir = os.path.join(nml_dir, "ref")
         os.makedirs(sim_nml_dir, exist_ok=True)
         os.makedirs(ref_nml_dir, exist_ok=True)
 
-        # Get selected evaluation items
         eval_items = config.get("evaluation_items", {})
         selected_items = [k for k, v in eval_items.items() if v]
 
         copied_files = {}
 
-        # Process simulation data namelists
         sim_data = config.get("sim_data", {})
         sim_def_nml = sim_data.get("def_nml", {})
         sim_source_configs = sim_data.get("source_configs", {})  # Get edited configs
@@ -1313,7 +1286,6 @@ class ConfigManager:
                         )
                     copied_files[f"model_{model_name}"] = dest_path
 
-        # Process reference data namelists
         ref_data = config.get("ref_data", {})
         ref_def_nml = ref_data.get("def_nml", {})
         ref_source_configs = ref_data.get("source_configs", {})  # Get edited configs
@@ -1421,7 +1393,6 @@ class ConfigManager:
             if not os.path.exists(src_path):
                 continue
 
-            # Copy with filtering
             model_path = self._copy_namelist_filtered(src_path, dest_path, selected_items, openbench_root)
             copied_files[source_name] = dest_path
 
@@ -1446,15 +1417,12 @@ class ConfigManager:
         Returns:
             Model definition path if found, None otherwise
         """
-        # Build the output structure
         filtered = {}
         model_path = None
 
-        # Check for general section
         if "general" in source_data:
             general = source_data["general"].copy()
 
-            # Convert paths to absolute
             if "root_dir" in general and general["root_dir"]:
                 general["root_dir"] = to_absolute_path(general["root_dir"], openbench_root)
             if "dir" in general and general["dir"]:
@@ -1494,7 +1462,6 @@ class ConfigManager:
                 elif item_data is not None:
                     filtered[item] = item_data
 
-        # Write the file
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "w", encoding="utf-8") as f:
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -1532,11 +1499,9 @@ class ConfigManager:
         filtered = {}
         model_path = None
 
-        # Process general section
         if "_general" in organized_data:
             general = organized_data["_general"].copy()
 
-            # Convert paths to absolute
             if "root_dir" in general and general["root_dir"]:
                 general["root_dir"] = to_absolute_path(general["root_dir"], openbench_root)
             if "dir" in general and general["dir"]:
@@ -1554,7 +1519,6 @@ class ConfigManager:
             # Remove UI-only field from output
             general.pop("per_var_time_range", None)
 
-            # Check if any variable has per_var_time_range enabled
             any_per_var = any(organized_data.get(item, {}).get("per_var_time_range", False) for item in selected_items)
 
             # If any variable uses per-variable time range, remove from general
@@ -1564,12 +1528,10 @@ class ConfigManager:
 
             filtered["general"] = general
 
-        # Process per-variable configurations (with type validation)
         for item in selected_items:
             if item in organized_data:
                 item_data = organized_data[item]
                 if isinstance(item_data, dict):
-                    # Use the specific config for this variable
                     var_config = item_data.copy()
 
                     # Remove per_var_time_range from output (it's only for UI control)
@@ -1580,7 +1542,6 @@ class ConfigManager:
                 elif item_data is not None:
                     filtered[item] = item_data
 
-        # Write the file
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "w", encoding="utf-8") as f:
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -1611,7 +1572,6 @@ class ConfigManager:
         except Exception:
             return None
 
-        # Build filtered content
         filtered = {}
         model_path = None
 
@@ -1619,7 +1579,6 @@ class ConfigManager:
         if "general" in content:
             general = content["general"].copy()
 
-            # Convert paths to absolute
             if "root_dir" in general and general["root_dir"]:
                 general["root_dir"] = to_absolute_path(general["root_dir"], openbench_root)
             if "dir" in general and general["dir"]:
@@ -1646,7 +1605,6 @@ class ConfigManager:
                 elif item_data is not None:
                     filtered[item] = item_data
 
-        # Write filtered content
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "w", encoding="utf-8") as f:
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -1670,7 +1628,6 @@ class ConfigManager:
         except Exception:
             return
 
-        # Build filtered content
         filtered = {}
 
         # Always keep general section (with type validation)
@@ -1686,7 +1643,6 @@ class ConfigManager:
                 elif item_data is not None:
                     filtered[item] = item_data
 
-        # Write filtered content
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "w", encoding="utf-8") as f:
             yaml.dump(filtered, f, default_flow_style=False, allow_unicode=True, sort_keys=False, indent=2)
@@ -1724,13 +1680,11 @@ class ConfigManager:
         """
         nml_dir = os.path.join(output_dir, "nml")
 
-        # Update sim_data def_nml paths
         sim_data = config.get("sim_data", {})
         sim_def_nml = sim_data.get("def_nml", {})
         for source_name in sim_def_nml:
             sim_def_nml[source_name] = os.path.join(nml_dir, "sim", f"{source_name}.yaml")
 
-        # Update ref_data def_nml paths
         ref_data = config.get("ref_data", {})
         ref_def_nml = ref_data.get("def_nml", {})
         for source_name in ref_def_nml:
@@ -1804,11 +1758,9 @@ class ConfigManager:
         if not os.path.exists(nml_dir):
             return
 
-        # Get currently used sources
         sim_sources = set(config.get("sim_data", {}).get("def_nml", {}).keys())
         ref_sources = set(config.get("ref_data", {}).get("def_nml", {}).keys())
 
-        # Clean sim directory
         sim_nml_dir = os.path.join(nml_dir, "sim")
         if os.path.exists(sim_nml_dir):
             for filename in os.listdir(sim_nml_dir):
@@ -1817,7 +1769,6 @@ class ConfigManager:
                     if source_name not in sim_sources and not source_name.startswith("model_"):
                         os.remove(os.path.join(sim_nml_dir, filename))
 
-        # Clean ref directory
         ref_nml_dir = os.path.join(nml_dir, "ref")
         if os.path.exists(ref_nml_dir):
             for filename in os.listdir(ref_nml_dir):
@@ -1836,14 +1787,12 @@ class ConfigManager:
         Returns:
             True if any source has per_var_time_range enabled
         """
-        # Check ref_data source_configs
         ref_source_configs = config.get("ref_data", {}).get("source_configs", {})
         for source_config in ref_source_configs.values():
             general = source_config.get("general", {})
             if general.get("per_var_time_range", False):
                 return True
 
-        # Check sim_data source_configs
         sim_source_configs = config.get("sim_data", {}).get("source_configs", {})
         for source_config in sim_source_configs.values():
             general = source_config.get("general", {})

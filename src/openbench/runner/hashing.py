@@ -26,7 +26,7 @@ from openbench.config.schema import OpenBenchConfig
 
 logger = logging.getLogger(__name__)
 
-OPENBENCH_ALGORITHM_VERSION = "2026-08-26.cache-signature-v3"
+OPENBENCH_ALGORITHM_VERSION = "2026-09-11.source-range-pair-cache-v4"
 NUMERIC_STACK_PACKAGES = ("numpy", "pandas", "xarray", "cftime")
 COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.core.evaluation",

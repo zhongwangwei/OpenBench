@@ -40,7 +40,6 @@ class PageGeneral(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        # === Project Info ===
         project_group = QGroupBox("Project Information")
         project_layout = QFormLayout(project_group)
         project_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -70,7 +69,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(project_group)
 
-        # === Spatial-Temporal Settings ===
         st_group = QGroupBox("Spatial-Temporal Settings")
         st_layout = QGridLayout(st_group)
 
@@ -168,7 +166,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(st_group)
 
-        # === Feature Toggles ===
         toggle_group = QGroupBox("Feature Toggles")
         toggle_layout = QGridLayout(toggle_group)
 
@@ -206,7 +203,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(toggle_group)
 
-        # === Groupby Options ===
         groupby_group = QGroupBox("Groupby Options")
         groupby_layout = QHBoxLayout(groupby_group)
 
@@ -226,7 +222,6 @@ class PageGeneral(BasePage):
 
         self.content_layout.addWidget(groupby_group)
 
-        # === Performance Settings ===
         performance_group = QGroupBox("Performance Settings")
         performance_layout = QGridLayout(performance_group)
 
@@ -358,14 +353,12 @@ class PageGeneral(BasePage):
 
     def _has_per_var_time_range(self) -> bool:
         """Check if any source has per_var_time_range enabled."""
-        # Check ref_data source_configs
         ref_source_configs = self.controller.config.get("ref_data", {}).get("source_configs", {})
         for source_config in ref_source_configs.values():
             general = source_config.get("general", {})
             if general.get("per_var_time_range", False):
                 return True
 
-        # Check sim_data source_configs
         sim_source_configs = self.controller.config.get("sim_data", {}).get("source_configs", {})
         for source_config in sim_source_configs.values():
             general = source_config.get("general", {})
@@ -477,7 +470,6 @@ class PageGeneral(BasePage):
             QMessageBox.warning(self, "Invalid Name", f"'{basename}' is a reserved system name.")
             return
 
-        # Check if output directory is set
         basedir = self.basedir_input.path().strip()
         if not basedir:
             QMessageBox.warning(self, "Error", "Please select an output directory first.")
@@ -626,7 +618,6 @@ class PageGeneral(BasePage):
                     # Set default to OpenBench/output (without project name)
                     basedir = os.path.join(openbench_root, "output")
                 elif not os.path.isabs(basedir):
-                    # Convert relative path to absolute
                     if basedir.startswith("./"):
                         basedir = basedir[2:]
                     basedir = os.path.normpath(os.path.join(openbench_root, basedir))
@@ -691,7 +682,6 @@ class PageGeneral(BasePage):
         # Note: Runtime Environment settings (execution_mode, remote config, python_path, conda_env)
         # are now handled by PageRuntime
 
-        # Update Year Range state based on per_var_time_range settings
         self.update_year_range_state()
 
     def _set_combo_by_data(self, combo, value):
@@ -868,7 +858,6 @@ class PageGeneral(BasePage):
         old_basename = old_general.get("basename", "")
         old_basedir = old_general.get("basedir", "")
 
-        # Save config first
         self._save_to_config_no_sync()
 
         new_basename = self.basename_input.text().strip()
@@ -885,7 +874,6 @@ class PageGeneral(BasePage):
         errors = []
         manager = ValidationManager(self)
 
-        # Project name required
         error = FieldValidator.required(
             self.basename_input.text().strip(),
             "basename",
@@ -897,7 +885,6 @@ class PageGeneral(BasePage):
             manager.show_error_and_focus(error, allow_skip=False)
             return False
 
-        # Output directory required
         error = FieldValidator.required(
             self.basedir_input.path().strip(),
             "basedir",
@@ -922,7 +909,6 @@ class PageGeneral(BasePage):
             )
             return False
 
-        # Year range validation
         error = FieldValidator.min_max(
             self.syear_spin.value(),
             self.eyear_spin.value(),
@@ -934,7 +920,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Latitude range validation
         error = FieldValidator.number_range(
             self.min_lat_spin.value(),
             -90.0,
@@ -970,7 +955,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Longitude range validation
         error = FieldValidator.number_range(
             self.min_lon_spin.value(),
             -180.0,
@@ -1006,7 +990,6 @@ class PageGeneral(BasePage):
         if error:
             errors.append(error)
 
-        # Show first error if any, allow user to skip
         if errors:
             if not manager.show_error_and_focus(errors[0]):
                 return False

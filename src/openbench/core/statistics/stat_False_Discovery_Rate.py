@@ -106,10 +106,8 @@ def stat_False_Discovery_Rate(self, *variables):
     significant_mask = p_values <= p_threshold
     proportion_passed = significant_mask.sum("combination") / len(combinations)
 
-    # Create output dataset
     ds = xr.Dataset({"p_values": p_values, "significant": significant_mask, "proportion_passed": proportion_passed})
 
-    # Add metadata
     ds["p_values"].attrs["long_name"] = "P-values from t-test"
     ds["p_values"].attrs["description"] = "P-values for each combination of datasets"
     ds["significant"].attrs["long_name"] = "Significant grid points"

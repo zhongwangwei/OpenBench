@@ -171,14 +171,11 @@ def taylor_diagram(*args, **kwargs):
     Created on Dec 3, 2016
     Revised on Aug 23, 2022
     """
-    # Check for no arguments
     if len(args) == 0:
         return
 
-    # Process arguments (if given)
     ax, STDs, RMSs, CORs = _get_taylor_diagram_arguments(*args)
 
-    # Get options
     options = _get_taylor_diagram_options(CORs, **kwargs)
 
     # Check the input statistics if requested.
@@ -191,20 +188,15 @@ def taylor_diagram(*args, **kwargs):
     # marker from the diagram.
     rho, theta = STDs, np.arccos(np.clip(CORs, -1.0, 1.0))
 
-    #  Get axis values for plot
     axes = _get_taylor_diagram_axes(ax, rho, options)
 
     if options["overlay"] == "off":
-        # Draw circles about origin
         _overlay_taylor_diagram_circles(ax, axes, options)
 
-        # Draw lines emanating from origin
         _overlay_taylor_diagram_lines(ax, axes, options)
 
-        # Plot axes for Taylor diagram
         axes_handles = _plot_taylor_axes(ax, axes, options)
 
-        # Plot marker on axis indicating observation STD
         _plot_taylor_obs(ax, axes_handles, STDs[0], axes, options)
 
         del axes_handles
@@ -214,17 +206,14 @@ def taylor_diagram(*args, **kwargs):
     X = np.multiply(rho[1:], np.cos(theta[1:]))
     Y = np.multiply(rho[1:], np.sin(theta[1:]))
 
-    # Plot data points
     lowcase = options["markerdisplayed"].lower()
     if lowcase == "marker":
         _plot_pattern_diagram_markers(ax, X, Y, options)
     elif lowcase == "colorbar":
         nZdata = len(options["cmapzdata"])
         if nZdata == 0:
-            # Use Centered Root Mean Square Difference for colors
             _plot_pattern_diagram_colorbar(ax, X, Y, RMSs[1:], options)
         else:
-            # Use Bias values for colors
             _plot_pattern_diagram_colorbar(ax, X, Y, options["cmapzdata"][1:], options)
     else:
         raise ValueError("Unrecognized option: " + options["markerdisplayed"])
@@ -511,11 +500,8 @@ def _get_taylor_diagram_arguments(*args):
     CORs: Correlation
     """
 
-    # Check amount of values provided and display options list if needed
-
     nargin = len(args)
     if nargin == 0:
-        # Display options list
         _display_taylor_diagram_options()
         return [], [], [], []
     elif nargin == 3:
@@ -529,7 +515,6 @@ def _get_taylor_diagram_arguments(*args):
         raise ValueError("Must supply 3 or 4 arguments.")
     del nargin
 
-    # Check data validity
     STDs = _ensure_np_array_or_die(stds, "STDs")
     RMSs = _ensure_np_array_or_die(rmss, "RMSs")
     CORs = _ensure_np_array_or_die(cors, "CORs")
@@ -609,7 +594,6 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
     )
     hp.set_facecolor(hp.get_edgecolor())
 
-    # Set parameters for color bar location
     location = option["locationcolorbar"].lower()
     xscale = 1.0
     labelpad = -25
@@ -631,22 +615,18 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
 
     # Add color bar to plot
     if option["colormap"] == "on":
-        # map color shading of markers to colormap
         hc = ax.figure.colorbar(hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ax=ax)
 
-        # Limit number of ticks on color bar to reasonable number
         if orientation == "horizontal":
             _setColorBarTicks(hc, 5, 20)
 
     elif option["colormap"] == "off":
-        # map color shading of markers to min to max range of Z values
         if len(Z) > 1:
             hp.set_clim(min(Z), max(Z))
             hc = ax.figure.colorbar(
                 hp, orientation=orientation, aspect=aspect, fraction=fraction, pad=0.06, ticks=[min(Z), max(Z)], ax=ax
             )
 
-            # Label just min/max range
             hc.set_ticklabels(["Min.", "Max."])
     else:
         raise ValueError("Invalid option for option.colormap: " + option["colormap"])
@@ -662,7 +642,6 @@ def _plot_pattern_diagram_colorbar(ax: matplotlib.axes.Axes, X, Y, Z, option: di
     hc.ax.xaxis.set_ticks_position("top")
     hc.ax.xaxis.set_label_position("top")
 
-    # Title the color bar
     if option["titlecolorbar"]:
         if orientation == "horizontal":
             hc.set_label(option["titlecolorbar"], fontsize=fontSize)
@@ -712,10 +691,8 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
     Revised on Aug 14, 2022
     """
 
-    # Set face color transparency
     alpha = option["alpha"]
 
-    # Set font and marker size
     fontSize = matplotlib.rcParams.get("font.size") - 2
     markerSize = option["markersize"]
 
@@ -745,20 +722,16 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
             )
 
     if option["markerlegend"] == "on":
-        # Check that marker labels have been provided
         if option["markerlabel"] == "" and option["markers"] is None:
             raise ValueError("No marker labels provided.")
 
-        # Plot markers of different color and symbols with labels displayed in a legend
         limit = option["axismax"]
         hp = ()
         rgba = None
 
         if option["markers"] is None:
-            # Define default markers (function)
             marker, markercolor = _get_default_markers(X, option)
 
-            # Plot markers at data points
             labelcolor = []
             markerlabel = []
             for i, xval in enumerate(X):
@@ -781,12 +754,10 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                     markerlabel.append(option["markerlabel"][i])
 
         else:
-            # Obtain markers from option['markers']
             labels, labelcolor, marker, markersize, markerfacecolor, markeredgecolor = _get_single_markers(
                 option["markers"]
             )
 
-            # Plot markers at data points
             markerlabel = []
             for i, xval in enumerate(X):
                 # Skip if X or Y contains NaN
@@ -806,18 +777,13 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                     hp += tuple(h)
                     markerlabel.append(labels[i])
 
-        # Add legend
         if len(markerlabel) == 0:
             warnings.warn("No markers within axis limit ranges.")
         else:
             _add_legend(ax, markerlabel, labelcolor, option, rgba, markerSize, fontSize, hp)
     else:
-        # Plot markers as dots of a single color with accompanying labels
-
-        # Plot markers at data points
         limit = option["axismax"]
 
-        # Define edge and face colors of the markers
         edge_color = _get_from_dict_or_default(option, "markercolor", "markercolors", "edge")
         if edge_color is None:
             edge_color = "r"
@@ -834,7 +800,6 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
 
             xval, yval = X[i], Y[i]
             if abs(xval) <= limit and abs(yval) <= limit:
-                # Plot marker
                 ax.plot(
                     xval,
                     yval,
@@ -845,9 +810,7 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
                 )
                 labelcolor.append(option["markerlabelcolor"])
 
-                # Check if marker labels provided
                 if type(option["markerlabel"]) is list:
-                    # Label marker
                     ax.text(
                         xval,
                         yval,
@@ -860,7 +823,6 @@ def _plot_pattern_diagram_markers(ax: matplotlib.axes.Axes, X, Y, option: dict):
 
             del i, xval, yval
 
-        # Add legend if labels provided as dictionary
         markerlabel = option["markerlabel"]
         marker_label_color = clr.to_rgb(edge_color) + (alpha,)
         if type(markerlabel) is dict:
@@ -892,17 +854,14 @@ def _get_default_markers(X, option: dict):
     Created on Mar 12, 2023
     Revised on Mar 12, 2023
     """
-    # Set face color transparency
     alpha = option["alpha"]
 
-    # Define list of marker symbols and colros
     kind = ["+", "o", "x", "s", "d", "^", "v", "p", "h", "*"]
     colorm = ["r", "b", "g", "c", "m", "y", "k", "gray"]
     if len(X) > 80:
         logger.warning("You must introduce new markers to plot more than 70 cases.")
         logger.info("The marker character array need to be extended inside the code.")
     if len(X) <= len(kind):
-        # Define markers with specified color
         marker = []
         markercolor = []
         if option["markercolor"] is None:
@@ -916,7 +875,6 @@ def _get_default_markers(X, option: dict):
                 marker.append(symbol + option["markercolor"])
                 markercolor.append(rgba)
     else:
-        # Define markers and colors using predefined list
         marker = []
         markercolor = []
         for color in colorm:
@@ -979,7 +937,6 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
     """
 
     if type(markerLabel) is list:
-        # Check for empty list of plot handles
         if len(hp) == 0:
             raise ValueError("Empty list of plot handles")
         elif len(hp) != len(markerLabel):
@@ -987,9 +944,7 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
                 "Number of labels and plot handle do not match: " + str(len(markerLabel)) + " != " + str(len(hp))
             )
 
-        # Add legend using labels provided as list
         if len(markerLabel) <= 6:
-            # Put legend in a default location
             markerlabel = tuple(markerLabel)
             if option["legend"]["set_legend"]:
                 leg = ax.legend(
@@ -1005,8 +960,6 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
                     hp, markerlabel, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.5, 1.0)
                 )
         else:
-            # Put legend to right of the plot in multiple columns as needed
-
             nmarkers = len(markerLabel)
             if option["markerlayout"][1] is None:
                 nrow = option["markerlayout"][0]
@@ -1015,9 +968,7 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
                 ncol = option["markerlayout"][1]
             markerlabel = tuple(markerLabel)
 
-            # Shift figure to include legend
             ax.figure.subplots_adjust(right=0.6)
-            # Plot legend of multi-column markers
             # Note: do not use bbox_to_anchor as this cuts off the legend
             if option["legend"]["set_legend"]:
                 loc = (option["legend"]["bbox_to_anchor_x"], option["legend"]["bbox_to_anchor_y"])
@@ -1029,9 +980,6 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
             leg = ax.legend(hp, markerlabel, loc=loc, fontsize=fontSize, numpoints=1, ncol=ncol)
 
     elif type(markerLabel) is dict:
-        # Add legend using labels provided as dictionary
-
-        # Define legend elements
         legend_elements = []
         for key, value in markerLabel.items():
             legend_object = Line2D(
@@ -1046,18 +994,15 @@ def _add_legend(ax, markerLabel, labelcolor, option, rgba, markerSize, fontSize,
             )
             legend_elements.append(legend_object)
 
-        # Put legend in a default location
         leg = ax.legend(
             handles=legend_elements, loc="upper right", fontsize=fontSize, numpoints=1, bbox_to_anchor=(1.4, 1.1)
         )
 
         if _checkKey(option, "numberpanels") and option["numberpanels"] == 2:
-            # add padding so legend is not cut off
             ax.figure.tight_layout(pad=1)
     else:
         raise Exception("markerLabel type is not a list or dictionary: " + str(type(markerLabel)))
 
-    # Set color of text in legend
     for i, text in enumerate(leg.get_texts()):
         text.set_color(labelcolor[i])
 
@@ -1138,7 +1083,6 @@ def _get_single_markers(markers: dict):
     markerlabel = []
     markersize = []
 
-    # Iterate through keys in dictionary
     for key in markers:
         color = markers[key]["faceColor"]
         symbol = markers[key]["symbol"]
@@ -1391,7 +1335,6 @@ def _default_options(CORs: list) -> dict:
 
     from matplotlib import rcParams
 
-    # Set default parameters for all options
     option = {}
     option["alpha"] = 1.0
     option["axismax"] = 0.0
@@ -1520,7 +1463,6 @@ def _get_options(option: dict, **kwargs) -> dict:
     Revised on Sep 12, 2022
     """
 
-    # Check for valid keys and values in dictionary
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
         if optname == "nonrmsdz":
@@ -1529,7 +1471,6 @@ def _get_options(option: dict, **kwargs) -> dict:
         if optname not in option:
             raise ValueError("Unrecognized option: " + optname)
         else:
-            # Replace option value with that from arguments
             if optname == "tickcor":
                 list1 = option["tickcor"][0]
                 list2 = option["tickcor"][1]
@@ -1542,7 +1483,6 @@ def _get_options(option: dict, **kwargs) -> dict:
             else:
                 option[optname] = optvalue
 
-            # Check values for specific options
             if optname == "checkstats":
                 option["checkstats"] = check_on_off(option["checkstats"])
 
@@ -1657,7 +1597,6 @@ def _read_options(option: dict, **kwargs) -> dict:
     Created on Sep 12, 2022
     Revised on Sep 12, 2022
     """
-    # Check if option filename provided
     name = ""
     for optname, optvalue in kwargs.items():
         optname = optname.lower()
@@ -1667,7 +1606,6 @@ def _read_options(option: dict, **kwargs) -> dict:
     if not name:
         return option
 
-    # Check if CSV file suffix
     filename, file_extension = os.path.splitext(name)
 
     if file_extension == "":
@@ -1677,37 +1615,28 @@ def _read_options(option: dict, **kwargs) -> dict:
     else:
         raise Exception("Invalid file type: " + name)
 
-    # Check if file exists
     if not os.path.isfile(filename):
         raise Exception("File does not exist: " + filename)
 
-    # Load object from CSV file
     objectData = pd.read_csv(filename)
 
-    # Parse object for keys and values
     keys = objectData.iloc[:, 0]
     values = objectData.iloc[:, 1].tolist()
 
-    # Identify keys requiring special consideration
     listkey = ["cmapzdata", "rincrms", "rincstd", "tickcor", "tickrms", "tickstd"]
     tuplekey = ["colcor", "colrms", "colstd"]
 
-    # Process for options read from CSV file
     for index in range(len(keys)):
-        # Skip assignment if no value provided in CSV file
         if pd.isna(values[index]):
             continue
 
-        # Convert list provided as string
         if _is_list_in_string(values[index]):
-            # Remove brackets
             values[index] = values[index].replace("[", "").replace("]", "")
 
         if keys[index] in listkey:
             if pd.isna(values[index]):
                 option[keys[index]] = []
             else:
-                # Convert string to list of floats
                 split_string = re.split(" |,", values[index])
                 split_string = " ".join(split_string).split()
                 option[keys[index]] = [float(x) for x in split_string]
@@ -1772,10 +1701,8 @@ def _get_taylor_diagram_options(*args, **kwargs) -> dict:
     CORs = args[0]
     nargin = len(kwargs)
 
-    # Set default parameters for all options
     option = _default_options(CORs)
 
-    # No options requested, so return with only defaults
     if nargin == 0:
         return option
 
@@ -1788,7 +1715,6 @@ def _get_taylor_diagram_options(*args, **kwargs) -> dict:
             break
 
     if name:
-        # Check if CSV file suffix
         filename, file_extension = os.path.splitext(name)
 
         if file_extension == "":
@@ -1798,7 +1724,6 @@ def _get_taylor_diagram_options(*args, **kwargs) -> dict:
         else:
             raise Exception("Invalid file type: " + name)
 
-        # Check if file exists
         if not os.path.isfile(filename):
             raise Exception("File does not exist: " + filename)
 
@@ -1806,7 +1731,6 @@ def _get_taylor_diagram_options(*args, **kwargs) -> dict:
         # CSV file, if specified.
         option = _read_options(option, **kwargs)
 
-    # Check for valid keys and values in dictionary
     # Allows user to override options specified in CSV file
     option = _get_options(option, **kwargs)
 
@@ -1859,7 +1783,6 @@ def _get_taylor_diagram_axes(ax, rho, option) -> dict:
     else:
         maxrho = option["axismax"]
 
-    # Determine default number of tick marks
     if option["overlay"] == "off":
         ax.set_xlim(-maxrho, maxrho)
     xt = ax.get_xticks()
@@ -2157,8 +2080,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
     lineWidth = rcParams.get("lines.linewidth")
     fontFamily = rcParams.get("font.family")
     if option["numberpanels"] == 1:
-        # Single panel
-
         if option["titlestd"] == "on":
             color = _get_from_dict_or_default(option, "colstd", "colsstd", "title")
             if option["normalizedstd"]:
@@ -2180,7 +2101,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
             axes_handles.append(handle)
             del color, handle
 
-        # plot correlation title
         if option["titlecor"] == "on":
             color = _get_from_dict_or_default(option, "colcor", "colscor", "title")
             pos1 = 45
@@ -2191,7 +2111,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
                 c = np.fliplr([np.linspace(pos1 - DA, pos1 + DA, len(lab))])[0]
                 dd = 1.15 * axes["rmax"]
                 for ii, ith in enumerate(c):
-                    # print("%s: %.03f, %.03f, %.03f" % (lab[ii], cur_x, cur_y, ith))
                     handle = ax.text(dd * np.cos(ith * np.pi / 180), dd * np.sin(ith * np.pi / 180), lab[ii])
                     handle.set(
                         rotation=ith - 90,
@@ -2257,8 +2176,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
                 axes_handles.append(handle)
 
     else:
-        # Double panel
-
         if option["titlestd"] == "on":
             color = _get_from_dict_or_default(option, "colstd", "colsstd", "title")
             handle = ax.set_xlabel(
@@ -2328,11 +2245,9 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
     ax.tick_params(axis="both", color=ticks_color, labelcolor=labels_color)
     del labels_color, ticks_color
 
-    # VARIOUS ADJUSTMENTS TO THE PLOT:
     ax.set_aspect("equal")
     ax.set_frame_on(None)
 
-    # set axes limits, set ticks, and draw axes lines
     ylabel = []
     if option["numberpanels"] == 2:
         xtick = [-option["tickstd"], option["tickstd"]]
@@ -2342,7 +2257,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
             xtick = np.concatenate((-option["tickstd"][0:], 0, option["tickstd"]), axis=None)
         xtick = np.sort(xtick)
 
-        # Set x tick labels
         xlabel = []
         for i in range(len(xtick)):
             if xtick[i] == 0:
@@ -2360,7 +2274,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
         ax.plot([-axes["rmax"], axes["rmax"]], [0, 0], color=axes["tc"], linewidth=lineWidth + 1)
         ax.plot([0, 0], [0, axes["rmax"]], color=axes["tc"])
 
-        # hide y-axis line
         ax.axes.get_yaxis().set_visible(False)
     else:
         ytick = ax.get_yticks()
@@ -2369,7 +2282,6 @@ def _plot_taylor_axes(ax: matplotlib.axes.Axes, axes: dict, option: dict) -> lis
         ax.set_xlim(axislim[0:2])
         ax.set_ylim(axislim[2:])
 
-        # Set y tick labels
         for i in range(len(ytick)):
             label = _get_axis_tick_label(ytick[i])
             ylabel.append(label)
@@ -2436,7 +2348,6 @@ def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD, axes_i
         )
 
     if option["titleobs"] != "":
-        # Put label below the marker
         labelsize = axes_handle[0].get_fontsize()  # get label size of STD axes
         ax.set_xlabel(option["titleobs"], color=option["colobs"], fontweight="bold", fontsize=labelsize)
         xlabelh = ax.xaxis.get_label()
@@ -2446,7 +2357,6 @@ def _plot_taylor_obs(ax: matplotlib.axes.Axes, axes_handle: list, obsSTD, axes_i
         xlabelh.set_horizontalalignment("center")
 
     if option["styleobs"] != "":
-        # Draw circle for observation STD
         theta = np.arange(0, 2 * np.pi, np.pi / 150)
         xunit = obsSTD * np.cos(theta)
         yunit = obsSTD * np.sin(theta)
@@ -2479,11 +2389,9 @@ def _get_axis_tick_label(value):
     if not _use_sci_notation(value):
         label = str(value)
 
-        # Get substring after period
         trailing = label.partition(".")[2]
         number_sigfig = 0
         if len(trailing) > 0:
-            # Find number of non-zero digits after decimal
             number_sigfig = 1
             before = trailing[0]
             number_digits = 1
@@ -2501,7 +2409,6 @@ def _get_axis_tick_label(value):
         if number_digits == len(trailing):
             number_sigfig = number_digits
 
-        # Round up the number to desired significant figures
         label = str(round(value, number_sigfig))
     else:
         label = "{:.1e}".format(value)
@@ -2537,7 +2444,6 @@ def generate_markers(data_names, option):
     import matplotlib.colors as mcolors
 
     markers = {}
-    # add colors and symbols
     hex_colors = [
         "#4C6EF5",
         "#F9C74F",

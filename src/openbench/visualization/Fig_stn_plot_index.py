@@ -27,10 +27,8 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
     # inside the first iteration and the second iteration then inherited
     # those values whenever the vmin_max_on branch didn't overwrite them.
     option_base = option.copy()
-    # read the data
     df = pd.read_csv(file, header=0)
     df = Convert_Type.convert_Frame(df)
-    # loop the keys in self.variables to get the metric output
     for type, source in zip(["ref_value", "sim_value"], sources):
         option = option_base.copy()
         min_metric = -999.0

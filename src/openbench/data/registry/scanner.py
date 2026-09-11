@@ -784,13 +784,20 @@ def _resolution_label(name: str) -> str | None:
 
 
 def _grid_resolution_roots(grid_dir: Path) -> list[tuple[str | None, Path]]:
-    """Return named resolution roots, or the legacy flat Grid root."""
+    """Return named resolution roots plus any legacy flat Grid root."""
     roots = [
         (res_name, res_dir)
         for res_name in RESOLUTION_MAP
         if (res_dir := _child_dir_case_insensitive(grid_dir, res_name)).is_dir()
     ]
-    return roots or [(None, grid_dir)]
+    flat_categories = [
+        child
+        for child in _iter_dirs(grid_dir)
+        if child.name.casefold() not in {name.casefold() for name in RESOLUTION_MAP}
+    ]
+    if flat_categories:
+        roots.append((None, grid_dir))
+    return roots
 
 
 def _resolution_from_grid_res(grid_res) -> str:
@@ -1329,8 +1336,10 @@ def _reference_dataset_dirs(
     directories = []
     if selected_scope != "station":
         grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
-        for _res_name, res_dir in _grid_resolution_roots(grid_dir):
+        for res_name, res_dir in _grid_resolution_roots(grid_dir):
             for category_dir in _iter_dirs(res_dir):
+                if res_name is None and _resolution_label(category_dir.name):
+                    continue
                 for var_dir in _iter_dirs(category_dir):
                     if not _is_profile_consumed(var_dir, consumed_dirs):
                         directories.extend(
@@ -1417,6 +1426,8 @@ def scan_reference_directory(
                 on_progress(f"Scanning Grid/{declared_res_name or ''}...")
 
             for category_dir in _iter_dirs(res_dir):
+                if declared_res_name is None and _resolution_label(category_dir.name):
+                    continue
                 cat_name = category_dir.name
                 category = _category_label(cat_name)
 
@@ -2631,7 +2642,6 @@ def get_compatible_resolutions(
     if not group.variants:
         return []
 
-    # Find the highest frequency rank among all variants
     max_rank = max(
         (_tim_res_rank(v.tim_res) for v in group.variants.values()),
         default=-1,
@@ -2788,11 +2798,9 @@ def _detect_data_type_from_nc(nc_file: Path) -> str | None:
 
         from openbench.data.coordinates import LAT_NAMES, LON_NAMES, STN_DIM_NAMES
 
-        # Check for station-like dimensions
         if STN_DIM_NAMES & set(dims.keys()):
             return "stn"
 
-        # Check lat/lon using shared fallback names
         lat_size = 0
         for name in LAT_NAMES:
             if name.lower() in dims:
@@ -3326,7 +3334,6 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
                 else:
                     station_id = stem
 
-            # Extract lat/lon using shared fallback names
             from openbench.data.coordinates import LAT_NAMES, LON_NAMES
 
             lat = lon = None
@@ -3354,7 +3361,6 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
             if years:
                 syear, eyear = min(years), max(years)
             elif "time" in nc.dimensions and nc.dimensions["time"].size > 0:
-                # Fallback: read time variable
                 try:
                     time_var = nc.variables["time"]
                     times = netCDF4.num2date(

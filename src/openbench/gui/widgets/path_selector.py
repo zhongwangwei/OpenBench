@@ -24,7 +24,6 @@ def get_default_browse_path() -> str:
     """
     import yaml
 
-    # Try from runtime settings file
     try:
         settings_path = os.path.join(os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml")
         if os.path.exists(settings_path):
@@ -81,7 +80,6 @@ class PathSelector(QWidget):
         # Enable drag and drop
         self.setAcceptDrops(True)
 
-        # Setup completer if storage is provided
         if storage:
             self._setup_completer(storage)
 
@@ -163,7 +161,6 @@ class PathSelector(QWidget):
             skip: If True, don't validate path existence
         """
         self._skip_validation = skip
-        # Re-trigger validation update
         self._on_text_changed(self.line_edit.text())
 
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -197,7 +194,6 @@ class PathSelector(QWidget):
         self.line_edit.setText(path)
         if not emit_signal:
             self.line_edit.blockSignals(False)
-        # Update last_dir based on the path
         if path:
             # Resolve relative path
             resolved_path = path

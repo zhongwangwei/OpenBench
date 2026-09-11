@@ -27,10 +27,8 @@ def process_station_diff_plot(
     metrics: list[str],
     scores: list[str],
 ) -> None:
-    # Process metrics for station data
     for metric in metrics:
         try:
-            # Load all station data for this metric
             station_frames = {}
             for sim_source in sim_sources:
                 sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
@@ -43,14 +41,12 @@ def process_station_diff_plot(
                 df = Convert_Type.convert_Frame(df)
                 station_frames[sim_source] = df
 
-            # Convert to DataFrame for easier handling
             aligned_frames = _station_frames_aligned_by_id(station_frames, metric)
             station_df = pd.DataFrame(
                 {sim_source: aligned_frames[sim_source][metric].reset_index(drop=True) for sim_source in sim_sources}
             )
             base_df = aligned_frames[sim_sources[0]]
 
-            # Calculate ensemble mean
             ensemble_mean = station_df.mean(axis=1).astype("float32")
             ensemble_df = pd.DataFrame({"ID": base_df["ID"], f"{metric}_ensemble_mean": ensemble_mean})
             ensemble_df = Convert_Type.convert_Frame(ensemble_df)
@@ -60,7 +56,6 @@ def process_station_diff_plot(
                 index=False,
             )
 
-            # Calculate anomalies for each simulation
             for sim_source in sim_sources:
                 df = aligned_frames[sim_source]
                 try:
@@ -88,10 +83,8 @@ def process_station_diff_plot(
             logging.error(f"Error processing station ensemble calculations for metric {metric}: {e}")
             raise
 
-    # Process scores for station data
     for score in scores:
         try:
-            # Load all station data for this score
             station_frames = {}
             for sim_source in sim_sources:
                 file_path = f"{basedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
@@ -99,14 +92,12 @@ def process_station_diff_plot(
                 df = Convert_Type.convert_Frame(df)
                 station_frames[sim_source] = df
 
-            # Convert to DataFrame for easier handling
             aligned_frames = _station_frames_aligned_by_id(station_frames, score)
             station_df = pd.DataFrame(
                 {sim_source: aligned_frames[sim_source][score].reset_index(drop=True) for sim_source in sim_sources}
             )
             base_df = aligned_frames[sim_sources[0]]
 
-            # Calculate ensemble mean
             ensemble_mean = station_df.mean(axis=1).astype("float32")
             ensemble_df = pd.DataFrame({"ID": base_df["ID"], f"{score}_ensemble_mean": ensemble_mean})
             ensemble_df = Convert_Type.convert_Frame(ensemble_df)
@@ -116,7 +107,6 @@ def process_station_diff_plot(
                 index=False,
             )
 
-            # Calculate anomalies for each simulation
             for sim_source in sim_sources:
                 df = aligned_frames[sim_source]
                 try:
@@ -144,7 +134,6 @@ def process_station_diff_plot(
             logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
             raise
     if len(sim_sources) >= 2:
-        # Calculate pairwise differences for metrics (station data)
         for metric in metrics:
             for i, sim1 in enumerate(sim_sources):
                 sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
@@ -210,7 +199,6 @@ def process_station_diff_plot(
                         logging.error(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
                         raise
 
-        # Calculate pairwise differences for scores (station data)
         for score in scores:
             for i, sim1 in enumerate(sim_sources):
                 sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]

@@ -142,7 +142,6 @@ class LocalStorage(ProjectStorage):
 
     def write_file(self, path: str, content: str) -> None:
         full_path = self._full_path(path)
-        # Ensure directory exists
         dir_path = os.path.dirname(full_path)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)

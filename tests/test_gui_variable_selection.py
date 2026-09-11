@@ -113,22 +113,15 @@ def test_sim_data_does_not_create_variable_mappings_when_evaluation_selection_is
     from openbench.gui.pages import page_sim_data
     from tests.gui_fakes import FakeLineEdit as FakeText
 
-    class FakeCombo:
-        def __init__(self, value):
-            self.value = value
-
-        def currentText(self):
-            return self.value
-
     controller = _FakeController({"evaluation_items": {}, "sim_data": {"general": {}}})
     page = SimpleNamespace(
         controller=controller,
         get_selected_cases=lambda: [{"label": "CaseA", "model": "CoLM2024", "nc_dir": "/sim", "prefix": "hist_"}],
         _prefix_input=FakeText(""),
-        _data_type_combo=FakeCombo("grid"),
+        _data_type_combo=FakeText("grid"),
         _grid_res_input=FakeText("0.5"),
-        _tim_res_combo=FakeCombo("Month"),
-        _data_groupby_combo=FakeCombo("Month"),
+        _tim_res_combo=FakeText("Month"),
+        _data_groupby_combo=FakeText("Month"),
         _suffix_input=FakeText(".nc"),
         _root_input=FakeText("/sim"),
         _get_available_variables=lambda: {"Runoff", "Latent_Heat"},

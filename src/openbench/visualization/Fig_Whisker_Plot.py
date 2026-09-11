@@ -31,7 +31,6 @@ def make_scenarios_comparison_Whisker_Plot(
         "text.usetex": False,
     }
     rcParams.update(params)
-    # Create the heatmap using Matplotlib
 
     facecolors = [
         "#ac8ab1",
@@ -161,7 +160,6 @@ def make_scenarios_comparison_Whisker_Plot(
         ax.tick_params(axis="x", color="k", width=1.5, length=4, which="major")
         ax.tick_params(axis="y", color="k", width=1.5, length=4, which="major")
 
-        # Add labels and title
         ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1)
         ylabel = option["yticklabel"]
         if not option["yticklabel"] or len(option["yticklabel"]) == 0:

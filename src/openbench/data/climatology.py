@@ -204,7 +204,6 @@ class ClimatologyProcessor:
         if clim_type is None:
             raise ValueError("Climatology type cannot be None")
 
-        # Check time dimension status
         has_time_dim = "time" in ds.dims or "time" in ds.coords
         time_size = len(ds.time) if has_time_dim else 0
 
@@ -229,7 +228,6 @@ class ClimatologyProcessor:
                 ds = ds.assign_coords(time=[annual_time])
                 logging.info(f"Reference: Added time dimension with {annual_time}")
             elif time_size == 1:
-                # Single time point - set to syear-01-01
                 ds = ds.isel(time=0).expand_dims("time")
                 annual_time = pd.Timestamp(f"{syear}-01-01")
                 ds = ds.assign_coords(time=[annual_time])
@@ -262,15 +260,12 @@ class ClimatologyProcessor:
                 ds = _order_by_calendar_month(ds).assign_coords(time=monthly_times)
                 logging.info(f"Reference: Set 12 monthly climatology points to comparison year {syear}")
             else:
-                # Multiple time points - calculate monthly climatology via groupby
                 try:
                     logging.info(f"Reference: Processing {time_size} time points to monthly climatology")
                     ds_monthly = _monthly_climatology_mean(ds, source_tim_res)
 
-                    # Reorder to ensure months are in order (1-12)
                     ds_monthly = ds_monthly.sortby("month")
 
-                    # Check if we got 12 months
                     if len(ds_monthly.month) != 12:
                         missing_months = set(range(1, 13)) - set(ds_monthly.month.values)
                         raise ValueError(
@@ -317,7 +312,6 @@ class ClimatologyProcessor:
             return ds
 
         if clim_type == self.ANNUAL_CLIMATOLOGY:
-            # Calculate multi-year mean
             ds_mean = _weighted_time_mean(ds, source_tim_res)
             ds_mean = ds_mean.expand_dims("time")
             annual_time = pd.Timestamp(f"{syear}-01-01")
@@ -325,12 +319,9 @@ class ClimatologyProcessor:
             logging.info(f"Calculated annual climatology from simulation data at {annual_time}")
 
         elif clim_type == self.MONTHLY_CLIMATOLOGY:
-            # Calculate multi-year monthly mean
             try:
-                # Group by month and calculate mean
                 ds_monthly = _monthly_climatology_mean(ds, source_tim_res)
 
-                # Reorder to ensure months are in order (1-12)
                 ds_monthly = ds_monthly.sortby("month")
 
                 if len(ds_monthly.month) != 12:
@@ -367,12 +358,10 @@ class ClimatologyProcessor:
         Returns:
             bool: True if supported, False otherwise
         """
-        # Check if metric is never supported for climatology
         if metric_name in self.NEVER_SUPPORTED_METRICS:
             logging.info(f"Metric '{metric_name}' is not supported for climatology evaluation - skipping")
             return False
 
-        # Check if metric requires multiple time points
         if metric_name in self.MULTI_TIME_METRICS:
             # For annual climatology with 1 time point, skip multi-time metrics
             if clim_type == self.ANNUAL_CLIMATOLOGY and time_points == 1:
@@ -398,12 +387,10 @@ class ClimatologyProcessor:
         Returns:
             bool: True if compatible, False otherwise
         """
-        # Check if both have time dimension
         if "time" not in ref_ds.dims or "time" not in sim_ds.dims:
             logging.warning("Both datasets must have time dimension for climatology evaluation")
             return False
 
-        # Check if time dimensions match
         ref_time_size = len(ref_ds.time)
         sim_time_size = len(sim_ds.time)
 
@@ -411,7 +398,6 @@ class ClimatologyProcessor:
             logging.error(f"Time dimension mismatch: reference has {ref_time_size}, simulation has {sim_time_size}")
             return False
 
-        # Check if time coordinates match (compare as timestamps)
         try:
             ref_times = pd.to_datetime(ref_ds.time.values)
             sim_times = pd.to_datetime(sim_ds.time.values)
@@ -457,11 +443,9 @@ def process_climatology_evaluation(
     """
     processor = ClimatologyProcessor()
 
-    # Set default syear if not provided
     if syear is None:
         syear = 2000
 
-    # Check if climatology mode is enabled via compare_tim_res
     is_climatology = processor.is_climatology_mode(compare_tim_res)
 
     if not is_climatology:
@@ -469,14 +453,12 @@ def process_climatology_evaluation(
         logging.debug("Non-climatology evaluation - using original time series")
         return None, None, metrics
 
-    # Get climatology type from compare_tim_res
     clim_type = processor.get_climatology_type_from_config(compare_tim_res)
 
     if clim_type is None:
         logging.error(f"Invalid compare_tim_res value: {compare_tim_res}")
         return None, None, []
 
-    # Validate syear
     if syear < 1000 or syear > 9999:
         logging.error(f"Invalid syear value: {syear}. Must be between 1000 and 9999.")
         return None, None, []
@@ -492,12 +474,10 @@ def process_climatology_evaluation(
         logging.error(f"Failed to prepare climatology datasets: {e}")
         raise ValueError(f"Failed to prepare {clim_type} climatology datasets: {e}") from e
 
-    # Validate compatibility
     if not processor.validate_climatology_compatibility(ref_processed, sim_processed):
         logging.error("Climatology compatibility validation failed")
         return None, None, []
 
-    # Get number of time points from processed reference data
     if "time" in ref_processed.dims:
         time_points = len(ref_processed.time)
         if time_points == 0:
@@ -507,7 +487,6 @@ def process_climatology_evaluation(
         time_points = 1
         logging.debug("No time dimension found, treating as single time point")
 
-    # Filter supported metrics based on climatology type and time points
     supported_metrics = [
         m for m in metrics if processor.is_metric_supported(m, clim_type=clim_type, time_points=time_points)
     ]

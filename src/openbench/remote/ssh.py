@@ -167,13 +167,10 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
             key: The host key to save
         """
         try:
-            # Ensure directory exists
             os.makedirs(os.path.dirname(self._known_hosts_path), exist_ok=True)
 
-            # Add the key
             self._host_keys.add(hostname, key.get_name(), key)
 
-            # Save to file
             self._host_keys.save(self._known_hosts_path)
 
             # Set restrictive permissions (Unix only)
@@ -218,7 +215,6 @@ class InteractiveHostKeyPolicy(paramiko.MissingHostKeyPolicy):
         key_type = key.get_name()
         fingerprint = self.get_fingerprint(key)
 
-        # Check if we already have a key for this host
         existing_key = self._host_keys.lookup(hostname)
         if existing_key is not None:
             # Host exists but key is different - potential MITM attack!
@@ -553,7 +549,6 @@ class SSHManager:
             local_addr = ("127.0.0.1", 0)
             self._jump_channel = transport.open_channel("direct-tcpip", dest_addr, local_addr)
 
-            # Connect through the channel
             self._jump_client = paramiko.SSHClient()
 
             # Use secure host key policy for jump connection
@@ -565,7 +560,7 @@ class SSHManager:
             if main_password:
                 # Password authentication for compute node
                 self._jump_client.connect(
-                    hostname=main_host,
+                    hostname=self._jump_known_host_name(main_host),
                     username=self._user,
                     password=main_password,
                     sock=self._jump_channel,
@@ -576,7 +571,7 @@ class SSHManager:
             elif main_key_file:
                 # SSH key authentication for compute node
                 self._jump_client.connect(
-                    hostname=main_host,
+                    hostname=self._jump_known_host_name(main_host),
                     username=self._user,
                     key_filename=main_key_file,
                     sock=self._jump_channel,
@@ -588,7 +583,7 @@ class SSHManager:
                 # Internal trust - try without explicit auth
                 # (relies on SSH agent or authorized_keys on compute node)
                 self._jump_client.connect(
-                    hostname=main_host,
+                    hostname=self._jump_known_host_name(main_host),
                     username=self._user,
                     sock=self._jump_channel,
                     timeout=self._timeout,
@@ -618,6 +613,9 @@ class SSHManager:
             except Exception:
                 pass
             raise SSHConnectionError(f"Jump connection failed: {e}") from e
+
+    def _jump_known_host_name(self, main_host: str) -> str:
+        return f"[{self._host}]:{self._port}->{main_host}:22"
 
     def disconnect_jump(self) -> None:
         """Disconnect from compute node (jump connection)."""
@@ -975,7 +973,6 @@ class SSHManager:
         """
         remote_path = self.resolve_remote_path(remote_path)
         sftp = self.open_sftp()
-        # Ensure local directory exists
         local_dir = os.path.dirname(local_path)
         if local_dir:
             os.makedirs(local_dir, exist_ok=True)
@@ -1032,23 +1029,12 @@ class SSHManager:
             except FileNotFoundError:
                 sftp.mkdir(path)
 
-    # Allowed characters in a remote $HOME path before we trust it for
-    # interpolation into shell commands. Anything outside this set (spaces,
-    # `;`, backticks, `$`, quotes, ...) could break command construction or
-    # enable injection via callers that interpolate the path directly into
-    # shell strings (detect_python_interpreters / detect_conda_envs do this
-    # to support `ls -d {home}/miniconda*/bin/python` style globs, which
-    # cannot be quoted as a single token without disabling the glob).
-    _SAFE_HOME_RE = re.compile(r"^[A-Za-z0-9_./\-]+$")
-
     def _get_home_dir(self) -> str:
         """Get remote home directory.
 
         Returns:
-            Home directory path. Falls back to ``/home/<user>`` if the
-            remote echo fails or returns a value with characters that are
-            unsafe for unquoted shell interpolation (so that downstream
-            ``f"ls -d {home}/..."`` commands cannot be hijacked).
+            Home directory path. Falls back to ``/home/<user>`` only if the
+            remote query fails or returns no absolute path.
         """
         identity = self.get_active_target_identity()
         if identity in self._home_dir_cache:
@@ -1063,17 +1049,7 @@ class SSHManager:
             logger.warning("Could not query remote $HOME: %s", exc)
             candidate = ""
         fallback = f"/home/{self._user}"
-        if not candidate:
-            home = fallback
-        elif not self._SAFE_HOME_RE.match(candidate):
-            logger.warning(
-                "Remote $HOME contains unsafe characters (%r); falling back to %s",
-                candidate,
-                fallback,
-            )
-            home = fallback
-        else:
-            home = candidate
+        home = candidate or fallback
         if identity is not None and query_succeeded:
             self._home_dir_cache[identity] = home
         return home
@@ -1090,6 +1066,7 @@ class SSHManager:
         self._last_detection_errors = []
         pythons = []
         home = self._get_home_dir()
+        home_glob = shlex.quote(home.rstrip("/") or "/")
 
         # System paths to exclude (don't want system or /opt installs)
         system_prefixes = ["/usr/bin", "/bin", "/opt/", "/usr/local/bin"]
@@ -1099,8 +1076,7 @@ class SSHManager:
 
         # Method 1: Find conda/miniconda directories in home (handles miniconda3-3.12 etc.)
         try:
-            # Find all conda-like directories
-            cmd = f"ls -d {home}/miniconda*/bin/python {home}/miniforge*/bin/python {home}/anaconda*/bin/python {home}/mambaforge*/bin/python 2>/dev/null"
+            cmd = f"ls -d {home_glob}/miniconda*/bin/python {home_glob}/miniforge*/bin/python {home_glob}/anaconda*/bin/python {home_glob}/mambaforge*/bin/python 2>/dev/null"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
                 for path in stdout.strip().split("\n"):
@@ -1134,7 +1110,7 @@ class SSHManager:
 
         # Method 3: Check .local/bin (pip user install)
         try:
-            local_python = f"{home}/.local/bin/python3"
+            local_python = posixpath.join(home.rstrip("/") or "/", ".local/bin/python3")
             quoted_python = shlex.quote(local_python)
             stdout, _, exit_code = self.execute(f"test -x {quoted_python} && echo {quoted_python}", timeout=5)
             if exit_code == 0 and stdout.strip():
@@ -1155,12 +1131,13 @@ class SSHManager:
         self._last_detection_errors = []
         envs = []
         home = self._get_home_dir()
+        home_glob = shlex.quote(home.rstrip("/") or "/")
 
         conda_exe = None
 
         # Method 1: Use wildcard to find conda in versioned directories (e.g., miniconda3-3.12)
         try:
-            cmd = f"ls -d {home}/miniconda*/bin/conda {home}/miniforge*/bin/conda {home}/anaconda*/bin/conda {home}/mambaforge*/bin/conda 2>/dev/null | head -1"
+            cmd = f"ls -d {home_glob}/miniconda*/bin/conda {home_glob}/miniforge*/bin/conda {home_glob}/anaconda*/bin/conda {home_glob}/mambaforge*/bin/conda 2>/dev/null | head -1"
             stdout, _, exit_code = self.execute(cmd, timeout=10)
             if exit_code == 0 and stdout.strip():
                 conda_exe = self._last_absolute_path(stdout, basename="conda")
@@ -1179,7 +1156,6 @@ class SSHManager:
         if not conda_exe:
             return envs
 
-        # Get environment list
         try:
             quoted_conda = shlex.quote(conda_exe)
             stdout, _, exit_code = self.execute(f"{quoted_conda} env list", timeout=10)

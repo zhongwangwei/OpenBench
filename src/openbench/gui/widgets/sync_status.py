@@ -106,19 +106,15 @@ class SyncStatusWidget(QWidget):
         self._status = status
         self._pending_count = pending_count
 
-        # Update dot color
         self._dot.setStyleSheet(self._get_dot_style(status))
 
-        # Update text
         text = self.STATUS_TEXT.get(status, "Unknown")
         if status == SyncStatus.PENDING and pending_count > 0:
             text = f"Pending ({pending_count})"
         self._text.setText(text)
 
-        # Show/hide retry button
         self._retry_btn.setVisible(status == SyncStatus.ERROR)
 
-        # Start/stop animation
         if status == SyncStatus.SYNCING:
             self._animation_timer.start(200)
         else:
@@ -156,7 +152,6 @@ class SyncStatusWidget(QWidget):
 
         Call this method before deleteLater() to ensure proper cleanup.
         """
-        # Stop animation timer
         if hasattr(self, "_animation_timer") and self._animation_timer:
             self._animation_timer.stop()
             self._animation_timer.timeout.disconnect()

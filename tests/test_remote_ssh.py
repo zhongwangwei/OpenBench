@@ -414,3 +414,44 @@ def test_remote_home_query_ignores_banner_and_is_cached_per_target():
     assert manager._get_home_dir() == "/home/alice"
     assert manager._get_home_dir() == "/home/alice"
     assert calls == [("echo $HOME", 5)]
+
+
+def test_remote_home_with_spaces_is_used_for_sftp_and_quoted_glob_discovery(tmp_path):
+    manager = SSHManager(auto_add_host_keys=True)
+    manager._user = "alice"
+    calls = []
+
+    def fake_execute(command, timeout=None):
+        calls.append(command)
+        if command == "echo $HOME":
+            return "/shared/Alice Doe\n", "", 0
+        return "", "", 1
+
+    manager.execute = fake_execute
+
+    assert manager._get_home_dir() == "/shared/Alice Doe"
+    manager.detect_python_interpreters()
+    manager.detect_conda_envs()
+
+    assert any("ls -d '/shared/Alice Doe'/miniconda*/bin/python" in call for call in calls)
+    assert any("ls -d '/shared/Alice Doe'/miniconda*/bin/conda" in call for call in calls)
+
+
+def test_jump_host_key_alias_includes_login_host_to_avoid_compute_name_collisions(monkeypatch):
+    FakeSSHClient.instances = []
+    monkeypatch.setattr(ssh_module.paramiko, "SSHClient", FakeSSHClient)
+    manager = SSHManager(auto_add_host_keys=True)
+
+    manager.connect("alice@login-a.example:2222", password="secret")
+    manager.connect_with_jump("node001", main_password="node-secret")
+    first_alias = FakeSSHClient.instances[-1].connect_kwargs["hostname"]
+    manager.disconnect()
+
+    manager.connect("alice@login-b.example:2222", password="secret")
+    manager.connect_with_jump("node001", main_password="node-secret")
+    second_alias = FakeSSHClient.instances[-1].connect_kwargs["hostname"]
+
+    assert first_alias == "[login-a.example]:2222->node001:22"
+    assert second_alias == "[login-b.example]:2222->node001:22"
+    assert first_alias != second_alias
+    assert manager.get_active_target_identity() == ("jump", "alice", "login-b.example", 2222, "node001", 22)

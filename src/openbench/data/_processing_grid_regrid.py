@@ -93,9 +93,7 @@ class GridRegridMixin:
             resolution_lon=self.compare_grid_res,
         )
         target_dataset = grid.create_regridding_dataset(lat_name="lat", lon_name="lon")
-        # Convert sparse arrays to dense arrays
         data_regrid = data.regrid.conservative(target_dataset, nan_threshold=0)
-        # data_regrid = data_regrid.compute()
 
         return data_regrid
 
@@ -130,10 +128,8 @@ class GridRegridMixin:
         import subprocess
         import tempfile
 
-        # Prepare data - ensure proper coordinate attributes
         data_prepared = data.copy()
 
-        # Add CF-compliant coordinate attributes if missing
         if "lon" in data_prepared.coords:
             if "standard_name" not in data_prepared["lon"].attrs:
                 data_prepared["lon"].attrs["standard_name"] = "longitude"
@@ -151,7 +147,6 @@ class GridRegridMixin:
         temp_grid_name = None
 
         try:
-            # Create temporary files
             temp_input = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
             temp_input_name = temp_input.name
             temp_input.close()
@@ -172,7 +167,6 @@ class GridRegridMixin:
                 format="NETCDF4_CLASSIC",
             )
 
-            # Create target grid file
             self.create_target_grid_file(temp_grid_name, new_grid)
 
             # Use remapcon (conservative remapping) — CDO's standard conservative method.
@@ -207,7 +201,6 @@ class GridRegridMixin:
 
     def save_remapped_data(self, data: xr.Dataset, data_source: str, year: int) -> None:
         try:
-            # Check if data is None (all regrid methods failed)
             if data is None:
                 logging.warning(f"No data to save for {data_source} year {year} - all regrid methods failed")
                 return

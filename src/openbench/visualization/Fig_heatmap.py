@@ -3,7 +3,6 @@ import os
 from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
 from openbench.visualization._figure_io import save_figure
 
-# Add the local visualization path for cmaps
 import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -54,7 +53,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     option = option.copy()
     # Convert the data to a DataFrame with fallback and auto-detection
     df = _read_comparison_file(file)
-    # exclude the first column
     df.set_index("Item", inplace=True)
     ref_dataname = df.iloc[:, 0:]
     df = df.iloc[:, 1:].astype("float32")
@@ -62,7 +60,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     font = {"family": "DejaVu Sans"}
     # font = {'family': option['font']}
     matplotlib.rc("font", **font)
-    # Create the heatmap using Matplotlib
     params = {
         "axes.linewidth": option["axes_linewidth"],
         "font.size": option["fontsize"],
@@ -79,13 +76,11 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
 
     option["x_wise"] = len(df.index)
     option["y_wise"] = len(df.columns)
-    # Add minimum size constraints for small datasets
     if option["x_wise"] < 3:
         option["x_wise"] = max(3, option["x_wise"])
     if option["y_wise"] < 3:
         option["y_wise"] = max(3, option["y_wise"])
 
-    # Adjust font sizes for small datasets
     if len(df.index) <= 2 or len(df.columns) <= 2:
         option["fontsize"] = min(option["fontsize"], 16)
         option["xtick"] = min(option["xtick"], 18)
@@ -103,8 +98,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     cmap = get_colormap(option.get("cmap", "coolwarm"))
     im = ax.imshow(df, cmap=cmap, vmin=vmin, vmax=vmax)
 
-    # Add colorbar
-    # Add labels and title
     ref_dataname_name = ref_dataname.iloc[:, 0].tolist()
     ax.set_yticks(range(len(df.index)))
     ax.set_xticks(range(len(df.columns)))
@@ -124,7 +117,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
         title = f"{score}"
     ax.set_title(title.replace("_", " "), fontsize=option["title_size"], weight="bold")
 
-    # Add numbers to each cell
     for i in range(len(df.index)):
         for j in range(len(df.columns)):
             ax.text(
@@ -150,7 +142,6 @@ def make_scenarios_scores_comparison_heat_map(file, score, option):
     #     max_tick_width = max(max_tick_width, bbox_in_fig_coords.width)
     # add the colorbar, and make it shrink to the size of the heatmap, and the location is at the right of reference data name
 
-    # Create dynamically positioned and sized colorbar
     pos = ax.get_position()  # .bounds
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
     if not option["colorbar_position_set"]:

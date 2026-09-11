@@ -168,7 +168,6 @@ def conservative_regrid_dataset(
         covered[coord] = coverage
         weights[coord] = raw_weights
 
-    # Apply the weights, using a unique set that matches chunking of each array
     for array in data_vars.keys():
         var_weights = {}
         for coord, weight_array in weights.items():
@@ -195,7 +194,6 @@ def conservative_regrid_dataset(
             var_covered = var_covered & covered[coord]
         data_vars[array] = data_vars[array].where(var_covered)
 
-    # Rebuild the results ensuring we preserve attributes and other coordinates
     for array, attrs in data_attrs.items():
         data_vars[array].attrs = attrs
 
@@ -203,7 +201,6 @@ def conservative_regrid_dataset(
 
     for coord, attrs in coord_attrs.items():
         if coord not in ds_regridded.coords:
-            # Add back any additional coordinates from the original dataset
             ds_regridded[coord] = data_coords[coord]
         ds_regridded[coord].attrs = attrs
 
@@ -236,7 +233,6 @@ def apply_weights(
         da_regrid /= valid_frac
         da_regrid = da_regrid.where(valid_frac >= get_valid_threshold(nan_threshold))
 
-    # Rename temporary coordinates and ensure original dimension order
     coord_map = {f"target_{coord}": coord for coord in coords}
     da_regrid = da_regrid.rename(coord_map).transpose(*da.dims)
 

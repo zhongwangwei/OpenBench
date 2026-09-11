@@ -79,7 +79,6 @@ class RelativeScoreComparisonMixin:
                                         combined_relative_scores["ID"] = df_sim["ID"]
                                         df_sim.set_index("ID", inplace=True)
 
-                                        # Read all files
                                         for score in scores:
                                             try:
                                                 dfs = []
@@ -100,11 +99,9 @@ class RelativeScoreComparisonMixin:
                                                         f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}"
                                                     )
                                                     continue
-                                                # Combine all dataframes
                                                 combined_df = pd.concat(dfs, axis=1)
                                                 score_mean = combined_df.mean(axis=1, skipna=True).astype("float32")
                                                 score_std = combined_df.std(axis=1, skipna=True).astype("float32")
-                                                # Calculate relative scores for each file
                                                 with np.errstate(divide="ignore", invalid="ignore"):
                                                     relative_scores = (
                                                         df_sim[f"{score}"].values - score_mean.values
@@ -121,7 +118,6 @@ class RelativeScoreComparisonMixin:
                                                     np.isfinite(relative_scores), relative_scores, np.nan
                                                 )
 
-                                                # Add the relative scores as a new column to the combined dataframe
                                                 combined_relative_scores[f"relative_{score}_{sim_source}"] = (
                                                     relative_scores
                                                 )
@@ -149,9 +145,7 @@ class RelativeScoreComparisonMixin:
                                                     inplace=True,
                                                 )
                                                 ilat_lon.append(df)
-                                            # Combine all dataframes
                                             merged_df = pd.concat(ilat_lon).groupby("ID").first().reset_index()
-                                            # Save the combined relative scores to a single file
                                             try:
                                                 lon_mapping = merged_df.set_index("ID")["ref_lon"].to_dict()
                                                 lat_mapping = merged_df.set_index("ID")["ref_lat"].to_dict()
@@ -221,7 +215,6 @@ class RelativeScoreComparisonMixin:
                                                     )
                                                     continue
 
-                                                # Read all files and combine into a single dataset
                                                 datasets = []
                                                 for file in all_files:
                                                     with xr.open_dataset(file) as ds_file:
@@ -236,7 +229,6 @@ class RelativeScoreComparisonMixin:
 
                                                 combined_ds = xr.concat(datasets, dim="file")
 
-                                                # Calculate mean and standard deviation for each grid point
                                                 score_mean = (
                                                     combined_ds[score].mean(dim="file", skipna=True).astype("float32")
                                                 )
@@ -268,7 +260,6 @@ class RelativeScoreComparisonMixin:
                                                     variable=f"relative_{score}",
                                                 )
 
-                                                # Create a new dataset to store the relative score
                                                 result_ds = xr.Dataset()
                                                 result_ds[f"relative_{score}"] = Convert_Type.convert_nc(relative_score)
 

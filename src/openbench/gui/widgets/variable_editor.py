@@ -121,7 +121,6 @@ class VariableEditorDialog(QDialog):
         self.setMinimumWidth(480)
         self.setModal(True)
 
-        # Ensure KNOWN_VARIABLES is populated
         global KNOWN_VARIABLES
         if known_variables is None:
             if not KNOWN_VARIABLES:
@@ -131,9 +130,7 @@ class VariableEditorDialog(QDialog):
 
         self._setup_ui(variable_name, varname, varunit, sub_dir, prefix, suffix, compute)
 
-    # ------------------------------------------------------------------
     # UI construction
-    # ------------------------------------------------------------------
 
     def _setup_ui(
         self,
@@ -147,7 +144,6 @@ class VariableEditorDialog(QDialog):
     ):
         layout = QVBoxLayout(self)
 
-        # --- Core fields ---
         core_group = QGroupBox("Variable Mapping")
         form = QFormLayout(core_group)
 
@@ -177,7 +173,6 @@ class VariableEditorDialog(QDialog):
         else:
             self.edit_compute = None
 
-        # File-pattern fields
         if self._mode == "reference":
             self.edit_sub_dir = QLineEdit(sub_dir)
             self.edit_sub_dir.setPlaceholderText("Subdirectory inside root_dir")
@@ -222,7 +217,6 @@ class VariableEditorDialog(QDialog):
 
             layout.addWidget(fb_group)
 
-        # --- OK / Cancel ---
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -257,9 +251,7 @@ class VariableEditorDialog(QDialog):
             self._fallbacks_data.pop(row)
             self._refresh_fallback_list()
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def get_data(self) -> dict:
         """Return the edited variable mapping data.

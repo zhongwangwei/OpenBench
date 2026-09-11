@@ -757,6 +757,8 @@ def test_test_connection_runs_handshake_off_gui_thread_with_marshalled_prompt(qa
 def test_detect_python_runs_probes_off_the_gui_thread(qapp, monkeypatch):
     from PySide6.QtCore import QThread
 
+    from tests.gui_fakes import FakeButton
+
     threads = []
 
     class ProbeSSH:
@@ -780,10 +782,6 @@ def test_detect_python_runs_probes_off_the_gui_thread(qapp, monkeypatch):
 
         def addItem(self, text):
             self.items.append(text)
-
-    class FakeButton:
-        def setEnabled(self, value):
-            self.enabled = value
 
     monkeypatch.setattr("openbench.gui.widgets.remote_config.QMessageBox.information", lambda *args, **kwargs: None)
     monkeypatch.setattr("openbench.gui.widgets.remote_config.QMessageBox.warning", lambda *args, **kwargs: None)
@@ -1485,6 +1483,315 @@ def test_remote_config_roundtrips_compute_node_key_without_saved_credentials(qap
     assert config["openbench_package_path"] == "/remote/OpenBench/src/openbench"
 
 
+def test_remote_config_host_switch_without_saved_credentials_clears_node_password(qapp):
+    widget = RemoteConfigWidget()
+    widget.node_group.setChecked(True)
+    widget.radio_node_password.setChecked(True)
+    widget.node_password_input.setText("old-node-secret")
+
+    widget.set_config(
+        {
+            "host": "bob@login.example.org",
+            "auth_type": "key",
+            "key_file": "/keys/login",
+            "use_jump": True,
+            "jump_node": "node002",
+            "jump_auth": "password",
+            "node_key_file": "",
+            "openbench_path": "/remote/OpenBench",
+        }
+    )
+
+    assert widget.node_password_input.text() == ""
+    assert widget._node_credentials() == ("", None)
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.node_input.text() == "node002"
+
+
+def test_remote_config_rejected_batch_target_change_leaves_form_unchanged(qapp):
+    widget = RemoteConfigWidget()
+    widget.host_input.setText("alice@login-old")
+    widget.key_input.setText("/keys/old-login")
+    widget.radio_key.setChecked(True)
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-old")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/old-node")
+    widget.openbench_input.setText("/remote/old")
+    widget._confirmed_server_config = widget._current_server_config()
+    widget._confirmed_node_config = widget._current_node_config()
+    widget._confirmed_project_path = "/remote/old"
+    widget._ssh_manager = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "is_jump_connected": True,
+            "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+            "disconnect_jump": lambda self: setattr(self, "jump_disconnects", getattr(self, "jump_disconnects", 0) + 1),
+        },
+    )()
+    guard_calls = []
+    widget.prepare_target_change = lambda: guard_calls.append(True) or False
+
+    widget.set_config(
+        {
+            "host": "bob@login-new",
+            "auth_type": "key",
+            "key_file": "/keys/new-login",
+            "use_jump": True,
+            "jump_node": "node-new",
+            "jump_auth": "key",
+            "node_key_file": "/keys/new-node",
+            "openbench_path": "/remote/new",
+        }
+    )
+
+    assert guard_calls == [True]
+    assert widget.host_input.text() == "alice@login-old"
+    assert widget.key_input.text() == "/keys/old-login"
+    assert widget.node_input.text() == "node-old"
+    assert widget.node_key_input.text() == "/keys/old-node"
+    assert widget.openbench_input.text() == "/remote/old"
+    assert getattr(widget._ssh_manager, "disconnects", 0) == 0
+    assert getattr(widget._ssh_manager, "jump_disconnects", 0) == 0
+
+
+def test_remote_config_batch_refreshes_main_auth_visibility(qapp):
+    widget = RemoteConfigWidget()
+    widget.radio_password.setChecked(True)
+
+    widget.set_config({"host": "alice@login", "auth_type": "key", "key_file": "/keys/login"})
+
+    assert widget.radio_key.isChecked()
+    assert widget.key_row_widget.isHidden() is False
+    assert widget.password_row_widget.isHidden() is True
+
+
+def test_remote_config_loads_non_secret_fields_when_credential_storage_fails(qapp, monkeypatch):
+    from openbench.remote.credentials import CredentialStorageError
+
+    class BrokenCredentials:
+        def get_credential(self, host):
+            raise CredentialStorageError("unreadable saved credentials")
+
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    widget = RemoteConfigWidget()
+    widget._credential_manager = BrokenCredentials()
+    widget.password_input.setText("old-login-secret")
+    widget.node_password_input.setText("old-node-secret")
+
+    widget.set_config(
+        {"host": "alice@login", "auth_type": "key", "key_file": "/keys/login", "openbench_path": "/work/OpenBench"}
+    )
+
+    assert warnings == ["unreadable saved credentials"]
+    assert widget.host_input.text() == "alice@login"
+    assert widget.radio_key.isChecked()
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.openbench_input.text() == "/work/OpenBench"
+    assert widget.password_input.text() == ""
+    assert widget.node_password_input.text() == ""
+
+
+def test_remote_config_empty_host_clears_secret_fields(qapp):
+    widget = RemoteConfigWidget()
+    widget.password_input.setText("old-login-secret")
+    widget.node_group.setChecked(True)
+    widget.radio_node_password.setChecked(True)
+    widget.node_password_input.setText("old-node-secret")
+
+    widget.set_config({"host": "", "auth_type": "password", "use_jump": False})
+
+    assert widget.password_input.text() == ""
+    assert widget.node_password_input.text() == ""
+
+
+def test_load_saved_credentials_without_saved_secret_preserves_non_secret_fields(qapp):
+    class Creds:
+        def get_credential(self, host):
+            assert host == "alice@login"
+            return None
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+    widget.host_input.setText("alice@login")
+    widget.radio_key.setChecked(True)
+    widget.key_input.setText("/keys/login")
+    widget.password_input.setText("old-login-secret")
+    widget.cb_save_password.setChecked(True)
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/node")
+    widget.node_password_input.setText("old-node-secret")
+    widget.openbench_input.setText("/work/OpenBench")
+
+    widget._load_saved_credentials("alice@login")
+
+    assert widget.host_input.text() == "alice@login"
+    assert widget.radio_key.isChecked()
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.node_group.isChecked() is True
+    assert widget.node_input.text() == "node001"
+    assert widget.radio_node_key.isChecked()
+    assert widget.node_key_input.text() == "/keys/node"
+    assert widget.openbench_input.text() == "/work/OpenBench"
+    assert widget.password_input.text() == ""
+    assert widget.node_password_input.text() == ""
+    assert widget.cb_save_password.isChecked() is False
+
+
+def test_load_saved_credentials_login_password_only_preserves_node_and_key(qapp):
+    class Creds:
+        def get_credential(self, host):
+            assert host == "alice@login"
+            return {"auth_type": "password", "password": "saved-login"}
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+    widget.radio_key.setChecked(True)
+    widget.key_input.setText("/keys/login")
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/node")
+
+    widget._load_saved_credentials("alice@login")
+
+    assert widget.radio_password.isChecked()
+    assert widget.password_input.text() == "saved-login"
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.node_group.isChecked() is True
+    assert widget.node_input.text() == "node001"
+    assert widget.radio_node_key.isChecked()
+    assert widget.node_key_input.text() == "/keys/node"
+
+
+def test_load_saved_credentials_storage_failure_warns_without_mutation(qapp, monkeypatch):
+    from openbench.remote.credentials import CredentialStorageError
+
+    class BrokenCredentials:
+        def get_credential(self, host):
+            raise CredentialStorageError("keyring unavailable")
+
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    widget = RemoteConfigWidget()
+    widget._credential_manager = BrokenCredentials()
+    widget.host_input.setText("alice@login")
+    widget.radio_key.setChecked(True)
+    widget.key_input.setText("/keys/login")
+    widget.password_input.setText("old-login-secret")
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node001")
+    widget.radio_node_password.setChecked(True)
+    widget.node_password_input.setText("old-node-secret")
+
+    widget._load_saved_credentials("alice@login")
+
+    assert warnings == ["keyring unavailable"]
+    assert widget.host_input.text() == "alice@login"
+    assert widget.radio_key.isChecked()
+    assert widget.key_input.text() == "/keys/login"
+    assert widget.node_group.isChecked() is True
+    assert widget.node_input.text() == "node001"
+    assert widget.radio_node_password.isChecked()
+    assert widget.password_input.text() == "old-login-secret"
+    assert widget.node_password_input.text() == "old-node-secret"
+
+
+def test_remote_config_saved_credentials_are_loaded_inside_single_batch_guard(qapp):
+    class Creds:
+        def get_credential(self, host):
+            assert host == "bob@login-new"
+            return {"auth_type": "password", "password": "saved-login", "jump_node": "node-new"}
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+    widget.host_input.setText("alice@login-old")
+    widget.key_input.setText("/keys/old-login")
+    widget.radio_key.setChecked(True)
+    widget.node_group.setChecked(True)
+    widget.node_input.setText("node-old")
+    widget.radio_node_key.setChecked(True)
+    widget.node_key_input.setText("/keys/old-node")
+    widget._confirmed_server_config = widget._current_server_config()
+    widget._confirmed_node_config = widget._current_node_config()
+    widget._ssh_manager = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "is_jump_connected": True,
+            "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+            "disconnect_jump": lambda self: setattr(self, "jump_disconnects", getattr(self, "jump_disconnects", 0) + 1),
+        },
+    )()
+    guard_calls = []
+    widget.prepare_target_change = lambda: guard_calls.append(True) or True
+
+    widget.set_config(
+        {
+            "host": "bob@login-new",
+            "auth_type": "key",
+            "key_file": "/keys/new-login",
+            "use_jump": True,
+            "jump_node": "node-new",
+            "jump_auth": "none",
+        }
+    )
+
+    assert guard_calls == [True]
+    assert widget.host_input.text() == "bob@login-new"
+    assert widget.radio_password.isChecked()
+    assert widget.password_input.text() == "saved-login"
+    assert widget.node_input.text() == "node-new"
+
+
+@pytest.mark.parametrize("allow_change", [False, True])
+def test_remote_config_saved_credentials_auth_change_uses_one_atomic_guard(qapp, allow_change):
+    class Creds:
+        def get_credential(self, host):
+            assert host == "alice@login"
+            return {"auth_type": "password", "password": "saved-login"}
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Creds()
+    widget.host_input.setText("alice@login")
+    widget.key_input.setText("/keys/login")
+    widget.radio_key.setChecked(True)
+    widget.node_group.setChecked(False)
+    widget._confirmed_server_config = widget._current_server_config()
+    widget._confirmed_node_config = widget._current_node_config()
+    ssh = type(
+        "SSH",
+        (),
+        {
+            "is_connected": True,
+            "is_jump_connected": False,
+            "disconnect": lambda self: setattr(self, "disconnects", getattr(self, "disconnects", 0) + 1),
+        },
+    )()
+    widget._ssh_manager = ssh
+    guard_calls = []
+    widget.prepare_target_change = lambda: guard_calls.append(True) or allow_change
+
+    widget.set_config({"host": "alice@login", "auth_type": "key", "key_file": "/keys/login", "use_jump": False})
+
+    assert guard_calls == [True]
+    if allow_change:
+        assert widget.radio_password.isChecked()
+        assert widget.password_input.text() == "saved-login"
+        assert getattr(ssh, "disconnects", 0) == 1
+    else:
+        assert widget.radio_key.isChecked()
+        assert widget.key_input.text() == "/keys/login"
+        assert widget.password_input.text() == ""
+        assert getattr(widget._ssh_manager, "disconnects", 0) == 0
+
+
 def test_test_connection_passes_compute_node_key_to_jump_connect(qapp, monkeypatch):
     from openbench.gui.widgets import remote_config
 
@@ -1656,13 +1963,7 @@ def test_host_input_click_emits_with_existing_text(qapp):
 
 def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
     from openbench.gui.widgets.remote_config import RemoteConfigWidget
-
-    class Text:
-        def __init__(self, value=""):
-            self.value = value
-
-        def text(self):
-            return self.value
+    from tests.gui_fakes import FakeButton, FakeLineEdit
 
     class Radio:
         def __init__(self, checked=False):
@@ -1677,10 +1978,6 @@ def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
 
         def setStyleSheet(self, value):
             self.style = value
-
-    class Button:
-        def setEnabled(self, value):
-            self.enabled = value
 
     class Signal:
         def __init__(self):
@@ -1700,18 +1997,18 @@ def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
             self.is_connected = False
 
     widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
-    widget.host_input = Text("alice@login")
-    widget.password_input = Text("old-secret")
-    widget.key_input = Text("")
+    widget.host_input = FakeLineEdit("alice@login")
+    widget.password_input = FakeLineEdit("old-secret")
+    widget.key_input = FakeLineEdit("")
     widget.radio_password = Radio(True)
     widget.radio_key = Radio(False)
     widget.node_group = type("NodeGroup", (), {"isChecked": lambda self: False})()
     widget.status_label = Label()
     widget.node_status_label = Label()
-    widget.btn_test = Button()
-    widget.btn_disconnect = Button()
-    widget.btn_confirm_node = Button()
-    widget.btn_disconnect_node = Button()
+    widget.btn_test = FakeButton()
+    widget.btn_disconnect = FakeButton()
+    widget.btn_confirm_node = FakeButton()
+    widget.btn_disconnect_node = FakeButton()
     widget.connection_status_changed = Signal()
     widget.config_changed = Signal()
     ssh = SSH()
@@ -1980,6 +2277,26 @@ def test_unchecked_compute_requires_an_active_direct_target(qapp):
     )()
 
     assert widget.is_connected() is False
+
+
+@pytest.mark.parametrize("auth", ["password", "key", "none"])
+def test_standalone_credentials_only_restore_selected_node_auth_fields(qapp, auth):
+    class Credentials:
+        def get_credential(self, host):
+            return {
+                "jump_node": "node-a",
+                "jump_auth": auth,
+                "node_password": "stored-secret",
+                "node_key_file": "/keys/stored",
+            }
+
+    widget = RemoteConfigWidget()
+    widget._credential_manager = Credentials()
+    widget.node_key_input.setText("/keys/current")
+    widget._load_saved_credentials("alice@login")
+
+    assert widget.node_password_input.text() == ("stored-secret" if auth == "password" else "")
+    assert widget.node_key_input.text() == ("/keys/stored" if auth == "key" else "/keys/current")
 
 
 def test_disabling_compute_selects_main_target_and_rebuilds_storage(qapp):

@@ -109,9 +109,6 @@ class SingleModelPerformanceIndexComparisonMixin:
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
         dir_path = os.path.join(f"{basedir}", "comparisons", "Single_Model_Performance_Index")
-        # if os.path.exists(dir_path):
-        #    shutil.rmtree(dir_path)
-        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -301,7 +298,6 @@ class SingleModelPerformanceIndexComparisonMixin:
 
                 logging.info(f"Completed SMPI calculation for {evaluation_item}")
                 logging.info("===============================================================================")
-        # After all calculations are done, call the plotting function
         _comparison_callable("make_scenarios_comparison_Single_Model_Performance_Index")(
             basedir, evaluation_items, ref_nml, sim_nml, option
         )

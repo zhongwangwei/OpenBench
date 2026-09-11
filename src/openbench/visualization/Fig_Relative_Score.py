@@ -189,12 +189,10 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
 
 
 def prepare_stn(output_dir, evaluation_item, ref_source, sim_source, scores, main_nml, option):
-    # read the data
     file = _relative_station_scores_path(output_dir, evaluation_item, ref_source, sim_source)
     if os.path.exists(file):
         df = pd.read_csv(file, header=0)
         df = Convert_Type.convert_Frame(df)
-        # loop the keys in self.variables to get the metric output
         min_metric = -999.0
         max_metric = 1000.0
 

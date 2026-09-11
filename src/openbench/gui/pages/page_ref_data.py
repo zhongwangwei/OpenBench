@@ -177,7 +177,6 @@ class PageRefData(BasePage):
 
     def _setup_content(self):
         """Setup page content."""
-        # === Data Root + Scan Controls ===
         scan_group = QGroupBox("Reference Scan Root")
         scan_layout = QHBoxLayout(scan_group)
 
@@ -208,7 +207,6 @@ class PageRefData(BasePage):
 
         self.content_layout.addWidget(scan_group)
 
-        # === Registry Info ===
         mgr = self._registry()
         ref_count = len(mgr.list_references())
         self.registry_label = QLabel(f"Registry: {ref_count} datasets available")
@@ -228,7 +226,6 @@ class PageRefData(BasePage):
         # Structure: _source_configs[var_name][source_name] = {"general": {...}, ...}
         self._source_configs: Dict[str, Dict[str, Any]] = {}
 
-        # Add validate button at bottom
         validate_layout = QHBoxLayout()
         validate_layout.addStretch()
         self.validate_btn = QPushButton("Validate Data")
@@ -252,7 +249,6 @@ class PageRefData(BasePage):
         self._var_combos.clear()
         self._var_advanced_fields.clear()
 
-        # Get selected evaluation items
         eval_items = self.controller.config.get("evaluation_items", {})
         selected = [k for k, v in eval_items.items() if v]
 
@@ -262,12 +258,10 @@ class PageRefData(BasePage):
             self.var_layout.addWidget(label)
             return
 
-        # Create group for each variable
         for var_name in selected:
             group = QGroupBox(var_name.replace("_", " "))
             group_layout = QVBoxLayout(group)
 
-            # --- Dataset combo row ---
             combo_layout = QHBoxLayout()
             combo_label = QLabel("Dataset:")
             combo_layout.addWidget(combo_label)
@@ -288,7 +282,6 @@ class PageRefData(BasePage):
 
             group_layout.addLayout(combo_layout)
 
-            # --- Collapsible Advanced section ---
             toggle_btn = QToolButton()
             toggle_btn.setText("Advanced")
             toggle_btn.setCheckable(True)
@@ -682,7 +675,6 @@ class PageRefData(BasePage):
             self.save_to_config()
             return
 
-        # Handle multi-resolution group: open resolution picker
         if isinstance(combo_data, dict) and "group" in combo_data:
             source_name = self._pick_resolution(combo_data, var_name)
             if not source_name:
@@ -773,7 +765,6 @@ class PageRefData(BasePage):
         base_name = group_data["group"]
         variant_names = group_data["variants"]
 
-        # Build variants dict for the dialog
         variants = {}
         for vname in variant_names:
             ref = mgr.get_reference(vname)
@@ -1003,7 +994,6 @@ class PageRefData(BasePage):
             # Unknown Windows path - cannot convert to remote
             return path
 
-        # Extract relative path from various formats
         relative_path = path
 
         # If path contains /nml/, extract from that point (handles local temp paths)
@@ -1015,7 +1005,6 @@ class PageRefData(BasePage):
             # Check if it's already a valid remote path
             if any(path.startswith(prefix) for prefix in ["/home/", "/share/", "/data/", "/work/", "/scratch/"]):
                 return path
-            # Extract relative portion if contains /nml/
             if "/nml/" in path:
                 relative_path = "nml/" + path.split("/nml/", 1)[1]
             else:
@@ -1031,10 +1020,8 @@ class PageRefData(BasePage):
         if not def_nml_path:
             return ""
 
-        # Get OpenBench root
         openbench_root = self._get_openbench_root()
 
-        # Convert to absolute path
         full_path = to_absolute_path(def_nml_path, openbench_root)
 
         # If already absolute and exists, return it
@@ -1129,7 +1116,6 @@ class PageRefData(BasePage):
                 if not manager.show_error_and_focus(error):
                     return False
 
-            # Validate the single source
             for source_name, source_data in sources.items():
                 general = source_data.get("general", {})
                 var_config = source_data.get("var_config", {})
@@ -1182,12 +1168,10 @@ class PageRefData(BasePage):
         from openbench.gui.data_validator import DataValidator
         from openbench.gui.widgets.validation_dialog import ValidationProgressDialog, ValidationResultsDialog
 
-        # Check if any sources configured
         if not self._source_configs:
             QMessageBox.information(self, "No Data", "No data sources configured. Please add a data source first.")
             return
 
-        # Get general config
         general_config = self.controller.config.get("general", {})
 
         # Remote execution context (shared gathering point for scan/import/validate)
@@ -1198,7 +1182,6 @@ class PageRefData(BasePage):
             return
         is_remote = bool(context)
 
-        # Create validator
         ref_data = self.controller.config.get("ref_data", {})
         reference_data_root = (
             ref_data.get("general", {}).get("data_root", "") if ref_data.get("_data_root_explicit") else ""
@@ -1212,12 +1195,10 @@ class PageRefData(BasePage):
             reference_data_root=reference_data_root,
         )
 
-        # Show progress dialog
         progress_dialog = ValidationProgressDialog(validator, self._source_configs, general_config, parent=self)
 
         if progress_dialog.exec() == QDialog.Accepted:
             report = progress_dialog.get_report()
             if report:
-                # Show results dialog
                 results_dialog = ValidationResultsDialog(report, parent=self)
                 results_dialog.exec()
