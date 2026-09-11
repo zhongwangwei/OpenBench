@@ -13,9 +13,17 @@ from openbench.core.scores import scores
 # stale hard-coded copy.
 _METRIC_EXCLUDE = {
     "rm_mean",
-    "rSD",
-    "PBIAS_HF",
-    "PBIAS_LF",
+    # These methods are implemented for programmatic use, but the current
+    # evaluation config cannot provide their extra inputs or scalarize their
+    # vector output.
+    "valindex",
+    "wNSE",
+    "wsNSE",
+    "sKGE",
+    # The appendix names quantile-based KGEnp components without fixing their
+    # formulas. Keep the canonical Pool et al. implementation importable, but
+    # do not present one scientific convention as the guide's only definition.
+    "KGEnp",
     # SMPI returns (estimate, lower, upper) and belongs to the dedicated
     # comparison workflow, not the single-DataArray evaluation contract.
     "smpi",
@@ -48,7 +56,12 @@ IMPLEMENTED_SCORES = set(IMPLEMENTED_SCORE_NAMES)
 METRIC_LABELS = {
     "percent_bias": "Percent Bias (PBIAS)",
     "absolute_percent_bias": "Absolute Percent Bias (APB)",
+    "MSE": "Mean Squared Error (MSE)",
     "RMSE": "Root Mean Squared Error (RMSE)",
+    "NRMSE": "Normalized Root Mean Squared Error (NRMSE)",
+    "RSR": "RMSE–Observation Standard Deviation Ratio (RSR)",
+    "RSS": "Residual Sum of Squares (RSS)",
+    "NMAE": "Normalized Mean Absolute Error (NMAE)",
     "ubRMSE": "Unbiased Root Mean Squared Error (ubRMSE)",
     "CRMSD": "Centered Root Mean Square Difference (CRMSD)",
     "mean_absolute_error": "Mean Absolute Error (MAE)",
@@ -60,6 +73,7 @@ METRIC_LABELS = {
     "KGE": "Kling–Gupta Efficiency (KGE)",
     "KGESS": "Kling–Gupta Efficiency Skill Score (KGESS)",
     "rv": "Relative Variability (RV)",
+    "rSD": "Ratio of Standard Deviations (rSD)",
     "ubNSE": "Unbiased Nash–Sutcliffe Efficiency (ubNSE)",
     "ubcorrelation": "Unbiased Correlation Coefficient (ubr)",
     "ubcorrelation_R2": "Unbiased Coefficient of Determination (ubR²)",
@@ -67,9 +81,22 @@ METRIC_LABELS = {
     "pc_min": "Relative Minimum Deviation (PCmin)",
     "pc_ampli": "Relative Amplitude Deviation (PCamp)",
     "APFB": "Annual Peak Flow Bias (APFB)",
+    "PBIAS_HF": "Percent Bias of High Flows (PBIAS-HF)",
+    "PBIAS_LF": "Percent Bias of Low Flows (PBIAS-LF)",
+    "pbiasfdc": "Flow Duration Curve Midsegment Slope Bias (PBIAS-FDC)",
     "br2": "Slope-adjusted Coefficient of Determination (br²)",
     "cp": "Coefficient of Persistence (CP)",
+    "rSpearman": "Spearman Rank Correlation Coefficient (rSpearman)",
+    "MIA": "Modified Index of Agreement (MIA)",
+    "RIA": "Relative Index of Agreement (RIA)",
     "dr": "Refined Index of Agreement (dr)",
+    "VE": "Volumetric Efficiency (VE)",
+    "LNSE": "Log Nash–Sutcliffe Efficiency (LNSE)",
+    "mNSE": "Modified Nash–Sutcliffe Efficiency (mNSE)",
+    "rNSE": "Relative Nash–Sutcliffe Efficiency (rNSE)",
+    "mKGE": "Modified Kling–Gupta Efficiency (mKGE)",
+    "KGEkm": "Known-moments Kling–Gupta Efficiency (KGEkm)",
+    "KGElf": "Low-flow Kling–Gupta Efficiency (KGElf)",
     "MFM_omega": "Model Fidelity Metric Phase Component (MFM-ω)",
     "MFM_varphi": "Model Fidelity Metric Variability Component (MFM-φ)",
     "MFM_eta": "Model Fidelity Metric Distribution Component (MFM-η)",
@@ -99,7 +126,12 @@ METRICS_ITEMS = {
             "percent_bias",
             "absolute_percent_bias",
             "mean_absolute_error",
+            "MSE",
             "RMSE",
+            "NRMSE",
+            "RSR",
+            "RSS",
+            "NMAE",
             "ubRMSE",
             "CRMSD",
         ],
@@ -111,21 +143,32 @@ METRICS_ITEMS = {
             "correlation_R2",
             "ubcorrelation",
             "ubcorrelation_R2",
+            "rSpearman",
         ],
         IMPLEMENTED_METRICS,
     ),
     "Efficiency": _filtered(
         [
             "NSE",
+            "LNSE",
+            "mNSE",
+            "rNSE",
             "KGE",
             "KGESS",
+            "mKGE",
+            "KGEkm",
+            "KGElf",
             "ubNSE",
             "L",
-            "index_agreement",
         ],
         IMPLEMENTED_METRICS,
     ),
-    "Hydrology": _filtered(["br2", "cp", "dr", "APFB"], IMPLEMENTED_METRICS),
+    "Agreement": _filtered(["index_agreement", "MIA", "RIA", "dr"], IMPLEMENTED_METRICS),
+    "Hydrology": _filtered(
+        ["PBIAS_HF", "PBIAS_LF", "pbiasfdc", "APFB", "VE", "br2", "cp"],
+        IMPLEMENTED_METRICS,
+    ),
+    "Variability": _filtered(["rv", "rSD", "pc_max", "pc_min", "pc_ampli"], IMPLEMENTED_METRICS),
     "Other": [],
 }
 

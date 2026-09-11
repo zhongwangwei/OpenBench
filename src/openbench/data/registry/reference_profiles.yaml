@@ -1158,29 +1158,46 @@ _Ignore_FLUXCOM_raw_composite:
     root_sub_dir: Grid/LowRes/Composite/FLUXCOM
 
 GDHY2019ver:
+  scan:
+    layout: grid_composite_children
+    root_sub_dir: Grid/LowRes/Anth/Crop/GDHY2019ver
   description: GDHY2019 global historical crop-yield dataset
   category: Bio
-  tim_res: Month
+  tim_res: Year
   data_groupby: Year
-  years:
-    - 1981
-    - 2016
+  timezone: 0
+  years: [1981, 2016]
   variables:
     Crop_Yield_Rice:
+      child: rice
       varname: var
       varunit: t ha-1
+      prefix: yield_
+      suffix: ''
     Crop_Yield_Corn:
+      child: maize
       varname: var
       varunit: t ha-1
+      prefix: yield_
+      suffix: ''
     Crop_Yield_Maize:
+      child: maize
       varname: var
       varunit: t ha-1
+      prefix: yield_
+      suffix: ''
     Crop_Yield_Soybean:
+      child: soybean
       varname: var
       varunit: t ha-1
+      prefix: yield_
+      suffix: ''
     Crop_Yield_Wheat:
+      child: wheat
       varname: var
       varunit: t ha-1
+      prefix: yield_
+      suffix: ''
 
 GRUN_ENSEMBLE:
   description: G-RUN ENSEMBLE global runoff
@@ -1335,10 +1352,10 @@ GIEMS_MC:
   variables:
     Inundation_Fraction:
       varname: total_water_fraction
-      varunit: m
+      varunit: fraction
     Inundation_Area:
       varname: water_surface_area
-      varunit: m
+      varunit: m2
 GIWUED:
   description: GIWUED reference dataset (LowRes)
   category: Urban

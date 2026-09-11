@@ -248,7 +248,8 @@ def test_netcdf_compression_is_opt_in_by_environment(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("kind", ["dataset", "dataarray"])
-def test_distributed_netcdf_write_uses_local_serial_scheduler_for_lazy_data(tmp_path, monkeypatch, kind):
+@pytest.mark.parametrize("distributed", [False, True])
+def test_lazy_netcdf_write_uses_local_serial_scheduler(tmp_path, monkeypatch, kind, distributed):
     import openbench.util.netcdf as netcdf
 
     array = xr.DataArray(
@@ -269,7 +270,7 @@ def test_distributed_netcdf_write_uses_local_serial_scheduler_for_lazy_data(tmp_
         captured["lazy"] = hasattr(self["metric"].data if isinstance(self, xr.Dataset) else self.data, "compute")
         return FakeDelayed()
 
-    monkeypatch.setattr(netcdf, "_distributed_client_active", lambda: True)
+    monkeypatch.setattr(netcdf, "_distributed_client_active", lambda: distributed)
     monkeypatch.setattr(type(lazy), "to_netcdf", fake_to_netcdf)
 
     netcdf.write_netcdf_atomic(lazy, tmp_path / "out.nc")

@@ -1,8 +1,8 @@
 # Releasing OpenBench 3.0
 
-This is a preparation checklist, not a record of publication. The package remains
-`3.0.0b15` until the release version is deliberately changed. Do not upload a
-rebuilt beta over the existing release, or reuse old local `dist/` artifacts.
+This is a preparation checklist, not a record of publication or a version change.
+Do not upload a rebuilt beta over the existing release, or reuse old local `dist/`
+artifacts.
 
 ## 1. Finalize the release inputs
 

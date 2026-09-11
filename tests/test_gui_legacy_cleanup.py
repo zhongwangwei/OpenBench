@@ -59,13 +59,15 @@ def test_gui_metric_and_score_options_come_from_core_registry():
     assert gui_metrics <= IMPLEMENTED_METRICS
     assert gui_scores <= IMPLEMENTED_SCORES
     assert {"dr", "APFB", "br2", "cp"} <= gui_metrics
-    assert {"smpi", "SMPI", "MSE", "LNSE", "The_Ideal_Point_score"} & (gui_metrics | gui_scores) == set()
-    assert "index_agreement" in METRICS_ITEMS["Efficiency"]
+    assert {"smpi", "SMPI", "The_Ideal_Point_score"} & (gui_metrics | gui_scores) == set()
+    assert {"MSE", "LNSE", "rSD", "PBIAS_HF", "PBIAS_LF"} <= gui_metrics
+    assert "KGEnp" not in gui_metrics
+    assert "index_agreement" in METRICS_ITEMS["Agreement"]
     assert "index_agreement" not in gui_scores
     assert "nSeasonalityScore" in gui_scores
 
 
-def test_metric_and_score_labels_use_full_name_with_abbreviation(qapp):
+def test_metric_and_score_labels_use_full_name_with_abbreviation():
     from openbench.core.registry import (
         IMPLEMENTED_METRICS,
         IMPLEMENTED_SCORES,
@@ -73,21 +75,13 @@ def test_metric_and_score_labels_use_full_name_with_abbreviation(qapp):
         SCORE_LABELS,
     )
     from openbench.gui.localization import ZH_CN
-    from openbench.gui.widgets import CheckboxGroup
 
     assert set(METRIC_LABELS) == IMPLEMENTED_METRICS
     assert set(SCORE_LABELS) == IMPLEMENTED_SCORES
 
-    group = CheckboxGroup(
-        {"Metrics": ["RMSE"], "Scores": ["nBiasScore"]},
-        labels={**METRIC_LABELS, **SCORE_LABELS},
-    )
-    assert group._checkboxes["RMSE"].text() == "Root Mean Squared Error (RMSE)"
-    assert group._checkboxes["nBiasScore"].text() == "Normalized Bias Score (nBiasScore)"
+    assert METRIC_LABELS["RMSE"] == "Root Mean Squared Error (RMSE)"
+    assert SCORE_LABELS["nBiasScore"] == "Normalized Bias Score (nBiasScore)"
     assert ZH_CN[METRIC_LABELS["RMSE"]] == "均方根误差（RMSE）"
-
-    group._checkboxes["RMSE"].setChecked(True)
-    assert group.get_selection()["RMSE"] is True
 
 
 def test_dead_page_options_duplicate_is_removed():

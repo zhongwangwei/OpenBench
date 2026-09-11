@@ -326,10 +326,9 @@ def test_remote_run_command_expands_tilde_paths():
     assert 'cd "$HOME"/OpenBench && ' in cmd
     assert "OPENBENCH_GUI_PROGRESS=1" in cmd
     assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench check' in cmd
-    assert (
-        "&& PYTHONUNBUFFERED=1 OPENBENCH_GUI_PROGRESS=1 "
-        '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
-    )
+    assert '"$HOME"/miniconda3/envs/ob/bin/python -u -m openbench run' in cmd
+    assert "__OPENBENCH_PHASE__=run_started" in cmd
+    assert "__OPENBENCH_PHASE__=run_completed" in cmd
     assert "'~/" not in cmd
 
 

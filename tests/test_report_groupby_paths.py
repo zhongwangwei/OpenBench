@@ -682,12 +682,15 @@ def test_report_ignores_hidden_sidecars_and_replaces_stale_figure_copies(tmp_pat
     case_dir = tmp_path / "case"
     metrics_dir = case_dir / "metrics"
     copied_dir = case_dir / "reports" / "figures" / "metrics"
+    output_figures_dir = case_dir / "figures"
     metrics_dir.mkdir(parents=True)
     copied_dir.mkdir(parents=True)
+    output_figures_dir.mkdir(parents=True)
     (metrics_dir / "Runoff_bias.jpg").write_bytes(b"figure")
     (metrics_dir / "._Runoff_bias.jpg").write_bytes(b"sidecar")
     (copied_dir / "stale.jpg").write_bytes(b"stale")
     (copied_dir / "._stale.jpg").write_bytes(b"sidecar")
+    (output_figures_dir / "stale.jpg").write_bytes(b"stale")
 
     generator = ReportGenerator(
         {"evaluation_items": ["Runoff"], "metrics": {}, "scores": {}, "comparisons": {}},
@@ -699,6 +702,8 @@ def test_report_ignores_hidden_sidecars_and_replaces_stale_figure_copies(tmp_pat
     assert not (copied_dir / "._Runoff_bias.jpg").exists()
     assert not (copied_dir / "stale.jpg").exists()
     assert not (copied_dir / "._stale.jpg").exists()
+    assert (output_figures_dir / "metrics" / "Runoff_bias.jpg").read_bytes() == b"figure"
+    assert not (output_figures_dir / "stale.jpg").exists()
 
 
 def test_report_renders_taylor_and_heatmap_once_without_heatmap_item_duplicate(tmp_path):

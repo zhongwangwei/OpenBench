@@ -123,7 +123,7 @@ def test_gldas_fixed_soil_layers_convert_to_volumetric_moisture(tmp_path):
     profile = RegistryManager(user_dir=tmp_path).get_model("GLDAS")
     ds = xr.Dataset(
         {
-            "SoilMoi00_10cm_inst": ("x", [20.0]),
+            "SoilMoi0_10cm_inst": ("x", [20.0]),
             "SoilMoi10_40cm_inst": ("x", [60.0]),
             "RootMoist_inst": ("x", [200.0]),
         }

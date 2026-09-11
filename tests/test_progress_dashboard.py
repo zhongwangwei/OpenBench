@@ -140,20 +140,21 @@ def test_process_cpu_sampler_is_reused_after_psutil_priming(qapp, monkeypatch):
     assert dashboard.mem_label.text() == "0.4%"
 
 
-def test_remote_resource_mode_is_explicitly_unavailable(qapp, monkeypatch):
+def test_remote_resource_samples_are_not_overwritten_by_local_psutil(qapp, monkeypatch):
     fake_psutil = SimpleNamespace(
         cpu_percent=lambda: 99,
         virtual_memory=lambda: SimpleNamespace(percent=99),
     )
     monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
     dashboard = ProgressDashboard()
-    dashboard.show_resource_unavailable("Resources (remote not monitored)")
+    dashboard.monitor_remote_resources()
+    dashboard.update_remote_resource_usage(25, 0.4)
 
     dashboard._update_resource_usage()
 
-    assert dashboard.resource_group.title() == "Resources (remote not monitored)"
-    assert dashboard.cpu_label.text() == "N/A"
-    assert dashboard.mem_label.text() == "N/A"
+    assert dashboard.resource_group.title() == "Resources (OpenBench remote)"
+    assert dashboard.cpu_label.text() == "25%"
+    assert dashboard.mem_label.text() == "0.4%"
 
 
 def test_resource_usage_shows_unavailable_when_psutil_is_missing(qapp, monkeypatch):

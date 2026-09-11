@@ -10,11 +10,27 @@ import pytest
 
 @pytest.fixture
 def qapp():
-    """Process-wide QApplication for GUI tests (offscreen platform)."""
+    """Reuse QApplication, but do not leak widgets or event filters across tests."""
     pytest.importorskip("PySide6")
+    from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
 
-    return QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+    manager = getattr(app, "_openbench_language_manager", None)
+    if manager is not None:
+        app.removeEventFilter(manager)
+        del app._openbench_language_manager
+    for widget in app.topLevelWidgets():
+        # Do not invoke closeEvent: it can open confirmation dialogs in teardown.
+        widget.hide()
+        widget.deleteLater()
+    if manager is not None:
+        manager.deleteLater()
+    # processEvents() alone does not deliver deferred QObject deletions.
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
 
 
 @pytest.fixture(autouse=True)

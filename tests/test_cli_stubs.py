@@ -4371,11 +4371,11 @@ def test_init_metric_and_score_options_are_implemented():
 
     missing_metrics = [name for name in init_module.METRIC_OPTIONS if not hasattr(metrics, name)]
     missing_scores = [name for name in init_module.SCORE_OPTIONS if not hasattr(scores, name)]
-    disabled_metrics = {"rSD", "PBIAS_HF", "PBIAS_LF"} & set(init_module.METRIC_OPTIONS)
+    restored_metrics = {"rSD", "PBIAS_HF", "PBIAS_LF"} & set(init_module.METRIC_OPTIONS)
 
     assert missing_metrics == []
     assert missing_scores == []
-    assert disabled_metrics == set()
+    assert restored_metrics == {"rSD", "PBIAS_HF", "PBIAS_LF"}
 
 
 def test_run_basic_comparison_uses_basic_figure_options(tmp_path, monkeypatch):

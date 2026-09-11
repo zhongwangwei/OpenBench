@@ -416,7 +416,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_metrics = self.metrics
+                                selected_metrics = [name for name in self.metrics if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "IGBP_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -449,7 +449,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_scores = self.scores
+                                selected_scores = [name for name in self.scores if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "IGBP_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -494,7 +494,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_metrics = self.metrics
+                                selected_metrics = [name for name in self.metrics if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "PFT_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -518,7 +518,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_scores = self.scores
+                                selected_scores = [name for name in self.scores if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "PFT_groupby", sim_source, ref_source) + os.sep
                                 )
