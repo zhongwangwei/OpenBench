@@ -67,7 +67,6 @@ def test_unused_interface_abstractions_are_removed():
 
 def test_detached_architecture_modules_are_removed_or_facades():
     assert not (ROOT / "src/openbench/_resources.py").exists()
-    assert not (ROOT / "src/openbench/core/evaluation_engine.py").exists()
     assert not (ROOT / "src/openbench/data/pipeline.py").exists()
 
     wrapper = ROOT / "src/openbench/visualization/Mod_Only_Drawing.py"

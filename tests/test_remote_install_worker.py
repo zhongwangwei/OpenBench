@@ -757,6 +757,8 @@ def test_test_connection_runs_handshake_off_gui_thread_with_marshalled_prompt(qa
 def test_detect_python_runs_probes_off_the_gui_thread(qapp, monkeypatch):
     from PySide6.QtCore import QThread
 
+    from tests.gui_fakes import FakeButton
+
     threads = []
 
     class ProbeSSH:
@@ -780,10 +782,6 @@ def test_detect_python_runs_probes_off_the_gui_thread(qapp, monkeypatch):
 
         def addItem(self, text):
             self.items.append(text)
-
-    class FakeButton:
-        def setEnabled(self, value):
-            self.enabled = value
 
     monkeypatch.setattr("openbench.gui.widgets.remote_config.QMessageBox.information", lambda *args, **kwargs: None)
     monkeypatch.setattr("openbench.gui.widgets.remote_config.QMessageBox.warning", lambda *args, **kwargs: None)
@@ -1965,13 +1963,7 @@ def test_host_input_click_emits_with_existing_text(qapp):
 
 def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
     from openbench.gui.widgets.remote_config import RemoteConfigWidget
-
-    class Text:
-        def __init__(self, value=""):
-            self.value = value
-
-        def text(self):
-            return self.value
+    from tests.gui_fakes import FakeButton, FakeLineEdit
 
     class Radio:
         def __init__(self, checked=False):
@@ -1986,10 +1978,6 @@ def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
 
         def setStyleSheet(self, value):
             self.style = value
-
-    class Button:
-        def setEnabled(self, value):
-            self.enabled = value
 
     class Signal:
         def __init__(self):
@@ -2009,18 +1997,18 @@ def test_primary_server_edit_invalidates_existing_connection(monkeypatch):
             self.is_connected = False
 
     widget = RemoteConfigWidget.__new__(RemoteConfigWidget)
-    widget.host_input = Text("alice@login")
-    widget.password_input = Text("old-secret")
-    widget.key_input = Text("")
+    widget.host_input = FakeLineEdit("alice@login")
+    widget.password_input = FakeLineEdit("old-secret")
+    widget.key_input = FakeLineEdit("")
     widget.radio_password = Radio(True)
     widget.radio_key = Radio(False)
     widget.node_group = type("NodeGroup", (), {"isChecked": lambda self: False})()
     widget.status_label = Label()
     widget.node_status_label = Label()
-    widget.btn_test = Button()
-    widget.btn_disconnect = Button()
-    widget.btn_confirm_node = Button()
-    widget.btn_disconnect_node = Button()
+    widget.btn_test = FakeButton()
+    widget.btn_disconnect = FakeButton()
+    widget.btn_confirm_node = FakeButton()
+    widget.btn_disconnect_node = FakeButton()
     widget.connection_status_changed = Signal()
     widget.config_changed = Signal()
     ssh = SSH()

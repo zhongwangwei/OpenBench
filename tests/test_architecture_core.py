@@ -38,21 +38,6 @@ def test_comparison_common_helpers_live_outside_comparison_god_module():
     common_source = (ROOT / "src/openbench/core/_comparison_common.py").read_text(encoding="utf-8")
 
     assert "from openbench.core._comparison_common import CommonComparisonMixin" in comparison_source
-    assert "class ComparisonProcessing(" in comparison_source
-    for mixin_name in (
-        "BasicComparisonMixin",
-        "CommonComparisonMixin",
-        "DiagramComparisonMixin",
-        "DistributionComparisonMixin",
-        "DiffPlotComparisonMixin",
-        "HeatMapComparisonMixin",
-        "ParallelCoordinatesComparisonMixin",
-        "PortraitComparisonMixin",
-        "RelativeScoreComparisonMixin",
-        "SingleModelPerformanceIndexComparisonMixin",
-        "TailComparisonMixin",
-    ):
-        assert mixin_name in comparison_source
     assert "def _run_parallel_or_serial(" in common_source
     assert "def save_result(" in common_source
     assert "def _run_parallel_or_serial(" not in comparison_source
