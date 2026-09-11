@@ -4,7 +4,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/colm-openbench)](https://pypi.org/project/colm-openbench/)
 [![Python versions](https://img.shields.io/pypi/pyversions/colm-openbench)](https://pypi.org/project/colm-openbench/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20%2B%20third--party-green)](LICENSE)
 [![User's Guide](https://img.shields.io/badge/docs-User's%20Guide%20(PDF)-blue)](docs/manual/OpenBench_UsersGuide_EN.pdf)
 
 OpenBench is a fully automated, cross-platform framework for benchmarking land
@@ -128,7 +128,7 @@ uv pip install "colm-openbench[all]"
 
 ### Conda / Mamba
 
-OpenBench **3.0.0** can be installed in an isolated Conda environment. A
+OpenBench **3.0.1** can be installed in an isolated Conda environment. A
 `colm-openbench` package is not currently published on conda-forge, so do not use
 `conda install -c conda-forge colm-openbench` yet. The conda-forge submission is
 [under review](https://github.com/conda-forge/staged-recipes/pull/34807).
@@ -138,14 +138,14 @@ first, then OpenBench from PyPI:
 ```bash
 conda create -n openbench --override-channels -c conda-forge python=3.12 pip cartopy netcdf4 scipy pandas xarray matplotlib-base
 conda activate openbench
-python -m pip install "colm-openbench==3.0.0"
+python -m pip install "colm-openbench==3.0.1"
 python -m pip check
 openbench --version
 openbench smoke-test
 ```
 
 For the graphical wizard and SSH controls, use
-`python -m pip install "colm-openbench[gui]==3.0.0"` in that environment.
+`python -m pip install "colm-openbench[gui]==3.0.1"` in that environment.
 Mamba can replace `conda create`. Install Conda dependencies before pip packages;
 when changing the native stack later, recreate the environment instead of mixing
 Conda updates into an existing pip installation. Avoid installing into `base`.
@@ -159,7 +159,7 @@ conda-forge publication. From a checkout of the matching release:
 ```bash
 conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build
 conda run -n openbench-build conda build conda/ --python 3.12 --override-channels -c conda-forge --no-anaconda-upload --output-folder ./dist/conda
-conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.0
+conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.1
 conda run -n openbench-conda openbench smoke-test
 ```
 
@@ -646,4 +646,7 @@ If you use OpenBench in scientific work, please cite:
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+OpenBench source code is MIT licensed. See [LICENSE](LICENSE) for details.
+Bundled third-party colormap resources keep their upstream terms: the vendored
+`cmaps` code is GPL-3.0-only, and the NCL color tables are covered by the
+included NCL source license file.

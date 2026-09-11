@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
@@ -70,7 +70,13 @@ dynamic = ["version"]
 description = "Open Source Land Surface Model Benchmarking System"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "MIT AND GPL-3.0-only AND LicenseRef-NCL-6.3.0"
+license-files = [
+    "LICENSE",
+    "src/openbench/visualization/cmaps/LICENSE",
+    "src/openbench/visualization/cmaps/colormaps/ncar_ncl/Copyright",
+    "src/openbench/visualization/cmaps/colormaps/ncar_ncl/NCL_source_license.txt",
+]
 authors = [
     { name = "Zhongwang Wei" },
     { name = "CoLM-SYSU" },
@@ -79,7 +85,6 @@ keywords = ["land surface model", "benchmarking", "evaluation", "climate", "eart
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

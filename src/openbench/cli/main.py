@@ -4,6 +4,8 @@ Uses lazy command loading to avoid importing all submodules at startup.
 """
 
 import importlib
+import io
+import sys
 
 import click
 
@@ -26,6 +28,13 @@ class LazyGroup(click.Group):
         "smoke-test": "openbench.cli.smoke:smoke_test",
         "registry": "openbench.cli.registry_cmd:registry",
     }
+
+    def main(self, *args, **kwargs):
+        # Redirected Windows streams may use a codec without our status glyphs.
+        for stream in (sys.stdout, sys.stderr):
+            if isinstance(stream, io.TextIOWrapper) and stream.errors == "strict":
+                stream.reconfigure(errors="backslashreplace")
+        return super().main(*args, **kwargs)
 
     def list_commands(self, ctx):
         preferred = [

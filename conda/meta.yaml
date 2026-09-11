@@ -1,6 +1,6 @@
 {% set name = "colm-openbench" %}
 {% set dist_name = name|replace("-", "_") %}
-{% set version = "3.0.0" %}
+{% set version = "3.0.1" %}
 
 package:
   name: {{ name|lower }}
@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ dist_name }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: 9774243ae91ca72d52f79e1aa0887a2507d157f3fe7fae336074284740b72bff
+  sha256: 0b9f563ca1a4ad09f828a01ffde5a18593409684895a97dcd760e01738eb8f60
 
 build:
   noarch: python
@@ -21,7 +21,7 @@ requirements:
   host:
     - python >=3.10
     - pip
-    - hatchling
+    - hatchling >=1.27.0
   run:
     - python >=3.10
     - xarray >=0.19.0
@@ -63,9 +63,12 @@ test:
 about:
   home: https://github.com/CoLM-SYSU/OpenBench
   dev_url: https://github.com/zhongwangwei/OpenBench
-  license: MIT
-  license_family: MIT
-  license_file: LICENSE
+  license: MIT AND GPL-3.0-only AND LicenseRef-NCL-6.3.0
+  license_file:
+    - LICENSE
+    - src/openbench/visualization/cmaps/LICENSE
+    - src/openbench/visualization/cmaps/colormaps/ncar_ncl/Copyright
+    - src/openbench/visualization/cmaps/colormaps/ncar_ncl/NCL_source_license.txt
   summary: Open Source Land Surface Model Benchmarking System
   description: |
     OpenBench is a fully automated, cross-platform framework for

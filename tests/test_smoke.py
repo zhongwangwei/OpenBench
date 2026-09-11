@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from openbench import __version__
+
 
 def test_import_openbench():
     """Verify that the openbench package can be imported."""
@@ -27,7 +29,7 @@ def test_cli_entry_point():
     runner = CliRunner()
     result = runner.invoke(cli, ["version"])
     assert result.exit_code == 0
-    assert "3.0.0" in result.output
+    assert result.output.strip() == f"openbench {__version__}"
 
 
 def test_cli_help():
@@ -51,7 +53,7 @@ def test_cli_version_option():
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "3.0.0" in result.output
+    assert result.output.strip() == f"openbench {__version__}"
 
 
 def test_gui_import_guard():

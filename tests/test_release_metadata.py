@@ -55,3 +55,16 @@ def test_conda_installs_the_declared_runtime_without_pip_dependency_resolution(m
     assert "--no-build-isolation" in recipe["build"]["script"]
     assert recipe["build"]["entry_points"] == [f"openbench = {project['scripts']['openbench']}"]
     assert {"python -m pip check", "openbench --version", "openbench smoke-test"} <= set(recipe["test"]["commands"])
+
+
+def test_distributions_declare_and_include_vendored_licenses(metadata):
+    project, recipe = metadata
+    assert project["license"] == recipe["about"]["license"] == "MIT AND GPL-3.0-only AND LicenseRef-NCL-6.3.0"
+    license_files = {
+        "LICENSE",
+        "src/openbench/visualization/cmaps/LICENSE",
+        "src/openbench/visualization/cmaps/colormaps/ncar_ncl/Copyright",
+        "src/openbench/visualization/cmaps/colormaps/ncar_ncl/NCL_source_license.txt",
+    }
+    assert set(project["license-files"]) == set(recipe["about"]["license_file"]) == license_files
+    assert all((ROOT / path).is_file() for path in license_files)

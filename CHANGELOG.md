@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.0.1] - 2026-09-11
+
+Patch release over 3.0.0 for release metadata and CLI output compatibility.
+
+### Fixed
+- Prevent Unicode output crashes in redirected CP1252 and other legacy-encoded
+  CLI streams while preserving UTF-8 output on normal terminals.
+- Correct distribution metadata and bundled third-party license coverage for
+  vendored `cmaps` and NCL color-table resources.
+
+### Packaging
+- Keep Conda-forge availability documented as pending review in
+  [conda-forge/staged-recipes#34807](https://github.com/conda-forge/staged-recipes/pull/34807);
+  no conda-forge channel package has been published yet.
+
 ## [3.0.0] - 2026-09-11
 
 First stable 3.0 release, including the main-branch fixes validated across Linux,

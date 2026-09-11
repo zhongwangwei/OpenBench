@@ -1,11 +1,15 @@
 """CLI integration tests — verify commands work end-to-end."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 from click.testing import CliRunner
 
+from openbench import __version__
 from openbench.cli.main import cli
 
 runner = CliRunner()
@@ -132,6 +136,28 @@ def test_model_list():
     assert "CoLM2024" in result.output
 
 
+@pytest.mark.parametrize("encoding", ["cp1252", "utf-8"])
+@pytest.mark.parametrize("command, expected", [(["model", "list"], "CoLM2024"), (["ref", "list"], "GLEAM")])
+def test_cli_redirected_output_encoding(tmp_path, encoding, command, expected):
+    result = subprocess.run(
+        [sys.executable, "-m", "openbench", *command],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+            "PYTHONIOENCODING": f"{encoding}:strict",
+            "OPENBENCH_HOME": str(tmp_path),
+        },
+        capture_output=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr.decode(encoding)
+    output = result.stdout.decode(encoding)
+    assert expected in output
+    if command == ["model", "list"]:
+        assert ("─" if encoding == "utf-8" else r"\u2500") in output
+
+
 def test_model_show():
     result = runner.invoke(cli, ["model", "show", "CoLM2024"])
     assert result.exit_code == 0
@@ -192,7 +218,7 @@ def test_migrate():
 def test_version():
     result = runner.invoke(cli, ["version"])
     assert result.exit_code == 0
-    assert "3.0.0" in result.output
+    assert result.output.strip() == f"openbench {__version__}"
 
 
 def test_init_output_is_loadable(tmp_path, monkeypatch):
