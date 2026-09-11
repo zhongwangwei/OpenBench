@@ -136,26 +136,39 @@ def test_model_list():
     assert "CoLM2024" in result.output
 
 
-@pytest.mark.parametrize("encoding", ["cp1252", "utf-8"])
+@pytest.mark.parametrize(
+    "io_encoding, separator",
+    [
+        ("cp1252:strict", r"\u2500"),
+        ("cp1252:surrogateescape", r"\u2500"),
+        ("cp1252:surrogatepass", r"\u2500"),
+        ("cp1252:replace", "?"),
+        ("utf-8:strict", "─"),
+        (None, None),
+    ],
+)
 @pytest.mark.parametrize("command, expected", [(["model", "list"], "CoLM2024"), (["ref", "list"], "GLEAM")])
-def test_cli_redirected_output_encoding(tmp_path, encoding, command, expected):
+def test_cli_redirected_output_encoding(tmp_path, io_encoding, separator, command, expected):
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        "OPENBENCH_HOME": str(tmp_path),
+    }
+    if io_encoding is None:
+        env.pop("PYTHONIOENCODING", None)
+    else:
+        env["PYTHONIOENCODING"] = io_encoding
     result = subprocess.run(
         [sys.executable, "-m", "openbench", *command],
         cwd=tmp_path,
-        env={
-            **os.environ,
-            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
-            "PYTHONIOENCODING": f"{encoding}:strict",
-            "OPENBENCH_HOME": str(tmp_path),
-        },
+        env=env,
         capture_output=True,
         timeout=60,
     )
-    assert result.returncode == 0, result.stderr.decode(encoding)
-    output = result.stdout.decode(encoding)
-    assert expected in output
-    if command == ["model", "list"]:
-        assert ("─" if encoding == "utf-8" else r"\u2500") in output
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="backslashreplace")
+    assert expected.encode("ascii") in result.stdout
+    if command == ["model", "list"] and separator is not None:
+        assert separator.encode(io_encoding.split(":")[0]) in result.stdout
 
 
 def test_model_show():

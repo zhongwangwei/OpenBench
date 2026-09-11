@@ -32,7 +32,7 @@ class LazyGroup(click.Group):
     def main(self, *args, **kwargs):
         # Redirected Windows streams may use a codec without our status glyphs.
         for stream in (sys.stdout, sys.stderr):
-            if isinstance(stream, io.TextIOWrapper) and stream.errors == "strict":
+            if isinstance(stream, io.TextIOWrapper) and stream.errors in {"strict", "surrogateescape", "surrogatepass"}:
                 stream.reconfigure(errors="backslashreplace")
         return super().main(*args, **kwargs)
 
