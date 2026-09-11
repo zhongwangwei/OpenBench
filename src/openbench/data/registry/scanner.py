@@ -783,6 +783,32 @@ def _resolution_label(name: str) -> str | None:
     return None
 
 
+def _grid_resolution_roots(grid_dir: Path) -> list[tuple[str | None, Path]]:
+    """Return named resolution roots plus any legacy flat Grid root."""
+    roots = [
+        (res_name, res_dir)
+        for res_name in RESOLUTION_MAP
+        if (res_dir := _child_dir_case_insensitive(grid_dir, res_name)).is_dir()
+    ]
+    flat_categories = [
+        child
+        for child in _iter_dirs(grid_dir)
+        if child.name.casefold() not in {name.casefold() for name in RESOLUTION_MAP}
+    ]
+    if flat_categories:
+        roots.append((None, grid_dir))
+    return roots
+
+
+def _resolution_from_grid_res(grid_res) -> str:
+    """Map native NetCDF spacing to the closest registry resolution bucket."""
+    try:
+        value = float(grid_res)
+    except (TypeError, ValueError):
+        return "MidRes"
+    return min(RESOLUTION_MAP, key=lambda name: abs(value - RESOLUTION_MAP[name]["typical_grid_res"]))
+
+
 def _profile_scan_specs():
     """Yield reference profiles that opt into scan-time layout handling."""
     for profile_name, profile in _load_reference_profiles().items():
@@ -1310,9 +1336,10 @@ def _reference_dataset_dirs(
     directories = []
     if selected_scope != "station":
         grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
-        for res_name in ("LowRes", "MidRes", "HigRes"):
-            res_dir = _child_dir_case_insensitive(grid_dir, res_name)
+        for res_name, res_dir in _grid_resolution_roots(grid_dir):
             for category_dir in _iter_dirs(res_dir):
+                if res_name is None and _resolution_label(category_dir.name):
+                    continue
                 for var_dir in _iter_dirs(category_dir):
                     if not _is_profile_consumed(var_dir, consumed_dirs):
                         directories.extend(
@@ -1386,7 +1413,7 @@ def scan_reference_directory(
         max_workers=max_workers,
     )
 
-    # Scan grid data: Grid/{Res}/<Category>/<Variable>/<Dataset>/*.nc
+    # Scan grid data: Grid/[{Res}/]<Category>/<Variable>/<Dataset>/*.nc
     # Walk 3 levels of directories. Composite category is scanned too:
     #   - Composite/<Dataset>/{dataset,data}/*.nc → profile-friendly dataset root
     #   - Composite/<Variable>/<Dataset>/*.nc     → normal grid registration
@@ -1394,15 +1421,13 @@ def scan_reference_directory(
     # If not but its children do → dataset with sub-dirs (depth 4).
     grid_dir = _child_dir_case_insensitive(ref_root, "Grid")
     if selected_scope != "station" and grid_dir.exists():
-        for res_name in ["LowRes", "MidRes", "HigRes"]:
-            res_dir = _child_dir_case_insensitive(grid_dir, res_name)
-            if not res_dir.exists():
-                continue
-
+        for declared_res_name, res_dir in _grid_resolution_roots(grid_dir):
             if on_progress:
-                on_progress(f"Scanning Grid/{res_name}...")
+                on_progress(f"Scanning Grid/{declared_res_name or ''}...")
 
             for category_dir in _iter_dirs(res_dir):
+                if declared_res_name is None and _resolution_label(category_dir.name):
+                    continue
                 cat_name = category_dir.name
                 category = _category_label(cat_name)
 
@@ -1412,7 +1437,7 @@ def scan_reference_directory(
 
                     var_name = var_dir.name
                     if on_progress:
-                        on_progress(f"  {res_name}/{cat_name}/{var_name}")
+                        on_progress(f"  {declared_res_name or 'auto'}/{cat_name}/{var_name}")
 
                     if cat_name.casefold() == "composite":
                         nc_dir, nc_count, status = _find_grid_composite_nc_dir(var_dir)
@@ -1439,6 +1464,10 @@ def scan_reference_directory(
                         if status == "found":
                             dataset_name = var_name
                             tim_res = _detect_tim_res(nc_dir)
+                            inspection = _inspect_nc_file(nc_dir) if declared_res_name is None else {}
+                            res_name = declared_res_name or _resolution_from_grid_res(
+                                inspection.get("detected_grid_res")
+                            )
                             if dataset_name not in groups:
                                 groups[dataset_name] = DatasetGroup(base_name=dataset_name)
 
@@ -1456,6 +1485,8 @@ def scan_reference_directory(
                             if dataset_name not in scanned.variables:
                                 scanned.variables[dataset_name] = ""
                                 scanned.file_count += nc_count
+                                if inspection:
+                                    scanned.nc_inspections[dataset_name] = inspection
                             continue
 
                     for dataset_dir in _iter_dirs(var_dir):
@@ -1514,6 +1545,8 @@ def scan_reference_directory(
 
                         # Detect tim_res and record sub_dir from the actual NC location
                         tim_res = _detect_tim_res(nc_dir)
+                        inspection = _inspect_nc_file(nc_dir) if declared_res_name is None else {}
+                        res_name = declared_res_name or _resolution_from_grid_res(inspection.get("detected_grid_res"))
                         sub_dir = nc_dir.relative_to(res_dir).as_posix()
 
                         if dataset_name not in groups:
@@ -1533,6 +1566,8 @@ def scan_reference_directory(
                         if var_name not in scanned.variables:
                             scanned.variables[var_name] = sub_dir
                             scanned.file_count += nc_count
+                            if inspection:
+                                scanned.nc_inspections[var_name] = inspection
 
     # Scan station data: Station/<category>/<variable>/<dataset>/
     # Also handles Composite layout: Station/Composite/<dataset>/dataset/*.nc
@@ -3374,7 +3409,9 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
             lon_var = _find_var(ds, LON_NAMES)
             lat_values = _station_coordinate_values(ds, lat_var, stn_dim)
             lon_values = _station_coordinate_values(ds, lon_var, stn_dim)
-            id_values = [(name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds]
+            id_values = [
+                (name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds
+            ]
             station_values = ds[stn_dim].values if stn_dim in ds.coords else None
 
             # Time range (case-insensitive dim name)

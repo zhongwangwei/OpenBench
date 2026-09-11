@@ -21,8 +21,6 @@ try:
 except (AttributeError, ValueError, IndexError):
     USE_NEW_FREQ_ALIASES = False
 
-_HAS_INTERFACES = True
-
 
 class ProcessingConfigMixin:
     def initialize_resource_parameters(self):
@@ -436,9 +434,8 @@ class ProcessingConfigMixin:
             Processed dataset
         """
         if isinstance(data, xr.Dataset):
-            if _HAS_INTERFACES and hasattr(super(), "validate_input"):
-                if not self.validate_input(data):
-                    raise ValueError("Input dataset validation failed")
+            if not self.validate_input(data):
+                raise ValueError("Input dataset validation failed")
 
             # Apply basic processing steps
             processed_data = self.check_dataset(data)
@@ -455,6 +452,8 @@ class ProcessingConfigMixin:
             f"{datasource}_varname",
             f"{datasource}_varunit",
             f"_fb_convert_{datasource}",
+            "minyear",
+            "maxyear",
         )
         state_before = {name: getattr(self, name, None) for name in state_names}
         state_existed = {name: hasattr(self, name) for name in state_names}
@@ -471,6 +470,17 @@ class ProcessingConfigMixin:
 
         try:
             if data_params["data_type"] != "stn":
+                if (
+                    getattr(self, "ref_data_type", "grid") != "stn"
+                    and getattr(self, "sim_data_type", "grid") != "stn"
+                    and getattr(self, "time_alignment", "intersection") != "strict"
+                ):
+                    # Grid source files are shared across pairs. Crop to the
+                    # source/project range here, not the first pair's overlap.
+                    self.minyear = max(int(data_params["syear"]), int(getattr(self, "syear", data_params["syear"])))
+                    self.maxyear = min(int(data_params["eyear"]), int(getattr(self, "eyear", data_params["eyear"])))
+                    if self.minyear > self.maxyear:
+                        raise ValueError(f"{datasource} has no years in the requested project range")
                 logging.debug(f"Processing {data_params['data_type']} data")
                 self.process_grid_data(data_params)
             else:

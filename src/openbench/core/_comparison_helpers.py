@@ -188,7 +188,7 @@ def _finite_reduced_value(
 
 def _apply_pairwise_valid_mask(s: xr.DataArray, o: xr.DataArray) -> tuple[xr.DataArray, xr.DataArray]:
     """Mask sim/ref arrays without in-place NaN assignment into possibly integer arrays."""
-    valid = s.notnull() & o.notnull()
+    valid = np.isfinite(s) & np.isfinite(o)
     return s.where(valid), o.where(valid)
 
 

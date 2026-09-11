@@ -136,7 +136,12 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
         ds = self.check_coordinate(ds)
         ds = self.check_dataset_time_integrity(ds, syear, eyear, time_freq, "stat")
         ds = self.select_timerange(ds, syear, eyear)
-        ds, varunit = self.process_units(ds, varunit)
+        data_vars = list(ds.data_vars) if isinstance(ds, xr.Dataset) else []
+        actual_unit = None
+        if data_vars:
+            actual_unit = ds[data_vars[0]].attrs.get("units")
+        actual_unit = actual_unit or getattr(ds, "attrs", {}).get("units")
+        ds, varunit = self.process_units(ds, actual_unit or varunit)
         return ds
 
     def remap_data(self, data_list):

@@ -16,7 +16,6 @@ _METRIC_EXCLUDE = {
     "rSD",
     "PBIAS_HF",
     "PBIAS_LF",
-    "index_agreement",
     # SMPI returns (estimate, lower, upper) and belongs to the dedicated
     # comparison workflow, not the single-DataArray evaluation contract.
     "smpi",
@@ -27,6 +26,8 @@ _METRIC_EXCLUDE = {
     "ubKGE",
     "kappa_coeff",
 }
+
+_SCORE_EXCLUDE = {"index_agreement"}
 
 
 def _public_callable_names(cls: type, *, exclude: Iterable[str] = ()) -> list[str]:
@@ -39,7 +40,7 @@ def _public_callable_names(cls: type, *, exclude: Iterable[str] = ()) -> list[st
 
 
 IMPLEMENTED_METRIC_NAMES = tuple(_public_callable_names(metrics, exclude=_METRIC_EXCLUDE))
-IMPLEMENTED_SCORE_NAMES = tuple(_public_callable_names(scores))
+IMPLEMENTED_SCORE_NAMES = tuple(_public_callable_names(scores, exclude=_SCORE_EXCLUDE))
 
 IMPLEMENTED_METRICS = set(IMPLEMENTED_METRIC_NAMES)
 IMPLEMENTED_SCORES = set(IMPLEMENTED_SCORE_NAMES)
@@ -73,10 +74,10 @@ METRIC_LABELS = {
     "MFM_varphi": "Model Fidelity Metric Variability Component (MFM-φ)",
     "MFM_eta": "Model Fidelity Metric Distribution Component (MFM-η)",
     "MFM": "Model Fidelity Metric (MFM)",
+    "index_agreement": "Index of Agreement (IOA)",
 }
 
 SCORE_LABELS = {
-    "index_agreement": "Index of Agreement (IOA)",
     "nBiasScore": "Normalized Bias Score (nBiasScore)",
     "nRMSEScore": "Normalized RMSE Score (nRMSEScore)",
     "nPhaseScore": "Normalized Phase Score (nPhaseScore)",
@@ -120,6 +121,7 @@ METRICS_ITEMS = {
             "KGESS",
             "ubNSE",
             "L",
+            "index_agreement",
         ],
         IMPLEMENTED_METRICS,
     ),
