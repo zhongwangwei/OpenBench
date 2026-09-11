@@ -33,6 +33,7 @@ headless tests do not prove real SSH/HPC connectivity or every optional backend.
 ## 3. Build and inspect fresh artifacts
 
 Install the build tools in the release environment (`build`, `twine`, `pytest`).
+Use a clean checkout of the release commit, not a working tree with local files.
 The following shell commands use a new directory and leave existing `dist/` alone:
 
 ```sh

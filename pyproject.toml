@@ -34,7 +34,7 @@ exclude = [
 # By default sdist would pick up everything in the working tree —
 # including any output/cache directories created by ad-hoc test runs
 # (the previous sdist artifact was 13 GB for exactly this reason).
-include = [
+only-include = [
     "src/openbench",
     "tests",
     "README.md",
