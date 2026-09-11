@@ -2,7 +2,7 @@
 
 > Open Source Land Surface Model Benchmarking System
 
-[![PyPI version](https://img.shields.io/pypi/v/colm-openbench?include_prereleases)](https://pypi.org/project/colm-openbench/)
+[![PyPI version](https://img.shields.io/pypi/v/colm-openbench)](https://pypi.org/project/colm-openbench/)
 [![Python versions](https://img.shields.io/pypi/pyversions/colm-openbench)](https://pypi.org/project/colm-openbench/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![User's Guide](https://img.shields.io/badge/docs-User's%20Guide%20(PDF)-blue)](docs/manual/OpenBench_UsersGuide_EN.pdf)
@@ -126,37 +126,44 @@ Using `uv`:
 uv pip install "colm-openbench[all]"
 ```
 
-### conda / conda-forge
+### Conda / Mamba
 
-OpenBench ships a conda-forge recipe (`conda/meta.yaml`, `noarch`: sourced from
-PyPI, with Cartopy/NetCDF/PROJ resolved by conda). Once published to
-conda-forge, a single command installs everything (no local compilation):
-
-```bash
-conda install -c conda-forge colm-openbench
-mamba install -c conda-forge colm-openbench   # or the faster mamba
-```
-
-> **Note:** the current release is a Beta pre-release (`3.0.0b16`) and is **not on
-> conda-forge yet**. Until it is, use one of the two paths below.
-
-If your platform does not have wheels for geospatial dependencies such as
-Cartopy, install the scientific stack from conda-forge first, then install
-OpenBench with pip:
+OpenBench **3.0.0** can be installed in an isolated Conda environment. A
+`colm-openbench` package is not currently published on conda-forge, so do not use
+`conda install -c conda-forge colm-openbench` yet. Install the native scientific
+libraries from conda-forge first, then OpenBench from PyPI:
 
 ```bash
-mamba create -n openbench -c conda-forge python=3.12 cartopy netcdf4
-mamba activate openbench
-pip install colm-openbench
+conda create -n openbench --override-channels -c conda-forge python=3.12 pip cartopy netcdf4 scipy pandas xarray matplotlib-base
+conda activate openbench
+python -m pip install "colm-openbench==3.0.0"
+python -m pip check
+openbench --version
+openbench smoke-test
 ```
 
-Or build a local conda package straight from the bundled recipe:
+For the graphical wizard and SSH controls, use
+`python -m pip install "colm-openbench[gui]==3.0.0"` in that environment.
+Mamba can replace `conda create`. Install Conda dependencies before pip packages;
+when changing the native stack later, recreate the environment instead of mixing
+Conda updates into an existing pip installation. Avoid installing into `base`.
+
+#### Build a native Conda package locally
+
+The versioned recipe in `conda/meta.yaml` builds a `noarch: python` CLI package
+from the checksummed PyPI source archive. This is a local build, not a claim of
+conda-forge publication. From a checkout of the matching release:
 
 ```bash
-conda install -n base conda-build
-conda build conda/
-conda install -c local colm-openbench
+conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build
+conda run -n openbench-build conda build conda/ --python 3.12 --override-channels -c conda-forge --no-anaconda-upload --output-folder ./dist/conda
+conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.0
+conda run -n openbench-conda openbench smoke-test
 ```
+
+The recipe installs dependencies through Conda rather than downloading them
+inside pip, then checks imports, dependency consistency, the CLI and bundled
+sample data. GUI/SSH and PDF extras remain optional, as with the PyPI install.
 
 Install from a GitHub checkout for development or local testing:
 
