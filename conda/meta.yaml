@@ -7,8 +7,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://pypi.org/packages/source/{{ name[0] }}/{{ dist_name }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: 0b9f563ca1a4ad09f828a01ffde5a18593409684895a97dcd760e01738eb8f60
+  url: https://github.com/zhongwangwei/OpenBench/releases/download/v{{ version }}/{{ dist_name }}-{{ version }}.tar.gz
+  sha256: c64c9c33d4ed0a941202c35b88ebca9ba6e8e256409cbbcb15ce5d1c1cf652e1
 
 build:
   noarch: python

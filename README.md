@@ -128,24 +128,24 @@ uv pip install "colm-openbench[all]"
 
 ### Conda / Mamba
 
-OpenBench **3.0.1** can be installed in an isolated Conda environment. A
+OpenBench can be installed in an isolated Conda environment. A
 `colm-openbench` package is not currently published on conda-forge, so do not use
 `conda install -c conda-forge colm-openbench` yet. The conda-forge submission is
 [under review](https://github.com/conda-forge/staged-recipes/pull/34807).
 Until it is published, install the native scientific libraries from conda-forge
-first, then OpenBench from PyPI:
+first, then the latest available OpenBench release from PyPI:
 
 ```bash
 conda create -n openbench --override-channels -c conda-forge python=3.12 pip cartopy netcdf4 scipy pandas xarray matplotlib-base
 conda activate openbench
-python -m pip install "colm-openbench==3.0.1"
+python -m pip install --upgrade colm-openbench
 python -m pip check
 openbench --version
 openbench smoke-test
 ```
 
 For the graphical wizard and SSH controls, use
-`python -m pip install "colm-openbench[gui]==3.0.1"` in that environment.
+`python -m pip install --upgrade "colm-openbench[gui]"` in that environment.
 Mamba can replace `conda create`. Install Conda dependencies before pip packages;
 when changing the native stack later, recreate the environment instead of mixing
 Conda updates into an existing pip installation. Avoid installing into `base`.
@@ -153,7 +153,7 @@ Conda updates into an existing pip installation. Avoid installing into `base`.
 #### Build a native Conda package locally
 
 The versioned recipe in `conda/meta.yaml` builds a `noarch: python` CLI package
-from the checksummed PyPI source archive. This is a local build, not a claim of
+from the checksummed GitHub Release source archive. This is a local build, not a claim of
 conda-forge publication. From a checkout of the matching release:
 
 ```bash
