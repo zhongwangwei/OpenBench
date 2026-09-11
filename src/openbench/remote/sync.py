@@ -4,9 +4,11 @@
 Sync engine for remote storage with local caching.
 """
 
+import errno
 import posixpath
 import re
 import shlex
+from fnmatch import fnmatchcase
 
 from openbench.remote.ssh import quote_remote_path
 import threading
@@ -17,10 +19,6 @@ from typing import Dict, List, Optional, Callable, Set
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
-
-
-def _has_exact_stdout_line(stdout: str, sentinel: str) -> bool:
-    return any(line.strip() == sentinel for line in stdout.splitlines())
 
 
 def _expand_remote_home(ssh_manager, path: str) -> str:
@@ -187,6 +185,32 @@ class SyncEngine:
             else:
                 out.append("\\" + char)
         return "".join(out)
+
+    @staticmethod
+    def _matches_glob(path: str, pattern: str) -> bool:
+        path_parts = path.split("/")
+        pattern_parts = pattern.split("/")
+
+        def matches(path_index: int, pattern_index: int) -> bool:
+            if pattern_index == len(pattern_parts):
+                return path_index == len(path_parts)
+            if pattern_parts[pattern_index] == "**":
+                return matches(path_index, pattern_index + 1) or (
+                    path_index < len(path_parts) and matches(path_index + 1, pattern_index)
+                )
+            return (
+                path_index < len(path_parts)
+                and fnmatchcase(path_parts[path_index], pattern_parts[pattern_index])
+                and matches(path_index + 1, pattern_index + 1)
+            )
+
+        return matches(0, 0)
+
+    @staticmethod
+    def _is_path_or_child(path: str, parent: str) -> bool:
+        parent = posixpath.normpath(parent).strip("/")
+        candidate = posixpath.normpath(path).strip("/")
+        return candidate == parent or candidate.startswith(parent + "/")
 
     def read(self, path: str) -> str:
         """
@@ -481,23 +505,37 @@ class SyncEngine:
         """List remote directory contents.
 
         Raises:
-            IOError: When the listing fails (e.g. permission denied, missing
-                directory, network error). Previously this returned ``[]``
-                indistinguishably from a genuinely empty directory.
+            IOError: When the listing fails. A missing remote directory is
+                tolerated only when pending cached children already define it.
         """
         self._ensure_remote_io_allowed()
         remote_path = self._remote_path(path)
-        # Don't swallow stderr in the shell — surface it on failure so
-        # callers can tell "permission denied" / "no such directory" apart
-        # from an empty directory.
-        stdout, stderr, exit_code = self._ssh.execute(f"ls -1 {quote_remote_path(remote_path)}", timeout=30)
-        self._ensure_remote_io_allowed()
-        if exit_code != 0:
-            raise IOError(
-                f"list_dir({remote_path!r}) failed (exit {exit_code}): "
-                f"{stderr.strip() or stdout.strip() or 'ls produced no diagnostics'}"
-            )
-        return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
+        entries = set()
+        directory = posixpath.normpath(path)
+        prefix = "" if directory == "." else directory.strip("/") + "/"
+        with self._lock:
+            for cached_path in self._pending_sync:
+                if cached_path.startswith(prefix):
+                    rest = cached_path[len(prefix) :]
+                    if rest:
+                        entries.add(rest.split("/", 1)[0])
+        try:
+            entries.update(self._ssh.open_sftp().listdir(remote_path))
+            self._ensure_remote_io_allowed()
+        except FileNotFoundError as exc:
+            self._ensure_remote_io_allowed()
+            if not entries:
+                raise IOError(f"list_dir({remote_path!r}) failed: {exc}") from exc
+        except RuntimeError:
+            raise
+        except OSError as exc:
+            self._ensure_remote_io_allowed()
+            if getattr(exc, "errno", None) != errno.ENOENT or not entries:
+                raise IOError(f"list_dir({remote_path!r}) failed: {exc}") from exc
+        except Exception as exc:
+            self._ensure_remote_io_allowed()
+            raise IOError(f"list_dir({remote_path!r}) failed: {exc}") from exc
+        return sorted(entries)
 
     def exists(self, path: str) -> bool:
         """Check if remote path exists."""
@@ -508,11 +546,24 @@ class SyncEngine:
                 return True
 
         remote_path = self._remote_path(path)
-        stdout, stderr, exit_code = self._ssh.execute(
-            f"test -e {quote_remote_path(remote_path)} && echo 'exists'", timeout=10
-        )
-        self._ensure_remote_io_allowed()
-        return exit_code == 0 and _has_exact_stdout_line(stdout, "exists")
+        try:
+            self._ensure_remote_io_allowed()
+            self._ssh.open_sftp().stat(remote_path)
+            self._ensure_remote_io_allowed()
+            return True
+        except FileNotFoundError:
+            self._ensure_remote_io_allowed()
+            return False
+        except RuntimeError:
+            raise
+        except OSError as exc:
+            self._ensure_remote_io_allowed()
+            if getattr(exc, "errno", None) == errno.ENOENT:
+                return False
+            raise IOError(f"exists({remote_path!r}) failed: {exc}") from exc
+        except Exception as exc:
+            self._ensure_remote_io_allowed()
+            raise IOError(f"exists({remote_path!r}) failed: {exc}") from exc
 
     def glob(self, pattern: str) -> List[str]:
         """Find files matching pattern on remote.
@@ -538,7 +589,10 @@ class SyncEngine:
                 f"glob({pattern!r}) under {base_dir!r} failed (exit {exit_code}): "
                 f"{stderr.strip() or stdout.strip() or 'glob produced no diagnostics'}"
             )
-        return [line.strip() for line in stdout.strip().split("\n") if line.strip()]
+        matches = {line.strip() for line in stdout.strip().split("\n") if line.strip()}
+        with self._lock:
+            matches.update(path for path in self._pending_sync if self._matches_glob(path, pattern))
+        return sorted(matches)
 
     def mkdir(self, path: str) -> None:
         """Create remote directory."""
@@ -567,6 +621,20 @@ class SyncEngine:
         remote_root = posixpath.normpath(self._remote_dir)
         if remote_path == remote_root:
             raise ValueError("Refusing to delete remote project root")
+        with self._lock:
+            state_paths = (
+                set(self._versions)
+                | set(self._cache)
+                | set(self._sync_status)
+                | self._pending_sync
+                | set(self._sync_errors)
+            )
+            versions = {
+                cached_path: self._versions.get(cached_path, 0)
+                for cached_path in state_paths
+                if self._is_path_or_child(cached_path, path)
+            }
+            version = self._versions.get(path, 0)
         quoted = quote_remote_path(remote_path)
         delete_cmd = f"if [ -d {quoted} ] && [ ! -L {quoted} ]; then rm -rf {quoted}; else rm -f {quoted}; fi"
         stdout, stderr, exit_code = self._ssh.execute(delete_cmd, timeout=10)
@@ -579,11 +647,18 @@ class SyncEngine:
         self._ensure_remote_io_allowed()
 
         with self._lock:
-            self._versions[path] = self._versions.get(path, 0) + 1
-            self._cache.pop(path, None)
-            self._sync_status.pop(path, None)
-            self._pending_sync.discard(path)
-            self._sync_errors.pop(path, None)
+            if self._versions.get(path, 0) != version:
+                return
+            for cached_path, cached_version in versions.items():
+                if self._versions.get(cached_path, 0) != cached_version:
+                    continue
+                self._versions[cached_path] = self._versions.get(cached_path, 0) + 1
+                self._cache.pop(cached_path, None)
+                self._sync_status.pop(cached_path, None)
+                self._pending_sync.discard(cached_path)
+                self._sync_errors.pop(cached_path, None)
+            if path not in versions:
+                self._versions[path] = self._versions.get(path, 0) + 1
 
     def start_background_sync(self, interval: float = 2.0):
         """Start background sync thread."""

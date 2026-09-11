@@ -90,6 +90,7 @@ from openbench.remote.credentials import CredentialManager, CredentialStorageErr
 logger = logging.getLogger(__name__)
 
 _DETACHED_TASK_WORKERS = []
+_CREDENTIAL_LOAD_FAILED = object()
 
 
 def parse_ssh_config() -> List[Dict[str, str]]:
@@ -1060,6 +1061,8 @@ class RemoteConfigWidget(QWidget):
         )
 
     def _prepare_target_change(self) -> bool:
+        if getattr(self, "_target_change_preapproved", False):
+            return True
         if self.has_active_setup_flow():
             return False
         callback = getattr(self, "prepare_target_change", None)
@@ -2209,7 +2212,7 @@ if spec is not None:
                     ssh_manager,
                     (
                         f"first_entry=$(find {quoted_install_path} -mindepth 1 -maxdepth 1 -print -quit "
-                        f"2>/dev/null) && test -z \"$first_entry\" && test -w {quoted_install_path} && echo is_empty"
+                        f'2>/dev/null) && test -z "$first_entry" && test -w {quoted_install_path} && echo is_empty'
                     ),
                     timeout=10,
                 )
@@ -2478,73 +2481,165 @@ if spec is not None:
             "openbench_package_path": package_path,
         }
 
+    def _get_saved_credential(self, host: str):
+        if not host:
+            return None
+        try:
+            return self._credential_manager.get_credential(host)
+        except CredentialStorageError as exc:
+            QMessageBox.warning(self, "Credential Load Failed", str(exc))
+            return _CREDENTIAL_LOAD_FAILED
+
     def set_config(self, config: Dict[str, Any]):
         """Set configuration from dictionary.
 
         Args:
             config: Configuration dictionary
         """
-        # Block signals during batch update
-        self.blockSignals(True)
-
-        # Set host
-        self.host_input.setText(config.get("host", ""))
-
-        # Set auth type
-        if config.get("auth_type") == "key":
-            self.radio_key.setChecked(True)
-        else:
-            self.radio_password.setChecked(True)
-
-        # Set key file
-        self.key_input.setText(config.get("key_file", ""))
-
-        # Set jump/compute node settings
-        self.node_group.setChecked(config.get("use_jump", False))
-        self.node_input.setText(config.get("jump_node", ""))
-
-        if config.get("jump_auth") == "password":
-            self.radio_node_password.setChecked(True)
-        elif config.get("jump_auth") == "key":
-            self.radio_node_key.setChecked(True)
-        else:
-            self.radio_node_none.setChecked(True)
-        self.node_key_input.setText(config.get("node_key_file", ""))
-
-        # Set num_cores
-        self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
-
-        # Set Python environment
-        python_path = config.get("python_path", "")
-        if python_path:
-            idx = self.python_combo.findText(python_path)
-            if idx >= 0:
-                self.python_combo.setCurrentIndex(idx)
-            else:
-                self.python_combo.setCurrentText(python_path)
-
-        # Set conda environment
-        conda_env = config.get("conda_env", "")
-        if conda_env:
-            idx = self.conda_combo.findText(conda_env)
-            if idx >= 0:
-                self.conda_combo.setCurrentIndex(idx)
-        else:
-            self.conda_combo.setCurrentIndex(0)
-
-        # Set OpenBench path
-        self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
-        self._set_openbench_probe_paths(
-            config.get("openbench_package_path", ""), config.get("openbench_source_path", "")
-        )
-
-        # Restore signals
-        self.blockSignals(False)
-
-        # Try to load saved credentials for this host
         host = config.get("host", "")
-        if host:
-            self._load_saved_credentials(host)
+        auth_type = "key" if config.get("auth_type") == "key" else "password"
+        key_file = config.get("key_file", "")
+        password = ""
+        save_password = False
+        use_jump = config.get("use_jump", False)
+        jump_node = config.get("jump_node", "")
+        jump_auth = config.get("jump_auth") or "none"
+        node_key_file = config.get("node_key_file", "")
+        node_password = ""
+
+        cred = self._get_saved_credential(host)
+        if cred is not _CREDENTIAL_LOAD_FAILED and cred:
+            auth_type = "key" if cred.get("auth_type") == "key" else "password"
+            password = cred.get("password") or ""
+            save_password = bool(password)
+            key_file = cred.get("key_file") or key_file
+            if cred.get("jump_node"):
+                use_jump = True
+                jump_node = cred["jump_node"]
+                jump_auth = cred.get("jump_auth") or "none"
+                node_password = cred.get("node_password") or ""
+                node_key_file = cred.get("node_key_file") or node_key_file
+
+        def final_server_config():
+            return (
+                host,
+                auth_type,
+                password if auth_type == "password" else "",
+                key_file if auth_type == "key" else "",
+            )
+
+        def final_node_config():
+            if not use_jump:
+                return ()
+            if not jump_node:
+                return None
+            return (
+                jump_node,
+                jump_auth,
+                node_password if jump_auth == "password" else "",
+                node_key_file if jump_auth == "key" else "",
+            )
+
+        target_changed = (
+            (
+                getattr(self, "_confirmed_server_config", None) is not None
+                and final_server_config() != self._confirmed_server_config
+            )
+            or (
+                getattr(self, "_confirmed_node_config", None) is not None
+                and final_node_config() != self._confirmed_node_config
+            )
+            or (
+                getattr(self, "_confirmed_project_path", None) is not None
+                and (config.get("openbench_path") or "~/OpenBench") != self._confirmed_project_path
+            )
+        )
+        if target_changed:
+            if not self._prepare_target_change():
+                return
+            self._target_change_preapproved = True
+
+        blockers = [
+            QSignalBlocker(widget)
+            for widget in (
+                self,
+                self.host_input,
+                self.radio_password,
+                self.radio_key,
+                self.password_input,
+                self.cb_save_password,
+                self.key_input,
+                self.node_group,
+                self.node_input,
+                self.radio_node_password,
+                self.radio_node_key,
+                self.radio_node_none,
+                self.node_password_input,
+                self.node_key_input,
+                self.num_cores_spin,
+                self.python_combo,
+                self.conda_combo,
+                self.openbench_input,
+                self.openbench_package_input,
+            )
+        ]
+        self._restoring_confirmed_config = True
+
+        try:
+            self.host_input.setText(host)
+            self.radio_key.setChecked(auth_type == "key")
+            self.radio_password.setChecked(auth_type != "key")
+            self.password_input.setText(password)
+            self.cb_save_password.setChecked(save_password)
+            self.key_input.setText(key_file)
+            self.password_row_widget.setVisible(self.radio_password.isChecked())
+            self.key_row_widget.setVisible(self.radio_key.isChecked())
+
+            self.node_group.setChecked(use_jump)
+            self.node_input.setText(jump_node)
+            self.radio_node_password.setChecked(jump_auth == "password")
+            self.radio_node_key.setChecked(jump_auth == "key")
+            self.radio_node_none.setChecked(jump_auth not in {"password", "key"})
+            self.node_password_input.setText(node_password)
+            self.node_key_input.setText(node_key_file)
+            self.node_password_input.setVisible(self.radio_node_password.isChecked())
+            self.node_key_widget.setVisible(self.radio_node_key.isChecked())
+
+            self.num_cores_spin.setValue(config.get("num_cores", DEFAULT_NUM_CORES))
+
+            python_path = config.get("python_path", "")
+            if python_path:
+                idx = self.python_combo.findText(python_path)
+                if idx >= 0:
+                    self.python_combo.setCurrentIndex(idx)
+                else:
+                    self.python_combo.setCurrentText(python_path)
+
+            conda_env = config.get("conda_env", "")
+            if conda_env:
+                idx = self.conda_combo.findText(conda_env)
+                if idx >= 0:
+                    self.conda_combo.setCurrentIndex(idx)
+            else:
+                self.conda_combo.setCurrentIndex(0)
+
+            self.openbench_input.setText(config.get("openbench_path") or "~/OpenBench")
+            self._set_openbench_probe_paths(
+                config.get("openbench_package_path", ""), config.get("openbench_source_path", "")
+            )
+        except Exception:
+            if target_changed:
+                self._target_change_preapproved = False
+            raise
+        finally:
+            self._restoring_confirmed_config = False
+            blockers.clear()
+
+        try:
+            self._on_config_changed()
+        finally:
+            if target_changed:
+                self._target_change_preapproved = False
 
     def _load_saved_credentials(self, host: str):
         """Load saved credentials for a host.
@@ -2552,51 +2647,42 @@ if spec is not None:
         Args:
             host: Host string to load credentials for
         """
-        try:
-            cred = self._credential_manager.get_credential(host)
-        except CredentialStorageError as exc:
-            QMessageBox.warning(self, "Credential Load Failed", str(exc))
+        cred = self._get_saved_credential(host)
+        if cred is _CREDENTIAL_LOAD_FAILED:
             return
-
         if not cred:
             self.password_input.clear()
+            self.node_password_input.clear()
             self.cb_save_password.setChecked(False)
             return
 
-        # Clear credential-derived fields only after we know credentials exist.
-        # Otherwise a config file that explicitly contains key/jump settings is
-        # silently wiped just because this machine has no saved secret for host.
         self.password_input.clear()
         self.cb_save_password.setChecked(False)
         self.node_password_input.clear()
 
-        auth_type = cred.get("auth_type")
-        if auth_type == "key":
-            self.radio_key.setChecked(True)
-        else:
-            self.radio_password.setChecked(True)
+        self.radio_key.setChecked(cred.get("auth_type") == "key")
+        self.radio_password.setChecked(cred.get("auth_type") != "key")
+        self.password_row_widget.setVisible(self.radio_password.isChecked())
+        self.key_row_widget.setVisible(self.radio_key.isChecked())
 
-        # Load password if saved
         if cred.get("password"):
             self.password_input.setText(cred["password"])
             self.cb_save_password.setChecked(True)
-        # Load key file if saved
         if cred.get("key_file"):
             self.key_input.setText(cred["key_file"])
-        # Load jump node settings
         if cred.get("jump_node"):
             self.node_group.setChecked(True)
             self.node_input.setText(cred["jump_node"])
-            if cred.get("jump_auth") == "password":
-                self.radio_node_password.setChecked(True)
-                if cred.get("node_password"):
-                    self.node_password_input.setText(cred["node_password"])
-            elif cred.get("jump_auth") == "key":
-                self.radio_node_key.setChecked(True)
-                if cred.get("node_key_file"):
-                    self.node_key_input.setText(cred["node_key_file"])
-            else:
-                self.radio_node_none.setChecked(True)
+            jump_auth = cred.get("jump_auth")
+            self.radio_node_password.setChecked(jump_auth == "password")
+            self.radio_node_key.setChecked(jump_auth == "key")
+            self.radio_node_none.setChecked(jump_auth not in {"password", "key"})
+            if jump_auth == "password" and cred.get("node_password"):
+                self.node_password_input.setText(cred["node_password"])
+            if jump_auth == "key" and cred.get("node_key_file"):
+                self.node_key_input.setText(cred["node_key_file"])
+        self.node_password_input.setVisible(self.radio_node_password.isChecked())
+        self.node_key_widget.setVisible(self.radio_node_key.isChecked())
 
     def disconnect(self):
         """Disconnect from remote server."""

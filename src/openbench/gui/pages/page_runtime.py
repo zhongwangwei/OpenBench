@@ -271,7 +271,7 @@ class PageRuntime(BasePage):
         if self.radio_local.isChecked():
             # Do not call the full target-change guard here: it may flush remote
             # storage, and _switch_to_local_storage() owns that side effect.
-            if self._remote_export_blocks_target_change():
+            if self._remote_activity_blocks_target_change():
                 self._set_execution_mode("remote")
                 return
             has_setup_flow = getattr(self.remote_config_widget, "has_active_setup_flow", None)
@@ -300,7 +300,7 @@ class PageRuntime(BasePage):
 
     def _prepare_remote_target_change(self) -> bool:
         """Guard remote target changes while remote storage has unsynced writes."""
-        if self._remote_export_blocks_target_change():
+        if self._remote_activity_blocks_target_change():
             return False
         main_window = self._get_main_window()
         if not main_window:
@@ -334,6 +334,28 @@ class PageRuntime(BasePage):
                 if callable(thaw):
                     thaw()
                 return False
+        return True
+
+    def _remote_activity_blocks_target_change(self) -> bool:
+        """Warn and block target changes while remote export or run is active."""
+        return self._remote_export_blocks_target_change() or self._remote_run_blocks_target_change()
+
+    def _remote_run_blocks_target_change(self) -> bool:
+        main_window = self._get_main_window()
+        if not main_window:
+            return False
+        run_page = getattr(main_window, "pages", {}).get("run_monitor")
+        runner = getattr(run_page, "_runner", None)
+        is_running = getattr(runner, "isRunning", None)
+        if not callable(is_running) or not is_running():
+            return False
+        if not getattr(run_page, "_last_run_is_remote", False):
+            return False
+        QMessageBox.warning(
+            self,
+            "Remote Run Active",
+            "Remote evaluation is still running. Stop it before changing the remote target.",
+        )
         return True
 
     def _remote_export_blocks_target_change(self) -> bool:

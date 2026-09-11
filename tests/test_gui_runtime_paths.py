@@ -250,6 +250,26 @@ def test_remote_storage_setup_failure_disconnects_candidate_without_claiming_loc
     assert events == ["disconnect"]
 
 
+def test_remote_target_change_is_blocked_while_evaluation_is_running(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    warnings = []
+    runner = SimpleNamespace(isRunning=lambda: True)
+    main_window = SimpleNamespace(
+        pages={
+            "preview": SimpleNamespace(_export_in_progress=False),
+            "run_monitor": SimpleNamespace(_runner=runner, _last_run_is_remote=True),
+        }
+    )
+    page._get_main_window = lambda: main_window
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_runtime.QMessageBox.warning",
+        lambda *args: warnings.append(args),
+    )
+
+    assert page._remote_activity_blocks_target_change() is True
+    assert warnings[-1][1] == "Remote Run Active"
+
+
 def test_switching_local_flushes_storage_before_widget_disconnect():
     events = []
     page = PageRuntime.__new__(PageRuntime)
@@ -263,7 +283,7 @@ def test_switching_local_flushes_storage_before_widget_disconnect():
         disconnect=lambda: events.append("disconnect"),
         reset_to_defaults=lambda: events.append("reset"),
     )
-    page._remote_export_blocks_target_change = lambda: False
+    page._remote_activity_blocks_target_change = lambda: False
     page._switch_to_local_storage = lambda: events.append("flush-and-switch") or True
     page._on_config_changed = lambda: events.append("save")
 
@@ -610,6 +630,41 @@ def test_switching_local_is_blocked_during_remote_preview_export(qapp, monkeypat
     page = _runtime_page(qapp, monkeypatch)
     page.radio_remote.setChecked(True)
     page._get_main_window = lambda: SimpleNamespace(pages={"preview": SimpleNamespace(_export_in_progress=True)})
+    switches = []
+    page._switch_to_local_storage = lambda: switches.append(True) or True
+    monkeypatch.setattr("openbench.gui.pages.page_runtime.QMessageBox.warning", lambda *_args: None)
+
+    page.radio_local.setChecked(True)
+
+    assert page.radio_remote.isChecked()
+    assert switches == []
+
+
+def test_runtime_prepare_remote_target_change_blocks_active_remote_run(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    warnings = []
+    runner = SimpleNamespace(isRunning=lambda: True)
+    page._get_main_window = lambda: SimpleNamespace(
+        pages={"run_monitor": SimpleNamespace(_runner=runner, _last_run_is_remote=True)}
+    )
+    monkeypatch.setattr(
+        "openbench.gui.pages.page_runtime.QMessageBox.warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    assert page._prepare_remote_target_change() is False
+    assert warnings == [
+        ("Remote Run Active", "Remote evaluation is still running. Stop it before changing the remote target.")
+    ]
+
+
+def test_switching_local_is_blocked_during_active_remote_run(qapp, monkeypatch):
+    page = _runtime_page(qapp, monkeypatch)
+    page.radio_remote.setChecked(True)
+    runner = SimpleNamespace(isRunning=lambda: True)
+    page._get_main_window = lambda: SimpleNamespace(
+        pages={"run_monitor": SimpleNamespace(_runner=runner, _last_run_is_remote=True)}
+    )
     switches = []
     page._switch_to_local_storage = lambda: switches.append(True) or True
     monkeypatch.setattr("openbench.gui.pages.page_runtime.QMessageBox.warning", lambda *_args: None)

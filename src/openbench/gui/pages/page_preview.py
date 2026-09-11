@@ -493,8 +493,7 @@ class PagePreview(BasePage):
             if source_name not in sim_grouped:
                 sim_grouped[source_name] = {"configs": [], "var_names": []}
             sim_grouped[source_name]["configs"].append(source_config)
-            if var_name:
-                sim_grouped[source_name]["var_names"].append(var_name)
+            sim_grouped[source_name]["var_names"].append(var_name)
 
         # Write grouped sim configs
         for source_name, group_data in sim_grouped.items():
@@ -591,8 +590,7 @@ class PagePreview(BasePage):
             if source_name not in ref_grouped:
                 ref_grouped[source_name] = {"configs": [], "var_names": []}
             ref_grouped[source_name]["configs"].append(source_config)
-            if var_name:
-                ref_grouped[source_name]["var_names"].append(var_name)
+            ref_grouped[source_name]["var_names"].append(var_name)
 
         # Write grouped ref configs
         for source_name, group_data in ref_grouped.items():
@@ -630,32 +628,39 @@ class PagePreview(BasePage):
 
         # Create per-variable entries from each config
         for cfg, var_name in zip(configs, var_names or [None] * len(configs)):
-            if not var_name:
-                continue
+            names = [var_name] if var_name else []
+            variables = cfg.get("variables", {}) if isinstance(cfg.get("variables"), dict) else {}
+            names.extend(name for name in variables if name not in names)
 
-            # Build variable-specific config from top-level fields
-            var_config = {}
-            for key in var_mapping_keys:
-                if key in cfg:
-                    var_config[key] = cfg[key]
+            for name in names:
+                if not name:
+                    continue
 
-            # Also check if there's already a variable entry in the config
-            if var_name in cfg and isinstance(cfg[var_name], dict):
-                # Merge with existing variable config
-                for k, v in cfg[var_name].items():
-                    var_config[k] = v
+                # Build variable-specific config from top-level fields
+                var_config = {}
+                for key in var_mapping_keys:
+                    if key in cfg:
+                        var_config[key] = cfg[key]
 
-            # Handle per-variable time range settings (consistent with local mode)
-            general = cfg.get("general", {})
-            if general.get("per_var_time_range"):
-                var_config["per_var_time_range"] = True
-                if "syear" in general and general["syear"] != "":
-                    var_config["syear"] = general["syear"]
-                if "eyear" in general and general["eyear"] != "":
-                    var_config["eyear"] = general["eyear"]
+                if isinstance(variables.get(name), dict):
+                    var_config.update(variables[name])
 
-            if var_config:
-                merged[var_name] = var_config
+                # Also check if there's already a variable entry in the config
+                if name in cfg and isinstance(cfg[name], dict):
+                    # Merge with existing variable config
+                    var_config.update(cfg[name])
+
+                # Handle per-variable time range settings (consistent with local mode)
+                general = cfg.get("general", {})
+                if general.get("per_var_time_range"):
+                    var_config["per_var_time_range"] = True
+                    if "syear" in general and general["syear"] != "":
+                        var_config["syear"] = general["syear"]
+                    if "eyear" in general and general["eyear"] != "":
+                        var_config["eyear"] = general["eyear"]
+
+                if var_config:
+                    merged[name] = var_config
 
         return merged
 

@@ -307,6 +307,36 @@ def test_remote_namelist_sync_uses_remote_root_for_relative_model_probe(monkeypa
     assert exported["Latent_Heat"]["fulllist"] == "/remote/OpenBench/lists/case.csv"
 
 
+def test_remote_namelist_sync_writes_scan_nested_variable_overrides(tmp_path):
+    preview = _preview()
+    preview.controller = FakeController()
+    config = {
+        "evaluation_items": {"Latent_Heat": True, "Sensible_Heat": False},
+        "sim_data": {
+            "source_configs": {
+                "ScanCase": {
+                    "general": {"root_dir": "data/sim", "data_type": "grid"},
+                    "variables": {
+                        "Latent_Heat": {"varname": "LE", "sub_dir": "fluxes"},
+                        "Sensible_Heat": {"varname": "H"},
+                    },
+                }
+            }
+        },
+        "ref_data": {},
+    }
+
+    preview._sync_namelists_for_remote(
+        config, str(tmp_path), "/remote/output", "/remote/OpenBench", ssh_manager=FakeSSH()
+    )
+
+    exported = yaml.safe_load((tmp_path / "nml" / "sim" / "ScanCase.yaml").read_text(encoding="utf-8"))
+    assert exported == {
+        "general": {"root_dir": "/remote/OpenBench/data/sim", "data_type": "grid"},
+        "Latent_Heat": {"varname": "LE", "sub_dir": "fluxes"},
+    }
+
+
 def test_resolve_path_for_remote_rejects_ambiguous_existing_local_absolute_path(monkeypatch):
     preview = _preview()
     monkeypatch.setattr(
