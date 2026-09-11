@@ -47,7 +47,7 @@ class CommonComparisonMixin:
         In per_pair mode, each sim-ref pair has its own masked ref copy.
         In intersection/strict mode, all sims share one ref file.
         """
-        if self.time_alignment == "per_pair" and sim_source:
+        if self.time_alignment == "per_pair" and sim_source and getattr(self, "unified_mask", True):
             pair_path = os.path.join(
                 basedir,
                 "data",
@@ -55,6 +55,7 @@ class CommonComparisonMixin:
             )
             if os.path.exists(pair_path):
                 return pair_path
+            raise FileNotFoundError(f"Pair reference is missing: {pair_path}. Rerun evaluation to regenerate it.")
         # Default: shared ref
         return os.path.join(basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc")
 

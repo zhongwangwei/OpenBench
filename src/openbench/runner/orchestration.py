@@ -374,7 +374,8 @@ def run_evaluation_impl(
                 )
             )
         except Exception:
-            _cleanup_pair_ref_overrides(tasks)
+            if not only_drawing:
+                _cleanup_pair_ref_overrides(rerun_tasks)
             raise
 
         evaluated = []
@@ -499,7 +500,15 @@ def run_evaluation_impl(
         "errors": errors,
     }
 
-    _cleanup_pair_ref_overrides(tasks)
+    if errors and not comparison_only and not only_drawing:
+        successful_pairs = {(result["variable"], result["sim"], result["ref"]) for result in evaluated}
+        _cleanup_pair_ref_overrides(
+            [
+                task
+                for task in rerun_tasks
+                if (task["var_name"], task["sim_source"], task["ref_source"]) not in successful_pairs
+            ]
+        )
 
     logger.info("All phases complete: %d evaluated, %d errors", len(evaluated), len(errors))
     return results

@@ -5549,8 +5549,8 @@ def test_start_optional_dask_client_connects_external_scheduler(monkeypatch):
     }
 
 
-def test_unhandled_post_phase_error_still_cleans_pair_ref_override(tmp_path, monkeypatch):
-    """Temporary per-pair ref files must be removed even if a post phase fails."""
+def test_unhandled_post_phase_error_keeps_successful_pair_ref_override(tmp_path, monkeypatch):
+    """Masked refs are durable evaluation outputs even if a later post phase fails."""
     import openbench.config.adapter as adapter
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
@@ -5635,7 +5635,7 @@ def test_unhandled_post_phase_error_still_cleans_pair_ref_override(tmp_path, mon
 
     assert result["status"] == "partial"
     assert any(err["phase"] == "groupby" and "groupby exploded" in err["message"] for err in result["errors"])
-    assert not pair_ref.exists()
+    assert pair_ref.exists()
 
 
 @pytest.mark.parametrize(("groupby_enabled", "expected_calls"), [(True, 1), (False, 0)])

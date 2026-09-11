@@ -5,13 +5,30 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+from pathlib import Path
 from typing import Any, Callable, Iterable
 
 logger = logging.getLogger(__name__)
 
 
+def pair_ref_path(output_dir: Path, task: dict[str, Any]) -> Path | None:
+    """Return the durable masked reference required by a grid per-pair task."""
+    bindings = task.get("bindings")
+    general = getattr(getattr(bindings, "runner_cfg", None), "general", {})
+    if general.get("time_alignment") != "per_pair" or not general.get("unified_mask", True):
+        return None
+    namelists = bindings.namelists
+    var, ref, sim = task["var_name"], task["ref_source"], task["sim_source"]
+    ref_section = namelists.reference.get(var, {})
+    sim_section = namelists.simulation.get(var, {})
+    if ref_section.get(f"{ref}_data_type", "grid") == "stn" or sim_section.get(f"{sim}_data_type", "grid") == "stn":
+        return None
+    ref_varname = ref_section.get(f"{ref}_varname") or var
+    return output_dir / "data" / f"{var}_ref_{ref}_{sim}_{ref_varname}.nc"
+
+
 def cleanup_pair_ref_overrides(tasks: list[dict[str, Any]]) -> None:
-    """Remove temporary per-pair reference copies created during preprocessing."""
+    """Remove per-pair reference copies after a failed run."""
     for task in tasks:
         pair_ref = task.get("ref_file_override")
         if pair_ref and os.path.lexists(pair_ref):
@@ -35,7 +52,7 @@ def clone_or_link_ref_for_pair(
     pair path itself rather than mutating the shared flat ref inode.
 
     Existing destinations are always removed first because per-pair files are
-    temporary masked refs; reusing a stale file can silently over-mask a later
+    regenerated masked refs; reusing a stale file can silently over-mask a later
     run.
 
     Returns the strategy used: ``clonefile``, ``reflink``, ``hardlink``,
