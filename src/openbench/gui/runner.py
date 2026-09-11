@@ -509,7 +509,6 @@ class EvaluationRunner(QThread):
         self._do_statistics = do_statistics
         self._num_statistics = max(0, int(num_statistics or 0))
 
-        # Calculate total tasks
         self._total_tasks = 0
 
         if do_evaluation:
@@ -526,7 +525,6 @@ class EvaluationRunner(QThread):
         if do_statistics:
             self._total_tasks += self._num_statistics
 
-        # Ensure at least 1 task
         self._total_tasks = max(1, self._total_tasks)
 
         # Reset completion tracking

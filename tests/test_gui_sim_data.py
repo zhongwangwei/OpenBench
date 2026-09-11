@@ -87,6 +87,82 @@ def test_remote_sim_scan_cancel_uses_threading_event(qapp, monkeypatch):
     assert page._scan_btn.enabled is True
 
 
+def test_remote_sim_scan_keeps_results_when_progress_close_emits_cancel(qapp, monkeypatch):
+    from openbench.gui.dialogs import scan_confirm
+    from openbench.remote.storage import RemoteStorage
+
+    class Signal:
+        def connect(self, slot):
+            self.slot = slot
+
+        def emit(self):
+            self.slot()
+
+    class Progress:
+        def __init__(self, *_args):
+            self.canceled = Signal()
+
+        def setWindowTitle(self, *_args):
+            pass
+
+        def setWindowModality(self, *_args):
+            pass
+
+        def setMinimumDuration(self, *_args):
+            pass
+
+        def show(self):
+            pass
+
+        def close(self):
+            self.canceled.emit()
+
+        def deleteLater(self):
+            pass
+
+    class Dialog:
+        register_button = SimpleNamespace(clicked=SimpleNamespace(connect=lambda *_args: None))
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def exec(self):
+            return True
+
+        def get_results(self):
+            return [{"label": "CLM5", "nc_dir": "/remote/sim/CLM5", "prefix": "hist_", "model": "CLM5"}]
+
+    added = []
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=RemoteStorage("/remote", object()), remote_settings=lambda: {}),
+        _root_input=_Text("/remote/sim"),
+        _clear_cases=lambda: None,
+        _registry_model_names=lambda: ["CLM5"],
+        _compute_variable_overrides=lambda *_args: {},
+        _add_case_row=lambda *args, **kwargs: added.append((args, kwargs)),
+        _settings_group=SimpleNamespace(setVisible=lambda *_args: None),
+        _on_selection_changed=lambda: None,
+    )
+    monkeypatch.setattr(page_sim_data, "get_remote_ssh_manager", lambda _controller: SimpleNamespace(is_connected=True))
+    monkeypatch.setattr(page_sim_data, "_remote_is_dir", lambda *_args: True)
+    monkeypatch.setattr(page_sim_data, "QProgressDialog", Progress)
+    monkeypatch.setattr(
+        page_sim_data,
+        "scan_simulation_cases_remote",
+        lambda *_args, **_kwargs: (
+            [("CLM5", "/remote/sim/CLM5", "hist_")],
+            {"CLM5": {"model": "CLM5", "variables": ["Runoff"]}},
+        ),
+    )
+    monkeypatch.setattr(scan_confirm, "ScanConfirmDialog", Dialog)
+    monkeypatch.setattr(page_sim_data.QApplication, "setOverrideCursor", lambda *_args: None)
+    monkeypatch.setattr(page_sim_data.QApplication, "restoreOverrideCursor", lambda: None)
+
+    page_sim_data.PageSimData._do_scan_flow(page)
+
+    assert added and added[0][0][:3] == ("CLM5", "/remote/sim/CLM5", "hist_")
+
+
 def test_remote_sim_scan_helpers_quote_paths_and_find_nc4():
     commands = []
 
@@ -163,7 +239,7 @@ def test_remote_sim_scan_rehydrates_scanner_metadata_and_fulllist(monkeypatch):
         "/remote/sim",
         python_path="/remote/conda/env/bin/python",
         conda_env="ob",
-        openbench_path="~/OpenBench",
+        openbench_source_path="~/OpenBench",
         should_abort=lambda: False,
     )
 
@@ -179,6 +255,86 @@ def test_remote_sim_scan_rehydrates_scanner_metadata_and_fulllist(monkeypatch):
     assert captured["python_path"] == "/remote/conda/env/bin/python"
     assert captured["conda_env"] == "ob"
     assert captured["timeout"] == 900
+
+
+def test_remote_station_materialization_uses_project_output_dir(monkeypatch):
+    captured = {}
+
+    def fake_remote_json(_ssh, script, **_kwargs):
+        captured["script"] = script
+        return {"cases": []}
+
+    monkeypatch.setattr("openbench.gui.remote_python.run_remote_python_json", fake_remote_json)
+
+    page_sim_data.scan_simulation_cases_remote(
+        object(),
+        "/remote/sim",
+        output_dir="/remote/project/output/MyCase",
+    )
+
+    assert 'station_output_dir = Path("/remote/project/output/MyCase")' in captured["script"]
+    assert 'Path.home() / ".openbench" / "sim_station_lists"' not in captured["script"]
+
+
+def test_local_station_scan_materializes_into_project_output(monkeypatch, tmp_path: Path):
+    calls = []
+    case = SimpleNamespace(
+        label="StationCase",
+        root_dir=tmp_path / "StationCase",
+        prefix="",
+        suffix="",
+        variable_overrides={},
+        model="CoLM2024",
+        variables=["Latent_Heat"],
+        data_type="stn",
+        grid_res=None,
+        tim_res="Day",
+        data_groupby="Single",
+        fulllist=None,
+        station_layout="nested_multi",
+        source_root=tmp_path,
+    )
+    case.root_dir.mkdir()
+
+    def fake_scan(roots, model_name="auto"):
+        assert roots == [str(tmp_path)]
+        assert model_name == "auto"
+        return SimpleNamespace(cases=[case])
+
+    def fake_materialize(result, output_dir, num_workers=4):
+        calls.append((result, Path(output_dir), num_workers))
+        result.cases[0].fulllist = Path(output_dir) / "StationCase" / "StationCase_stations.csv"
+
+    monkeypatch.setattr("openbench.data.sim_scanner.scan_simulation_roots", fake_scan)
+    monkeypatch.setattr("openbench.data.sim_scanner.materialize_station_cases", fake_materialize)
+
+    _discovered, metadata = page_sim_data._scan_local_cases(str(tmp_path), str(tmp_path / "output" / "RunA"))
+
+    assert len(calls) == 1
+    assert calls[0][0].cases == [case]
+    assert calls[0][1:] == (tmp_path / "output" / "RunA", 1)
+    assert metadata["StationCase"]["fulllist"] == str(
+        tmp_path / "output" / "RunA" / "StationCase" / "StationCase_stations.csv"
+    )
+
+
+def test_remote_sim_scan_does_not_import_from_workspace(monkeypatch):
+    captured = {}
+
+    def fake_remote_json(_ssh, script, **_kwargs):
+        captured["script"] = script
+        return {"cases": [], "diagnostics": {"root": "/remote/sim"}}
+
+    monkeypatch.setattr("openbench.gui.remote_python.run_remote_python_json", fake_remote_json)
+
+    _discovered, metadata = page_sim_data.scan_simulation_cases_remote(
+        object(),
+        "/remote/sim",
+        openbench_path="/stale/OpenBench",
+    )
+
+    assert "/stale/OpenBench" not in captured["script"]
+    assert metadata["__scan__"]["root"] == "/remote/sim"
 
 
 def test_remote_model_match_uses_case_label_and_leaves_unknown_blank():
@@ -313,15 +469,16 @@ def test_local_gui_sim_scan_runs_off_gui_thread(qapp, monkeypatch, tmp_path):
 
     ran_on_gui_thread = []
 
-    def fake_scan(root):
+    def fake_scan(root, output_dir):
         assert root == str(tmp_path)
+        assert output_dir == str(tmp_path / "output" / "RunA")
         ran_on_gui_thread.append(QThread.currentThread() == qapp.thread())
         return [], {}
 
     monkeypatch.setattr(page_sim_data, "_scan_local_cases", fake_scan)
     monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: None)
     page = SimpleNamespace(
-        controller=SimpleNamespace(storage=object()),
+        controller=SimpleNamespace(storage=object(), get_output_dir=lambda: str(tmp_path / "output" / "RunA")),
         _root_input=_Text(str(tmp_path)),
         _clear_cases=lambda: None,
     )
@@ -428,6 +585,66 @@ def test_validate_data_checks_each_variable_file_pattern(monkeypatch, tmp_path):
     assert "heat_*.nc" in warnings[0][2]
 
 
+def test_local_station_validation_checks_fulllist_not_case_root(monkeypatch, tmp_path: Path):
+    case_root = tmp_path / "StationCase"
+    case_root.mkdir()
+    fulllist = tmp_path / "output" / "RunA" / "StationCase" / "StationCase_stations.csv"
+    fulllist.parent.mkdir(parents=True)
+    fulllist.write_text("ID,sim_dir,syear,eyear\nS1,/data/S1,2001,2001\n")
+    infos = []
+
+    monkeypatch.setattr(page_sim_data, "_find_nc_dir", lambda *_args: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: infos.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *_args: None)
+
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object(), config={"general": {"syear": 2001, "eyear": 2001}}),
+        get_selected_cases=lambda: [
+            {
+                "label": "StationCase",
+                "nc_dir": str(case_root),
+                "model": "CoLM2024",
+                "data_type": "stn",
+                "fulllist": str(fulllist),
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert infos and infos[0][1] == "Validation OK"
+
+
+def test_local_station_validation_rejects_materialization_error(monkeypatch, tmp_path: Path):
+    case_root = tmp_path / "StationCase"
+    case_root.mkdir()
+    warnings = []
+    infos = []
+
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: infos.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *args: warnings.append(args))
+
+    page = SimpleNamespace(
+        controller=SimpleNamespace(storage=object(), config={"general": {"syear": 2001, "eyear": 2001}}),
+        get_selected_cases=lambda: [
+            {
+                "label": "StationCase",
+                "nc_dir": str(case_root),
+                "model": "CoLM2024",
+                "data_type": "stn",
+                "fulllist": str(tmp_path / "missing.csv"),
+                "station_materialize_error": "station materialization dropped 1 site(s): bad_site",
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert not infos
+    assert warnings
+    assert "station materialization dropped 1 site(s): bad_site" in warnings[0][2]
+
+
 def test_remote_station_validation_checks_fulllist_not_case_root(monkeypatch):
     from openbench.gui.data_validator import ValidationCheck
     from openbench.remote.storage import RemoteStorage
@@ -472,6 +689,50 @@ def test_remote_station_validation_checks_fulllist_not_case_root(monkeypatch):
     page_sim_data.PageSimData._validate_data(page)
 
     assert calls == ["/remote/home/.openbench/sim_station_lists/StationCase.csv"]
+    assert infos and infos[0][1] == "Validation OK"
+
+
+def test_remote_grid_validation_lists_each_case_once(monkeypatch):
+    from openbench.remote.storage import RemoteStorage
+
+    calls = []
+    infos = []
+    ssh = SimpleNamespace(is_connected=True)
+    monkeypatch.setattr(page_sim_data, "get_remote_ssh_manager", lambda _controller: ssh)
+    monkeypatch.setattr(page_sim_data, "_remote_find_nc_dir", lambda *_args: "/remote/sim/CaseA")
+
+    def list_files(*_args):
+        calls.append(1)
+        return ["/remote/sim/CaseA/runoff_2001.nc", "/remote/sim/CaseA/heat_2001.nc"]
+
+    monkeypatch.setattr(page_sim_data, "_remote_list_nc_files", list_files)
+    monkeypatch.setattr(page_sim_data.QMessageBox, "information", lambda *args: infos.append(args))
+    monkeypatch.setattr(page_sim_data.QMessageBox, "warning", lambda *_args: None)
+
+    page = SimpleNamespace(
+        controller=SimpleNamespace(
+            storage=RemoteStorage("/remote", ssh),
+            config={"general": {"syear": 2001, "eyear": 2001}},
+            remote_settings=lambda: {},
+        ),
+        get_selected_cases=lambda: [
+            {
+                "label": "CaseA",
+                "nc_dir": "/remote/sim/CaseA",
+                "model": "CoLM2024",
+                "data_type": "grid",
+                "data_groupby": "Year",
+                "variables": {
+                    "Runoff": {"prefix": "runoff_", "suffix": ".nc"},
+                    "Latent_Heat": {"prefix": "heat_", "suffix": ".nc"},
+                },
+            }
+        ],
+    )
+
+    page_sim_data.PageSimData._validate_data(page)
+
+    assert calls == [1]
     assert infos and infos[0][1] == "Validation OK"
 
 

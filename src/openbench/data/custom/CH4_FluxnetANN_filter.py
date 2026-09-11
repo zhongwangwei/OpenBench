@@ -13,17 +13,14 @@ from openbench.util.netcdf import write_netcdf_atomic
 
 def process_site(station_idx, dataset, info):
     """Extract metadata for a single station and persist its series as NetCDF."""
-    # Get coordinates for this station
     lon = float(dataset["lon"].isel(data=station_idx).values)
     lat = float(dataset["lat"].isel(data=station_idx).values)
 
     # Use index as station ID since no explicit station_id variable
     station_id = f"FCH4_{station_idx:04d}"
 
-    # Get time series data for this station
     fch4 = dataset["FCH4"].isel(data=station_idx)
 
-    # Find valid time range (non-missing data)
     valid_mask = ~fch4.isnull()
     if not valid_mask.any():
         return None
@@ -35,7 +32,6 @@ def process_site(station_idx, dataset, info):
     use_syear = max(start_year, int(info.sim_syear), int(info.syear))
     use_eyear = min(end_year, int(info.sim_eyear), int(info.eyear))
 
-    # Apply filters: time range, spatial extent
     if (
         (use_eyear - use_syear) < info.min_year
         or lon < info.min_lon
@@ -80,7 +76,6 @@ def filter_CH4_FluxnetANN(info, ds=None):
         if varname in ds:
             return info, ds[varname]
         else:
-            # Return the first data variable
             data_vars = list(ds.data_vars)
             if data_vars:
                 return info, ds[data_vars[0]]

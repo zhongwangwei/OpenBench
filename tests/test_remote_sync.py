@@ -45,6 +45,14 @@ class FakeSFTP:
         assert mode == "wb"
         return FakeRemoteFile(self.ssh, path)
 
+    def stat(self, path):
+        if path not in self.ssh.files:
+            raise FileNotFoundError(path)
+        return object()
+
+    def listdir(self, path):
+        return []
+
 
 def test_remote_path_rejects_escape_from_project_root():
     sync = SyncEngine(FakeSSH(), "/remote/project")
@@ -53,18 +61,23 @@ def test_remote_path_rejects_escape_from_project_root():
         sync.read("../outside.txt")
 
 
-def test_list_dir_quotes_remote_path_with_shell_metacharacters():
+def test_list_dir_passes_shell_metacharacters_to_sftp_without_a_shell():
+    class ListingSFTP:
+        def listdir(self, path):
+            seen.append(path)
+            return []
+
     ssh = FakeSSH()
     sync = SyncEngine(ssh, "/remote/project")
     path = "bad'; touch /tmp/openbench_pwn; echo '"
+    seen = []
+    ssh.open_sftp = lambda: ListingSFTP()
 
     sync.list_dir(path)
 
-    # list_dir no longer redirects stderr to /dev/null — it surfaces the
-    # stderr message when the call fails so callers can distinguish
-    # "permission denied" / "no such directory" from a genuinely empty dir.
     remote_path = "/remote/project/" + path
-    assert ssh.commands == [f"ls -1 {shlex.quote(remote_path)}"]
+    assert seen == [remote_path]
+    assert ssh.commands == []
 
 
 def test_glob_rejects_shell_metacharacters():
@@ -83,15 +96,14 @@ def test_glob_allows_relative_pattern_with_spaces():
     assert r"for f in nml/my\ case/**/*.yaml;" in ssh.commands[-1]
 
 
-def test_exists_requires_exact_success_sentinel():
-    class NoisyMissingSSH(FakeSSH):
-        def execute(self, command, timeout=30):
-            self.commands.append(command)
-            return "not exists\n", "", 1
-
-    sync = SyncEngine(NoisyMissingSSH(), "/remote/project")
+def test_exists_uses_sftp_stat_without_ambiguous_shell_exit():
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
 
     assert sync.exists("nml/main.yaml") is False
+    ssh.files["/remote/project/nml/main.yaml"] = b"ok: true\n"
+    assert sync.exists("nml/main.yaml") is True
+    assert ssh.commands == []
 
 
 def test_mark_synced_replaces_stale_pending_cache_without_remote_read():
@@ -468,8 +480,6 @@ def test_sync_engine_commands_expand_tilde_project_dir():
 
     engine = SyncEngine(TildeSSH(), "~/OpenBench")
     engine.mkdir("nml")
-    engine.exists("nml/main.yaml")
-    engine.list_dir("nml")
 
     joined = "\n".join(commands)
     assert commands
@@ -552,6 +562,183 @@ def test_glob_raises_remote_diagnostics_on_nonzero_exit():
         sync.glob("nml/**/*.yaml")
 
 
+def test_pending_write_is_visible_to_list_dir_and_glob_before_sync():
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+
+    sync.write("nml/new case/main.yaml", "ok: true\n")
+
+    assert sync.list_dir("nml") == ["new case"]
+    assert sync.list_dir("nml/new case") == ["main.yaml"]
+    assert sync.glob("nml/**/*.yaml") == ["nml/new case/main.yaml"]
+
+    sync.write("nml/main.yaml", "top: true\n")
+    sync.write("nml/deep/main.yaml", "deep: true\n")
+    sync.write("main.yaml", "root: true\n")
+
+    assert sync.glob("nml/*.yaml") == ["nml/main.yaml"]
+    assert sync.glob("*.yaml") == ["main.yaml"]
+    assert sync.glob("nml/**/*.yaml") == ["nml/deep/main.yaml", "nml/main.yaml", "nml/new case/main.yaml"]
+    assert sync.glob("**/*.yaml") == [
+        "main.yaml",
+        "nml/deep/main.yaml",
+        "nml/main.yaml",
+        "nml/new case/main.yaml",
+    ]
+
+
+def test_remote_queries_do_not_resurrect_synced_cache_entries():
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("nml/stale.yaml", "stale: true\n")
+
+    assert sync.list_dir("nml") == []
+    assert sync.glob("nml/*.yaml") == []
+
+
+def test_pending_children_define_a_remote_directory_that_is_not_synced_yet():
+    class MissingDirectorySFTP(FakeSFTP):
+        def listdir(self, path):
+            raise FileNotFoundError(path)
+
+    ssh = FakeSSH()
+    ssh.open_sftp = lambda: MissingDirectorySFTP(ssh)
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.write("nml/new/main.yaml", "ok: true\n")
+
+    assert sync.list_dir("nml") == ["new"]
+
+
+def test_list_dir_does_not_hide_remote_errors_without_pending_children():
+    class FailingSFTP(FakeSFTP):
+        def listdir(self, path):
+            raise PermissionError("permission denied")
+
+    ssh = FakeSSH()
+    ssh.open_sftp = lambda: FailingSFTP(ssh)
+
+    with pytest.raises(IOError, match="permission denied"):
+        SyncEngine(ssh, "/remote/project").list_dir("secret")
+
+
+def test_exists_raises_remote_errors_but_returns_false_for_missing():
+    class StatSFTP:
+        def __init__(self, exc):
+            self.exc = exc
+
+        def stat(self, path):
+            raise self.exc
+
+    class ExistsSSH(FakeSSH):
+        def __init__(self, exc):
+            super().__init__()
+            self.exc = exc
+
+        def open_sftp(self):
+            return StatSFTP(self.exc)
+
+    assert SyncEngine(ExistsSSH(FileNotFoundError("missing")), "/remote/project").exists("missing.txt") is False
+
+    with pytest.raises(IOError, match="permission denied"):
+        SyncEngine(ExistsSSH(PermissionError("permission denied")), "/remote/project").exists("secret.txt")
+
+
+def test_exists_reports_target_switch_instead_of_translating_stat_error():
+    class SwitchingErrorSSH(FakeSSH):
+        def __init__(self):
+            super().__init__()
+            self.identity = ("direct", "alice", "login-a", 22)
+
+        def get_active_target_identity(self):
+            return self.identity
+
+        def open_sftp(self):
+            return self
+
+        def stat(self, path):
+            self.identity = ("direct", "alice", "login-b", 22)
+            raise PermissionError("permission denied")
+
+    sync = SyncEngine(SwitchingErrorSSH(), "/remote/project")
+
+    with pytest.raises(RuntimeError, match="remote target identity changed"):
+        sync.exists("secret.txt")
+
+
+def test_delete_does_not_clear_newer_write_created_during_remote_delete():
+    class WritingDeleteSSH(FakeSSH):
+        def execute(inner_self, command, timeout=30):
+            inner_self.commands.append(command)
+            sync.write("notes.txt", "new")
+            return "", "", 0
+
+    ssh = WritingDeleteSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("notes.txt", "old")
+
+    sync.delete("notes.txt")
+
+    assert sync.read("notes.txt") == "new"
+    assert sync.get_sync_status("notes.txt") is SyncStatus.PENDING
+    assert sync.get_pending_count() == 1
+
+
+def test_delete_directory_clears_cached_children_but_not_siblings():
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("dir/a.txt", "a")
+    sync.write("dir/pending.txt", "pending")
+    sync.mark_synced("dir2/a.txt", "dir2")
+    sync.mark_synced("other/dir/a.txt", "other")
+
+    sync.delete("dir")
+
+    assert "dir/a.txt" not in sync._cache
+    assert "dir/pending.txt" not in sync._cache
+    assert "dir/a.txt" not in sync._sync_status
+    assert "dir/pending.txt" not in sync._sync_status
+    assert sync.read("dir2/a.txt") == "dir2"
+    assert sync.read("other/dir/a.txt") == "other"
+    assert sync.get_pending_count() == 0
+
+
+def test_delete_directory_preserves_child_written_during_remote_delete():
+    class WritingDeleteSSH(FakeSSH):
+        def execute(inner_self, command, timeout=30):
+            inner_self.commands.append(command)
+            sync.write("dir/a.txt", "new")
+            sync.write("dir/new.txt", "new child")
+            return "", "", 0
+
+    ssh = WritingDeleteSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("dir/a.txt", "old")
+
+    sync.delete("dir")
+
+    assert sync.read("dir/a.txt") == "new"
+    assert sync.read("dir/new.txt") == "new child"
+    assert sync.get_sync_status("dir/a.txt") is SyncStatus.PENDING
+    assert sync.get_sync_status("dir/new.txt") is SyncStatus.PENDING
+    assert sync.get_pending_count() == 2
+
+
+@pytest.mark.parametrize("path", ["dir/", "./dir"])
+def test_delete_directory_alias_clears_cached_children(path):
+    ssh = FakeSSH()
+    sync = SyncEngine(ssh, "/remote/project")
+    sync.mark_synced("dir/a.txt", "a")
+    sync.write("dir/pending.txt", "pending")
+    sync.mark_synced("dir2/a.txt", "dir2")
+
+    sync.delete(path)
+
+    assert "dir/a.txt" not in sync._cache
+    assert "dir/pending.txt" not in sync._cache
+    assert sync.read("dir2/a.txt") == "dir2"
+    assert sync.get_pending_count() == 0
+
+
 def test_stop_background_sync_reports_thread_that_did_not_exit():
     class StuckThread:
         def join(self, timeout=None):
@@ -596,6 +783,16 @@ class IdentitySFTP:
     def open(self, path, mode):
         self.opens.append((path, mode))
         return IdentityRemoteFile(self.ssh, path, mode)
+
+    def stat(self, path):
+        self.opens.append((path, "stat"))
+        if path not in self.ssh.files:
+            raise FileNotFoundError(path)
+        return object()
+
+    def listdir(self, path):
+        self.opens.append((path, "listdir"))
+        return []
 
 
 class IdentitySSH(FakeSSH):
@@ -748,17 +945,28 @@ def test_sync_engine_refuses_other_remote_io_after_target_switch(operation):
     assert b.sftp.opens == []
 
 
+class SwitchingStatSFTP(IdentitySFTP):
+    def stat(self, path):
+        self.opens.append((path, "stat"))
+        self.ssh.identity = ("direct", "alice", "login-b", 22)
+        return object()
+
+    def listdir(self, path):
+        self.opens.append((path, "listdir"))
+        self.ssh.identity = ("direct", "alice", "login-b", 22)
+        return ["main.yaml"]
+
+
 class SwitchingExecuteSSH(IdentitySSH):
     def __init__(self):
         super().__init__(("direct", "alice", "login-a", 22))
+        self.sftp = SwitchingStatSFTP(self)
 
     def execute(self, command, timeout=30):
         self.commands.append(command)
         self.identity = ("direct", "alice", "login-b", 22)
         if command.startswith("ls -1"):
             return "main.yaml\n", "", 0
-        if "test -e" in command:
-            return "exists\n", "", 0
         if "bash -c" in command:
             return "nml/main.yaml\n", "", 0
         return "", "", 0
@@ -780,7 +988,7 @@ def test_remote_queries_recheck_target_after_execute_before_returning(operation)
     with pytest.raises(RuntimeError, match="remote target identity changed"):
         operation(sync)
 
-    assert ssh.commands
+    assert ssh.commands or ssh.sftp.opens
 
 
 def test_delete_rechecks_frozen_after_execute_before_clearing_cache():

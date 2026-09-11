@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-# Check the platform
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
@@ -361,17 +360,11 @@ class LC_groupby_only_drawing(metrics, scores):
         self.general_config = self.main_nml["general"]
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
         self._pft_station_warning_shown = False  # Track if PFT station data warning has been shown
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
-        # Set default weight method to 'none'
         self.weight = self.main_nml["general"].get("weight", "none")
-        # this should be done in read_namelist
-        # adjust the time frequency
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.debug(
                 f"LC_groupby_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
@@ -391,12 +384,10 @@ class LC_groupby_only_drawing(metrics, scores):
 
     def scenarios_IGBP_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         def _scenarios_IGBP_groupby(basedir, scores, metrics, sim_nml, ref_nml, evaluation_items):
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 logging.info(f"Processing evaluation item: {evaluation_item}")
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -425,7 +416,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_metrics = self.metrics
+                                selected_metrics = [name for name in self.metrics if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "IGBP_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -458,7 +449,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_scores = self.scores
+                                selected_scores = [name for name in self.scores if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "IGBP_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -472,12 +463,10 @@ class LC_groupby_only_drawing(metrics, scores):
 
     def scenarios_PFT_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         def _scenarios_PFT_groupby(basedir, scores, metrics, sim_nml, ref_nml, evaluation_items):
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 logging.info(f"now processing the evaluation item: {evaluation_item}")
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                # if the sim_sources and ref_sources are not list, then convert them to list
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -505,7 +494,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_metrics = self.metrics
+                                selected_metrics = [name for name in self.metrics if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "PFT_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -529,7 +518,7 @@ class LC_groupby_only_drawing(metrics, scores):
                                     ],
                                 )
 
-                                selected_scores = self.scores
+                                selected_scores = [name for name in self.scores if name != "n_valid"]
                                 option["path"] = (
                                     _groupby_pair_dir(self.casedir, "PFT_groupby", sim_source, ref_source) + os.sep
                                 )
@@ -552,17 +541,11 @@ class CZ_groupby_only_drawing(metrics, scores):
         self.main_nml = main_nml
         self.general_config = self.main_nml["general"]
         self._station_warning_shown = False  # Track if station data warning has been shown
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
-        # Set default weight method to 'none'
         self.weight = self.main_nml["general"].get("weight", "none")
-        # this should be done in read_namelist
-        # adjust the time frequency
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.debug(
                 f"CZ_groupby_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
@@ -655,20 +638,14 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         self.author = "Xionghui Xu"
         self.main_nml = main_nml
         self.general_config = self.main_nml["general"]
-        # update self based on self.general_config
         self.__dict__.update(self.general_config)
         self.compare_nml = {}
-        # Add default weight attribute
         self.weight = self.main_nml["general"].get("weight", "none")  # Default to 'none' if not specified
         self._igbp_station_warning_shown = False  # Track if IGBP station data warning has been shown
 
-        # Extract remapping information from main namelist
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
-        # this should be done in read_namelist
-        # adjust the time frequency
-        # Check if climatology mode - skip frequency parsing
         if self.compare_tim_res in ["climatology-year", "climatology-month"]:
             logging.debug(
                 f"ComparisonProcessing_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
@@ -684,7 +661,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 value = 1
             else:
                 value = int(value)  # Convert the numerical value to an integer
-            # Get the corresponding pandas frequency
             freq = self.freq_map.get(unit.lower())
             if not freq:
                 raise ValueError(f"Unsupported time unit: {unit}")
@@ -723,13 +699,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             dir_path = os.path.join(casedir, "comparisons", "Taylor_Diagram")
             os.makedirs(dir_path, exist_ok=True)
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 try:
-                    # read the simulation source and reference source
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -777,13 +750,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             dir_path = os.path.join(casedir, "comparisons", "Target_Diagram")
             os.makedirs(dir_path, exist_ok=True)
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 try:
-                    # read the simulation source and reference source
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -840,7 +810,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 try:
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -857,7 +826,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -878,7 +846,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                # read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
@@ -924,7 +891,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -945,7 +911,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                # read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 data = df[metric].values
                                             else:
@@ -1057,7 +1022,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 try:
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # If the sim_sources and ref_sources are not lists, convert them to lists
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -1074,7 +1038,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # Create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -1095,7 +1058,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                # Read the file_path data and select the score
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
@@ -1143,7 +1105,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             for ref_source in ref_sources:
                                 try:
                                     datasets_filtered = []
-                                    # Create a numpy matrix to store the data
                                     for sim_source in sim_sources:
                                         try:
                                             ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
@@ -1164,7 +1125,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                # Read the file_path data and select the metric
                                                 df = pd.read_csv(file_path, sep=",", header=0)
                                                 data = df[metric].values
                                             else:
@@ -1310,16 +1270,12 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         dir_path = os.path.join(f"{basedir}", "comparisons", "Ridgeline_Plot")
-        # if os.path.exists(dir_path):
-        #    shutil.rmtree(dir_path)
-        # print(f"Re-creating output directory: {dir_path}")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
         for evaluation_item in evaluation_items:
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-            # if the sim_sources and ref_sources are not list, then convert them to list
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
@@ -1331,7 +1287,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     continue
                 for ref_source in ref_sources:
                     datasets_filtered = []
-                    # create a numpy matrix to store the data
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
@@ -1339,7 +1294,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             sim_sources = [sim_sources]
                         if isinstance(ref_sources, str):
                             ref_sources = [ref_sources]
-                        # create a numpy matrix to store the data
 
                         if ref_data_type == "stn" or sim_data_type == "stn":
                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
@@ -1353,7 +1307,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             )
                             if not os.path.exists(file_path):
                                 _require_only_drawing_file(file_path, producer="evaluation")
-                            # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=",", header=0)
                             df = Convert_Type.convert_Frame(df)
                             data = df[score].values
@@ -1387,7 +1340,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         os.makedirs(dir_path)
 
                     datasets_filtered = []
-                    # create a numpy matrix to store the data
                     for sim_source in sim_sources:
                         ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
@@ -1395,7 +1347,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             sim_sources = [sim_sources]
                         if isinstance(ref_sources, str):
                             ref_sources = [ref_sources]
-                        # create a numpy matrix to store the data
                         if ref_data_type == "stn" or sim_data_type == "stn":
                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
                             sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
@@ -1408,7 +1359,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             )
                             if not os.path.exists(file_path):
                                 _require_only_drawing_file(file_path, producer="evaluation")
-                            # read the file_path data and select the score
                             df = pd.read_csv(file_path, sep=",", header=0)
                             data = df[metric].values
                         else:
@@ -1485,26 +1435,20 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path)
 
         for evaluation_item in evaluation_items:
-            # Get simulation sources
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-            # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
                 ref_sources = [ref_sources]
 
             for ref_source in ref_sources:
-                # Skip if only one simulation source
-
-                # Check data types for all simulation sources
                 data_types = []
                 for sim_source in sim_sources:
                     sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                     data_types.append(sim_data_type)
 
-                # Check if both 'stn' and grid data exist
                 if "stn" in data_types and any(dt != "stn" for dt in data_types):
                     raise _unsupported_only_drawing(
                         figure="Diff Plot",
@@ -1599,7 +1543,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                         ],
                                     )
                                     _require_netcdf_finite(diff_path, f"{item_type}_diff")
-                # After calculating anomalies for metrics
                 make_scenarios_comparison_Diff_Plot(
                     dir_path,
                     metrics,
@@ -1626,11 +1569,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path)
 
         for evaluation_item in evaluation_items:
-            # Get simulation sources
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-            # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
@@ -1711,19 +1652,15 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         self.compare_nml["Mann_Kendall_Trend_Test"] = {}
         self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"] = option["significance_level"]
         for evaluation_item in evaluation_items:
-            # Get simulation sources
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
             ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-            # Convert to lists if needed
             if isinstance(sim_sources, str):
                 sim_sources = [sim_sources]
             if isinstance(ref_sources, str):
                 ref_sources = [ref_sources]
 
             for sim_source in sim_sources:
-                # Skip if only one simulation source
-
                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                 sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
 
@@ -1784,11 +1721,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -1820,7 +1755,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         )
                         raise
                     finally:
-                        # Clean up memory after each simulation source
                         gc.collect()
 
                 for ref_source in ref_sources:
@@ -1849,10 +1783,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         )
                         raise
                     finally:
-                        # Clean up memory after each reference source
                         gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()
 
     def scenarios_Functional_Response_comparison(
@@ -1868,11 +1800,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                 ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if isinstance(ref_sources, str):
@@ -1908,13 +1838,10 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                     )
                                     raise
                                 finally:
-                                    # Clean up memory after each simulation source
                                     gc.collect()
                     finally:
-                        # Clean up memory after each reference source
                         gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
@@ -1938,9 +1865,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 os.makedirs(dir_path)
 
             for evaluation_item in evaluation_items:
-                # Get simulation sources
                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                # Convert to lists if needed
                 if isinstance(sim_sources, str):
                     sim_sources = [sim_sources]
                 if len(sim_sources) < 2:
@@ -1973,8 +1898,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             )
                             raise
                         finally:
-                            # Clean up memory after each iteration
                             gc.collect()
         finally:
-            # Ensure memory is cleaned up after the entire process
             gc.collect()

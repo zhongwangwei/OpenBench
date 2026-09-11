@@ -49,13 +49,11 @@ def filter_ResOpsUS(info, ds=None):
     """
     # If ds is provided, we're in data filtering mode
     if ds is not None:
-        # Return the first data variable or the dataset as-is
         data_vars = list(ds.data_vars)
         if data_vars:
             return info, ds[data_vars[0]]
         return info, ds
 
-    # Initialization mode: load and filter station metadata
     station_list_path = _resolve_station_list(info)
     info.ref_fulllist = str(station_list_path)
 

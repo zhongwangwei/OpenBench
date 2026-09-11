@@ -18,7 +18,6 @@ class TimeIntegrityWorkflowMixin:
     """Split temporal processing helpers."""
 
     def make_time_integrity(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str) -> xr.Dataset:
-        # Validate year values
         syear = self.validate_year(syear, default=1990)
         eyear = self.validate_year(eyear, default=2020)
         # Convert any cftime axis (noleap/360_day/julian) to datetime64 first
@@ -59,7 +58,6 @@ class TimeIntegrityWorkflowMixin:
                     time_var = ds.time
                 except Exception as e:
                     logger.warning("Failed to remove duplicate monthly timestamps: %s", e)
-                # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"
                 except Exception:
@@ -112,7 +110,6 @@ class TimeIntegrityWorkflowMixin:
                     time_var = ds.time
                 except Exception as e:
                     logger.warning("Failed to remove duplicate daily timestamps: %s", e)
-                # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"
                 except Exception:
@@ -125,7 +122,6 @@ class TimeIntegrityWorkflowMixin:
                     except Exception:
                         logging.debug("Could not set calendar attribute for daily data; proceeding.")
                         pass
-                # Check by date presence and fill missing by reindexing
                 expected_days = pd.period_range(start=f"{syear}-01-01", end=f"{eyear}-12-31", freq="D")
                 try:
                     present_days = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="D")
@@ -164,7 +160,6 @@ class TimeIntegrityWorkflowMixin:
                     time_var = ds.time
                 except Exception as e:
                     logger.warning("Failed to remove duplicate hourly timestamps: %s", e)
-                # Safely set calendar attribute using encoding
                 try:
                     time_var.encoding["calendar"] = "proleptic_gregorian"
                 except Exception:
@@ -177,7 +172,6 @@ class TimeIntegrityWorkflowMixin:
                     except Exception:
                         logging.debug("Could not set calendar attribute for hourly data; proceeding.")
                         pass
-                # Check by hour presence and fill missing by reindexing
                 expected_hours = pd.period_range(start=f"{syear}-01-01", end=f"{eyear}-12-31 23:00:00", freq="h")
                 try:
                     present_hours = pd.PeriodIndex(pd.to_datetime(ds["time"].values), freq="h")
@@ -198,7 +192,6 @@ class TimeIntegrityWorkflowMixin:
                 except (ValueError, AttributeError, TypeError):
                     ds["time"] = time_index
             time_var = ds.time
-            # Safely set calendar attribute using encoding
             try:
                 time_var.encoding["calendar"] = "proleptic_gregorian"
             except Exception:
@@ -213,8 +206,6 @@ class TimeIntegrityWorkflowMixin:
                     pass
             time_values = time_var
 
-            # Create a complete time series based on the specified time frequency and range
-            # Compare the actual time with the complete time series to find the missing time
             missing_times = time_index[~np.isin(time_index, time_values)]
             if len(missing_times) > 0:
                 logging.warning("Time series is not complete. Missing time values found.")

@@ -47,7 +47,7 @@ class CommonComparisonMixin:
         In per_pair mode, each sim-ref pair has its own masked ref copy.
         In intersection/strict mode, all sims share one ref file.
         """
-        if self.time_alignment == "per_pair" and sim_source:
+        if self.time_alignment == "per_pair" and sim_source and getattr(self, "unified_mask", True):
             pair_path = os.path.join(
                 basedir,
                 "data",
@@ -55,6 +55,7 @@ class CommonComparisonMixin:
             )
             if os.path.exists(pair_path):
                 return pair_path
+            raise FileNotFoundError(f"Pair reference is missing: {pair_path}. Rerun evaluation to regenerate it.")
         # Default: shared ref
         return os.path.join(basedir, "data", f"{evaluation_item}_ref_{ref_source}_{ref_varname}.nc")
 
@@ -75,8 +76,6 @@ class CommonComparisonMixin:
         )
 
     def save_result(self, output_file, method_name, result):
-        # Remove the existing output directory
-        # logging.info(f"Saving {method_name} output to {output_file}")
         try:
             if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
                 if isinstance(result, xr.DataArray):
@@ -90,7 +89,6 @@ class CommonComparisonMixin:
                 result["lon"].attrs["units"] = "degrees_east"
                 result["lon"].attrs["axis"] = "X"
 
-                # Ensure the directory exists
                 output_dir = os.path.dirname(output_file)
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
@@ -99,5 +97,4 @@ class CommonComparisonMixin:
             else:
                 logging.info(f"Result of {method_name}: {result}")
         finally:
-            # Clean up memory
             gc.collect()

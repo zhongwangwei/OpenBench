@@ -37,13 +37,10 @@ class TargetDiagramComparisonMixin:
             dir_path = os.path.join(casedir, "comparisons", "Target_Diagram")
             os.makedirs(dir_path, exist_ok=True)
 
-            # read the simulation source and reference source
             for evaluation_item in evaluation_items:
                 try:
-                    # read the simulation source and reference source
                     sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                     ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    # if the sim_sources and ref_sources are not list, then convert them to list
                     if isinstance(sim_sources, str):
                         sim_sources = [sim_sources]
                     if isinstance(ref_sources, str):
@@ -59,7 +56,6 @@ class TargetDiagramComparisonMixin:
                             with _atomic_text_writer(output_file_path) as output_file:
                                 output_file.write("Item\t")
                                 output_file.write("Reference\t")
-                                # ill determine the number of simulation sources
                                 sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                                 if isinstance(sim_sources, str):
                                     sim_sources = [sim_sources]

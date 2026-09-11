@@ -37,14 +37,12 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
         }
         rcParams.update(params)
 
-        # create a figure and axis
         fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
         ax = fig.add_subplot(111)
 
         for spine in ax.spines.values():
             spine.set_linewidth(option["line_width"])
 
-        # Generate colors using a colormap
         MLINES = generate_lines(sim_sources, option)
         # Create a list to store line objects for the legend
         lines = []
@@ -72,7 +70,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
 
                 density = kde(x_values)
 
-                # Store the line object
                 (line,) = ax.plot(
                     x_values,
                     density,
@@ -96,7 +93,6 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                 )
                 raise
 
-        # Add labels and legend
         if varname == "percent_bias":
             legend_title = "Percent Bias showing value between [-100,100]"
         else:
@@ -173,7 +169,6 @@ def generate_lines(data_names, option):
     import matplotlib.colors as mcolors
 
     lines = {}
-    # add colors and symbols
     hex_colors = [
         "#468cc8",
         "#90278c",

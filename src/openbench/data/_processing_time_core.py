@@ -157,7 +157,6 @@ class TimeCoreMixin:
         return self._normalize_longitude_axis(ds)
 
     def check_time(self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str) -> xr.Dataset:
-        # Validate year values
         syear = self.validate_year(syear, default=1990)
         eyear = self.validate_year(eyear, default=2020)
         tim_res_lower = str(tim_res or "").strip().lower()
@@ -183,16 +182,13 @@ class TimeCoreMixin:
                     )
                 return ds.assign_coords(time=time_index)
 
-        # Check for duplicate time values
         if ds["time"].to_index().has_duplicates:
             if getattr(self, "time_alignment", "intersection") == "strict":
                 raise ValueError("strict time alignment requires unique time values; duplicate timestamps found")
             logging.warning("Warning: Duplicate time values found. Removing duplicates...")
-            # Remove duplicates by keeping the first occurrence
             _, index = np.unique(ds["time"], return_index=True)
             ds = ds.isel(time=index)
 
-        # Ensure time is sorted
         ds = ds.sortby("time")
         var_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(ds.data_vars), None)
         try:
@@ -202,7 +198,6 @@ class TimeCoreMixin:
                 result = ds.transpose("time", "lon", "lat")
             except (ValueError, KeyError):
                 result = ds.squeeze([dim for dim, size in ds.sizes.items() if dim != "time" and size == 1])
-        # Ensure we always return a DataArray
         if isinstance(result, xr.Dataset) and var_name and var_name in result:
             return result[var_name]
         elif isinstance(result, xr.Dataset):
@@ -249,7 +244,6 @@ class TimeCoreMixin:
         self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str
     ) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
-        # Ensure the dataset has a proper time index
         ds = self.check_time(ds, syear, eyear, tim_res)
         if self._is_climatology_frequency_value(tim_res):
             return ds

@@ -62,7 +62,6 @@ def _read_comparison_file(file):
 @with_isolated_rc
 def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_items, scores, metrics, option):
     option = option.copy()
-    # Set figure size
     font = {"family": option["font"]}
     matplotlib.rc("font", **font)
 
@@ -78,31 +77,22 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
         "text.usetex": False,
     }
     rcParams.update(params)
-    # Set figure size
     figsize = (option["x_wise"], option["y_wise"])
 
-    # ----------------------------------------------------------------------------------#
     #                                                                                  #
     #                                                                                  #
     #                               Start the main loop                                #
     #                                                                                  #
     #                                                                                  #
-    # ----------------------------------------------------------------------------------#
 
     # Read file with fallback and auto-detection
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
-    # -------------------------------------------------------------------------------------------------------------------
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = df["Item"].unique()
-    # Get unique `Reference` values for each `Item` and store them in `item_references`.
     item_references = df.groupby("Item")["Reference"].unique()
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
-    # Iterate over each variable and its corresponding references
 
-    # Set figure size
     cbar_label = option["colorbar_label"]
     if option["colorbar_label"] == "":
         cbar_label = "Scores"
@@ -135,10 +125,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
     for item, references in item_references.items():
         for reference in references:
-            # Initialize data_score array
             data_score = np.zeros((4, len(scores), len(sim_sources)))
 
-            # Fill data_score array with corresponding values
             for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, score in enumerate(scores):
                     for j, sim_source in enumerate(sim_sources):
@@ -148,12 +136,10 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             ][f"{score}_{season}"].iloc[0]
                         except Exception:
                             data_score[k, i, j] = np.nan
-            # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
             yaxis_labels = [score.replace("_", " ") for score in scores]
 
             try:
-                # Create the portrait plot
                 fig, ax, cbar = portrait_plot(
                     data_score,
                     xaxis_labels=xaxis_labels,
@@ -193,7 +179,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
                 ax.set_title(title, fontsize=option["title_size"])
 
-                # Save the plot
                 filename = join_filename_components(item, reference)
                 output_file_path = (
                     f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}_scores.{option['saving_format']}"
@@ -205,7 +190,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             except Exception:
                 logging.exception(f"Error in {item} - {reference}")
                 raise
-    # delete the variables
     del (
         df,
         unique_items,
@@ -223,46 +207,33 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
         output_file_path,
     )
 
-    # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
-    # -------------------------------------------------------------------------------------------------------------------
 
     # Read file with fallback and auto-detection
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
-    # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = filtered_df["Item"].unique()
 
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
 
-    # Specify the scores to be plotted
     # scores = ['nBiasScore', 'overall_score']
 
-    # Generate all combinations of `Reference` values from `filtered_df`.
     all_combinations = list(limited_product(filtered_df["Reference"], option, context="Portrait seasonal scores"))
 
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
-    # Iterate over each score
     for score in scores:
-        # Iterate over each `item_combination` in the generated combinations.
         for item_combination in all_combinations:
-            # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
                 mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
-            # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
 
-            # Initialize data_score array
             data_score = np.zeros((4, len(unique_items), len(sim_sources)))
 
-            # Fill data_score array with corresponding values
             for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, uitem in enumerate(unique_items):
                     for j, sim_source in enumerate(sim_sources):
@@ -272,14 +243,12 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             ][f"{score}_{season}"].iloc[0]
                         except IndexError:
                             data_score[k, i, j] = np.nan
-            # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
             yaxis_labels = [unique_item.replace("_", " ") for unique_item in unique_items]
             cbar_label = option["colorbar_label"]
 
             if option["colorbar_label"] == "":
                 cbar_label = score.replace("_", " ")
-            # Create the portrait plot
             try:
                 fig, ax, cbar = portrait_plot(
                     data_score,
@@ -319,7 +288,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
                 ax.set_title(title, fontsize=option["title_size"])
 
-                # Save the plot
                 filename = join_filename_components(score, *item_combination)
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 save_figure(
@@ -329,7 +297,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             except Exception:
                 logging.exception(f"Error in {score} - {item_combination}")
                 raise
-    # delete the variables
     del (
         df,
         filtered_df,
@@ -349,33 +316,24 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
         output_file_path,
     )
 
-    # -------------------------------------------------------------------------------------------------------------------
     # end of the function
 
-    # -------------------------------------------------------------------------------------------------------------------
     # new start metrics
 
     # Read file with fallback and auto-detection
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
     # 第一种：基于单变量，多个模型，多个评估指标的对比
-    # -------------------------------------------------------------------------------------------------------------------
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = df["Item"].unique()
-    # Get unique `Reference` values for each `Item` and store them in `item_references`.
     item_references = df.groupby("Item")["Reference"].unique()
-    # Specify the evaluation items (metrics) to be plotted
     evaluation_items = metrics
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
-    # Iterate over each variable and its corresponding references
     for item, references in item_references.items():
         for reference in references:
             #     Initialize data_metric array
             data_metric = np.zeros((4, len(evaluation_items), 1, len(sim_sources)))
-            # Fill data_metric array with corresponding values
             for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, metric in enumerate(evaluation_items):
                     for j, sim_source in enumerate(sim_sources):
@@ -386,14 +344,12 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                         except IndexError:
                             data_metric[k, i, 0, j] = np.nan
 
-            # Set figure size
             mfigsize = (len(sim_sources), len(metrics))
             figure, axes = plt.subplots(nrows=len(metrics), ncols=1, figsize=mfigsize, sharex=True)
             axes = np.atleast_1d(axes)
             figure.subplots_adjust(hspace=0)  # -0.91
 
             for i, metric in enumerate(metrics):
-                # Set x-axis and y-axis labels
                 xaxis_labels = sim_sources
                 yaxis_labels = [metric.replace("_", " ")]
 
@@ -402,7 +358,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     cbar_label = metric.replace("_", " ")
 
                 cbar_option["colorbar_position_set"] = False
-                # Create the portrait plot
                 try:
                     fig, ax, cbar = portrait_plot(
                         data_metric[:, i, :],
@@ -497,40 +452,28 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
         output_file_path,
     )
 
-    # -------------------------------------------------------------------------------------------------------------------
     # 第二种：基于多变量，多个模型，单个评估指标的对比
-    # -------------------------------------------------------------------------------------------------------------------
     # Read file with fallback and auto-detection
     df = _read_comparison_file(file)
     df = Convert_Type.convert_Frame(df)
-    # Filter unique values for `Item` and `Reference` and store it in `filtered_df`.
     filtered_df = df.groupby("Item")[["Reference"]].agg(lambda x: list(x.unique())).reset_index()
 
-    # Get unique `Item` values and store them in `unique_items`.
     unique_items = filtered_df["Item"].unique()
 
-    # Get unique `Simulation` values and store them in `sim_sources`.
     sim_sources = df["Simulation"].unique()
 
-    # Generate all combinations of `Reference` values from `filtered_df`.
     all_combinations = list(limited_product(filtered_df["Reference"], option, context="Portrait seasonal metrics"))
 
-    # Iterate over each metric
     for metric in metrics:
-        # Iterate over each `item_combination` in the generated combinations.
         for item_combination in all_combinations:
-            # Create a boolean mask to filter rows where `Item` and `Reference` match the current combination.
             mask = pd.Series(False, index=df.index)
             for i, item in enumerate(unique_items):
                 mask |= (df["Item"] == item) & (df["Reference"] == item_combination[i])
 
-            # Filter the DataFrame based on the boolean mask.
             filtered_df = df[mask]
 
-            # Initialize data_metric array
             data_metric = np.zeros((4, len(unique_items), len(sim_sources)))
 
-            # Fill data_metric array with corresponding values
             for k, season in enumerate(["DJF", "MAM", "JJA", "SON"]):
                 for i, uitem in enumerate(unique_items):
                     for j, sim_source in enumerate(sim_sources):
@@ -540,7 +483,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                             ][f"{metric}_{season}"].iloc[0]
                         except IndexError:
                             data_metric[k, i, j] = np.nan
-            # Set x-axis and y-axis labels
             xaxis_labels = sim_sources
             yaxis_labels = [unique_item.replace("_", " ") for unique_item in unique_items]
 
@@ -552,7 +494,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     vmin, vmax = option["vmin"], option["vmax"]
                 else:
                     vmin, vmax = np.percentile(data_metric[~np.isnan(data_metric)], [5, 95])
-                # Create the portrait plot
                 fig, ax, cbar = portrait_plot(
                     data_metric,
                     xaxis_labels=xaxis_labels,
@@ -591,7 +532,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 ax.set_xlabel(xlabel, fontsize=option["xtick"] + 1)
                 ax.set_title(title, fontsize=option["title_size"])
 
-                # Save the plot
                 filename = join_filename_components(metric, *item_combination)
                 output_file_path = f"{basedir}/comparisons/Portrait_Plot_seasonal/{filename}.{option['saving_format']}"
                 save_figure(
@@ -725,9 +665,6 @@ def portrait_plot(
     Last update: 2022. 10
     """
 
-    # ----------------
-    # Prepare plotting
-    # ----------------
     cbar_kw = dict(cbar_kw or {})
     cbar_kw.setdefault("orientation", "horizontal")
     cbar_option = dict(cbar_option or {})
@@ -748,9 +685,6 @@ def portrait_plot(
             if num_divide_annotate != num_divide:
                 raise ValueError("Error: annotate_data does not have same size as data")
 
-    # ----------------
-    # Ready to plot!!
-    # ----------------
     if fig is None:
         fig = plt.figure(figsize=figsize)
     if ax is None:
@@ -766,7 +700,6 @@ def portrait_plot(
         vmin = min(vrange)
         vmax = max(vrange)
 
-    # Normalize colorbar
     if cmap_bounds is None:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     else:
@@ -851,12 +784,9 @@ def portrait_plot(
 
     pos = ax.get_position()
     left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-    # X-axis tick labels
     if xaxis_tick_labels_top_and_bottom:
-        # additional x-axis tick labels
         ax.tick_params(axis="x", bottom=True, top=True, labelbottom=True, labeltop=True)
     else:
-        # Let the horizontal axes labeling appear on top.
         if use_axes:
             if ifigure == 0:
                 ax.tick_params(top=True, bottom=False, labeltop=True, labelbottom=False)
@@ -875,7 +805,6 @@ def portrait_plot(
         rotation_mode="anchor",
     )
     """
-    # Rotate and align top ticklabels
     setp(
         [tick.label2 for tick in ax.xaxis.get_major_ticks()],
         rotation=xticklabel_rotation,
@@ -886,7 +815,6 @@ def portrait_plot(
     )
 
     if xaxis_tick_labels_top_and_bottom:
-        # Rotate and align bottom ticklabels
         setp(
             [tick.label1 for tick in ax.xaxis.get_major_ticks()],
             rotation=xticklabel_rotation,
@@ -896,10 +824,8 @@ def portrait_plot(
             fontsize=xaxis_fontsize,
         )
 
-    # Set font size for yaxis tick labels
     setp(ax.get_yticklabels(), fontsize=yaxis_fontsize)
 
-    # Legend
     if legend_on:
         if legend_labels is None:
             raise ValueError("Error: legend_labels was not provided.")
@@ -919,7 +845,6 @@ def portrait_plot(
         ax.set_aspect("equal")
 
     if not colorbar_off:
-        # Create colorbar
         if not cbar_option["colorbar_position_set"]:
             if not use_axes:
                 pos = ax.get_position()
@@ -951,7 +876,6 @@ def portrait_plot(
             )
         cbar = ax.figure.colorbar(im, cax=cbar_ax, **cbar_kw)
 
-        # Label for colorbar
         if cbar_label is not None:
             if "orientation" in list(cbar_kw.keys()):
                 if cbar_kw["orientation"] == "horizontal":
@@ -1006,11 +930,7 @@ def portrait_plot(
         return fig, ax, "cbar"
 
 
-# ======================================================================
-# Prepare data
-# ----------------------------------------------------------------------
 def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
-    # In case data was given as list of arrays, convert it to numpy (stacked) array
     if isinstance(data, list):
         if debug:
             logger.info("data type is list")
@@ -1025,7 +945,6 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
             data = np.stack(data)
             num_divide = len(data)
 
-    # Now, data is expected to be be a numpy array (whether given or converted from list)
     if debug:
         logger.info("data.shape:", data.shape)
     if data.shape[-1] != len(xaxis_labels) and len(xaxis_labels) > 0:
@@ -1051,10 +970,8 @@ def prepare_data(data, xaxis_labels, yaxis_labels, debug=False):
     return data, num_divide
 
 
-# ======================================================================
 # Portrait plot 1: heatmap-style (no triangle)
 # (Inspired from: https://matplotlib.org/devdocs/gallery/images_contours_and_fields/image_annotated_heatmap.html)
-# ----------------------------------------------------------------------
 @with_isolated_rc
 def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwargs):
     """
@@ -1083,10 +1000,8 @@ def heatmap(data, xaxis_labels, yaxis_labels, ax=None, invert_yaxis=False, **kwa
     if invert_yaxis:
         ax.invert_yaxis()
 
-    # Plot the heatmap
     im = ax.pcolormesh(data, **kwargs)
 
-    # Show all ticks and label them with the respective list entries.
     ax.set_xticks(np.arange(data.shape[1]) + 0.5, minor=False)
     ax.set_yticks(np.arange(data.shape[0]) + 0.5, minor=False)
     ax.set_xticklabels(xaxis_labels)
@@ -1148,12 +1063,9 @@ def annotate_heatmap(
     kw = dict(horizontalalignment="center", verticalalignment="center")
     kw.update(textkw)
 
-    # Get the formatter in case a string is supplied
     if isinstance(valfmt, str):
         valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
 
-    # Loop over the data and create a `Text` for each "pixel".
-    # Change the text's color depending on the data.
     texts = []
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
@@ -1167,10 +1079,8 @@ def annotate_heatmap(
     return ax
 
 
-# ======================================================================
 # Portrait plot 2 (two triangles)
 # (Inspired from: https://stackoverflow.com/questions/44291155/plotting-two-distance-matrices-together-on-same-plot)
-# ----------------------------------------------------------------------
 def triamatrix_wrap_up(
     upper,
     lower,
@@ -1185,11 +1095,9 @@ def triamatrix_wrap_up(
     inner_line_color="k",
     inner_line_width=0.5,
 ):
-    # Colorbar range
     if norm is None:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
 
-    # Triangles
     im = triamatrix(
         upper,
         ax,
@@ -1246,10 +1154,8 @@ def triamatrix(a, ax, rot=0, cmap="viridis", **kwargs):
     return col
 
 
-# ======================================================================
 # Portrait plot 4 (four triangles)
 # (Inspired from: https://stackoverflow.com/questions/44666679/something-like-plt-matshow-but-with-triangles)
-# ----------------------------------------------------------------------
 @with_isolated_rc
 def quatromatrix(
     top,
@@ -1286,7 +1192,6 @@ def quatromatrix(
     else:
         C = np.c_[left.flatten(), bottom.flatten(), right.flatten(), top.flatten()].flatten()
 
-    # Prevent coloring missing data
     C = np.ma.array(C, mask=np.isnan(C))
 
     tripcolor = ax.tripcolor(A[:, 0], A[:, 1], Tr, facecolors=C, **tripcolorkw)
@@ -1316,15 +1221,12 @@ def list_between_elements(a):
     return a_between
 
 
-# ======================================================================
 # Portrait plot legend (four/two triangles)
-# ======================================================================
 def add_legend(num_divide, ax, box_xy=None, box_size=None, labels=None, lw=1, fontsize=14):
     if box_xy is None:
         box_x = ax.get_xlim()[1] * 1.25
         box_y = ax.get_ylim()[1]
     else:
-        # Convert axes coordinate to data coordinate
         # Ref: https://matplotlib.org/stable/tutorials/advanced/transforms_tutorial.html
         box_x, box_y = ax.transLimits.inverted().transform(box_xy)
 

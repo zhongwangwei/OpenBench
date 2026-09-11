@@ -102,7 +102,6 @@ def stat_mann_kendall_trend_test(self, data):
             if hasattr(da, "chunks") and da.chunks is not None:
                 da = da.chunk({"time": -1})
 
-            # Apply the test to each grid point with chunking
             result = xr.apply_ufunc(
                 mk_test,
                 da,
@@ -114,7 +113,6 @@ def stat_mann_kendall_trend_test(self, data):
                 dask_gufunc_kwargs={"output_sizes": {"mk_params": 7}},
             )
 
-            # Create separate variables for each component
             trend = result.isel(mk_params=0)
             significance = result.isel(mk_params=1)
             p_value = result.isel(mk_params=2)
@@ -123,7 +121,6 @@ def stat_mann_kendall_trend_test(self, data):
             z_score = result.isel(mk_params=5)
             sen_slope = result.isel(mk_params=6)
 
-            # Create a new Dataset with separate variables
             ds = xr.Dataset(
                 {
                     "trend": trend,
@@ -136,7 +133,6 @@ def stat_mann_kendall_trend_test(self, data):
                 }
             )
 
-            # Add attributes
             ds.trend.attrs["long_name"] = "Mann-Kendall trend"
             ds.trend.attrs["description"] = "Trend direction: 1 (increasing), -1 (decreasing), 0 (no trend)"
             ds.significance.attrs["long_name"] = "Trend significance"
@@ -158,33 +154,26 @@ def stat_mann_kendall_trend_test(self, data):
             ds.attrs["significance_level"] = significance_level
             ds.attrs["sen_slope_max_exact_pairs"] = max_sen_pairs
 
-            # Clean up intermediate result
             del result
             gc.collect()
 
             return ds
         finally:
-            # Ensure cleanup of any remaining objects
             gc.collect()
 
     try:
-        # Process the data with proper memory management
         if isinstance(data, xr.Dataset):
-            # If it's a dataset, apply the test to each data variable
             results = []
             for var in data.data_vars:
                 result = _apply_mann_kendall(data[var], significance_level)
                 result = result.assign_coords(variable=var)
                 results.append(result)
-            # Save the result
             return xr.concat(results, dim="variable")
         elif isinstance(data, xr.DataArray):
-            # If it's a DataArray, apply the test directly
             return _apply_mann_kendall(data, significance_level)
         else:
             logging.error("Input must be an xarray Dataset or DataArray")
             raise TypeError("Input must be an xarray Dataset or DataArray")
 
     finally:
-        # Clean up any remaining objects
         gc.collect()

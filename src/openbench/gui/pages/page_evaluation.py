@@ -4,6 +4,7 @@ Evaluation Items selection page.
 """
 
 from openbench.gui.pages.base_page import BasePage
+from openbench.gui.config_manager import migrate_gui_variable_config
 from openbench.gui.widgets import CheckboxGroup
 
 
@@ -32,7 +33,8 @@ EVALUATION_ITEMS = {
         "Surface_Soil_Moisture",
         "Terrestrial_Water_Storage_Change",
         "Total_Runoff",
-        "Water_Evaporation",
+        "Open_Water_Evaporation",
+        "Transpiration",
     ],
     "Energy Cycle": [
         "Surface_Albedo",
@@ -59,12 +61,6 @@ EVALUATION_ITEMS = {
         "Surface_Specific_Humidity",
     ],
     "Agriculture": [
-        "Crop_Emergence_DOY_Wheat",
-        "Crop_Heading_DOY_Corn",
-        "Crop_Heading_DOY_Wheat",
-        "Crop_Maturity_DOY_Corn",
-        "Crop_Maturity_DOY_Wheat",
-        "Crop_V3_DOY_Corn",
         "Crop_Yield_Corn",
         "Crop_Yield_Maize",
         "Crop_Yield_Rice",
@@ -118,8 +114,8 @@ class PageEvaluation(BasePage):
 
     def load_from_config(self):
         """Load from config."""
-        eval_items = self.controller.config.get("evaluation_items", {})
-        self.checkbox_group.set_selection(eval_items)
+        config = migrate_gui_variable_config(self.controller.config)
+        self.checkbox_group.set_selection(config.get("evaluation_items", {}))
 
     def save_to_config(self):
         """Save to config."""

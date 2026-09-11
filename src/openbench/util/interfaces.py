@@ -161,7 +161,6 @@ class BaseProcessor(IDataProcessor):
         if not isinstance(data, xr.Dataset):
             return False
 
-        # Check if dataset has data
         if len(data.data_vars) == 0:
             return False
 

@@ -587,3 +587,85 @@ def test_find_data_files_supports_undated_files_in_month_directories(tmp_path):
     )
 
     assert {Path(path).parent.name for path in result} == {"2000-01", "2000-02"}
+
+
+def test_reference_compute_from_namelist_finds_split_dependency_files(tmp_path, monkeypatch):
+    import openbench.config.adapter as adapter
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as registry_manager
+    from openbench.config.schema import (
+        EvaluationConfig,
+        OpenBenchConfig,
+        ProjectConfig,
+        ReferenceConfig,
+        SimulationEntry,
+    )
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    times = pd.date_range("2000-01-01", periods=1)
+    xr.Dataset({"rain": xr.DataArray([1.0], coords={"time": times})}).to_netcdf(tmp_path / "rain_2000.nc")
+    xr.Dataset({"snow": xr.DataArray([2.0], coords={"time": times})}).to_netcdf(tmp_path / "snow_2000.nc")
+
+    ref = ReferenceDataset(
+        name="SplitRef",
+        description="split dependency ref",
+        category="Water",
+        data_type="grid",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2000],
+        root_dir=str(tmp_path),
+        variables={
+            "Runoff": VariableMapping(
+                varname="runoff",
+                varunit="mm day-1",
+                compute="ds['rain'] + ds['snow']",
+            )
+        },
+    )
+
+    class FakeRegistry:
+        last_resolve_reason = ""
+
+        def get_reference(self, name, **_kwargs):
+            return ref if name == "SplitRef" else None
+
+        def get_resolution_variants(self, _name):
+            return {}
+
+        def get_model(self, _name):
+            return None
+
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: FakeRegistry())
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="case", output_dir=str(tmp_path / "out"), years=[2000, 2000]),
+        evaluation=EvaluationConfig(variables=["Runoff"]),
+        reference=ReferenceConfig(sources={"Runoff": "SplitRef"}),
+        simulation={
+            "SimA": SimulationEntry(
+                model="Unknown",
+                root_dir=str(tmp_path),
+                variables={"Runoff": {"varname": "runoff", "varunit": "mm day-1"}},
+            )
+        },
+    )
+
+    _, ref_nml, _ = adapter.build_legacy_namelists(cfg)
+    section = ref_nml["Runoff"]
+    assert section["SplitRef_compute"] == "ds['rain'] + ds['snow']"
+
+    processor = _make_processor(processing)
+    processor.ref_source = "SplitRef"
+    processor.ref_compute = section["SplitRef_compute"]
+    processor.ref_data_type = "grid"
+    processor.ref_tim_res = "Day"
+    processor.compare_tim_res = "Day"
+    files = processing.BaseDatasetProcessing._find_data_files(
+        processor, str(tmp_path), "", 2000, "", "ref", [section["SplitRef_varname"]]
+    )
+
+    assert {Path(path).name for path in files} == {"rain_2000.nc", "snow_2000.nc"}
+    result = processing.BaseDatasetProcessing.select_var(processor, 2000, 2000, "Day", files, ["runoff"], "ref")
+    assert result.name == "Runoff"
+    assert float(result.values[0]) == 3.0

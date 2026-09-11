@@ -97,12 +97,10 @@ class YamlPreview(QWidget):
         font.setPointSize(11)
         self.text_edit.setFont(font)
 
-        # Apply syntax highlighter
         self.highlighter = YamlHighlighter(self.text_edit.document())
 
         layout.addWidget(self.text_edit, 1)
 
-        # Button bar
         btn_bar = QHBoxLayout()
         btn_bar.setSpacing(8)
 

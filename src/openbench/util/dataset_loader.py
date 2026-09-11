@@ -64,7 +64,6 @@ def cached_glob(pattern: str, ttl: int = GLOB_CACHE_TTL, force_refresh: bool = F
 
     current_time = time.time()
 
-    # Check cache under lock
     if not force_refresh:
         with _glob_cache_lock:
             entry = _glob_cache.get(pattern)
@@ -270,7 +269,6 @@ def open_dataset(
     >>> ds = open_dataset("small_file.nc", chunks=None)  # No chunking
     >>> ds = open_dataset("file.nc", chunks={"time": 24, "lat": 1000})  # Custom
     """
-    # Check if file exists
     if not os.path.exists(path):
         raise FileNotFoundError(f"Dataset file not found: {path}")
 
@@ -278,7 +276,6 @@ def open_dataset(
     file_size = os.path.getsize(path)
 
     if not use_chunking or file_size < size_threshold:
-        # Small file: load directly into memory
         logging.debug(f"Loading small file directly: {path} ({file_size / 1024 / 1024:.1f} MB)")
         return _open_dataset_with_fallback(path, **kwargs)
 
@@ -302,7 +299,6 @@ def _get_auto_chunks(path: str) -> Dict[str, int]:
     dict
         Chunk sizes for each dimension found in the file
     """
-    # Quick peek at the file to get dimensions
     try:
         with xr.open_dataset(path) as ds:
             dims = ds.sizes
@@ -361,7 +357,6 @@ def open_mfdataset(
         Combined dataset with Dask arrays
     """
     if chunks == "auto":
-        # Get chunks from first file
         if isinstance(paths, list) and len(paths) > 0:
             first_file = paths[0]
         else:
@@ -734,5 +729,4 @@ def load_and_compute(
     if variables:
         ds = ds[variables]
 
-    # Compute to load into memory
     return ds.compute()

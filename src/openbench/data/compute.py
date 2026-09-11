@@ -220,7 +220,6 @@ def execute_compute(ds: Any, expression: str, var_name: str = "") -> Any:
     # "total_area = ds['a'] + ds['b']; (prod / total_area) * factor"
     steps = [s.strip() for s in expression.split(";") if s.strip()]
 
-    # Build execution namespace
     namespace: dict[str, Any] = {
         "ds": _CaseInsensitiveDatasetProxy(ds),
         "np": np,
@@ -241,7 +240,6 @@ def execute_compute(ds: Any, expression: str, var_name: str = "") -> Any:
                 _validate_expression(step, allowed_names=namespace.keys())
                 eval(step, {"__builtins__": {}}, namespace)  # noqa: S307
 
-        # Evaluate final expression — this is the return value
         _validate_expression(steps[-1], allowed_names=namespace.keys())
         result = eval(steps[-1], {"__builtins__": {}}, namespace)  # noqa: S307
 

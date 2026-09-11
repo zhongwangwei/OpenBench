@@ -69,6 +69,17 @@ def is_cross_platform_path(path: str) -> bool:
     return False
 
 
+def is_windows_absolute_path(path: str) -> bool:
+    """Return whether a path is a Windows drive or UNC path on any client OS."""
+    return bool(
+        path
+        and (
+            (len(path) >= 3 and path[0].isalpha() and path[1] == ":" and path[2] in ("/", "\\"))
+            or path.startswith(("//", "\\\\"))
+        )
+    )
+
+
 def to_posix_path(path: str) -> str:
     """
     Convert a path to POSIX format (forward slashes).
@@ -510,12 +521,16 @@ def remote_exec_context(controller, parent):
         QMessageBox.warning(parent, "Not Connected", "Remote mode requires connecting to the server first.")
         return None
     remote_config = controller.remote_settings()
-    return {
+    context = {
         "ssh_manager": ssh_manager,
         "python_path": remote_config.get("python_path", ""),
         "conda_env": remote_config.get("conda_env", ""),
         "openbench_path": remote_config.get("openbench_path", ""),
     }
+    source_path = remote_config.get("openbench_source_path", "")
+    if source_path:
+        context["openbench_source_path"] = source_path
+    return context
 
 
 def browse_directory(controller, parent, title: str, current_path: str = "") -> str:
@@ -642,7 +657,6 @@ def _convert_linux_to_windows(linux_path: str, openbench_root: str) -> str:
         if lower_marker in lower_search:
             # Extract the relative path after the marker's parent
             if lower_marker == "/openbench/":
-                # Get everything after OpenBench/
                 idx = lower_search.find("/openbench/")
                 relative = search_path[idx + len("/openbench/") :]
             else:
@@ -727,7 +741,6 @@ def validate_path(path: str, path_type: str = "file", must_exist: bool = True) -
         if path_type == "directory" and not os.path.isdir(path):
             return False, f"Path is not a directory: {path}"
     else:
-        # Check parent directory exists
         parent = os.path.dirname(path)
         if parent and not os.path.exists(parent):
             return False, f"Parent directory does not exist: {parent}"

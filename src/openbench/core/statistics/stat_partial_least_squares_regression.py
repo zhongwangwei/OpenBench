@@ -27,8 +27,7 @@ def stat_partial_least_squares_regression(self, *variables):
         raise ImportError("scikit-learn is required for this function")
     from scipy.stats import t
 
-    # Prepare Dependent and Independent data
-    max_components = self.stats_nml["Partial_Least_Squares_Regression"]["max_components"]
+    configured_max_components = self.stats_nml["Partial_Least_Squares_Regression"]["max_components"]
     n_splits = self.stats_nml["Partial_Least_Squares_Regression"]["n_splits"]
     n_jobs = self.stats_nml["Partial_Least_Squares_Regression"]["n_jobs"]
 
@@ -48,16 +47,29 @@ def stat_partial_least_squares_regression(self, *variables):
                     "stat_partial_least_squares_regression expects a single-variable "
                     f"Dataset, got {len(data.data_vars)}: {list(data.data_vars)}"
                 )
-            return data.to_array().squeeze("variable").values  # Dataset → 转多变量DataArray再取值
+            return data.to_array().squeeze("variable")  # Dataset → 转多变量DataArray再取值
         elif isinstance(data, xr.DataArray):
-            return data.values  # DataArray → 直接取值
+            return data  # DataArray → 直接取值
         else:
             raise TypeError(f"Unsupported type: {type(data)}. Expected xarray.Dataset or xarray.DataArray")
 
-    # Prepare data
-    Y_data = extract_xarray_data(Y_vars)
-    X_data = np.concatenate([extract_xarray_data(x)[np.newaxis, ...] for x in X_vars], axis=0)
+    # Prepare data on shared coordinates before dropping xarray labels.
+    Y_da = extract_xarray_data(Y_vars)
+    X_da = [extract_xarray_data(x) for x in X_vars]
+    aligned = xr.align(Y_da, *X_da, join="inner")
+    if aligned[0].sizes.get("time", 0) == 0:
+        raise ValueError("Partial Least Squares Regression inputs have no overlapping time coordinates")
+    Y_aligned = aligned[0]
+    X_aligned = [x.transpose(*Y_aligned.dims) for x in aligned[1:]]
+
+    Y_data = Y_aligned.values
+    X_data = np.concatenate([x.values[np.newaxis, ...] for x in X_aligned], axis=0)
     X_data = np.moveaxis(X_data, 0, 1)  # Reshape to (time, n_variables, lat, lon)
+    split_preview = list(TimeSeriesSplit(n_splits=n_splits).split(np.arange(Y_data.shape[0])))
+    min_train_size = min(len(train_index) for train_index, _ in split_preview)
+    max_components = min(int(configured_max_components), X_data.shape[1], min_train_size)
+    if max_components < 1:
+        raise ValueError("Partial Least Squares Regression requires at least one predictor and CV training sample")
     # Standardize data. Guard zero-variance columns (constant predictors,
     # e.g. mask layers) — naive division would yield inf/NaN that pollute
     # every grid cell in that predictor and silently propagate downstream
@@ -84,7 +96,6 @@ def stat_partial_least_squares_regression(self, *variables):
         where=Y_std != 0,
     )
 
-    # Define helper functions for parallel processing
     def compute_best_components(lat, lon):
         x = X_stand[:, :, lat, lon]
         y = Y_stand[:, lat, lon]
@@ -92,19 +103,25 @@ def stat_partial_least_squares_regression(self, *variables):
             return lat, lon, np.nan
 
         tscv = TimeSeriesSplit(n_splits=n_splits)
-        scores = []
+        best_score = -np.inf
+        best_n_components = np.nan
         for n in range(1, max_components + 1):
             pls = PLSRegression(n_components=n, scale=False, max_iter=500)
-            score = cross_val_score(pls, x, y, cv=tscv)
-            scores.append(score.mean())
+            score = cross_val_score(pls, x, y, cv=tscv, error_score="raise")
+            finite_score = score[np.isfinite(score)]
+            if finite_score.size == 0:
+                continue
+            mean_score = finite_score.mean()
+            if mean_score > best_score:
+                best_score = mean_score
+                best_n_components = n
 
-        best_n_components = np.argmax(scores) + 1
         return lat, lon, best_n_components
 
     def compute_plsr(lat, lon, n_components):
         x = X_stand[:, :, lat, lon]
         y = Y_stand[:, lat, lon]
-        if np.isnan(x).any() or np.isnan(y).any():
+        if n_components < 1 or np.isnan(x).any() or np.isnan(y).any():
             return lat, lon, np.full(X_data.shape[1], np.nan), np.nan, np.full(X_data.shape[1], np.nan), np.nan
 
         pls = PLSRegression(n_components=n_components, scale=False)
@@ -143,7 +160,6 @@ def stat_partial_least_squares_regression(self, *variables):
         r_squared = pls.score(x, y)
 
         return lat, lon, coef.ravel(), intercept.ravel(), p_vals, r_squared
-        # Compute best number of components
 
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_best_components)(lat, lon) for lat in range(Y_data.shape[1]) for lon in range(Y_data.shape[2])
@@ -154,7 +170,6 @@ def stat_partial_least_squares_regression(self, *variables):
         if not np.isnan(n_components):
             best_n_components[lat, lon] = n_components
 
-    # Compute PLSR results
     results = Parallel(n_jobs=n_jobs)(
         delayed(compute_plsr)(lat, lon, best_n_components[lat, lon])
         for lat in range(Y_data.shape[1])
@@ -182,7 +197,6 @@ def stat_partial_least_squares_regression(self, *variables):
         where=X_std != 0,
     )
     anomaly = coef_values * scale
-    # Create output dataset
     ds = xr.Dataset(
         data_vars={
             "best_n_components": (["lat", "lon"], best_n_components),
@@ -192,10 +206,9 @@ def stat_partial_least_squares_regression(self, *variables):
             "r_squared": (["lat", "lon"], r_squared_values),
             "anomaly": (["variable", "lat", "lon"], anomaly),
         },
-        coords={"lat": Y_vars.lat, "lon": Y_vars.lon, "variable": [f"x{i + 1}" for i in range(len(X_vars))]},
+        coords={"lat": Y_aligned.lat, "lon": Y_aligned.lon, "variable": [f"x{i + 1}" for i in range(len(X_vars))]},
     )
 
-    # Add metadata
     ds["best_n_components"].attrs["long_name"] = "Best number of components"
     ds["coefficients"].attrs["long_name"] = "PLSR coefficients"
     ds["intercepts"].attrs["long_name"] = "PLSR intercepts"

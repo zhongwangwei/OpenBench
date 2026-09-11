@@ -36,7 +36,6 @@ class BasePage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
-        # Header
         header = QWidget()
         header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)

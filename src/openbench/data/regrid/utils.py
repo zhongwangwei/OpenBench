@@ -291,7 +291,6 @@ def format_for_regrid(
             if str(coord).lower() in handler["names"]:
                 formatted_coords[coord_type] = str(coord)
 
-    # Apply formatting
     for coord_type, coord in formatted_coords.items():
         # Make sure formatted coords are sorted
         obj = ensure_monotonic(obj, coord)

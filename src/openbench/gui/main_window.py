@@ -81,17 +81,14 @@ class MainWindow(QMainWindow):
             self._logo_pixmap.loadFromData(logo.read_bytes(), "PNG")
             self.setWindowIcon(QIcon(self._logo_pixmap))
 
-        # Initialize controller
         self.controller = WizardController(self)
 
-        # Set project_root on startup
         self.controller.project_root = get_openbench_root()
 
         # Sync status widget (created later if needed for remote mode)
         self._sync_status = None
         self._nav_bar_layout = None  # Reference to nav bar layout for sync status
 
-        # Setup UI
         self._setup_ui()
         self._connect_signals()
         self._update_navigation()
@@ -110,11 +107,9 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Create splitter for sidebar and content
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter, 1)
 
-        # === Sidebar ===
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
         sidebar.setMinimumWidth(180)
@@ -125,12 +120,14 @@ class MainWindow(QMainWindow):
 
         # Logo/Title area
         title_frame = QFrame()
-        title_frame.setStyleSheet("background-color: #252525; padding: 20px;")
+        title_frame.setStyleSheet("background-color: #252525;")
         title_layout = QVBoxLayout(title_frame)
+        title_layout.setContentsMargins(16, 16, 16, 16)
 
         self.logo_label = QLabel()
         if not self._logo_pixmap.isNull():
-            self.logo_label.setPixmap(self._logo_pixmap.scaled(160, 92, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo_label.setPixmap(self._logo_pixmap.scaled(132, 76, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.logo_label.setStyleSheet("background-color: #ffffff; border-radius: 8px; padding: 6px;")
         self.logo_label.setAlignment(Qt.AlignCenter)
         title_layout.addWidget(self.logo_label)
 
@@ -166,7 +163,6 @@ class MainWindow(QMainWindow):
         self.nav_list.setFocusPolicy(Qt.NoFocus)
         sidebar_layout.addWidget(self.nav_list)
 
-        # Sidebar buttons
         btn_frame = QFrame()
         btn_frame.setStyleSheet("background-color: #252525; padding: 10px;")
         btn_layout = QVBoxLayout(btn_frame)
@@ -201,13 +197,11 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(sidebar)
 
-        # === Content Area ===
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        # Page stack
         self.page_stack = QStackedWidget()
         self._setup_pages()
         content_layout.addWidget(self.page_stack, 1)
@@ -230,7 +224,6 @@ class MainWindow(QMainWindow):
 
         self._nav_bar_layout.addStretch()
 
-        # Page indicator
         self.page_indicator = QLabel("Step 1 of 10")
         self.page_indicator.setStyleSheet("color: #666666;")
         self._nav_bar_layout.addWidget(self.page_indicator)
@@ -251,7 +244,6 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(content)
 
-        # Set splitter sizes (sidebar: 220px, content: rest)
         splitter.setSizes([220, 980])
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
@@ -289,17 +281,14 @@ class MainWindow(QMainWindow):
             self.pages[page_id] = page
             self.page_stack.addWidget(page)
 
-        # Connect preview page run signal to monitor page
         if "preview" in self.pages and "run_monitor" in self.pages:
             self.pages["preview"].run_requested.connect(self.pages["run_monitor"].start_run)
 
-        # Connect sim page → propagate available variables to ref/eval pages
         if "sim_data" in self.pages:
             self.pages["sim_data"].available_variables_changed.connect(self._on_available_variables_changed)
 
     def _connect_signals(self):
         """Connect signals to slots."""
-        # Navigation buttons
         self.btn_back.clicked.connect(self._on_back_clicked)
         self.btn_next.clicked.connect(self._on_next_clicked)
         self.btn_rerun.clicked.connect(self._on_rerun_clicked)
@@ -309,10 +298,8 @@ class MainWindow(QMainWindow):
         self.btn_about.clicked.connect(self._show_about)
         self.language_manager.language_changed.connect(self._on_language_changed)
 
-        # Sidebar navigation
         self.nav_list.currentRowChanged.connect(self._on_nav_selected)
 
-        # Controller signals
         self.controller.page_changed.connect(self._on_page_changed)
         self.controller.pages_visibility_changed.connect(self._update_navigation)
 
@@ -602,13 +589,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        # Validate current page before proceeding
         current_page = self.pages.get(self.controller.current_page)
         if current_page and callable(getattr(current_page, "validate", None)):
             if not current_page.validate():
                 return
 
-        # Special handling for Preview page - trigger export and run
         if self.controller.current_page == "preview":
             preview_page = self.pages.get("preview")
             if preview_page:
@@ -654,7 +639,6 @@ class MainWindow(QMainWindow):
         if isinstance(self.controller.storage, RemoteStorage):
             file_path = self._browse_remote_config_file()
         else:
-            # Use OpenBench root as default directory
             start_dir = self._get_local_openbench_path()
             file_path, _ = QFileDialog.getOpenFileName(
                 self, "Load Configuration", start_dir, "YAML Files (*.yaml *.yml);;All Files (*)"
@@ -664,13 +648,11 @@ class MainWindow(QMainWindow):
 
     def _get_local_openbench_path(self) -> str:
         """Get local OpenBench path from config or runtime settings."""
-        # Try from controller config first
         general = self.controller.config.get("general", {})
         local_path = general.get("local_openbench_path", "")
         if local_path and os.path.isdir(local_path):
             return local_path
 
-        # Try from runtime settings file
         try:
             settings_path = os.path.join(os.path.expanduser("~"), ".openbench_wizard", "runtime_settings.yaml")
             if os.path.exists(settings_path):
@@ -757,10 +739,8 @@ class MainWindow(QMainWindow):
             if not is_remote:
                 self.controller.storage = LocalStorage(project_root)
 
-            # Start with default config
             new_config = self.controller._default_config()
 
-            # Check if this is a main config file (has reference_nml and simulation_nml)
             general = loaded_config.get("general", {})
 
             if self.controller._config_manager.is_unified_config(loaded_config):
@@ -791,7 +771,6 @@ class MainWindow(QMainWindow):
                     if key in current_runtime:
                         new_config["general"][key] = current_runtime[key]
 
-            # Update the controller with the new config
             self.controller.config = new_config
 
             # Navigate to the first page (skip runtime in remote mode)
@@ -827,7 +806,6 @@ class MainWindow(QMainWindow):
         # Check if using remote storage
         is_remote = isinstance(self.controller.storage, RemoteStorage)
 
-        # Copy general settings and convert paths to absolute
         for key, value in general.items():
             if key not in ("reference_nml", "simulation_nml", "statistics_nml", "figure_nml"):
                 # Convert path fields to absolute (only for local mode)
@@ -835,12 +813,10 @@ class MainWindow(QMainWindow):
                     value = to_absolute_path(value, project_root)
                 new_config["general"][key] = value
 
-        # Copy other sections
         for section in ("evaluation_items", "metrics", "scores", "comparisons", "statistics"):
             if section in loaded_config:
                 new_config[section] = loaded_config[section]
 
-        # Load reference NML if specified
         ref_nml_path = general.get("reference_nml", "")
         if ref_nml_path:
             if is_remote:
@@ -855,13 +831,11 @@ class MainWindow(QMainWindow):
                     try:
                         with open(ref_full_path, "r", encoding="utf-8") as f:
                             ref_config = yaml.safe_load(f) or {}
-                        # Convert all paths in ref_config to absolute
                         ref_config = convert_paths_in_dict(ref_config, project_root)
                         new_config["ref_data"] = ref_config
                     except Exception as e:
                         print(f"Warning: Failed to load reference NML: {e}")
 
-        # Load simulation NML if specified
         sim_nml_path = general.get("simulation_nml", "")
         if sim_nml_path:
             if is_remote:
@@ -876,7 +850,6 @@ class MainWindow(QMainWindow):
                     try:
                         with open(sim_full_path, "r", encoding="utf-8") as f:
                             sim_config = yaml.safe_load(f) or {}
-                        # Convert all paths in sim_config to absolute
                         sim_config = convert_paths_in_dict(sim_config, project_root)
                         new_config["sim_data"] = sim_config
                     except Exception as e:
@@ -891,11 +864,9 @@ class MainWindow(QMainWindow):
         if os.path.isabs(path):
             return path
 
-        # Try relative to base_dir first (for paths like ./nml/nml-yaml/...)
         if path.startswith("./"):
             relative_path = path[2:]
 
-            # Try from current working directory first
             full_path = os.path.normpath(os.path.join(os.getcwd(), relative_path))
             if os.path.exists(full_path):
                 return full_path
@@ -906,27 +877,22 @@ class MainWindow(QMainWindow):
             if os.path.exists(full_path):
                 return full_path
 
-            # Try from base_dir
             full_path = os.path.normpath(os.path.join(base_dir, relative_path))
             if os.path.exists(full_path):
                 return full_path
 
-            # Try from config_dir
             full_path = os.path.normpath(os.path.join(config_dir, relative_path))
             if os.path.exists(full_path):
                 return full_path
 
-        # Try relative to config_dir
         full_path = os.path.normpath(os.path.join(config_dir, path))
         if os.path.exists(full_path):
             return full_path
 
-        # Try relative to base_dir
         full_path = os.path.normpath(os.path.join(base_dir, path))
         if os.path.exists(full_path):
             return full_path
 
-        # Return the path as-is if nothing works
         return path
 
     def _resolve_remote_path(self, path: str, config_dir: str, base_dir: str) -> str:
@@ -951,7 +917,6 @@ class MainWindow(QMainWindow):
             )
             return exit_code == 0 and "exists" in stdout
 
-        # Try relative to base_dir first (for paths like ./nml/nml-yaml/...)
         if path.startswith("./"):
             relative_path = path[2:]
 
@@ -961,27 +926,22 @@ class MainWindow(QMainWindow):
             if remote_exists(full_path):
                 return full_path
 
-            # Try from base_dir
             full_path = f"{base_dir}/{relative_path}"
             if remote_exists(full_path):
                 return full_path
 
-            # Try from config_dir
             full_path = f"{config_dir}/{relative_path}"
             if remote_exists(full_path):
                 return full_path
 
-        # Try relative to config_dir
         full_path = f"{config_dir}/{path}"
         if remote_exists(full_path):
             return full_path
 
-        # Try relative to base_dir
         full_path = f"{base_dir}/{path}"
         if remote_exists(full_path):
             return full_path
 
-        # Return the path as-is if nothing works
         return path
 
     def _extract_evaluation_items_from_ref(self, ref_config: dict, new_config: dict):
@@ -1107,7 +1067,6 @@ class MainWindow(QMainWindow):
         errors = validate_paths_in_dict(config)
 
         if errors:
-            # Build error message
             error_lines = []
             for key, path, error in errors[:10]:  # Show max 10 errors
                 error_lines.append(f"  {key}: {path}")
@@ -1136,7 +1095,6 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.Yes:
             self.controller.reset()
-            # Set project_root for new configs
             self.controller.project_root = get_openbench_root()
 
     def _init_default_storage(self):
@@ -1240,6 +1198,8 @@ class MainWindow(QMainWindow):
         """
         from openbench.remote.sync import SyncEngine
 
+        was_remote = isinstance(self.controller.storage, RemoteStorage)
+
         get_target_identity = getattr(ssh_manager, "get_active_target_identity", None)
         if callable(get_target_identity) and get_target_identity() is None:
             QMessageBox.warning(
@@ -1285,14 +1245,18 @@ class MainWindow(QMainWindow):
         sync_engine = SyncEngine(ssh_manager, remote_project_dir)
         self.controller.storage = RemoteStorage(remote_project_dir, sync_engine)
         self.controller.ssh_manager = ssh_manager
+        config = getattr(self.controller, "config", None)
+        if not was_remote and isinstance(config, dict):
+            config.setdefault("general", {})["basedir"] = f"{remote_project_dir.rstrip('/')}/output"
+        general_page = getattr(self, "pages", {}).get("general")
+        if general_page is not None:
+            general_page.load_from_config()
         from openbench.gui.remote_registry import clear_registry
 
         clear_registry(self.controller)
 
-        # Setup sync status widget
         self._setup_sync_status(sync_engine)
 
-        # Start background sync
         sync_engine.start_background_sync()
         return True
 
@@ -1304,13 +1268,19 @@ class MainWindow(QMainWindow):
         Args:
             project_dir: Local project directory path
         """
+        was_remote = isinstance(self.controller.storage, RemoteStorage)
         if not self._cleanup_remote_storage(sync_pending=True, disconnect_ssh=True):
             return False
 
         self.controller.storage = LocalStorage(project_dir)
         self.controller.project_root = project_dir
+        config = getattr(self.controller, "config", None)
+        if was_remote and isinstance(config, dict):
+            config.setdefault("general", {})["basedir"] = os.path.join(project_dir, "output")
+        general_page = getattr(self, "pages", {}).get("general")
+        if general_page is not None:
+            general_page.load_from_config()
 
-        # Remove sync status widget if exists
         if self._sync_status:
             self._sync_status.cleanup()
             self._sync_status.setParent(None)
@@ -1320,7 +1290,6 @@ class MainWindow(QMainWindow):
 
     def _setup_sync_status(self, sync_engine):
         """Setup sync status widget for remote mode."""
-        # Remove old sync status if exists
         if self._sync_status:
             self._sync_status.cleanup()
             self._sync_status.setParent(None)
@@ -1369,7 +1338,6 @@ class MainWindow(QMainWindow):
         sync_engine._on_status_changed = on_status_changed
         self._sync_status.retry_clicked.connect(sync_engine.retry_errors)
 
-        # Set initial status
         overall = sync_engine.get_overall_status()
         pending = sync_engine.get_pending_count()
         self._sync_status.set_status(overall, pending)
@@ -1384,36 +1352,29 @@ class MainWindow(QMainWindow):
         try:
             files = storage.glob("nml/main-*.yaml")
             if files:
-                # Load first main config found
                 config_path = files[0]
                 content = storage.read_file(config_path)
                 loaded_config = yaml.safe_load(content) or {}
 
-                # Extract basename from filename (main-{basename}.yaml)
                 filename = os.path.basename(config_path)
                 if filename.startswith("main-") and filename.endswith(".yaml"):
                     basename = filename[5:-5]  # Remove "main-" prefix and ".yaml" suffix
                 else:
                     basename = "config"
 
-                # Start with default config and merge loaded config
                 new_config = self.controller._default_config()
 
-                # Copy general settings
                 general = loaded_config.get("general", {})
                 for key, value in general.items():
                     if key not in ("reference_nml", "simulation_nml", "statistics_nml", "figure_nml"):
                         new_config["general"][key] = value
 
-                # Ensure basename is set
                 new_config["general"]["basename"] = basename
 
-                # Copy other sections if present
                 for section in ("evaluation_items", "metrics", "scores", "comparisons", "statistics"):
                     if section in loaded_config:
                         new_config[section] = loaded_config[section]
 
-                # Try to load ref and sim configs
                 ref_path = f"nml/ref-{basename}.yaml"
                 if storage.exists(ref_path):
                     try:
@@ -1432,13 +1393,10 @@ class MainWindow(QMainWindow):
                     except Exception as e:
                         logger.warning(f"Failed to load sim config: {e}")
 
-                # Update the controller with the loaded config
                 self.controller.config = new_config
 
-                # Navigate to the general page (skip runtime)
                 self.controller.go_to_page("general")
 
-                # Refresh all pages
                 for page_id, page in self.pages.items():
                     if hasattr(page, "load_from_config"):
                         page.load_from_config()

@@ -64,7 +64,6 @@ class ConnectionManager:
 
     def _save(self):
         """Save connections to file."""
-        # Ensure directory exists
         dir_path = os.path.dirname(self._config_path)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
@@ -132,7 +131,6 @@ class ConnectionManager:
 
         conn.update(kwargs)
 
-        # Update existing or add new
         for i, existing in enumerate(self._connections):
             if existing.get("name") == name:
                 self._connections[i] = conn

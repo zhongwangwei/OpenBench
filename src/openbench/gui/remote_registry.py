@@ -7,7 +7,7 @@ from typing import Any
 
 from openbench.data.registry.manager import _auto_resolve_variant, _build_model, _build_reference
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset
-from openbench.util.names import normalize_name
+from openbench.util.names import canonical_variable_name, normalize_name
 
 _REMOTE_CACHE: dict[tuple, "RemoteRegistrySnapshot"] = {}
 
@@ -62,6 +62,14 @@ def _remote_settings(controller) -> dict[str, Any]:
     return {}
 
 
+def _configured_source_path(settings: dict[str, Any]) -> str:
+    source_path = str(settings.get("openbench_source_path") or "").strip()
+    package_path = str(settings.get("openbench_package_path") or "").strip().replace("\\", "/").rstrip("/")
+    if not source_path and package_path.endswith("/src/openbench"):
+        source_path = package_path[: -len("/src/openbench")]
+    return source_path
+
+
 def _ssh_manager(controller):
     if hasattr(controller, "storage"):
         from openbench.gui.path_utils import get_remote_ssh_manager
@@ -86,7 +94,7 @@ def _execution_context(settings: dict[str, Any]) -> tuple[str, str, str]:
     return (
         str(settings.get("python_path") or ""),
         str(settings.get("conda_env") or ""),
-        str(settings.get("openbench_path") or ""),
+        _configured_source_path(settings),
     )
 
 
@@ -94,10 +102,10 @@ def _cache_key(controller, ssh_manager) -> tuple:
     return (_target_identity(ssh_manager),) + _execution_context(_remote_settings(controller))
 
 
-def _remote_bootstrap(openbench_path: str) -> str:
-    if not openbench_path:
+def _remote_bootstrap(openbench_source_path: str) -> str:
+    if not openbench_source_path:
         return ""
-    root = openbench_path.rstrip("/")
+    root = openbench_source_path.rstrip("/")
     return (
         "import os\n"
         "import sys\n"
@@ -112,7 +120,7 @@ def _remote_json(controller, script: str):
     from openbench.gui import remote_python
 
     settings = _remote_settings(controller)
-    script = _remote_bootstrap(settings.get("openbench_path", "")) + script
+    script = _remote_bootstrap(_configured_source_path(settings)) + script
     return remote_python.run_remote_python_json(
         _ssh_manager(controller),
         script,
@@ -177,7 +185,7 @@ class RemoteRegistrySnapshot:
         self._var_index.clear()
         for key, ref in self._references.items():
             for var_name in ref.variables:
-                self._var_index.setdefault(normalize_name(var_name), []).append(key)
+                self._var_index.setdefault(normalize_name(canonical_variable_name(var_name)), []).append(key)
 
     def _ensure_current_target(self) -> None:
         current = _cache_key(self._controller, _ssh_manager(self._controller))
@@ -241,7 +249,7 @@ class RemoteRegistrySnapshot:
         self._ensure_current_target()
         return [
             self._references[key]
-            for key in self._var_index.get(normalize_name(variable), [])
+            for key in self._var_index.get(normalize_name(canonical_variable_name(variable)), [])
             if key in self._references
         ]
 

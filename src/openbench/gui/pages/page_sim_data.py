@@ -14,6 +14,7 @@ variables are available for evaluation downstream.
 import logging
 import os
 import threading
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
@@ -61,9 +62,7 @@ SIM_TIM_RES_OPTIONS = [
 from openbench.gui.path_utils import browse_directory, get_remote_ssh_manager
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _case_file_patterns(file_names: List[str]) -> tuple:
@@ -252,9 +251,11 @@ def scan_simulation_cases_remote(
     ssh_manager,
     root: str,
     *,
+    output_dir: str = "",
     python_path: str = "",
     conda_env: str = "",
     openbench_path: str = "",
+    openbench_source_path: str = "",
     timeout: int = 900,
     should_abort=None,
 ) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
@@ -264,8 +265,8 @@ def scan_simulation_cases_remote(
     from openbench.gui.remote_python import run_remote_python_json
 
     bootstrap = ""
-    if openbench_path:
-        remote_root = openbench_path.rstrip("/")
+    if openbench_source_path:
+        remote_root = openbench_source_path.rstrip("/")
         bootstrap = (
             "import os\n"
             "import sys\n"
@@ -278,9 +279,10 @@ def scan_simulation_cases_remote(
     script = f"""{bootstrap}
 import dataclasses
 import json
-from hashlib import blake2s
+import sys
 from pathlib import Path
 
+import openbench
 from openbench.data.coordinates import glob_nc
 try:
     from openbench.data.sim_scanner import scan_simulation_roots
@@ -295,14 +297,16 @@ else:
     station_materialize_error = ""
 
 root = {json.dumps(root)}
+station_output_dir = Path({json.dumps(output_dir)}).expanduser() if {json.dumps(output_dir)} else None
 result = scan_simulation_roots([root], model_name="auto")
 if any(case.station_layout for case in result.cases):
     if materialize_station_cases is None:
         pass
+    elif station_output_dir is None:
+        station_materialize_error = "station materialization failed: output directory is missing"
     else:
         try:
-            digest = blake2s(root.encode("utf-8"), digest_size=6).hexdigest()
-            materialize_station_cases(result, Path.home() / ".openbench" / "sim_station_lists" / digest, num_workers=1)
+            materialize_station_cases(result, station_output_dir, num_workers=1)
         except Exception as exc:
             station_materialize_error = "station materialization failed: %s: %s" % (type(exc).__name__, exc)
 
@@ -329,7 +333,16 @@ for case in result.cases:
     if case.station_layout and not case.fulllist and station_materialize_error:
         data["station_materialize_error"] = station_materialize_error
     payload.append(data)
-print(json.dumps({{"cases": payload}}, default=_json_default))
+module_file = getattr(openbench, "__file__", "") or ""
+print(json.dumps({{
+    "cases": payload,
+    "diagnostics": {{
+        "python": sys.executable,
+        "openbench_module": str(Path(module_file).resolve()) if module_file else "",
+        "root": str(Path(root).expanduser()),
+        "root_exists": Path(root).expanduser().is_dir(),
+    }},
+}}, default=_json_default))
 """
     payload = run_remote_python_json(
         ssh_manager,
@@ -367,6 +380,8 @@ def _rehydrate_simulation_cases(payload) -> tuple[List[tuple], Dict[str, Dict[st
     raw_cases = payload.get("cases", []) if isinstance(payload, dict) else payload
     discovered: List[tuple] = []
     case_meta: Dict[str, Dict[str, Any]] = {}
+    if isinstance(payload, dict) and isinstance(payload.get("diagnostics"), dict):
+        case_meta["__scan__"] = dict(payload["diagnostics"])
     for item in raw_cases or []:
         if not isinstance(item, dict):
             continue
@@ -430,11 +445,20 @@ def _model_from_case_label(label: str, model_names: List[str]) -> str:
     return ""
 
 
-def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
+def _scan_local_cases(root: str, output_dir: str = "") -> tuple[List[tuple], Dict[str, Dict[str, Any]]]:
     """Use the shared CLI scanner so GUI discovery follows the same rules."""
-    from openbench.data.sim_scanner import scan_simulation_roots
+    from openbench.data.sim_scanner import materialize_station_cases, scan_simulation_roots
 
     result = scan_simulation_roots([root], model_name="auto")
+    station_materialize_error = ""
+    if any(scanned.station_layout for scanned in result.cases):
+        if output_dir:
+            try:
+                materialize_station_cases(result, output_dir, num_workers=1)
+            except Exception as exc:
+                station_materialize_error = f"station materialization failed: {type(exc).__name__}: {exc}"
+        else:
+            station_materialize_error = "station materialization failed: output directory is missing"
     discovered: List[tuple] = []
     case_meta: Dict[str, Dict[str, Any]] = {}
     for scanned in result.cases:
@@ -460,6 +484,9 @@ def _scan_local_cases(root: str) -> tuple[List[tuple], Dict[str, Dict[str, Any]]
             "data_groupby": scanned.data_groupby,
             "fulllist": str(scanned.fulllist) if scanned.fulllist else "",
             "station_layout": scanned.station_layout,
+            "station_dropped_sites": [str(name) for name in (getattr(scanned, "station_dropped_sites", []) or [])],
+            "unresolved": [str(name) for name in (getattr(scanned, "unresolved", []) or [])],
+            "station_materialize_error": station_materialize_error or _station_materialize_error(scanned.__dict__),
             "source_root": str(scanned.source_root) if scanned.source_root else "",
         }
     return discovered, case_meta
@@ -556,9 +583,7 @@ def _grid_res_value(value: Any) -> Any:
         return value
 
 
-# ---------------------------------------------------------------------------
 # Page
-# ---------------------------------------------------------------------------
 
 
 class PageSimData(BasePage):
@@ -598,12 +623,9 @@ class PageSimData(BasePage):
             logger.warning("Could not load registry model %s: %s", model_name, exc)
             return []
 
-    # ------------------------------------------------------------------
     # Setup
-    # ------------------------------------------------------------------
 
     def _setup_content(self):
-        # === Scan section ===
         scan_group = QGroupBox("Scan for Cases")
         scan_form = QFormLayout(scan_group)
         scan_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
@@ -628,7 +650,6 @@ class PageSimData(BasePage):
 
         self.content_layout.addWidget(scan_group)
 
-        # === Case list (scrollable) ===
         self._case_scroll = QScrollArea()
         self._case_scroll.setWidgetResizable(True)
         self._case_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -648,7 +669,6 @@ class PageSimData(BasePage):
         # Cached model names
         self._model_names: List[str] = PageSimData._registry_model_names(self)
 
-        # === Shared settings ===
         self._settings_group = QGroupBox("Optional Overrides for Selected Cases")
         settings_form = QFormLayout(self._settings_group)
 
@@ -684,7 +704,6 @@ class PageSimData(BasePage):
         self._settings_group.setVisible(False)
         self.content_layout.addWidget(self._settings_group)
 
-        # === Validate button ===
         validate_layout = QHBoxLayout()
         validate_layout.addStretch()
         self.validate_btn = QPushButton("Validate Data")
@@ -696,9 +715,7 @@ class PageSimData(BasePage):
         # Legacy compat
         self._source_configs: Dict[str, Dict[str, Any]] = {}
 
-    # ------------------------------------------------------------------
     # Browse & Scan
-    # ------------------------------------------------------------------
 
     def _browse_root(self):
         path = browse_directory(
@@ -757,6 +774,7 @@ class PageSimData(BasePage):
         # live event loop), so the window stays painted while the progress
         # dialog can cancel the SSH command.
         QApplication.setOverrideCursor(Qt.WaitCursor)
+        scan_was_canceled = False
         try:
             discovered = []
             # label → {files, suffix, multi_stream}; carried past the confirm
@@ -768,12 +786,14 @@ class PageSimData(BasePage):
                 if callable(settings_fn):
                     remote_settings = settings_fn() or {}
                 try:
+                    output_dir_fn = getattr(self.controller, "get_output_dir", None)
                     discovered, case_meta = scan_simulation_cases_remote(
                         ssh_manager,
                         root,
+                        output_dir=output_dir_fn() if callable(output_dir_fn) else "",
                         python_path=remote_settings.get("python_path", ""),
                         conda_env=remote_settings.get("conda_env", ""),
-                        openbench_path=remote_settings.get("openbench_path", ""),
+                        openbench_source_path=remote_settings.get("openbench_source_path", ""),
                         should_abort=cancel_event.is_set if cancel_event is not None else None,
                     )
                 except Exception as exc:
@@ -783,24 +803,36 @@ class PageSimData(BasePage):
                     return
             else:
                 try:
-                    discovered, case_meta = call_responsive(lambda: _scan_local_cases(root))
+                    output_dir_fn = getattr(self.controller, "get_output_dir", None)
+                    output_dir = output_dir_fn() if callable(output_dir_fn) else ""
+                    discovered, case_meta = call_responsive(lambda: _scan_local_cases(root, output_dir))
                 except Exception as exc:
                     QMessageBox.critical(self, "Error", f"Cannot scan directory:\n{exc}")
                     return
         finally:
+            scan_was_canceled = cancel_event is not None and cancel_event.is_set()
             QApplication.restoreOverrideCursor()
             if progress is not None:
                 progress.close()
                 progress.deleteLater()
 
-        if cancel_event is not None and cancel_event.is_set():
+        if scan_was_canceled:
             return
 
         if not discovered:
-            QMessageBox.information(self, "No Cases Found", f"No NetCDF simulation cases found under:\n{root}")
+            message = f"No NetCDF simulation cases found under:\n{root}"
+            diagnostics = case_meta.get("__scan__", {})
+            if diagnostics:
+                message += (
+                    f"\n\nPython: {diagnostics.get('python') or 'unknown'}"
+                    f"\nOpenBench: {diagnostics.get('openbench_module') or 'unknown'}"
+                    f"\nScanned root: {diagnostics.get('root') or root}"
+                )
+                if diagnostics.get("root_exists") is False:
+                    message += "\nThe selected remote root does not exist."
+            QMessageBox.information(self, "No Cases Found", message)
             return
 
-        # Refresh model names
         self._model_names = PageSimData._registry_model_names(self)
         case_models = {}
         for label, _nc_dir, _prefix in discovered:
@@ -814,7 +846,6 @@ class PageSimData(BasePage):
         )
         nc_var_count = len({variable for meta in case_meta.values() for variable in meta.get("variables", [])})
 
-        # Show confirmation dialog
         from openbench.gui.dialogs.scan_confirm import ScanConfirmDialog
 
         dlg = ScanConfirmDialog(
@@ -834,7 +865,6 @@ class PageSimData(BasePage):
 
         confirmed = dlg.get_results()
 
-        # Build per-case rows from confirmed results
         for case in confirmed:
             meta = case_meta.get(case["label"], {})
             if case["model"] == meta.get("model"):
@@ -1118,9 +1148,7 @@ class PageSimData(BasePage):
             case["row_widget"].deleteLater()
         self._cases.clear()
 
-    # ------------------------------------------------------------------
     # Selection changed → derive available variables
-    # ------------------------------------------------------------------
 
     def _on_selection_changed(self):
         """Called when any checkbox or model combo changes."""
@@ -1196,9 +1224,7 @@ class PageSimData(BasePage):
             )
         return result
 
-    # ------------------------------------------------------------------
     # Config persistence
-    # ------------------------------------------------------------------
 
     def save_to_config(self):
         cases = self.get_selected_cases()
@@ -1479,9 +1505,7 @@ class PageSimData(BasePage):
         if saved_configs:
             self._settings_group.setVisible(True)
 
-    # ------------------------------------------------------------------
     # Validation
-    # ------------------------------------------------------------------
 
     def validate(self) -> bool:
         cases = self.get_selected_cases()
@@ -1521,23 +1545,23 @@ class PageSimData(BasePage):
             remote_openbench_root = remote_settings().get("openbench_path", "")
         file_checker = RemoteNetCDFValidator(ssh_manager) if is_remote else LocalNetCDFValidator()
         for c in cases:
+            if is_remote and (not ssh_manager or not ssh_manager.is_connected):
+                issues.append(f"{c['label']}: remote server is not connected")
+                continue
+            if c.get("data_type") == "stn":
+                detail = c.get("station_materialize_error")
+                if detail:
+                    issues.append(f"{c['label']}: {detail}")
+                    continue
+                fulllist = c.get("fulllist", "")
+                if not fulllist:
+                    issues.append(f"{c['label']}: station fulllist is missing")
+                    continue
+                check = file_checker.check_file_exists(fulllist)
+                if not check.passed:
+                    issues.append(f"{c['label']}: {check.message}")
+                continue
             if is_remote:
-                if not ssh_manager or not ssh_manager.is_connected:
-                    issues.append(f"{c['label']}: remote server is not connected")
-                    continue
-                if c.get("data_type") == "stn":
-                    detail = c.get("station_materialize_error")
-                    if detail:
-                        issues.append(f"{c['label']}: {detail}")
-                        continue
-                    fulllist = c.get("fulllist", "")
-                    if not fulllist:
-                        issues.append(f"{c['label']}: station fulllist is missing")
-                        continue
-                    check = file_checker.check_file_exists(fulllist)
-                    if not check.passed:
-                        issues.append(f"{c['label']}: {check.message}")
-                    continue
                 try:
                     nc_dir = _remote_find_nc_dir(ssh_manager, c["nc_dir"])
                 except Exception as exc:
@@ -1545,6 +1569,11 @@ class PageSimData(BasePage):
                     continue
                 if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
+                    continue
+                try:
+                    available_files = _remote_list_nc_files(ssh_manager, nc_dir)
+                except Exception as exc:
+                    issues.append(f"{c['label']}: {exc}")
                     continue
             else:
                 if not os.path.isdir(c["nc_dir"]):
@@ -1554,6 +1583,7 @@ class PageSimData(BasePage):
                 if not nc_dir:
                     issues.append(f"{c['label']}: no NetCDF files found ({c['nc_dir']})")
                     continue
+                available_files = [str(path) for path in _glob_nc_local(nc_dir)]
 
             variable_patterns = [
                 (name, override)
@@ -1574,7 +1604,16 @@ class PageSimData(BasePage):
                     ssh_manager=ssh_manager,
                     remote_openbench_root=remote_openbench_root,
                 )
-                sample_paths = path_gen.get_sample_paths()
+                candidate_patterns = (
+                    path_gen._candidate_filenames()
+                    if str(path_gen.data_groupby).lower() == "single"
+                    else path_gen._candidate_patterns()
+                )
+                sample_paths = [
+                    path
+                    for path in available_files
+                    if any(fnmatch(os.path.basename(path), pattern) for pattern in candidate_patterns)
+                ]
                 issue_label = f"{c['label']} ({variable_name})" if variable_name else c["label"]
                 if not sample_paths:
                     pattern = path_gen.describe_pattern()
@@ -1582,17 +1621,6 @@ class PageSimData(BasePage):
                         f"No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
                     )
                     issues.append(f"{issue_label}: {message}")
-                    continue
-
-                file_checks = [file_checker.check_file_exists(path) for path in sample_paths]
-                if not any(check.passed for check in file_checks):
-                    pattern = path_gen.describe_pattern()
-                    issues.append(
-                        f"{issue_label}: No files found matching pattern '{pattern}' in {path_gen._get_base_dir()}"
-                    )
-                elif any(not check.passed for check in file_checks):
-                    failed = next(check for check in file_checks if not check.passed)
-                    issues.append(f"{issue_label}: {failed.message}")
         if issues:
             QMessageBox.warning(self, "Validation Issues", "\n".join(issues))
         else:

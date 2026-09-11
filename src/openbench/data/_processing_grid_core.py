@@ -170,7 +170,6 @@ class GridProcessingCoreMixin:
                     compression=False,
                 )
         except (OSError, IOError, BrokenPipeError):
-            # ProgressBar failed (likely non-interactive environment), save without progress bar
             write_mfdataset_chunked_atomic(
                 var_files,
                 output_file,
@@ -279,14 +278,12 @@ class GridProcessingCoreMixin:
                 #    much cheaper than remap daily then resample
                 if not self._is_climatology_mode():
                     data = self._resample_to_compare_resolution(data, f"{data_source} grid data")
-                # 3. Remap to target grid
                 remapped_data = self.remap_data(data)
                 self.save_remapped_data(remapped_data, data_source, year)
         finally:
             gc.collect()
 
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
-        # Check if lon and lat are 2D
         data = self.check_coordinate(data)
         if data["lon"].ndim == 2 and data["lat"].ndim == 2:
             try:

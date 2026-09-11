@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# Plot settings
 import xarray as xr
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from matplotlib import rcParams
@@ -97,7 +96,6 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     }
     rcParams.update(params)
 
-    # Set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
     with xr.open_dataset(f"{basedir}/{filename}") as _ds:
         ds = _ds.load()
     ds = Convert_Type.convert_nc(ds)
@@ -473,7 +471,6 @@ def make_scenarios_comparison_Diff_Plot(
 ):
     for metric in metrics:
         for sim_source in sim_sources:
-            # try:
             plot_diff_results(
                 basedir,
                 "anomaly",
@@ -486,8 +483,6 @@ def make_scenarios_comparison_Diff_Plot(
                 ref_data_type,
                 option,
             )
-        # except:
-        #     logging.error(f'{evaluation_item}:{metric} - {ref_source} {sim_source} anomaly error')
         # After calculating differences for metrics
         if len(sim_sources) >= 2:
             for i, sim1 in enumerate(sim_sources):
@@ -512,7 +507,6 @@ def make_scenarios_comparison_Diff_Plot(
                         raise
 
     for score in scores:
-        # After calculating anomalies for scores
         for sim_source in sim_sources:
             try:
                 plot_diff_results(

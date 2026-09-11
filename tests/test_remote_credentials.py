@@ -80,3 +80,19 @@ def test_save_credential_roundtrips_compute_node_key_and_password(tmp_path):
     assert cred["jump_node"] == "node002"
     assert cred["jump_auth"] == "password"
     assert cred["node_password"] == "node-secret"
+
+
+def test_save_password_refuses_ephemeral_salt(tmp_path, monkeypatch):
+    class SaltWriteFails(CredentialManager):
+        def _atomic_write(self, path, content, *, binary=False):
+            if path.endswith(self.SALT_FILE):
+                raise OSError("disk read-only")
+            return super()._atomic_write(path, content, binary=binary)
+
+    monkeypatch.setattr(CredentialManager, "_get_encryption_key", lambda self: "stable-machine:user")
+    mgr = SaltWriteFails(config_dir=str(tmp_path))
+
+    with pytest.raises(CredentialStorageError, match="encryption salt could not be persisted"):
+        mgr.save_credential("alice@example.org", "password", password="secret")
+
+    assert not (tmp_path / "credentials.json").exists()

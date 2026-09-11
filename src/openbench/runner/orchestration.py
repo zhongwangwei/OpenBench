@@ -125,9 +125,7 @@ def run_evaluation_impl(
     # same reference NC file.  All writes go to distinct output files,
     # so disabling the lock is safe.
 
-    # Resolve through openbench.runner.local at call time so existing tests and
-    # downstream integrations that monkeypatch local helper wrappers still affect
-    # orchestration after the god-module split.
+    # Resolve through runner.local so downstream helper overrides still apply.
     from openbench.runner import local as _local_runner
 
     _apply_unified_mask = _local_runner._apply_unified_mask
@@ -158,7 +156,6 @@ def run_evaluation_impl(
     runner_cfg = bindings.runner_cfg
     general = runner_cfg.general
 
-    # Setup output directories
     basedir = Path(runner_cfg.basedir)
     basename = runner_cfg.basename
     output_dir = basedir / basename
@@ -172,16 +169,12 @@ def run_evaluation_impl(
     logger.info("Variables: %s", list(runner_cfg.evaluation_items.keys()))
     logger.info("Simulations: %s", list(cfg.simulation.keys()))
 
-    # Derive list keys from the legacy config
     metric_vars = list(runner_cfg.metrics)
     score_vars = list(runner_cfg.scores)
     comparison_vars = list(runner_cfg.comparisons)
     statistic_vars = list(runner_cfg.statistics)
 
-    # Determine parallelism level (auto-detect when num_cores is None/0).
-    # Currently unused at variable level — parallelism lives inside
-    # DatasetProcessing (station processing, yearly combination).
-    # Reserved for future variable-level parallel dispatch.
+    # None/0 selects available cores; explicit requests stay within the CPU limit.
     available_cores = effective_cpu_count(os.cpu_count() or 1)
     num_cores: int = available_cores
     if hasattr(cfg, "project") and cfg.project is not None:
@@ -194,7 +187,6 @@ def run_evaluation_impl(
     only_drawing = bool(general.get("only_drawing", False))
     use_cache = not force and not only_drawing
 
-    # Build task list
     tasks = _build_evaluation_tasks(
         cfg=cfg,
         bindings=bindings,
@@ -308,14 +300,8 @@ def run_evaluation_impl(
                 "errors": errors,
             }
 
-    # ─── Pre-process data: parallel across variables, serial within each variable ───
-    #
-    # Strategy: group tasks by variable, preprocess each variable's tasks in parallel.
-    # Within each variable: ref once → for each sim: sim + unified_mask (serial, mask accumulates).
-    # Different variables write to different files → safe to parallelize.
     unified_mask = general.get("unified_mask", True)
 
-    # Group tasks by variable and mark safe cache skips.
     var_tasks = _group_tasks_by_variable(tasks)
     cached_results = _collect_cached_results(
         var_tasks,
@@ -342,11 +328,9 @@ def run_evaluation_impl(
         var_names = [
             var_name for var_name, vtasks in var_tasks.items() if not all(task.get("cache_skipped") for task in vtasks)
         ]
-        # Preprocess + evaluate: serial across variables (like old openbench.py).
-        # Parallelism lives *inside* station processing (Parallel n_jobs=num_cores)
-        # and inside yearly file combination, not at the variable/task level.
-        # This avoids nested-parallel deadlocks and I/O contention on shared
-        # reference files that plagued the previous variable-level parallel dispatch.
+        # Preprocess variables serially to avoid nested-parallel deadlocks and
+        # shared-reference I/O contention; station/yearly processing may parallelize
+        # internally. Ready evaluation tasks are dispatched separately below.
         preprocess_errors: list[dict[str, Any]] = []
         if only_drawing:
             logger.info("only_drawing mode: skipping preprocessing and metric recomputation")
@@ -377,7 +361,8 @@ def run_evaluation_impl(
                 )
             )
         except Exception:
-            _cleanup_pair_ref_overrides(tasks)
+            if not only_drawing:
+                _cleanup_pair_ref_overrides(rerun_tasks)
             raise
 
         evaluated = []
@@ -513,7 +498,15 @@ def run_evaluation_impl(
         "errors": errors,
     }
 
-    _cleanup_pair_ref_overrides(tasks)
+    if errors and not comparison_only and not only_drawing:
+        successful_pairs = {(result["variable"], result["sim"], result["ref"]) for result in evaluated}
+        _cleanup_pair_ref_overrides(
+            [
+                task
+                for task in rerun_tasks
+                if (task["var_name"], task["sim_source"], task["ref_source"]) not in successful_pairs
+            ]
+        )
 
     logger.info("All phases complete: %d evaluated, %d errors", len(evaluated), len(errors))
     return results

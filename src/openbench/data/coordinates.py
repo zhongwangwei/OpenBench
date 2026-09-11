@@ -137,8 +137,6 @@ def find_lon_name(names) -> str | None:
     return None
 
 
-# --- NetCDF file extensions ---
-
 # Raw extension strings for use in regex and os.path patterns.
 NC_SUFFIXES: tuple[str, ...] = (".nc", ".nc4", ".NC", ".NC4")
 NC_EXTENSIONS: tuple[str, ...] = tuple(f"*{suffix}" for suffix in NC_SUFFIXES)
