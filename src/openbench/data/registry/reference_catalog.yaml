@@ -1064,9 +1064,15 @@ FLUXNET_PLUMBER2:
   - 2018
   variables:
     Latent_Heat:
+      fallbacks:
+      - varname: Qle
+        varunit: W m-2
       varname: Qle_cor
       varunit: W m-2
     Sensible_Heat:
+      fallbacks:
+      - varname: Qh
+        varunit: W m-2
       varname: Qh_cor
       varunit: W m-2
     Ground_Heat:

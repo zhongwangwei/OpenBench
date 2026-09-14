@@ -74,9 +74,9 @@ def make_scenarios_comparison_Whisker_Plot(
                 datasets_filtered[i] = np.where(data < -1, -1, data).tolist()
 
     # Create the whisker plot
+    tick_labels = [f"{i}" for i in sim_sources]
     bp = ax.boxplot(
         datasets_filtered,
-        labels=[f"{i}" for i in sim_sources],
         vert=option["vert"],
         showfliers=option["showfliers"],
         flierprops=dict(
@@ -153,6 +153,8 @@ def make_scenarios_comparison_Whisker_Plot(
         )
 
     if option["vert"]:
+        ax.set_xticks(range(1, len(tick_labels) + 1))
+        ax.set_xticklabels(tick_labels)
         setp(ax.get_xticklabels(), rotation=option["x_rotation"], ha=option["ha"])
 
         ax.xaxis.set_ticks_position("both")
@@ -183,6 +185,8 @@ def make_scenarios_comparison_Whisker_Plot(
         else:
             ax.set(ylim=(min_value, max_value))
     else:
+        ax.set_yticks(range(1, len(tick_labels) + 1))
+        ax.set_yticklabels(tick_labels)
         setp(ax.get_yticklabels(), rotation=option["y_rotation"], ha=option["ha"])
 
         xlabel = option["xticklabel"]
