@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import json
 from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
 from openbench.visualization._figure_io import save_figure
 
@@ -191,6 +192,10 @@ def _read_metrics_file(file):
     df.index.name = None
 
     counts = {}
+    counts_by_statistic = {}
+    n_valid_by_statistic = metadata.pop("n_valid_by_statistic", None)
+    if n_valid_by_statistic:
+        counts_by_statistic = json.loads(n_valid_by_statistic)
     if "n_valid" in df.index:
         if df.index[-1] != "n_valid" or list(df.index).count("n_valid") != 1:
             raise ValueError(f"{file}: n_valid must appear once as the final row")
@@ -198,6 +203,8 @@ def _read_metrics_file(file):
         df = df.drop(index="n_valid")
     df.attrs["metadata"] = metadata
     df.attrs["n_valid"] = counts
+    if counts_by_statistic:
+        df.attrs["n_valid_by_statistic"] = counts_by_statistic
     return df
 
 
@@ -209,11 +216,8 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     df = _read_metrics_file(file)
     metadata = df.attrs.get("metadata", {})
     counts = df.attrs.get("n_valid", {})
+    counts_by_statistic = df.attrs.get("n_valid_by_statistic", {})
     selected_metrics = [name for name in selected_metrics if name != "n_valid"]
-
-    def class_label(column, label):
-        count = counts.get(column)
-        return f"{label}\nn={int(count):,}" if count is not None else label
 
     def metric_label(metric):
         label = metric.replace("_", " ")
@@ -239,6 +243,23 @@ def make_LC_based_heat_map(file, selected_metrics, lb, option):
     # Select the desired metrics
     # selected_metrics = ['nBiasScore', 'nRMSEScore', 'nPhaseScore', 'nIavScore', 'nSpatialScore', 'overall_score']
     df_selected = df.loc[selected_metrics]
+
+    def class_label(column, label):
+        row_counts = [
+            counts_by_statistic.get(metric, {}).get(column)
+            for metric in df_selected.index
+            if counts_by_statistic.get(metric, {}).get(column) is not None
+        ]
+        if not row_counts and column in counts:
+            row_counts = [counts[column]]
+        if not row_counts:
+            return label
+        row_counts = [int(count) for count in row_counts]
+        return (
+            f"{label}\nn={row_counts[0]:,}"
+            if min(row_counts) == max(row_counts)
+            else f"{label}\nn={min(row_counts):,}–{max(row_counts):,}"
+        )
 
     # Mapping from numeric column IDs to IGBP class names
     igbp_id_to_name = {

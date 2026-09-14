@@ -211,3 +211,46 @@ def test_metric_scale_custom_range_uses_toolbox_without_netcdf(monkeypatch):
     assert actual[0].name == expected[0].name
     np.testing.assert_array_equal(actual[1], expected[1])
     assert (actual[2].vmin, actual[2].vmax, actual[4]) == (expected[2].vmin, expected[2].vmax, expected[4])
+
+
+def test_heatmap_labels_per_statistic_count_range_for_selected_rows(tmp_path, monkeypatch):
+    import openbench.visualization.Fig_LC_based_heat_map as plot
+
+    source = tmp_path / "metrics.csv"
+    source.write_text(
+        "\n".join(
+            [
+                '# n_valid_by_statistic: {"bias":{"ENF":2,"Overall":4},"RMSE":{"ENF":5,"Overall":5}}',
+                "metric\tENF\tOverall",
+                "bias\t1\t2",
+                "RMSE\t3\t4",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    captured = {}
+    monkeypatch.setattr(
+        plot,
+        "_draw_groupby_heatmap",
+        lambda file, data, column_labels, row_labels, lb, option: captured.update(column_labels=column_labels),
+    )
+    options = yaml.safe_load(Path("src/openbench/data/fignml/IGBP_groupby_source.yaml").read_text(encoding="utf-8"))[
+        "general"
+    ]
+    options.update(item=["Evapotranspiration"], groupby="IGBP_groupby", x_ticklabel="Short")
+    plot.make_LC_based_heat_map(
+        str(source),
+        ["bias"],
+        "metric",
+        options,
+    )
+    assert captured["column_labels"] == ["ENF\nn=2", "Overall\nn=4"]
+
+    plot.make_LC_based_heat_map(
+        str(source),
+        ["bias", "RMSE"],
+        "metric",
+        options,
+    )
+    assert captured["column_labels"] == ["ENF\nn=2–5", "Overall\nn=4–5"]
