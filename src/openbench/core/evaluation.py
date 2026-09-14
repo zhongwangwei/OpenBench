@@ -831,12 +831,57 @@ class Evaluation_stn(metrics, scores):
                     )
                     results = [self.make_evaluation_parallel(station_list, iik) for iik in station_indices]
 
-            skipped = sum(1 for r in results if r is None)
-            if skipped:
-                raise RuntimeError(f"Station evaluation failed for {skipped}/{len(station_indices)} station(s)")
-            if not results:
-                raise RuntimeError("Station evaluation produced no station results")
-            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+            '''---------------------------------------'''
+
+            # skipped = sum(1 for r in results if r is None)
+            # if skipped:
+            #     raise RuntimeError(f"Station evaluation failed for {skipped}/{len(station_indices)} station(s)")
+            # if not results:
+            #     raise RuntimeError("Station evaluation produced no station results")
+            # station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+            valid_mask = [result is not None for result in results]
+
+            n_total = len(results)
+            n_valid = sum(valid_mask)
+            n_skipped = n_total - n_valid
+
+            if n_skipped > 0:
+                logging.warning(
+                    "Skipped %d/%d station(s) during evaluation; "
+                    "%d valid station(s) will be retained.",
+                    n_skipped,
+                    n_total,
+                    n_valid,
+                )
+
+            # Only fail when no station can be evaluated.
+            if n_valid == 0:
+                raise RuntimeError(
+                    f"Station evaluation produced no valid station results "
+                    f"({n_skipped}/{n_total} stations skipped)"
+                )
+
+            # Keep station metadata and evaluation results strictly aligned.
+            valid_indices = [
+                idx for idx, is_valid in enumerate(valid_mask)
+                if is_valid
+            ]
+
+            station_list = station_list.iloc[valid_indices].reset_index(drop=True)
+
+            valid_results = [
+                result for result in results
+                if result is not None
+            ]
+
+            results_df = pd.DataFrame(valid_results).reset_index(drop=True)
+
+            station_list = pd.concat(
+                [station_list, results_df],
+                axis=1,
+            )
+            '''---------------------------------------'''
+
             requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
             if not requested_columns:
                 requested_columns = ["KGESS", "RMSE", "correlation"]

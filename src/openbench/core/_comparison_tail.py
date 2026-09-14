@@ -257,6 +257,16 @@ class TailComparisonMixin:
                                         with xr.open_dataset(sim_path) as sim_ds:
                                             sim = select_data_array(sim_ds, sim_varname).load()
                                         sim = Convert_Type.convert_nc(sim)
+                                        ref, sim = xr.align(
+                                            ref,
+                                            sim,
+                                            join="inner",
+                                        )
+                                        if ref.sizes.get("time", 0) == 0:
+                                            raise ValueError(
+                                                f"No overlapping timestamps for "
+                                                f"{evaluation_item}: {ref_source} vs {sim_source}"
+                                            )
 
                                         result = method_function(*[ref, sim])
 

@@ -16,6 +16,48 @@ PostPhasePreflight = Callable[..., list[dict[str, Any]]]
 ItemFilter = Callable[[Path, list[str]], list[str]]
 BindingsOnlyDrawing = Callable[[Any], bool]
 
+# These scenarios read the preprocessed flat NetCDF files.  A station-involved
+# evaluation consumes those files while extracting station series, so there is
+# no valid grid input left for these comparisons.
+_GRID_ONLY_COMPARISONS = frozenset(
+    {
+        "Diff_Plot",
+        "Functional_Response",
+        "Mann_Kendall_Trend_Test",
+        "Mean",
+        "Median",
+        "Max",
+        "Min",
+        "Sum",
+        "Standard_Deviation",
+        "Portrait_Plot_seasonal",
+    }
+)
+
+
+def _grid_only_evaluation_items(
+    comparison_name: str, evaluation_items: list[str], simulation_nml: dict, reference_nml: dict
+) -> list[str]:
+    """Exclude items whose source pair includes station data."""
+    retained = []
+    for item in evaluation_items:
+        sim_sources = simulation_nml["general"][f"{item}_sim_source"]
+        ref_sources = reference_nml["general"][f"{item}_ref_source"]
+        sim_sources = [sim_sources] if isinstance(sim_sources, str) else sim_sources
+        ref_sources = [ref_sources] if isinstance(ref_sources, str) else ref_sources
+        has_station_source = any(
+            simulation_nml[item][f"{source}_data_type"] == "stn" for source in sim_sources
+        ) or any(reference_nml[item][f"{source}_data_type"] == "stn" for source in ref_sources)
+        if has_station_source:
+            logger.info(
+                "Skipping %s for %s: station-involved combinations are not supported",
+                comparison_name,
+                item,
+            )
+        else:
+            retained.append(item)
+    return retained
+
 
 def run_comparison(
     bindings: Any,
@@ -71,6 +113,14 @@ def run_comparison(
 
         for cvar in comparison_vars:
             logger.info("Running %s comparison...", cvar)
+            comparison_items = evaluation_items
+            if cvar in _GRID_ONLY_COMPARISONS:
+                comparison_items = _grid_only_evaluation_items(
+                    cvar, evaluation_items, namelists.simulation, namelists.reference
+                )
+                if not comparison_items:
+                    logger.info("Completed %s comparison (no grid-only evaluation items)", cvar)
+                    continue
             if cvar in basic_methods:
                 method_name = "scenarios_Basic_comparison"
                 fig_opts = dict(comparison_fig.get(cvar) or comparison_fig.get("Basic", {}))
@@ -85,7 +135,7 @@ def run_comparison(
                         basedir,
                         namelists.simulation,
                         namelists.reference,
-                        evaluation_items,
+                        comparison_items,
                         score_vars,
                         metric_vars,
                         fig_opts,

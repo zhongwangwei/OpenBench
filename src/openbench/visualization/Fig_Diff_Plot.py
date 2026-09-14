@@ -310,8 +310,6 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         c=metric,
         cmap=cmap,
         norm=norm,
-        vmin=mticks[0],
-        vmax=mticks[-1],
         marker=option["marker"],
         linewidths=0.5,
         edgecolors="black",
@@ -393,7 +391,7 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         ticks=mticks,
         spacing="uniform",
         label="",
-        extend=option["extend"],
+        extend=extend,
         orientation=option["colorbar_position"],
     )
     cb.solids.set_edgecolor("face")

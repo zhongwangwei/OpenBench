@@ -254,8 +254,8 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                # A table has one display count per column; retain the largest count among statistics.
+                                maximum_counts = None
                                 header_values = ["metric"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
@@ -310,22 +310,20 @@ class LC_groupby(metrics, scores):
                                         ),
                                     )
                                     row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, metric
+                                    if maximum_counts is None:
+                                        maximum_counts = row_counts
                                     else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
-                                                )
+                                        maximum_counts = [
+                                            max(previous, current)
+                                            for previous, current in zip(maximum_counts, row_counts)
+                                        ]
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
+                                if maximum_counts is None:
                                     raise ValueError(
                                         f"{output_file_path}: no statistics available; CSV generation stopped"
                                     )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                rows.append("n_valid\t" + "\t".join(map(str, maximum_counts)) + "\n")
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -363,8 +361,8 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                # A table has one display count per column; retain the largest count among statistics.
+                                maximum_counts = None
                                 header_values = ["score"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
@@ -476,22 +474,20 @@ class LC_groupby(metrics, scores):
                                     if score_weights is not None:
                                         score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
                                     row_counts.append(int(score_mask.sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, score
+                                    if maximum_counts is None:
+                                        maximum_counts = row_counts
                                     else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
-                                                )
+                                        maximum_counts = [
+                                            max(previous, current)
+                                            for previous, current in zip(maximum_counts, row_counts)
+                                        ]
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
+                                if maximum_counts is None:
                                     raise ValueError(
                                         f"{output_file_path2}: no statistics available; CSV generation stopped"
                                     )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                rows.append("n_valid\t" + "\t".join(map(str, maximum_counts)) + "\n")
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores
@@ -612,8 +608,8 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                # A table has one display count per column; retain the largest count among statistics.
+                                maximum_counts = None
                                 header_values = ["metric"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
@@ -668,22 +664,20 @@ class LC_groupby(metrics, scores):
                                         ),
                                     )
                                     row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, metric
+                                    if maximum_counts is None:
+                                        maximum_counts = row_counts
                                     else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
-                                                )
+                                        maximum_counts = [
+                                            max(previous, current)
+                                            for previous, current in zip(maximum_counts, row_counts)
+                                        ]
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
+                                if maximum_counts is None:
                                     raise ValueError(
                                         f"{output_file_path}: no statistics available; CSV generation stopped"
                                     )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                rows.append("n_valid\t" + "\t".join(map(str, maximum_counts)) + "\n")
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -720,8 +714,8 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                # A table has one display count per column; retain the largest count among statistics.
+                                maximum_counts = None
                                 header_values = ["score"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
@@ -830,22 +824,20 @@ class LC_groupby(metrics, scores):
                                     if score_weights is not None:
                                         score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
                                     row_counts.append(int(score_mask.sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, score
+                                    if maximum_counts is None:
+                                        maximum_counts = row_counts
                                     else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
-                                                )
+                                        maximum_counts = [
+                                            max(previous, current)
+                                            for previous, current in zip(maximum_counts, row_counts)
+                                        ]
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
+                                if maximum_counts is None:
                                     raise ValueError(
                                         f"{output_file_path2}: no statistics available; CSV generation stopped"
                                     )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                rows.append("n_valid\t" + "\t".join(map(str, maximum_counts)) + "\n")
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores

@@ -576,7 +576,8 @@ def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_pat
     assert list(proc.station_list.columns) == ["ID", "sim_dir", "ref_dir", "use_syear", "use_eyear"]
 
 
-def test_process_station_data_hard_fails_partial_station_failures(tmp_path):
+@pytest.mark.parametrize("all_failed", [False, True])
+def test_process_station_data_only_fails_when_all_stations_fail(tmp_path, caplog, all_failed):
     from openbench.data.processing import StationDatasetProcessing
 
     proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
@@ -584,10 +585,39 @@ def test_process_station_data_hard_fails_partial_station_failures(tmp_path):
     proc.station_list = pd.DataFrame(
         {"ID": ["A", "B"], "use_syear": [2000, 2000], "use_eyear": [2000, 2000], "sim_dir": ["a.nc", "b.nc"]}
     )
-    proc._make_stn_parallel = lambda station_list, datasource, i: {"ok": i == 0, "station": station_list.iloc[i]["ID"]}
+    proc._make_stn_parallel = lambda station_list, datasource, i: {
+        "ok": i == 0 and not all_failed, "station": station_list.iloc[i]["ID"],
+        "error": "Variable 'qle_cor' not found in station data.",
+    }
 
-    with pytest.raises(RuntimeError, match="1/2 sim station"):
+    if all_failed:
+        with pytest.raises(RuntimeError, match="2/2 sim station"):
+            StationDatasetProcessing.process_station_data(proc, {"datasource": "sim"})
+    else:
         StationDatasetProcessing.process_station_data(proc, {"datasource": "sim"})
+        assert "continuing with 1 successful station" in caplog.text
+    assert "qle_cor" in caplog.text
+
+
+def test_failed_station_removes_stale_output(tmp_path, monkeypatch):
+    from openbench.data.processing import StationDatasetProcessing
+
+    proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    proc.casedir, proc.ref_source, proc.sim_source = str(tmp_path), "Ref", "Sim"
+    proc.item = "Latent_Heat"
+    stations = pd.DataFrame([{"ID": "A", "use_syear": 2000, "use_eyear": 2000, "ref_dir": "a.nc"}])
+    output = tmp_path / "data" / "stn_Ref_Sim" / "Latent_Heat_ref_A_2000_2000.nc"
+    output.parent.mkdir(parents=True)
+    output.write_bytes(b"stale")
+
+    def fail_open(*args, **kwargs):
+        raise ValueError("Variable 'qle_cor' not found in station data.")
+
+    monkeypatch.setattr(xr, "open_dataset", fail_open)
+    result = proc._make_stn_parallel(stations, "ref", 0)
+    assert not result["ok"]
+    assert "qle_cor" in result["error"]
+    assert not output.exists()
 
 
 def test_station_evaluation_hard_fails_when_any_station_skips(tmp_path, monkeypatch):

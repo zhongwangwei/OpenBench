@@ -76,7 +76,7 @@ def make_scenarios_comparison_Whisker_Plot(
     # Create the whisker plot
     bp = ax.boxplot(
         datasets_filtered,
-        labels=[f"{i}" for i in sim_sources],
+        tick_labels=[f"{i}" for i in sim_sources],
         vert=option["vert"],
         showfliers=option["showfliers"],
         flierprops=dict(

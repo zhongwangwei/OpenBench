@@ -157,11 +157,18 @@ def test_producer_metadata_counts_and_values(groupby_case, group, kind, weight):
 
 @pytest.mark.parametrize("group", ["IGBP", "PFT", "CZ"])
 @pytest.mark.parametrize("kind", ["metric", "score"])
-def test_mismatch_stops_csv(groupby_case, group, kind):
+def test_mismatch_uses_largest_n_valid(groupby_case, group, kind):
+    from openbench.visualization.Fig_LC_based_heat_map import _read_metrics_file
+
     case = groupby_case(group, mismatch=True, kind=kind)
-    with pytest.raises(ValueError, match="inconsistent n_valid.*CSV generation stopped"):
-        case.run()
-    assert not case.path.exists()
+    case.run()
+    frame = _read_metrics_file(str(case.path))
+
+    # The CSV has one display count per class, so it records the largest
+    # eligible sample count among its statistic rows.
+    expected_counts = (19, 19, 36) if kind == "metric" else (20, 19, 40)
+    for column, expected_count in zip((*frame.columns[:2], "Overall"), expected_counts):
+        assert frame.attrs["n_valid"][column] == expected_count
 
 
 def test_legacy_reader(tmp_path):

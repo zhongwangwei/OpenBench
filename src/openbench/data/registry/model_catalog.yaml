@@ -59,7 +59,7 @@ BCC_AVIM:
       varunit: '-'
     Surface_Net_LW_Radiation: &id009
       compute: -ds['FIRA']
-      varname: FIRA
+      varname: Surface_Net_LW_Radiation
       varunit: W m-2
     Surface_Soil_Moisture: &id010
       compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06 / 1000.0
@@ -828,7 +828,7 @@ LM4:
           varunit: kg m-2 s-1
     Ecosystem_Respiration:
       compute: "ds['resp'] / 31536000.0 if 'year' in ds['resp'].attrs.get('units', '').lower() else ds['resp']"
-      varname: resp
+      varname: Ecosystem_Respiration
       varunit: kg C m-2 s-1
     Evapotranspiration:
       varname: evap
@@ -839,11 +839,11 @@ LM4:
           convert: value / 2.5e6
     Gross_Primary_Productivity:
       compute: "ds['gpp'] / 31536000.0 if 'year' in ds['gpp'].attrs.get('units', '').lower() else ds['gpp']"
-      varname: gpp
+      varname: Gross_Primary_Productivity
       varunit: kg C m-2 s-1
     Ground_Evaporation:
       compute: "ds['evspsblsoi'] if 'evspsblsoi' in ds else ds['levapg'] + ds['fevapg'] if 'levapg' in ds and 'fevapg' in ds else ds['soil_evap']"
-      varname: evspsblsoi
+      varname: Ground_Evaporation
       varunit: kg m-2 s-1
     Ground_Heat:
       varname: grnd_flux
@@ -860,11 +860,11 @@ LM4:
       varunit: m2 m-2
     Net_Ecosystem_Exchange:
       compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: nbp
+      varname: Net_Ecosystem_Exchange
       varunit: kg C m-2 s-1
     Net_Ecosystem Exchange:
       compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: nbp
+      varname: Exchange
       varunit: kg C m-2 s-1
     Net_Radiation:
       compute: ds['fsw'] + ds['flw']
@@ -896,7 +896,7 @@ LM4:
           varunit: kg m-2
     Soil_Evaporation:
       compute: "ds['evspsblsoi'] if 'evspsblsoi' in ds else ds['levapg'] + ds['fevapg'] if 'levapg' in ds and 'fevapg' in ds else ds['soil_evap']"
-      varname: evspsblsoi
+      varname: Soil_Evaporation
       varunit: kg m-2 s-1
     Subsurface_Runoff:
       varname: soil_rbf
@@ -909,7 +909,7 @@ LM4:
           varunit: K
     Surface_Albedo:
       compute: "ds['albedo_dif'].mean('band') if 'band' in ds['albedo_dif'].dims else ds['albedo_dif']"
-      varname: albedo_dif
+      varname: Surface_Albedo
       varunit: unitless
     Surface_Downward_LW_Radiation:
       varname: lwdn
@@ -969,7 +969,7 @@ LM4:
       varunit: m s-1
     Total_Runoff:
       compute: "ds['runf'] if 'runf' in ds else ds['wroff'] + ds['sroff']"
-      varname: runf
+      varname: Total_Runoff
       varunit: kg m-2 s-1
     Veg_Cover_In_Fraction:
       varname: vegn_cover
@@ -989,7 +989,7 @@ ORCHIDEE:
           varunit: kg m-2 s-1
     Gross_Primary_Productivity:
       compute: "((ds['gpp'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['gpp'].dims else ds['gpp'] * 1000.0 if 'kg' in ds['gpp'].attrs.get('units', '').lower() else ds['gpp'])"
-      varname: gpp
+      varname: Gross_Primary_Productivity
       varunit: gC m-2 s-1
     Ground_Evaporation:
       varname: evapnu
@@ -1005,15 +1005,15 @@ ORCHIDEE:
           varunit: W m-2
     Leaf_Area_Index:
       compute: "(ds['LAImean'] if 'LAImean' in ds else (ds['lai'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['lai'].dims else ds['lai'])"
-      varname: lai
+      varname: Leaf_Area_Index
       varunit: unitless
     Net_Ecosystem_Exchange:
       compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
-      varname: nee
+      varname: Net_Ecosystem_Exchange
       varunit: gC m-2 s-1
     Net_Ecosystem Exchange:
       compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
-      varname: nee
+      varname: Net_Ecosystem
       varunit: gC m-2 s-1
     Net_Radiation:
       varname: netrad
@@ -1059,7 +1059,7 @@ ORCHIDEE:
           varunit: K
     Surface_Albedo:
       compute: "(ds['Albedo'] if 'Albedo' in ds else ds['albedo'].mean('albtyp') if 'albtyp' in ds['albedo'].dims else ds['albedo'])"
-      varname: albedo
+      varname: Surface_Albedo
       varunit: unitless
     Surface_Downward_LW_Radiation:
       varname: lwdown
@@ -1091,7 +1091,7 @@ ORCHIDEE:
     Surface_Soil_Moisture:
       # mrsos is the upper 0.1 m water column (kg m-2); divide by 100 kg m-2.
       compute: "ds['mrsos'] / 100.0"
-      varname: mrsos
+      varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature:
       varname: temp_sol
@@ -1564,7 +1564,7 @@ GLDAS:
       varname: SWE_inst
       varunit: kg m-2
     Surface_Soil_Moisture:
-      varname: SoilMoi0_10cm_inst
+      varname: Surface_Soil_Moisture
       # Noah layer thickness 0.1 m: https://ldas.gsfc.nasa.gov/gldas/specifications
       compute: ds['SoilMoi0_10cm_inst'] / 100.0
       varunit: m3 m-3
@@ -1614,12 +1614,12 @@ GLDAS:
       varname: Tveg_tavg
       varunit: W m-2
     Root_Zone_Soil_Moisture:
-      varname: RootMoist_inst
+      varname: Root_Zone_Soil_Moisture
       # ponytail: user-selected 1 m root zone; adjust depth below for other products.
       compute: ds['RootMoist_inst'] / (1000.0 * 1.0)
       varunit: m3 m-3
     Soil_Moisture_Lev2:
-      varname: SoilMoi10_40cm_inst
+      varname: Soil_Moisture_Lev2
       # Noah layer thickness 0.3 m; divide water mass by density * layer thickness.
       compute: ds['SoilMoi10_40cm_inst'] / 300.0
       varunit: m3 m-3
@@ -3121,11 +3121,11 @@ WRF:
       varunit: Pa
     Surface_Soil_Moisture:
       compute: ds['SMOIS'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['SMOIS'].isel(soil=0)
-      varname: SMOIS
+      varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature:
       compute: ds['TSLB'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['TSLB'].isel(soil=0)
-      varname: TSLB
+      varname: Surface_Soil_Temperature
       varunit: K
     Surface_Specific_Humidity:
       varname: Q2

@@ -107,8 +107,19 @@ class StationProcessingCoreMixin:
             failures = [r for r in results if isinstance(r, dict) and not r.get("ok")]
             if failures:
                 failed_ids = ", ".join(str(r.get("station", "?")) for r in failures[:5])
-                raise RuntimeError(
-                    f"Station processing failed for {len(failures)}/{len(indices)} {data_params['datasource']} station(s): {failed_ids}"
+                for failure in failures:
+                    logging.warning(
+                        "Skipping station %s (%s): %s",
+                        failure.get("station", "?"), data_params["datasource"],
+                        failure.get("error", "station processing failed"),
+                    )
+                if len(failures) == len(indices):
+                    raise RuntimeError(
+                        f"Station processing failed for {len(failures)}/{len(indices)} {data_params['datasource']} station(s): {failed_ids}"
+                )
+                logging.warning(
+                    "Skipped %d/%d %s station(s) during preprocessing; continuing with %d successful station(s)",
+                    len(failures), len(indices), data_params["datasource"], len(indices) - len(failures),
                 )
         finally:
             gc.collect()
@@ -283,6 +294,15 @@ class StationProcessingCoreMixin:
                 delattr(self, f"_fb_convert_{datasource}")
 
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
+        station = station_list.iloc[index]
+        # Remove previous output before processing so a skipped station cannot
+        # be evaluated using stale data from an earlier run.
+        output_file = os.path.join(
+            self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}",
+            f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc",
+        )
+        if os.path.lexists(output_file):
+            os.unlink(output_file)
         try:
             station = station_list.iloc[index]
             start_year = int(station["use_syear"])
