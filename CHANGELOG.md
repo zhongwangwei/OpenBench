@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.0.2] - 2026-09-14
+
+Patch release for station evaluation and comparison reliability.
+
+### Fixed
+- Retain station comparison rows with unavailable values and explicit reasons,
+  without excluding valid grid pairs in mixed grid/station configurations.
+- Distinguish known station data gaps from processing failures; report partial
+  evaluation success and do not cache it as a complete result.
+- Align station timestamps before using configured-resolution normalization,
+  preserving exact non-Gregorian calendar coordinates and singleton time axes.
+- Include station results in Correlation, Basic, seasonal and tail-statistic
+  comparisons and drawing-only runs; preserve undefined statistics as NA.
+- Restrict Relative Score to configured compatible sources, retain undefined
+  station results, and use signed z-score color scales rather than score bounds.
+- Preserve per-statistic valid sample counts in group-by tables and figures.
+- Resolve Diff Plot color-normalization conflicts and retain Matplotlib 3.4+
+  Whisker Plot compatibility; honor station plot limits and neutral NA markers.
+- Fall back directly from missing PLUMBER2 `Qle_cor` / `Qh_cor` to `Qle` / `Qh`,
+  and accept the supported carbon-flux and temperature unit aliases.
+
+### Packaging
+- Advance the GitHub source and Conda recipe to 3.0.2. The source already includes
+  the Windows console fix, so its old Conda backport patch is no longer needed.
+- This GitHub update does not publish a package to PyPI or conda-forge.
+
 ## [3.0.1] - 2026-09-11
 
 Patch release over 3.0.0 for release metadata and CLI output compatibility.

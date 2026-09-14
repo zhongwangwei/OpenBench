@@ -100,7 +100,10 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 ```
 
-Install from PyPI (current release: **3.0.1**):
+The GitHub source version is **3.0.2**. This update does not publish to PyPI;
+the PyPI installation examples below refer to **3.0.1**.
+
+Install from PyPI:
 
 ```bash
 # Default install — fully featured (CLI, statistics, plotting, HTML reports,
@@ -168,7 +171,7 @@ post-release compatibility patches:
 ```bash
 conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build
 conda run -n openbench-build conda build conda/ --python 3.12 --override-channels -c conda-forge --no-anaconda-upload --output-folder ./dist/conda
-conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.1
+conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.2
 conda run -n openbench-conda openbench smoke-test
 ```
 
