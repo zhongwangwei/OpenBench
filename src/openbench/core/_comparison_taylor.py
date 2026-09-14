@@ -17,9 +17,11 @@ from joblib import delayed
 from openbench.core._comparison_helpers import (
     _apply_pairwise_valid_mask,
     _atomic_text_writer,
-    _require_station_diagram_results,
+    _load_station_pair,
+    _station_evaluation_frame,
     _write_csv_atomic,
 )
+from openbench.data.station_missing import StationDataUnavailable
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
 from openbench.util.filenames import join_filename_components
@@ -130,6 +132,22 @@ def _write_taylor_summary(row, stds, cors, RMSs, index: int, summary: TaylorSumm
     RMSs[index] = summary.diagram_crmsd
 
 
+def _station_metadata_for_results(station_list: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
+    """Keep station metadata only before appending freshly computed result columns."""
+    metadata_columns = [
+        "ID",
+        "sim_lat",
+        "sim_lon",
+        "ref_lon",
+        "ref_lat",
+        "lon",
+        "lat",
+        "use_syear",
+        "use_eyear",
+    ]
+    return station_list[[column for column in metadata_columns if column in station_list.columns]]
+
+
 def _comparison_callable(name: str):
     """Resolve monkeypatch-friendly callables from openbench.core.comparison."""
     comparison = sys.modules.get("openbench.core.comparison")
@@ -188,20 +206,9 @@ class TaylorDiagramComparisonMixin:
                                         if ref_varname is None or ref_varname == "":
                                             ref_varname = evaluation_item
                                         if ref_data_type == "stn" or sim_data_type == "stn":
-                                            stnlist = os.path.join(
-                                                casedir,
-                                                "metrics",
-                                                f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                            station_list = _station_evaluation_frame(
+                                                casedir, evaluation_item, ref_source, sim_source, kind="metrics"
                                             )
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            # Keep existing evaluation columns and required station metadata.
-                                            required_cols = {"ID", "use_syear", "use_eyear"}
-                                            missing_cols = required_cols.difference(station_list.columns)
-                                            if missing_cols:
-                                                raise KeyError(
-                                                    f"Station evaluation CSV missing required Taylor columns: {sorted(missing_cols)}"
-                                                )
                                             if ref_source.lower() == "grdc" and {"lon", "lat"}.issubset(
                                                 station_list.columns
                                             ):
@@ -215,64 +222,44 @@ class TaylorDiagramComparisonMixin:
                                                 item,
                                                 sim_varname,
                                                 ref_varname,
-                                                station_list,
-                                                iik,
+                                                station_row,
                                             ):
                                                 try:
-                                                    sim_path = os.path.join(
+                                                    s, o = _load_station_pair(
+                                                        self,
                                                         casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+                                                        item,
+                                                        ref_source,
+                                                        sim_source,
+                                                        station_row,
+                                                        ref_varname,
+                                                        sim_varname,
                                                     )
-                                                    ref_path = os.path.join(
-                                                        casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
-                                                    )
-
-                                                    with xr.open_dataset(sim_path) as sim_ds:
-                                                        s = select_data_array(sim_ds, sim_varname).squeeze().load()
-                                                    with xr.open_dataset(ref_path) as ref_ds:
-                                                        o = select_data_array(ref_ds, ref_varname).squeeze().load()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
-
-                                                    if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(
-                                                        s["time"].values, o["time"].values
-                                                    ):
-                                                        s, o = xr.align(s, o, join="inner")
-                                                    s, o = _apply_pairwise_valid_mask(s, o)
-                                                    row = {}
-                                                    try:
-                                                        row["std_s"] = _taylor_standard_deviation(s).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"std_s calculation failed: {e}")
-                                                        row["std_s"] = np.nan
-                                                    try:
-                                                        row["std_o"] = _taylor_standard_deviation(o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"std_o calculation failed: {e}")
-                                                        row["std_o"] = np.nan
-                                                    try:
-                                                        row["CRMSD"] = self.CRMSD(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"CRMSD calculation failed: {e}")
-                                                        row["CRMSD"] = np.nan
-                                                    try:
-                                                        row["correlation"] = self.correlation(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"correlation calculation failed: {e}")
-                                                        row["correlation"] = np.nan
-                                                    return row
-                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
-                                                    logging.debug(
-                                                        f"Station {station_list['ID'][iik]} skipped in Taylor: {e}"
-                                                    )
-                                                    return None
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
+                                                    result = {
+                                                        "std_s": _to_scalar_float(_taylor_standard_deviation(s)),
+                                                        "std_o": _to_scalar_float(_taylor_standard_deviation(o)),
+                                                        "CRMSD": _to_scalar_float(self.CRMSD(s, o)),
+                                                        "correlation": _to_scalar_float(self.correlation(s, o)),
+                                                    }
+                                                    if not np.isfinite(list(result.values())).any():
+                                                        result.update(
+                                                            {
+                                                                "status": "unavailable",
+                                                                "reason": "computed Taylor metrics are undefined",
+                                                            }
+                                                        )
+                                                    else:
+                                                        result.update({"status": "ok", "reason": ""})
+                                                    return result
+                                                except StationDataUnavailable as exc:
+                                                    return {
+                                                        "std_s": np.nan,
+                                                        "std_o": np.nan,
+                                                        "CRMSD": np.nan,
+                                                        "correlation": np.nan,
+                                                        "status": "unavailable",
+                                                        "reason": str(exc),
+                                                    }
 
                                             results = self._run_parallel_or_serial(
                                                 delayed(_make_validation_parallel)(
@@ -282,35 +269,27 @@ class TaylorDiagramComparisonMixin:
                                                     evaluation_item,
                                                     sim_varname,
                                                     ref_varname,
-                                                    station_list,
-                                                    iik,
+                                                    station_row,
                                                 )
-                                                for iik in range(len(station_list["ID"]))
+                                                for _, station_row in station_list.iterrows()
                                             )
 
-                                            # Replace None results with empty dicts so pd.DataFrame
-                                            # produces zero-length rows that align by ID rather than
-                                            # 0-column placeholder rows that break column alignment
-                                            # in the subsequent concat.
-                                            results_clean = [r if isinstance(r, dict) else {} for r in results]
-                                            _require_station_diagram_results(
-                                                results_clean,
-                                                diagram="Taylor",
-                                                item=evaluation_item,
-                                                ref_source=ref_source,
-                                                sim_source=sim_source,
+                                            result_frame = pd.DataFrame(results)
+                                            station_list = pd.concat(
+                                                [
+                                                    _station_metadata_for_results(station_list, result_frame),
+                                                    result_frame,
+                                                ],
+                                                axis=1,
                                             )
-                                            results_df = pd.DataFrame(results_clean, index=station_list.index)
-                                            station_list = pd.concat([station_list, results_df], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
 
                                             output_stn_path = os.path.join(
                                                 dir_path,
                                                 f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
                                             )
-                                            _write_csv_atomic(station_list, output_stn_path)
+                                            _write_csv_atomic(station_list, output_stn_path, index=False)
 
-                                            station_list = pd.read_csv(output_stn_path, header=0)
                                             std_sim = station_list["std_s"].mean(skipna=True)
                                             cor_sim = station_list["correlation"].mean(skipna=True)
                                             std_ref = station_list["std_o"].mean(skipna=True)

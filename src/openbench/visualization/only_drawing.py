@@ -7,6 +7,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.core._comparison_helpers import (
+    _comparison_sim_groups,
+    _station_evaluation_frame,
+    _STATION_STATISTIC_COLUMNS,
+    _station_statistic_sources,
+)
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
@@ -271,6 +277,20 @@ def _require_csv_finite(path: str, value_column: str, *, required_columns: list[
     columns = [value_column, *(required_columns or [])]
     df = _require_csv_columns(path, columns)
     _require_finite_values(df[value_column].values, path=path, variable=value_column)
+
+
+def _require_station_csv_values(path, value_column, *, required_columns=None):
+    frame = _require_csv_columns(path, [value_column, *(required_columns or [])])
+    if frame.empty:
+        raise ValueError(f"only_drawing input has no station rows: {path}")
+    row_status = frame.get("status", pd.Series("", index=frame.index))
+    status = frame.get(f"status_{value_column}", row_status).fillna(row_status)
+    recorded = status.eq("unavailable")
+    if frame.loc[recorded, value_column].notna().any():
+        raise ValueError(f"only_drawing unavailable station rows contain non-missing {value_column}: {path}")
+    values = frame.loc[~recorded, value_column]
+    if len(values):
+        _require_finite_values(values, path=path, variable=value_column)
 
 
 def _require_netcdf_finite(path: str, variable: str, *, producer: str = "comparison") -> None:
@@ -846,7 +866,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = pd.read_csv(file_path, sep=",", header=0)
+                                                df = _station_evaluation_frame(
+                                                    basedir, evaluation_item, ref_source, sim_source, "scores"
+                                                )
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
@@ -861,7 +883,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
                                             datasets_filtered.append(
-                                                data[~np.isnan(data)]
+                                                data[np.isfinite(data)]
                                             )  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
@@ -911,7 +933,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = pd.read_csv(file_path, sep=",", header=0)
+                                                df = _station_evaluation_frame(
+                                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
+                                                )
                                                 data = df[metric].values
                                             else:
                                                 file_path = os.path.join(
@@ -929,7 +953,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                             if metric == "percent_bias":
                                                 data = data[(data >= -100) & (data <= 100)]
                                             datasets_filtered.append(
-                                                data[~np.isnan(data)]
+                                                data[np.isfinite(data)]
                                             )  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
@@ -993,18 +1017,35 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                     output_file_path = output_file_path_txt
             output_file_path = _require_only_drawing_file(output_file_path, producer="comparison")
             df = _require_csv_columns(output_file_path, ["Item", "Reference", "Simulation"])
+            station_rows = pd.Series(
+                [
+                    "stn"
+                    in (
+                        ref_nml.get(row.Item, {}).get(f"{row.Reference}_data_type"),
+                        sim_nml.get(row.Item, {}).get(f"{row.Simulation}_data_type"),
+                    )
+                    for row in df.itertuples()
+                ],
+                index=df.index,
+            )
             for metric in metrics:
                 for season in ["DJF", "MAM", "JJA", "SON"]:
                     column = f"{metric}_{season}"
                     if column in df.columns:
-                        _require_finite_values(df[column].values, path=output_file_path, variable=column)
+                        if not station_rows.all():
+                            _require_finite_values(
+                                df.loc[~station_rows, column].values, path=output_file_path, variable=column
+                            )
                     else:
                         raise KeyError(f"only_drawing input missing columns ['{column}']: {output_file_path}")
             for score in scores:
                 for season in ["DJF", "MAM", "JJA", "SON"]:
                     column = f"{score}_{season}"
                     if column in df.columns:
-                        _require_finite_values(df[column].values, path=output_file_path, variable=column)
+                        if not station_rows.all():
+                            _require_finite_values(
+                                df.loc[~station_rows, column].values, path=output_file_path, variable=column
+                            )
                     else:
                         raise KeyError(f"only_drawing input missing columns ['{column}']: {output_file_path}")
             make_scenarios_comparison_Portrait_Plot_seasonal(
@@ -1058,7 +1099,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = pd.read_csv(file_path, sep=",", header=0)
+                                                df = _station_evaluation_frame(
+                                                    basedir, evaluation_item, ref_source, sim_source, "scores"
+                                                )
                                                 df = Convert_Type.convert_Frame(df)
                                                 data = df[score].values
                                             else:
@@ -1075,7 +1118,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 ds = Convert_Type.convert_nc(ds)
                                                 data = ds[score].values
                                             datasets_filtered.append(
-                                                data[~np.isnan(data)]
+                                                data[np.isfinite(data)]
                                             )  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
@@ -1125,7 +1168,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 )
                                                 if not os.path.exists(file_path):
                                                     _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = pd.read_csv(file_path, sep=",", header=0)
+                                                df = _station_evaluation_frame(
+                                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
+                                                )
                                                 data = df[metric].values
                                             else:
                                                 file_path = os.path.join(
@@ -1145,7 +1190,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                             if metric == "percent_bias":
                                                 data = data[(data >= -100) & (data <= 100)]
                                             datasets_filtered.append(
-                                                data[~np.isnan(data)]
+                                                data[np.isfinite(data)]
                                             )  # Filter out NaNs and append
                                         finally:
                                             gc.collect()  # Clean up memory after processing each simulation source
@@ -1307,7 +1352,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             )
                             if not os.path.exists(file_path):
                                 _require_only_drawing_file(file_path, producer="evaluation")
-                            df = pd.read_csv(file_path, sep=",", header=0)
+                            df = _station_evaluation_frame(basedir, evaluation_item, ref_source, sim_source, "scores")
                             df = Convert_Type.convert_Frame(df)
                             data = df[score].values
                         else:
@@ -1321,7 +1366,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                 ds = _ds.load()
                             ds = Convert_Type.convert_nc(ds)
                             data = ds[score].values
-                        datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
+                        datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
 
                     try:
                         make_scenarios_comparison_Ridgeline_Plot(
@@ -1359,7 +1404,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             )
                             if not os.path.exists(file_path):
                                 _require_only_drawing_file(file_path, producer="evaluation")
-                            df = pd.read_csv(file_path, sep=",", header=0)
+                            df = _station_evaluation_frame(basedir, evaluation_item, ref_source, sim_source, "metrics")
                             data = df[metric].values
                         else:
                             file_path = os.path.join(
@@ -1375,7 +1420,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         data = data[~np.isinf(data)]
                         if metric == "percent_bias":
                             data = data[(data >= -100) & (data <= 100)]
-                        datasets_filtered.append(data[~np.isnan(data)])  # Filter out NaNs and append
+                        datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
 
                     try:
                         make_scenarios_comparison_Ridgeline_Plot(
@@ -1444,60 +1489,35 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 ref_sources = [ref_sources]
 
             for ref_source in ref_sources:
-                data_types = []
-                for sim_source in sim_sources:
-                    sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                    data_types.append(sim_data_type)
-
-                if "stn" in data_types and any(dt != "stn" for dt in data_types):
-                    raise _unsupported_only_drawing(
-                        figure="Diff Plot",
-                        reason=(
-                            f"{evaluation_item} mixes station and gridded simulations; "
-                            "all simulation sources must use the same data type"
-                        ),
-                    )
-
-                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                if ref_data_type == "stn":
-                    for item_type in [*metrics, *scores]:
-                        for sim_source in sim_sources:
-                            anomaly_path = _require_only_drawing_file(
-                                _diff_station_anomaly_path(
-                                    dir_path, evaluation_item, ref_source, sim_source, item_type
-                                ),
-                                producer="comparison",
-                                fallback_paths=[
-                                    _legacy_diff_station_anomaly_path(
+                groups = _comparison_sim_groups(evaluation_item, sim_sources, ref_source, sim_nml, ref_nml)
+                for ref_data_type, group_sources in groups.items():
+                    if ref_data_type == "stn":
+                        for item_type in [*metrics, *scores]:
+                            for sim_source in group_sources:
+                                anomaly_path = _require_only_drawing_file(
+                                    _diff_station_anomaly_path(
                                         dir_path, evaluation_item, ref_source, sim_source, item_type
-                                    )
-                                ],
-                            )
-                            _require_csv_finite(
-                                anomaly_path,
-                                f"{item_type}_anomaly",
-                                required_columns=["ID", "lat", "lon"],
-                            )
+                                    ),
+                                    producer="comparison",
+                                    fallback_paths=[
+                                        _legacy_diff_station_anomaly_path(
+                                            dir_path, evaluation_item, ref_source, sim_source, item_type
+                                        )
+                                    ],
+                                )
+                                _require_station_csv_values(
+                                    anomaly_path,
+                                    f"{item_type}_anomaly",
+                                    required_columns=["ID", "lat", "lon"],
+                                )
 
-                        if len(sim_sources) >= 2:
-                            for i, sim1 in enumerate(sim_sources):
-                                sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
-                                for sim2 in sim_sources[i + 1 :]:
-                                    sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
-                                    diff_path = _require_only_drawing_file(
-                                        _diff_station_difference_path(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim1,
-                                            sim_varname_1,
-                                            sim2,
-                                            sim_varname_2,
-                                            item_type,
-                                        ),
-                                        producer="comparison",
-                                        fallback_paths=[
-                                            _legacy_diff_station_difference_path(
+                            if len(group_sources) >= 2:
+                                for i, sim1 in enumerate(group_sources):
+                                    sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
+                                    for sim2 in group_sources[i + 1 :]:
+                                        sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
+                                        diff_path = _require_only_drawing_file(
+                                            _diff_station_difference_path(
                                                 dir_path,
                                                 evaluation_item,
                                                 ref_source,
@@ -1506,55 +1526,69 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                                 sim2,
                                                 sim_varname_2,
                                                 item_type,
-                                            )
-                                        ],
-                                    )
-                                    _require_csv_finite(
-                                        diff_path,
-                                        f"{item_type}_diff",
-                                        required_columns=["ID", "lat", "lon"],
-                                    )
-                else:
-                    for item_type in [*metrics, *scores]:
-                        for sim_source in sim_sources:
-                            anomaly_path = _require_only_drawing_file(
-                                _diff_grid_anomaly_path(dir_path, evaluation_item, ref_source, sim_source, item_type),
-                                producer="comparison",
-                                fallback_paths=[
-                                    _legacy_diff_grid_anomaly_path(
+                                            ),
+                                            producer="comparison",
+                                            fallback_paths=[
+                                                _legacy_diff_station_difference_path(
+                                                    dir_path,
+                                                    evaluation_item,
+                                                    ref_source,
+                                                    sim1,
+                                                    sim_varname_1,
+                                                    sim2,
+                                                    sim_varname_2,
+                                                    item_type,
+                                                )
+                                            ],
+                                        )
+                                        _require_station_csv_values(
+                                            diff_path,
+                                            f"{item_type}_diff",
+                                            required_columns=["ID", "lat", "lon"],
+                                        )
+                    else:
+                        for item_type in [*metrics, *scores]:
+                            for sim_source in group_sources:
+                                anomaly_path = _require_only_drawing_file(
+                                    _diff_grid_anomaly_path(
                                         dir_path, evaluation_item, ref_source, sim_source, item_type
-                                    )
-                                ],
-                            )
-                            _require_netcdf_finite(anomaly_path, f"{item_type}_anomaly")
+                                    ),
+                                    producer="comparison",
+                                    fallback_paths=[
+                                        _legacy_diff_grid_anomaly_path(
+                                            dir_path, evaluation_item, ref_source, sim_source, item_type
+                                        )
+                                    ],
+                                )
+                                _require_netcdf_finite(anomaly_path, f"{item_type}_anomaly")
 
-                        if len(sim_sources) >= 2:
-                            for i, sim1 in enumerate(sim_sources):
-                                for sim2 in sim_sources[i + 1 :]:
-                                    diff_path = _require_only_drawing_file(
-                                        _diff_grid_difference_path(
-                                            dir_path, evaluation_item, ref_source, sim1, sim2, item_type
-                                        ),
-                                        producer="comparison",
-                                        fallback_paths=[
-                                            _legacy_diff_grid_difference_path(
+                            if len(group_sources) >= 2:
+                                for i, sim1 in enumerate(group_sources):
+                                    for sim2 in group_sources[i + 1 :]:
+                                        diff_path = _require_only_drawing_file(
+                                            _diff_grid_difference_path(
                                                 dir_path, evaluation_item, ref_source, sim1, sim2, item_type
-                                            )
-                                        ],
-                                    )
-                                    _require_netcdf_finite(diff_path, f"{item_type}_diff")
-                make_scenarios_comparison_Diff_Plot(
-                    dir_path,
-                    metrics,
-                    scores,
-                    evaluation_item,
-                    ref_source,
-                    sim_sources,
-                    self.general_config,
-                    sim_nml,
-                    ref_data_type,
-                    option,
-                )
+                                            ),
+                                            producer="comparison",
+                                            fallback_paths=[
+                                                _legacy_diff_grid_difference_path(
+                                                    dir_path, evaluation_item, ref_source, sim1, sim2, item_type
+                                                )
+                                            ],
+                                        )
+                                        _require_netcdf_finite(diff_path, f"{item_type}_diff")
+                    make_scenarios_comparison_Diff_Plot(
+                        dir_path,
+                        metrics,
+                        scores,
+                        evaluation_item,
+                        ref_source,
+                        group_sources,
+                        self.general_config,
+                        sim_nml,
+                        ref_data_type,
+                        option,
+                    )
 
     def scenarios_Basic_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         """
@@ -1578,38 +1612,43 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 ref_sources = [ref_sources]
 
             for ref_source in ref_sources:
-                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                 ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
 
-                if ref_data_type == "stn":
+                groups = _comparison_sim_groups(evaluation_item, sim_sources, ref_source, sim_nml, ref_nml)
+                if "stn" in groups:
                     try:
-                        for sim_source in sim_sources:
+                        for sim_source in groups["stn"]:
                             output_path = (
                                 f"{dir_path}/{evaluation_item}_stn_{ref_source}_{sim_source}_{basic_method}.csv"
                             )
                             output_path = _require_only_drawing_file(output_path, producer="comparison")
                             if basic_method != "nSpatialScore":
-                                _require_csv_finite(output_path, "ref_value", required_columns=["sim_value"])
-                                _require_csv_finite(output_path, "sim_value", required_columns=["ref_value"])
+                                _require_station_csv_values(output_path, "ref_value", required_columns=["sim_value"])
+                                _require_station_csv_values(output_path, "sim_value", required_columns=["ref_value"])
                             make_stn_plot_index(
                                 output_path, basic_method, self.main_nml["general"], (ref_source, sim_source), option
                             )
                     except Exception as e:
                         logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                         raise
-                else:
+                if "grid" in groups:
                     try:
-                        output_path = os.path.join(
-                            dir_path, f"{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc"
+                        paired_sims = (
+                            groups["grid"] if getattr(self, "time_alignment", "intersection") == "per_pair" else [None]
                         )
-                        # Skip global map plotting for nSpatialScore since it's constant globally
-                        if basic_method != "nSpatialScore":
-                            _require_netcdf_finite(output_path, basic_method)
-                            make_geo_plot_index(output_path, basic_method, self.main_nml["general"], option)
-                        else:
-                            _skip_optional_only_drawing(
-                                figure="Basic", reason=f"{basic_method} is a constant global value"
-                            )
+                        for paired_sim in paired_sims:
+                            filename = f"{evaluation_item}_ref_{ref_source}_{ref_varname}_{basic_method}.nc"
+                            if paired_sim is not None:
+                                filename = f"{evaluation_item}_ref_{ref_source}_sim_{paired_sim}_{ref_varname}_{basic_method}.nc"
+                            output_path = os.path.join(dir_path, filename)
+                            # Skip global map plotting for nSpatialScore since it's constant globally
+                            if basic_method != "nSpatialScore":
+                                _require_netcdf_finite(output_path, basic_method)
+                                make_geo_plot_index(output_path, basic_method, self.main_nml["general"], option)
+                            else:
+                                _skip_optional_only_drawing(
+                                    figure="Basic", reason=f"{basic_method} is a constant global value"
+                                )
                     except Exception as e:
                         logging.error(f"Error processing Grid {basic_method} calculations for {ref_source}: {e}")
                         raise
@@ -1623,7 +1662,9 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                 sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                if sim_data_type != "stn":
+                if sim_data_type != "stn" and any(
+                    ref_nml[evaluation_item][f"{source}_data_type"] != "stn" for source in ref_sources
+                ):
                     try:
                         output_path = os.path.join(
                             dir_path, f"{evaluation_item}_sim_{sim_source}_{sim_varname}_{basic_method}.nc"
@@ -1640,209 +1681,102 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         logging.error(f"Error processing station {basic_method} calculations for {sim_source}: {e}")
                         raise
 
+    def _draw_station_statistic(self, path, method_name, ref_source, sim_source, option):
+        path = _require_only_drawing_file(path, producer="comparison")
+        columns = _STATION_STATISTIC_COLUMNS[method_name]
+        for column in columns:
+            _require_station_csv_values(path, column, required_columns=["ID"])
+        make_stn_plot_index(
+            path,
+            method_name,
+            self.main_nml["general"],
+            _station_statistic_sources(columns, ref_source, sim_source),
+            option,
+            value_columns=columns,
+        )
+
+    def _draw_source_statistic(self, method_name, basedir, sim_nml, ref_nml, evaluation_items, option):
+        dir_path = os.path.join(basedir, "comparisons", method_name)
+        for item in evaluation_items:
+            sims = sim_nml["general"][f"{item}_sim_source"]
+            refs = ref_nml["general"][f"{item}_ref_source"]
+            sims = [sims] if isinstance(sims, str) else sims
+            refs = [refs] if isinstance(refs, str) else refs
+            grid_sims = [sim for sim in sims if sim_nml[item][f"{sim}_data_type"] != "stn"]
+            grid_refs = [ref for ref in refs if ref_nml[item][f"{ref}_data_type"] != "stn"]
+            for ref in refs:
+                groups = _comparison_sim_groups(item, sims, ref, sim_nml, ref_nml)
+                for sim in groups.get("stn", []):
+                    self._draw_station_statistic(
+                        os.path.join(dir_path, f"{method_name}_{item}_stn_{ref}_{sim}.csv"),
+                        method_name,
+                        ref,
+                        sim,
+                        option,
+                    )
+            grid_outputs = []
+            if grid_refs:
+                for sim in grid_sims:
+                    varname = sim_nml[item][f"{sim}_varname"]
+                    grid_outputs.append((f"{method_name}_{item}_sim_{sim}_{varname}.nc", sim))
+            if grid_sims:
+                for ref in grid_refs:
+                    varname = ref_nml[item][f"{ref}_varname"]
+                    pairs = (
+                        grid_sims
+                        if getattr(self, "time_alignment", "intersection") == "per_pair"
+                        and getattr(self, "unified_mask", True)
+                        else [None]
+                    )
+                    for sim in pairs:
+                        pair_suffix = f"_sim_{sim}" if sim is not None else ""
+                        grid_outputs.append((f"{method_name}_{item}_ref_{ref}{pair_suffix}_{varname}.nc", ref))
+            for filename, source in grid_outputs:
+                path = os.path.join(dir_path, filename)
+                if method_name == "Mann_Kendall_Trend_Test":
+                    path = _require_netcdf_variables(
+                        path, ["tau", "trend", "p_value"], finite_variables=["tau", "trend"], producer="statistics"
+                    )
+                    make_Mann_Kendall_Trend_Test(path, method_name, source, self.main_nml["general"], option)
+                else:
+                    _require_netcdf_finite(path, method_name, producer="statistics")
+                    make_Standard_Deviation(path, method_name, source, self.main_nml["general"], option)
+
     def scenarios_Mann_Kendall_Trend_Test_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
-        method_name = "Mann_Kendall_Trend_Test"
-        getattr(self, f"stat_{method_name.lower()}", None)
-        dir_path = os.path.join(basedir, "comparisons", "Mann_Kendall_Trend_Test")
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-
-        self.compare_nml["Mann_Kendall_Trend_Test"] = {}
-        self.compare_nml["Mann_Kendall_Trend_Test"]["significance_level"] = option["significance_level"]
-        for evaluation_item in evaluation_items:
-            sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-            ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-
-            if isinstance(sim_sources, str):
-                sim_sources = [sim_sources]
-            if isinstance(ref_sources, str):
-                ref_sources = [ref_sources]
-
-            for sim_source in sim_sources:
-                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-
-                if sim_data_type != "stn":
-                    try:
-                        output_file = os.path.join(
-                            dir_path, f"Mann_Kendall_Trend_Test_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
-                        )
-                        output_file = _require_netcdf_variables(
-                            output_file,
-                            ["tau", "trend", "p_value"],
-                            finite_variables=["tau", "trend"],
-                            producer="statistics",
-                        )
-                        make_Mann_Kendall_Trend_Test(
-                            output_file, method_name, sim_source, self.main_nml["general"], option
-                        )
-                    except FileNotFoundError:
-                        raise
-                    except Exception as e:
-                        logging.error(
-                            f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}"
-                        )
-                        raise
-            for ref_source in ref_sources:
-                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                if ref_data_type != "stn":
-                    try:
-                        output_file = os.path.join(
-                            dir_path, f"Mann_Kendall_Trend_Test_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                        )
-                        output_file = _require_netcdf_variables(
-                            output_file,
-                            ["tau", "trend", "p_value"],
-                            finite_variables=["tau", "trend"],
-                            producer="statistics",
-                        )
-                        make_Mann_Kendall_Trend_Test(
-                            output_file, method_name, ref_source, self.main_nml["general"], option
-                        )
-                    except FileNotFoundError:
-                        raise
-                    except Exception as e:
-                        logging.error(
-                            f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}"
-                        )
-                        raise
+        self._draw_source_statistic("Mann_Kendall_Trend_Test", basedir, sim_nml, ref_nml, evaluation_items, option)
 
     def scenarios_Standard_Deviation_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
-        try:
-            method_name = "Standard_Deviation"
-            getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, "comparisons", method_name)
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-
-            for evaluation_item in evaluation_items:
-                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-
-                if isinstance(sim_sources, str):
-                    sim_sources = [sim_sources]
-                if isinstance(ref_sources, str):
-                    ref_sources = [ref_sources]
-
-                for sim_source in sim_sources:
-                    try:
-                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                        sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-
-                        if sim_data_type != "stn":
-                            output_file = os.path.join(
-                                dir_path, f"{method_name}_{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
-                            )
-
-                            _require_netcdf_finite(output_file, method_name, producer="statistics")
-                            make_Standard_Deviation(
-                                output_file, method_name, sim_source, self.main_nml["general"], option
-                            )
-                        else:
-                            logging.info(
-                                f"Skipping {method_name} drawing for {evaluation_item} {sim_source}: station data type."
-                            )
-                    except FileNotFoundError:
-                        raise
-                    except Exception as e:
-                        logging.error(
-                            f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}"
-                        )
-                        raise
-                    finally:
-                        gc.collect()
-
-                for ref_source in ref_sources:
-                    try:
-                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                        ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-
-                        if ref_data_type != "stn":
-                            output_file = os.path.join(
-                                dir_path, f"{method_name}_{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
-                            )
-
-                            _require_netcdf_finite(output_file, method_name, producer="statistics")
-                            make_Standard_Deviation(
-                                output_file, method_name, ref_source, self.main_nml["general"], option
-                            )
-                        else:
-                            logging.info(
-                                f"Skipping {method_name} drawing for {evaluation_item} {ref_source}: station data type."
-                            )
-                    except FileNotFoundError:
-                        raise
-                    except Exception as e:
-                        logging.error(
-                            f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}"
-                        )
-                        raise
-                    finally:
-                        gc.collect()
-        finally:
-            gc.collect()
+        self._draw_source_statistic("Standard_Deviation", basedir, sim_nml, ref_nml, evaluation_items, option)
 
     def scenarios_Functional_Response_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
-        self.compare_nml["Functional_Response"] = {}
-        self.compare_nml["Functional_Response"]["nbins"] = option["nbins"]
-        try:
-            method_name = "Functional_Response"
-            getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, "comparisons", method_name)
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-
-            for evaluation_item in evaluation_items:
-                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-
-                if isinstance(sim_sources, str):
-                    sim_sources = [sim_sources]
-                if isinstance(ref_sources, str):
-                    ref_sources = [ref_sources]
-
-                for ref_source in ref_sources:
-                    try:
-                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                        ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-
-                        if ref_data_type != "stn":
-                            for sim_source in sim_sources:
-                                try:
-                                    sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                                    sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                    if sim_data_type != "stn":
-                                        output_file = os.path.join(
-                                            dir_path,
-                                            f"{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc",
-                                        )
-
-                                        _require_netcdf_finite(
-                                            output_file, "functional_response_score", producer="statistics"
-                                        )
-                                        make_Functional_Response(
-                                            output_file, method_name, sim_source, self.main_nml["general"], option
-                                        )
-                                except FileNotFoundError:
-                                    raise
-                                except Exception as e:
-                                    logging.error(
-                                        f"Error processing {method_name} calculations for {evaluation_item} {ref_source} {sim_source}: {e}"
-                                    )
-                                    raise
-                                finally:
-                                    gc.collect()
-                    finally:
-                        gc.collect()
-        finally:
-            gc.collect()
+        method_name = "Functional_Response"
+        dir_path = os.path.join(basedir, "comparisons", method_name)
+        for item in evaluation_items:
+            sims = sim_nml["general"][f"{item}_sim_source"]
+            refs = ref_nml["general"][f"{item}_ref_source"]
+            sims = [sims] if isinstance(sims, str) else sims
+            refs = [refs] if isinstance(refs, str) else refs
+            for ref in refs:
+                for kind, sources in _comparison_sim_groups(item, sims, ref, sim_nml, ref_nml).items():
+                    for sim in sources:
+                        if kind == "stn":
+                            self._draw_station_statistic(
+                                os.path.join(dir_path, f"{method_name}_{item}_stn_{ref}_{sim}.csv"),
+                                method_name,
+                                ref,
+                                sim,
+                                option,
+                            )
+                        else:
+                            path = os.path.join(dir_path, f"{method_name}_{item}_ref_{ref}_sim_{sim}.nc")
+                            _require_netcdf_finite(path, "functional_response_score", producer="statistics")
+                            make_Functional_Response(path, method_name, sim, self.main_nml["general"], option)
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         try:
@@ -1857,47 +1791,29 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Clean up memory after processing
 
     def scenarios_Correlation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
-        try:
-            method_name = "Correlation"
-            getattr(self, f"stat_{method_name.lower()}", None)
-            dir_path = os.path.join(basedir, "comparisons", method_name)
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-
-            for evaluation_item in evaluation_items:
-                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                if isinstance(sim_sources, str):
-                    sim_sources = [sim_sources]
-                if len(sim_sources) < 2:
-                    _skip_unrequested_only_drawing(
-                        figure="Correlation", reason=f"{evaluation_item} has fewer than two simulation sources"
-                    )
-                    continue
-
-                for i, sim1 in enumerate(sim_sources):
-                    for j, sim2 in enumerate(sim_sources[i + 1 :], i + 1):
-                        sim_data_type1 = sim_nml[f"{evaluation_item}"][f"{sim1}_data_type"]
-                        sim_data_type2 = sim_nml[f"{evaluation_item}"][f"{sim2}_data_type"]
-                        if sim_data_type1 == "stn" or sim_data_type2 == "stn":
-                            raise _unsupported_only_drawing(
-                                figure="Correlation",
-                                reason=f"{evaluation_item} uses station data; all simulation sources must be gridded",
+        method_name = "Correlation"
+        directory = os.path.join(basedir, "comparisons", method_name)
+        for item in evaluation_items:
+            sims = sim_nml["general"][f"{item}_sim_source"]
+            refs = ref_nml.get("general", {}).get(f"{item}_ref_source", [])
+            sims = [sims] if isinstance(sims, str) else sims
+            refs = [refs] if isinstance(refs, str) else refs
+            grid_refs = [ref for ref in refs if ref_nml[item][f"{ref}_data_type"] != "stn"]
+            for i, sim1 in enumerate(sims):
+                for sim2 in sims[i + 1 :]:
+                    station_sim = "stn" in (sim_nml[item][f"{sim1}_data_type"], sim_nml[item][f"{sim2}_data_type"])
+                    if station_sim and not refs:
+                        raise ValueError("Station Correlation requires a reference source to identify station support")
+                    if not station_sim and (grid_refs or not refs):
+                        path = os.path.join(directory, f"{method_name}_{item}_{sim1}_and_{sim2}.nc")
+                        _require_netcdf_finite(path, method_name, producer="statistics")
+                        make_Correlation(path, method_name, self.main_nml["general"], option)
+                    for ref in refs:
+                        if station_sim or ref_nml[item][f"{ref}_data_type"] == "stn":
+                            self._draw_station_statistic(
+                                os.path.join(directory, f"{method_name}_{item}_stn_{ref}_{sim1}_and_{sim2}.csv"),
+                                method_name,
+                                sim1,
+                                sim2,
+                                option,
                             )
-
-                        try:
-                            output_file = os.path.join(
-                                dir_path, f"{method_name}_{evaluation_item}_{sim1}_and_{sim2}.nc"
-                            )
-                            _require_netcdf_finite(output_file, method_name, producer="statistics")
-                            make_Correlation(output_file, method_name, self.main_nml["general"], option)
-                        except FileNotFoundError:
-                            raise
-                        except Exception as e:
-                            logging.error(
-                                f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}"
-                            )
-                            raise
-                        finally:
-                            gc.collect()
-        finally:
-            gc.collect()

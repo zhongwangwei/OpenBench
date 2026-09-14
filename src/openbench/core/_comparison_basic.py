@@ -11,9 +11,14 @@ import pandas as pd
 import xarray as xr
 from joblib import delayed
 
-from openbench.core._comparison_helpers import _apply_pairwise_valid_mask, _require_stat_method, _write_csv_atomic
+from openbench.core._comparison_helpers import (
+    _load_station_pair,
+    _station_evaluation_frame,
+    _require_stat_method,
+    _write_csv_atomic,
+)
+from openbench.data.station_missing import StationDataUnavailable
 from openbench.util.converttype import Convert_Type
-from openbench.util.names import select_data_array
 
 
 def _comparison_callable(name: str):
@@ -40,46 +45,34 @@ class BasicComparisonMixin:
         def calculate_basic_parallel(
             station_list, iik, evaluation_item, ref_source, sim_source, ref_varname, sim_varname
         ):
-            sim_filename = f"{evaluation_item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"
-            ref_filename = f"{evaluation_item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc"
-
-            sim_path = os.path.join(basedir, "data", f"stn_{ref_source}_{sim_source}", sim_filename)
-            ref_path = os.path.join(basedir, "data", f"stn_{ref_source}_{sim_source}", ref_filename)
-
-            with xr.open_dataset(sim_path) as sim_ds:
-                s = select_data_array(sim_ds, sim_varname).squeeze().load()
-            with xr.open_dataset(ref_path) as ref_ds:
-                o = select_data_array(ref_ds, ref_varname).squeeze().load()
-            o = Convert_Type.convert_nc(o)
-            s = Convert_Type.convert_nc(s)
-
-            # Align time axes safely. The previous code did an unconditional
-
-            # s["time"] = o["time"], which (a) raises when lengths differ and
-
-            # (b) silently pairs values against wrong timestamps when lengths
-
-            # match but coords are offset. Use inner-join intersect instead.
-
-            if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(s["time"].values, o["time"].values):
-                s, o = xr.align(s, o, join="inner")
-            s, o = _apply_pairwise_valid_mask(s, o)
-
-            row = {}
-            method_function = _require_stat_method(self, basic_method)
-            result_s = method_function(*[s])
-            result_o = method_function(*[o])
             try:
-                row["ref_value"] = result_o.values
-            except (ValueError, RuntimeError, AttributeError) as e:
-                logging.debug(f"ref_value extraction failed: {e}")
-                row["ref_value"] = -9999.0
-            try:
-                row["sim_value"] = result_s.values
-            except (ValueError, RuntimeError, AttributeError) as e:
-                logging.debug(f"sim_value extraction failed: {e}")
-                row["sim_value"] = -9999.0
-            return row
+                s, o = _load_station_pair(
+                    self,
+                    basedir,
+                    evaluation_item,
+                    ref_source,
+                    sim_source,
+                    station_list.iloc[iik],
+                    ref_varname,
+                    sim_varname,
+                )
+            except StationDataUnavailable as exc:
+                return {"ref_value": np.nan, "sim_value": np.nan, "status": "unavailable", "reason": str(exc)}
+            method = _require_stat_method(self, basic_method)
+            ref_value, sim_value = float(method(o)), float(method(s))
+            ref_valid, sim_valid = np.isfinite(ref_value), np.isfinite(sim_value)
+            available = ref_valid and sim_valid
+            reason = f"{basic_method} is undefined for available samples"
+            return {
+                "ref_value": ref_value if ref_valid else np.nan,
+                "sim_value": sim_value if sim_valid else np.nan,
+                "status": "ok" if available else "partial" if ref_valid or sim_valid else "unavailable",
+                "reason": "" if available else reason,
+                "status_ref_value": "ok" if ref_valid else "unavailable",
+                "status_sim_value": "ok" if sim_valid else "unavailable",
+                "reason_ref_value": "" if ref_valid else reason,
+                "reason_sim_value": "" if sim_valid else reason,
+            }
 
         for evaluation_item in evaluation_items:
             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
@@ -94,18 +87,28 @@ class BasicComparisonMixin:
                 ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
                 ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
 
-                if ref_data_type == "stn":
-                    for sim_source in sim_sources:
+                station_sources = [
+                    source
+                    for source in sim_sources
+                    if ref_data_type == "stn" or sim_nml[evaluation_item][f"{source}_data_type"] == "stn"
+                ]
+                grid_sources = [source for source in sim_sources if source not in station_sources]
+                if station_sources:
+                    for sim_source in station_sources:
                         try:
-                            stnlist = os.path.join(
-                                basedir, "metrics", f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
-                            )
-                            station_list = pd.read_csv(stnlist, header=0)
-                            station_list = Convert_Type.convert_Frame(station_list)
-                            del_col = ["ID", "sim_lat", "sim_lon", "ref_lon", "ref_lat", "use_syear", "use_eyear"]
-                            station_list.drop(
-                                columns=[col for col in station_list.columns if col not in del_col], inplace=True
-                            )
+                            station_list = _station_evaluation_frame(basedir, evaluation_item, ref_source, sim_source)
+                            metadata = [
+                                "ID",
+                                "sim_lat",
+                                "sim_lon",
+                                "ref_lon",
+                                "ref_lat",
+                                "use_syear",
+                                "use_eyear",
+                                "status",
+                                "reason",
+                            ]
+                            station_list = station_list[[col for col in metadata if col in station_list]]
 
                             sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
                             results = self._run_parallel_or_serial(
@@ -115,7 +118,10 @@ class BasicComparisonMixin:
                                 for iik in range(len(station_list["ID"]))
                             )
                             basic_data = pd.concat(
-                                [station_list.copy(), pd.DataFrame([r if r is not None else {} for r in results])],
+                                [
+                                    station_list.drop(columns=["status", "reason"], errors="ignore"),
+                                    pd.DataFrame(results),
+                                ],
                                 axis=1,
                             )
                             basic_data = Convert_Type.convert_Frame(basic_data)
@@ -130,13 +136,13 @@ class BasicComparisonMixin:
                         except Exception as e:
                             logging.error(f"Error processing station {basic_method} calculations for {ref_source}: {e}")
                             raise
-                else:
+                if grid_sources:
                     # In per_pair mode the runner writes one masked ref
                     # file per (ref, sim) pair so Basic comparison must
                     # read and write the pair-specific ref result. In
                     # intersection/strict mode all sims share one ref file,
                     # preserving the historical single-output behavior.
-                    ref_sim_sources = sim_sources if self.time_alignment == "per_pair" else [None]
+                    ref_sim_sources = grid_sources if self.time_alignment == "per_pair" else [None]
                     for ref_sim_source in ref_sim_sources:
                         try:
                             ref_path = self._ref_data_path(
@@ -172,10 +178,11 @@ class BasicComparisonMixin:
             for sim_source in sim_sources:
                 if len(sim_sources) < 2:
                     continue
-
                 sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                 sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                if sim_data_type != "stn":
+                if sim_data_type != "stn" and any(
+                    ref_nml[evaluation_item][f"{source}_data_type"] != "stn" for source in ref_sources
+                ):
                     try:
                         with xr.open_dataset(
                             os.path.join(basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc")

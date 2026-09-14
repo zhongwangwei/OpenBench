@@ -372,7 +372,7 @@ def test_correlation_does_not_mutate_empty_sim_varnames(tmp_path, monkeypatch):
     assert sim_nml["Runoff"]["Sim2_varname"] is None
 
 
-def test_mann_kendall_logs_station_skips(tmp_path, caplog):
+def test_mann_kendall_requires_station_inputs_instead_of_skipping_source(tmp_path, caplog):
     from openbench.core.comparison import ComparisonProcessing
 
     main_nml = {
@@ -390,11 +390,11 @@ def test_mann_kendall_logs_station_skips(tmp_path, caplog):
     processor.stat_mann_kendall_trend_test = lambda ds: ds
 
     caplog.set_level(logging.INFO)
-    processor.scenarios_Mann_Kendall_Trend_Test_comparison(
-        str(tmp_path / "case"), sim_nml, ref_nml, ["Runoff"], [], [], {"significance_level": 0.05}
-    )
-
-    assert "Skipping Mann_Kendall_Trend_Test" in caplog.text
+    with pytest.raises(FileNotFoundError, match="Runoff_stn_RefA_SimA_evaluations.csv"):
+        processor.scenarios_Mann_Kendall_Trend_Test_comparison(
+            str(tmp_path / "case"), sim_nml, ref_nml, ["Runoff"], [], [], {"significance_level": 0.05}
+        )
+    assert "Skipping Mann_Kendall_Trend_Test" not in caplog.text
 
 
 def test_climatology_unsupported_metric_raises(tmp_path, monkeypatch):

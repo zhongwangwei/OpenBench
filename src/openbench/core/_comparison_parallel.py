@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from openbench.core._comparison_helpers import _finite_reduced_value, _write_csv_atomic
+from openbench.core._comparison_helpers import _finite_reduced_value, _station_evaluation_frame, _write_csv_atomic
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
@@ -73,17 +73,24 @@ class ParallelCoordinatesComparisonMixin:
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                                score_df = (
+                                                    _station_evaluation_frame(
+                                                        basedir, evaluation_item, ref_source, sim_source, kind="scores"
+                                                    )
+                                                    if scores
+                                                    else None
                                                 )
-                                                df = pd.read_csv(file_path, sep=",", header=0)
-                                                df = Convert_Type.convert_Frame(df)
+                                                metric_df = (
+                                                    _station_evaluation_frame(
+                                                        basedir, evaluation_item, ref_source, sim_source, kind="metrics"
+                                                    )
+                                                    if metrics
+                                                    else None
+                                                )
 
                                                 for score in scores:
                                                     kk = _finite_reduced_value(
-                                                        df[score].values,
+                                                        score_df[score].values,
                                                         reducer="mean",
                                                         plot="Parallel Coordinates",
                                                         item=evaluation_item,
@@ -95,15 +102,15 @@ class ParallelCoordinatesComparisonMixin:
                                                     output_file.write(f"{kk_str}\t")
 
                                                 for metric in metrics:
-                                                    df[metric] = df[metric].replace([np.inf, -np.inf], np.nan)
-                                                    if df[metric].shape[0] > 2:
-                                                        q_low, q_high = df[metric].quantile([0.05, 0.95])
-                                                        df[metric] = df[metric].where(
-                                                            (df[metric] >= q_low) & (df[metric] <= q_high), np.nan
+                                                    metric_values = metric_df[metric].replace([np.inf, -np.inf], np.nan)
+                                                    if metric_values.shape[0] > 2:
+                                                        q_low, q_high = metric_values.quantile([0.05, 0.95])
+                                                        metric_values = metric_values.where(
+                                                            (metric_values >= q_low) & (metric_values <= q_high), np.nan
                                                         )
 
                                                     kk = _finite_reduced_value(
-                                                        df[metric].values,
+                                                        metric_values.values,
                                                         reducer="median",
                                                         plot="Parallel Coordinates",
                                                         item=evaluation_item,

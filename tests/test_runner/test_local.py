@@ -5157,8 +5157,8 @@ def test_basic_only_drawing_reports_missing_precomputed_grid_input(tmp_path, mon
     assert plot_calls == []
 
 
-def test_correlation_only_drawing_fails_fast_for_station_sources(tmp_path, monkeypatch):
-    """Requested Correlation only_drawing should not warn/continue when inputs are unsupported."""
+def test_correlation_only_drawing_requires_station_comparison_output(tmp_path, monkeypatch):
+    """Station Correlation redraw requires a computed station table, not a blanket type error."""
     import openbench.visualization.Mod_Only_Drawing as only_drawing_module
 
     plot_calls = []
@@ -5176,7 +5176,7 @@ def test_correlation_only_drawing_fails_fast_for_station_sources(tmp_path, monke
         metrics=["Correlation"],
     )
 
-    with pytest.raises(ValueError, match="Correlation only_drawing cannot render requested figure"):
+    with pytest.raises(FileNotFoundError, match="Correlation_Runoff_stn_RefA_SimA_and_SimB.csv"):
         renderer.scenarios_Correlation_comparison(
             str(tmp_path / "case"),
             {
@@ -7909,7 +7909,7 @@ def test_core_score_comparison_rejects_empty_scores(tmp_path, method_name, messa
         ("scenarios_Target_Diagram_comparison", "make_scenarios_comparison_Target_Diagram"),
     ],
 )
-def test_core_diagram_station_all_sites_skipped_raises(tmp_path, monkeypatch, method_name, plot_func):
+def test_core_diagram_unrecorded_station_inputs_raise(tmp_path, monkeypatch, method_name, plot_func):
     """Taylor/Target station diagrams should fail when every listed site lacks task input files."""
     import pandas as pd
 
@@ -7947,7 +7947,7 @@ def test_core_diagram_station_all_sites_skipped_raises(tmp_path, monkeypatch, me
     )
     monkeypatch.setattr(comparison_module, plot_func, lambda *args, **kwargs: None)
 
-    with pytest.raises(FileNotFoundError, match="no usable station data"):
+    with pytest.raises(FileNotFoundError, match="Runoff_sim_S1_2001_2002.nc"):
         getattr(processor, method_name)(
             str(tmp_path),
             {

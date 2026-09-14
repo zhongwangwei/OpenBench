@@ -13,10 +13,19 @@ from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 
-def process_portrait_metric(self, casedir, item, ref_source, sim_source, metric, s, o, vkey=None):
+def _has_finite_values(data) -> bool:
+    return bool(np.isfinite(np.asarray(data)).any())
+
+
+def process_portrait_metric(self, casedir, item, ref_source, sim_source, metric, s, o, vkey=None, allow_empty=False):
     try:
         pb = getattr(self, metric)(s, o)
-        pb = pb.where(np.isfinite(pb), np.nan)
+        if hasattr(pb, "where"):
+            pb = pb.where(np.isfinite(pb), np.nan)
+        else:
+            pb = np.where(np.isfinite(pb), pb, np.nan)
+        if allow_empty and not _has_finite_values(pb):
+            return np.nan
         _finite_distribution_values(
             pb,
             plot="Portrait Plot seasonal",
@@ -31,6 +40,8 @@ def process_portrait_metric(self, casedir, item, ref_source, sim_source, metric,
         except (ValueError, RuntimeError, AttributeError) as e:
             logging.debug(f"Quantile filtering failed for {metric}: {e}")
 
+        if allow_empty and not _has_finite_values(pb):
+            return np.nan
         _finite_distribution_values(
             pb,
             plot="Portrait Plot seasonal",
@@ -68,11 +79,13 @@ def process_portrait_metric(self, casedir, item, ref_source, sim_source, metric,
         gc.collect()  # Clean up memory after processing each metric
 
 
-def process_portrait_score(self, casedir, item, ref_source, sim_source, score, s, o, vkey=None):
+def process_portrait_score(self, casedir, item, ref_source, sim_source, score, s, o, vkey=None, allow_empty=False):
     try:
         pb = getattr(self, score)(s, o)
         if hasattr(pb, "where"):
             pb = pb.where(np.isfinite(pb), np.nan)
+        if allow_empty and not _has_finite_values(pb):
+            return np.nan
         _finite_distribution_values(
             pb,
             plot="Portrait Plot seasonal",
@@ -114,8 +127,11 @@ def process_portrait_score(self, casedir, item, ref_source, sim_source, score, s
         else:
             # For station data, just take the mean
             pb = pb.mean(skipna=True) if hasattr(pb, "mean") else pb
+        reduced = Convert_Type.convert_nc(pb) if hasattr(pb, "dims") else pb
+        if allow_empty and not _has_finite_values(reduced):
+            return np.nan
         return _finite_reduced_value(
-            [Convert_Type.convert_nc(pb)],
+            [reduced],
             reducer="mean",
             plot="Portrait Plot seasonal",
             item=item,

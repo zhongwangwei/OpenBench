@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 
+from openbench.core._comparison_helpers import _comparison_sim_groups
 from openbench.core._comparison_diff_grid import process_grid_diff_plot
 from openbench.core._comparison_diff_station import process_station_diff_plot
 
@@ -33,50 +34,39 @@ class DiffPlotScenarioMixin:
                 ref_sources = [ref_sources]
 
             for ref_source in ref_sources:
-                data_types = [sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"] for sim_source in sim_sources]
-                if "stn" in data_types and any(data_type != "stn" for data_type in data_types):
-                    logging.warning(f"Cannot compare station and gridded data together for {evaluation_item}")
-                    logging.warning(
-                        "All simulation sources must be either station data or gridded data; skipping this evaluation item"
-                    )
-                    continue
-
-                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                if ref_data_type == "stn":
-                    process_station_diff_plot(
-                        basedir=basedir,
-                        dir_path=dir_path,
-                        sim_nml=sim_nml,
-                        evaluation_item=evaluation_item,
-                        ref_source=ref_source,
-                        sim_sources=sim_sources,
-                        metrics=metrics,
-                        scores=scores,
-                    )
-                else:
-                    process_grid_diff_plot(
+                groups = _comparison_sim_groups(evaluation_item, sim_sources, ref_source, sim_nml, ref_nml)
+                for data_type, sources in groups.items():
+                    if not sources:
+                        continue
+                    kwargs = dict(
                         basedir=basedir,
                         dir_path=dir_path,
                         evaluation_item=evaluation_item,
                         ref_source=ref_source,
-                        sim_sources=sim_sources,
+                        sim_sources=sources,
                         metrics=metrics,
                         scores=scores,
                     )
-
-                try:
+                    if data_type == "stn":
+                        process_station_diff_plot(sim_nml=sim_nml, **kwargs)
+                    else:
+                        process_grid_diff_plot(**kwargs)
                     _comparison_callable("make_scenarios_comparison_Diff_Plot")(
                         dir_path,
                         metrics,
                         scores,
                         evaluation_item,
                         ref_source,
-                        sim_sources,
+                        sources,
                         self.general_config,
                         sim_nml,
-                        ref_data_type,
+                        data_type,
                         option,
                     )
-                except (ValueError, RuntimeError, IOError, OSError) as e:
-                    logging.error(f"Error creating Diff Plot for {evaluation_item}/{ref_source}: {e}")
-                    raise
+                if len(groups) > 1:
+                    logging.warning(
+                        "%s/%s: station and grid comparisons were produced separately; "
+                        "cross-representation differences require a common spatial support",
+                        evaluation_item,
+                        ref_source,
+                    )
