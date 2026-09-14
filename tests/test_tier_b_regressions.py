@@ -520,11 +520,25 @@ def test_parallel_coordinates_no_longer_drops_columns_for_single_nan():
     assert "all_missing_value_columns" in source
 
 
-def test_relative_score_validity_does_not_use_id_column_only():
-    source = Path("src/openbench/core/_comparison_relative.py").read_text(encoding="utf-8")
+def test_relative_score_validity_does_not_use_id_column_only(tmp_path, monkeypatch):
+    from types import SimpleNamespace
 
-    assert "relative_score_columns" in source
-    assert "if not combined_relative_scores.empty" not in source
+    import pandas as pd
+
+    import openbench.core._comparison_relative as relative
+
+    monkeypatch.setattr(relative, "_station_evaluation_frame", lambda *a, **kw: pd.DataFrame({"ID": ["A"]}))
+    with pytest.raises(KeyError, match="Overall_Score"):
+        relative.RelativeScoreComparisonMixin.scenarios_Relative_Score_comparison(
+            SimpleNamespace(main_nml={"general": {}}),
+            str(tmp_path),
+            {"general": {"Runoff_sim_source": "Sim"}, "Runoff": {"Sim_data_type": "stn"}},
+            {"general": {"Runoff_ref_source": "Ref"}, "Runoff": {"Ref_data_type": "stn"}},
+            ["Runoff"],
+            ["Overall_Score"],
+            [],
+            {},
+        )
 
 
 def test_groupby_default_compare_tim_res_is_parseable_without_config_value(tmp_path):

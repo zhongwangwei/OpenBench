@@ -448,50 +448,53 @@ def test_relative_score_station_inner_plot_failures_propagate(tmp_path, monkeypa
         )
 
 
-def test_relative_score_station_all_nan_raises_before_plot(tmp_path, monkeypatch):
-    """Relative Score station renderer should fail on all-NaN data instead of silently skipping."""
+def test_relative_score_station_all_nan_renders_neutral_map_without_colorbar(tmp_path, monkeypatch):
+    """Relative Score station renderer should keep all-NaN rows as neutral markers."""
     import openbench.visualization.Fig_Relative_Score as fig_relative
 
-    plot_calls = []
-    monkeypatch.setattr(fig_relative.plt, "figure", lambda *args, **kwargs: plot_calls.append(args))
+    axes_counts = []
 
-    with pytest.raises(ValueError, match="no finite data"):
-        fig_relative.make_stn_plot_index(
-            str(tmp_path / "relative.csv"),
-            "Overall_Score",
-            np.array([np.nan]),
-            np.array([30.0]),
-            np.array([100.0]),
-            {"min_lon": 0, "max_lon": 360, "min_lat": -90, "max_lat": 90},
-            {
-                "cmap": "viridis",
-                "vmin_max_on": False,
-                "font": "DejaVu Sans",
-                "labelsize": 8,
-                "xtick": 8,
-                "ytick": 8,
-                "x_wise": 4,
-                "y_wise": 3,
-                "markersize": 10,
-                "marker": "o",
-                "line_width": 1,
-                "set_lat_lon": False,
-                "max_lon": 360,
-                "min_lon": 0,
-                "max_lat": 90,
-                "min_lat": -90,
-                "xticklabel": "",
-                "yticklabel": "",
-                "title": "",
-                "title_size": 10,
-                "colorbar_position_set": False,
-                "colorbar_position": "vertical",
-                "saving_format": "png",
-                "dpi": 80,
-            },
-        )
+    def capture(fig, *args, **kwargs):
+        axes_counts.append(len(fig.axes))
 
-    assert plot_calls == []
+    monkeypatch.setattr(fig_relative, "save_figure", capture)
+
+    fig_relative.make_stn_plot_index(
+        str(tmp_path / "relative.csv"),
+        "Overall_Score",
+        np.array([np.nan]),
+        np.array([30.0]),
+        np.array([100.0]),
+        {"min_lon": 0, "max_lon": 360, "min_lat": -90, "max_lat": 90},
+        {
+            "cmap": "viridis",
+            "vmin_max_on": False,
+            "font": "DejaVu Sans",
+            "labelsize": 8,
+            "xtick": 8,
+            "ytick": 8,
+            "x_wise": 4,
+            "y_wise": 3,
+            "markersize": 10,
+            "marker": "o",
+            "line_width": 1,
+            "set_lat_lon": False,
+            "max_lon": 360,
+            "min_lon": 0,
+            "max_lat": 90,
+            "min_lat": -90,
+            "xticklabel": "",
+            "yticklabel": "",
+            "title": "",
+            "title_size": 10,
+            "colorbar_position_set": False,
+            "colorbar_position": "vertical",
+            "saving_format": "png",
+            "dpi": 80,
+        },
+    )
+
+    assert axes_counts == [1]
 
 
 def test_diff_plot_grid_all_nan_raises_before_map(tmp_path, monkeypatch):

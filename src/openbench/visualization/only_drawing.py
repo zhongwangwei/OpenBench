@@ -1252,7 +1252,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                                         ],
                                     )
                                     for score in scores:
-                                        _require_csv_finite(
+                                        _require_station_csv_values(
                                             relative_file,
                                             f"relative_{score}_{sim_source}",
                                             required_columns=["ID"],

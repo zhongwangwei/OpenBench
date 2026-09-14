@@ -8243,8 +8243,8 @@ def test_core_relative_score_plot_failures_propagate(tmp_path, monkeypatch):
         )
 
 
-def test_core_relative_score_nonfinite_station_result_raises(tmp_path, monkeypatch):
-    """Relative Score should not emit all-NaN/inf station relative scores when model spread is zero."""
+def test_core_relative_score_zero_spread_retains_unavailable_stations(tmp_path, monkeypatch):
+    """Zero spread is undefined, not grounds for dropping station rows or failing comparison."""
     import pandas as pd
 
     import openbench.core.comparison as comparison_module
@@ -8281,29 +8281,40 @@ def test_core_relative_score_nonfinite_station_result_raises(tmp_path, monkeypat
         [],
     )
 
-    with pytest.raises(ValueError, match="no finite data"):
-        processor.scenarios_Relative_Score_comparison(
-            str(tmp_path),
-            {
-                "general": {"Runoff_sim_source": ["SimA", "SimB"]},
-                "Runoff": {
-                    "SimA_data_type": "stn",
-                    "SimA_varname": "runoff_sim",
-                    "SimB_data_type": "stn",
-                    "SimB_varname": "runoff_sim",
-                },
+    processor.scenarios_Relative_Score_comparison(
+        str(tmp_path),
+        {
+            "general": {"Runoff_sim_source": ["SimA", "SimB"]},
+            "Runoff": {
+                "SimA_data_type": "stn",
+                "SimA_varname": "runoff_sim",
+                "SimB_data_type": "stn",
+                "SimB_varname": "runoff_sim",
             },
-            {
-                "general": {"Runoff_ref_source": "RefA"},
-                "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
-            },
-            ["Runoff"],
-            ["Overall_Score"],
-            [],
-            {},
-        )
+        },
+        {
+            "general": {"Runoff_ref_source": "RefA"},
+            "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+        },
+        ["Runoff"],
+        ["Overall_Score"],
+        [],
+        {},
+    )
 
-    assert plot_calls == []
+    from openbench.util.filenames import relative_station_scores_filename
+    from openbench.visualization.only_drawing import _require_station_csv_values
+
+    assert len(plot_calls) == 2
+    for sim_source in ("SimA", "SimB"):
+        path = tmp_path / "comparisons/Relative_Score" / relative_station_scores_filename("Runoff", "RefA", sim_source)
+        result = pd.read_csv(path)
+        assert result.ID.tolist() == ["S1"]
+        value = f"relative_Overall_Score_{sim_source}"
+        assert result[value].isna().all()
+        assert result[f"status_{value}"].tolist() == ["unavailable"]
+        assert result[f"reason_{value}"].tolist() == ["zero across-model variance"]
+        _require_station_csv_values(str(path), value)
 
 
 def test_core_diff_plot_missing_station_score_input_raises(tmp_path, monkeypatch):
