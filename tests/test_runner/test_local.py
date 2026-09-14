@@ -2024,8 +2024,9 @@ def test_preprocessing_errors_are_reported_and_skip_evaluation(tmp_path, monkeyp
     assert any("sim preprocessing exploded" in err["message"] for err in result["errors"])
 
 
-def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path, monkeypatch):
-    """A normal run must not build comparison/statistics/report outputs from a partial task set."""
+@pytest.mark.parametrize("station_skip", [False, True])
+def test_normal_run_distinguishes_station_skips_from_evaluation_errors(tmp_path, monkeypatch, station_skip):
+    """Data-gap station skips permit postprocessing; failed evaluation tasks do not."""
     import openbench.config.adapter as adapter
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
@@ -2090,6 +2091,20 @@ def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path,
 
     def fake_evaluate(task):
         if task["var_name"] == "ET":
+            if station_skip:
+                return {
+                    "variable": "ET",
+                    "sim": "SimA",
+                    "ref": "RefA",
+                    "status": "success",
+                    "station_summary": {
+                        "total": 2,
+                        "succeeded": 1,
+                        "skipped": [
+                            {"station": "A", "reason": "no shared finite sim/ref pairs"},
+                        ],
+                    },
+                }
             return {
                 "variable": "ET",
                 "sim": "SimA",
@@ -2126,9 +2141,15 @@ def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path,
     result = run_evaluation(cfg, force=True)
 
     assert result["status"] == "partial"
-    assert [item["variable"] for item in result["evaluated"]] == ["Runoff"]
-    assert any(err["phase"] == "evaluation" and "ET failed" in err["message"] for err in result["errors"])
-    assert post_calls == []
+    if station_skip:
+        assert [item["variable"] for item in result["evaluated"]] == ["Runoff", "ET"]
+        assert result["evaluated"][1]["station_summary"]["skipped"][0]["station"] == "A"
+        assert result["errors"] == []
+        assert post_calls == ["comparison", "groupby", "statistics", "report"]
+    else:
+        assert [item["variable"] for item in result["evaluated"]] == ["Runoff"]
+        assert any(err["phase"] == "evaluation" and "ET failed" in err["message"] for err in result["errors"])
+        assert post_calls == []
 
 
 def test_partial_run_cache_marks_only_successful_tasks(tmp_path, monkeypatch):

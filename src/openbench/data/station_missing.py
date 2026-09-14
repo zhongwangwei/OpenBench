@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import xarray as xr
 
 _DEFAULT_SENTINELS = (-999.0, -9999.0)
+
+
+class StationDataUnavailable(ValueError):
+    """An identified station data gap, not a processing or configuration error."""
+
+
+def record_station_skip(output: str | Path, reason: str) -> None:
+    """Replace stale output with the known data-gap reason for evaluation workers."""
+    from openbench.util.netcdf import write_file_atomic
+
+    output = Path(output)
+    output.unlink(missing_ok=True)
+    write_file_atomic(
+        output.with_suffix(".skip.txt"),
+        lambda path: path.write_text(reason, encoding="utf-8"),
+        suffix=".tmp.txt",
+    )
 
 
 def missing_sentinels(attrs: dict | None = None, encoding: dict | None = None) -> tuple[float, ...]:

@@ -58,16 +58,31 @@ def test_run_dry_run(tmp_path):
     assert "test-full" in result.output
 
 
-def test_run_actual(tmp_path):
+@pytest.mark.parametrize("partial_stations", [False, True])
+def test_run_actual(tmp_path, partial_stations):
     import openbench.runner.local as local_runner
 
     def fake_run_evaluation(cfg, force=False, comparison_only=False):
         return {
-            "status": "success",
+            "status": "partial" if partial_stations else "success",
             "output_dir": "/tmp/openbench-out",
             "variables": ["Evapotranspiration"],
             "simulations": ["CoLM2024"],
             "errors": [],
+            "evaluated": [
+                {
+                    "variable": "Runoff",
+                    "sim": "Sim",
+                    "ref": "Ref",
+                    "station_summary": {
+                        "total": 504,
+                        "succeeded": 499,
+                        "skipped": [{"station": "A", "reason": "no shared finite sim/ref pairs"}],
+                    },
+                }
+            ]
+            if partial_stations
+            else [],
         }
 
     original = local_runner.run_evaluation
@@ -79,7 +94,11 @@ def test_run_actual(tmp_path):
         local_runner.run_evaluation = original
 
     assert result.exit_code == 0
-    assert "Evaluation complete" in result.output
+    if partial_stations:
+        assert "Evaluation partial success" in result.output
+        assert "499/504" in result.output and "A: no shared finite sim/ref pairs" in result.output
+    else:
+        assert "Evaluation complete" in result.output
 
 
 def test_run_only_drawing_fail_fast_errors_exit_nonzero(tmp_path):

@@ -6,6 +6,7 @@ import gc
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
@@ -13,7 +14,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
-from openbench.data.station_missing import mask_station_missing
+from openbench.data.compute import MissingComputeVariable
+from openbench.data.station_missing import StationDataUnavailable, mask_station_missing, record_station_skip
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_xarray_key_case_insensitive
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
@@ -104,11 +106,27 @@ class StationProcessingCoreMixin:
                 )
                 results = [self._make_stn_parallel(self.station_list, data_params["datasource"], i) for i in indices]
 
+            if len(results) != len(indices) or any(
+                not isinstance(result, dict) or not isinstance(result.get("ok"), bool) for result in results
+            ):
+                raise RuntimeError("Station preprocessing returned incomplete or invalid worker results")
             failures = [r for r in results if isinstance(r, dict) and not r.get("ok")]
             if failures:
+                for failure in failures:
+                    logging.warning(
+                        "Skipping station %s (%s): %s", failure["station"], data_params["datasource"], failure["error"]
+                    )
                 failed_ids = ", ".join(str(r.get("station", "?")) for r in failures[:5])
-                raise RuntimeError(
-                    f"Station processing failed for {len(failures)}/{len(indices)} {data_params['datasource']} station(s): {failed_ids}"
+                if len(failures) == len(indices):
+                    raise RuntimeError(
+                        f"Station processing failed for {len(failures)}/{len(indices)} {data_params['datasource']} station(s): {failed_ids}"
+                    )
+                logging.warning(
+                    "Station preprocessing partial success (%s): %d/%d succeeded, %d skipped",
+                    data_params["datasource"],
+                    len(indices) - len(failures),
+                    len(indices),
+                    len(failures),
                 )
         finally:
             gc.collect()
@@ -160,46 +178,46 @@ class StationProcessingCoreMixin:
                         break
 
                 # Priority 1: compute
-                computed = (
-                    None if runtime_fallback_used else self._try_compute_from_profile(source_name, stn_data, datasource)
-                )
+                try:
+                    computed = (
+                        None
+                        if runtime_fallback_used
+                        else self._try_compute_from_profile(source_name, stn_data, datasource)
+                    )
+                except MissingComputeVariable as exc:
+                    raise StationDataUnavailable(str(exc)) from exc
                 if computed is not None:
                     current_var_list = [getattr(self, "item", current_var_list[0])]
                     ds = computed
                 elif not runtime_fallback_used:
                     # Priority 2: filter (station filters handle CaMA allocation etc.)
-                    try:
-                        from openbench.data.custom import load_filter
+                    from openbench.data.custom import load_filter
 
-                        stn_module = load_filter(source_name)
-                        filter_func = None
-                        if stn_module:
-                            filter_func = getattr(stn_module, f"filter_{source_name}", None)
-                        if filter_func is None:
-                            import re as _re
+                    stn_module = load_filter(source_name)
+                    filter_func = None
+                    if stn_module:
+                        filter_func = getattr(stn_module, f"filter_{source_name}", None)
+                    if filter_func is None:
+                        import re as _re
 
-                            base_name = _re.sub(r"[\d.]+$", "", source_name)
-                            if base_name and base_name != source_name:
-                                stn_module = stn_module or load_filter(base_name)
-                                if stn_module:
-                                    filter_func = getattr(stn_module, f"filter_{base_name}", None)
-                        if stn_module and filter_func:
-                            logging.info("Applying station filter for %s", source_name)
-                            updated_self, filtered_data = filter_func(self, stn_data)
-                            if updated_self is not None and filtered_data is not None:
-                                new_var_attr = getattr(self, f"{datasource}_varname")
-                                current_var_list = (
-                                    list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
-                                )
-                                ds = filtered_data
-                            else:
-                                raise ValueError(f"Station filter returned None for {source_name}")
+                        base_name = _re.sub(r"[\d.]+$", "", source_name)
+                        if base_name and base_name != source_name:
+                            stn_module = stn_module or load_filter(base_name)
+                            if stn_module:
+                                filter_func = getattr(stn_module, f"filter_{base_name}", None)
+                    if stn_module and filter_func:
+                        logging.info("Applying station filter for %s", source_name)
+                        updated_self, filtered_data = filter_func(self, stn_data)
+                        if updated_self is not None and filtered_data is not None:
+                            new_var_attr = getattr(self, f"{datasource}_varname")
+                            current_var_list = list(new_var_attr) if isinstance(new_var_attr, list) else [new_var_attr]
+                            ds = filtered_data
                         else:
-                            raise ImportError(f"No filter function for {source_name}")
-                    except (ImportError, AttributeError, ValueError):
-                        list(stn_data.data_vars) + list(stn_data.coords)
-                        logging.error(f"Variable '{current_var_list[0]}' not found in station data.")
-                        raise ValueError(f"Variable '{current_var_list[0]}' not found in station data.")
+                            raise RuntimeError(f"Station filter returned None for {source_name}")
+                    elif stn_module is not None:
+                        raise AttributeError(f"No filter function for {source_name}")
+                    else:
+                        raise StationDataUnavailable(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
                 ds = stn_data[actual_station_var]
 
@@ -238,8 +256,7 @@ class StationProcessingCoreMixin:
             ds = ds.sel(time=slice(f"{start_year}-01-01", f"{end_year}-12-31"))
 
             if len(ds.time) == 0:
-                logging.warning(f"No data found for the specified time range {start_year}-{end_year}")
-                return None
+                raise StationDataUnavailable(f"No data found for the specified time range {start_year}-{end_year}")
 
             # Resample to compare_tim_res (skip for climatology — handled by Mod_Climatology)
             if not self._is_climatology_mode():
@@ -250,15 +267,15 @@ class StationProcessingCoreMixin:
 
             current_varunit = getattr(self, f"{datasource}_varunit")
             if current_varunit:
-                try:
-                    ds, converted_unit = self.process_units(ds, current_varunit)
-                    logging.info(
-                        f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}"
-                    )
-                except Exception as e:
-                    logging.warning(f"Unit conversion failed for {datasource} station data: {e}")
+                ds, converted_unit = self.process_units(ds, current_varunit)
+                logging.info(
+                    f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}"
+                )
 
             ds = self.select_timerange(ds, start_year, end_year)
+            values = ds.to_array() if isinstance(ds, xr.Dataset) else ds
+            if not bool(np.isfinite(values).any()):
+                raise StationDataUnavailable("No finite station data in the requested time range")
 
             # Store original variable name as attribute for later renaming if needed
             if original_varname:
@@ -282,7 +299,7 @@ class StationProcessingCoreMixin:
             elif hasattr(self, f"_fb_convert_{datasource}"):
                 delattr(self, f"_fb_convert_{datasource}")
 
-    def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> None:
+    def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> dict:
         try:
             station = station_list.iloc[index]
             start_year = int(station["use_syear"])
@@ -293,15 +310,19 @@ class StationProcessingCoreMixin:
                 stn_data = self._select_merged_station_data(stn_data, station, datasource)
                 processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
                 if processed_data is None:
-                    raise ValueError("no valid data after processing")
+                    raise RuntimeError("Station processing unexpectedly returned None")
                 self.save_station_data(processed_data, station, datasource)
                 return {"ok": True, "station": station["ID"]}
-        except Exception as e:
-            station_id = (
-                station_list.iloc[index].get("ID", f"index-{index}") if index < len(station_list) else f"index-{index}"
+        except StationDataUnavailable as e:
+            # Do not let an expected skip reuse an earlier run's station output.
+            output = (
+                Path(self.casedir)
+                / "data"
+                / f"stn_{self.ref_source}_{self.sim_source}"
+                / (f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
             )
-            logging.warning(f"Station {station_id} ({datasource}) failed: {e}")
-            return {"ok": False, "station": station_id, "error": str(e)}
+            record_station_skip(output, str(e))
+            return {"ok": False, "station": station["ID"], "error": str(e)}
         finally:
             gc.collect()
 
@@ -399,6 +420,7 @@ class StationProcessingCoreMixin:
                 _write_netcdf_atomic(data, output_file, compression=False)
 
             logging.debug(f"Saved station data to {output_file}")
+            Path(output_file).with_suffix(".skip.txt").unlink(missing_ok=True)
         finally:
             if data_to_save is not None and hasattr(data_to_save, "close"):
                 data_to_save.close()
