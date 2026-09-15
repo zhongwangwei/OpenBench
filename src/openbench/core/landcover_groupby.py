@@ -13,6 +13,7 @@ from openbench.util.filenames import (
     groupby_table_filename,
     join_filename_components,
 )
+from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 from openbench.util.static_datasets import static_dataset_path
@@ -414,7 +415,9 @@ class LC_groupby(metrics, scores):
                                             with _open_dataset_safe(
                                                 f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                                             ) as ref_ds:
-                                                cached_mass_ref = ref_ds[f"{ref_varname}"].load()
+                                                cached_mass_ref = select_data_array(
+                                                    ref_ds, ref_varname, evaluation_item
+                                                ).load()
                                         o = cached_mass_ref
 
                                         area_weights = np.cos(np.deg2rad(ds.lat))
@@ -749,7 +752,9 @@ class LC_groupby(metrics, scores):
                                             with _open_dataset_safe(
                                                 f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                                             ) as ref_ds:
-                                                cached_mass_ref = ref_ds[f"{ref_varname}"].load()
+                                                cached_mass_ref = select_data_array(
+                                                    ref_ds, ref_varname, evaluation_item
+                                                ).load()
                                         o = cached_mass_ref
 
                                         area_weights = np.cos(np.deg2rad(ds.lat))

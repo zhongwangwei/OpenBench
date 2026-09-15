@@ -171,7 +171,7 @@ def _grid_score_mean(
     if weight == "mass":
         ref_path = handler._ref_data_path(casedir, evaluation_item, ref_source, ref_varname, sim_source)
         with xr.open_dataset(ref_path) as o_file:
-            o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
+            o = Convert_Type.convert_nc(select_data_array(o_file, ref_varname, evaluation_item).load())
 
         area_weights = np.cos(np.deg2rad(ds.lat))
         flux_weights = np.abs(o.mean("time"))

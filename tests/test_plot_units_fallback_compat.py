@@ -24,12 +24,15 @@ class _StationProcessor:
             mapping = RegistryManager().get_reference("FLUXNET_PLUMBER2").variables["Latent_Heat"]
             self.FLUXNET_PLUMBER2_fallbacks = [fb.to_dict() for fb in mapping.fallbacks]
             self.units_seen = []
+            self.compute_calls = 0
 
         def _is_climatology_mode(self):
             return True
 
         def _try_compute_from_profile(self, *args, **kwargs):
-            raise AssertionError("catalog fallback should run before compute")
+            # FLUXNET_PLUMBER2 has no catalog compute for Latent_Heat.
+            self.compute_calls += 1
+            return None
 
         def check_coordinate(self, ds):
             return ds
@@ -82,6 +85,7 @@ def test_fluxnet_plumber2_raw_fallback_is_used_when_corrected_missing():
     np.testing.assert_allclose(out.values, [4.0, 5.0])
     assert proc.ref_varname == "Qle_cor"
     assert proc.units_seen == ["W m-2"]
+    assert proc.compute_calls == 0  # catalog fallback runs before compute
 
 
 def test_unit_aliases_convert_exactly():

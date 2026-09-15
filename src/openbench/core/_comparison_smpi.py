@@ -21,6 +21,7 @@ from openbench.core._comparison_helpers import (
 )
 from openbench.data.station_missing import StationDataUnavailable
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 
@@ -289,9 +290,9 @@ class SingleModelPerformanceIndexComparisonMixin:
                             )
 
                             with xr.open_dataset(o_path) as o_ds:
-                                o = o_ds[f"{ref_varname}"].load()
+                                o = select_data_array(o_ds, ref_varname, evaluation_item).load()
                             with xr.open_dataset(s_path) as s_ds:
-                                s = s_ds[f"{sim_varname}"].load()
+                                s = select_data_array(s_ds, sim_varname, evaluation_item).load()
 
                             o = Convert_Type.convert_nc(o)
                             s = Convert_Type.convert_nc(s)

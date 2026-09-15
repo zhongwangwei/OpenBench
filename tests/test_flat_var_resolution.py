@@ -83,3 +83,71 @@ def test_masking_read_resolves_relabelled_variable(tmp_path):
     # Should not raise "No variable named 'f_respc'"
     masking.apply_unified_mask(info, item, ref_src, sim_src, write_netcdf_atomic_fn=fake_writer)
     assert written  # the masked ref was written
+
+
+def _flat_series(varname: str, scale: float) -> xr.Dataset:
+    return xr.Dataset(
+        {varname: (("time", "lat", "lon"), np.arange(1.0, 17.0).reshape(4, 2, 2) * scale)},
+        coords={
+            "time": xr.date_range("2000-01-01", periods=4, freq="MS"),
+            "lat": [10.0, 20.0],
+            "lon": [30.0, 40.0],
+        },
+    )
+
+
+def test_smpi_grid_comparison_reads_relabelled_sim_variable(tmp_path, monkeypatch):
+    import openbench.core.comparison as comparison_module
+
+    item, ref_src, sim_src = "Net_Ecosystem_Exchange", "FLUXCOM", "Case05"
+    (tmp_path / "data").mkdir()
+    _flat_series("NEE", scale=1.0).to_netcdf(tmp_path / "data" / f"{item}_ref_{ref_src}_NEE.nc")
+    _flat_series(item, scale=1.5).to_netcdf(tmp_path / "data" / f"{item}_sim_{sim_src}_f_respc.nc")
+    monkeypatch.setattr(
+        comparison_module, "make_scenarios_comparison_Single_Model_Performance_Index", lambda *a, **k: None
+    )
+    processor = comparison_module.ComparisonProcessing(
+        {
+            "general": {
+                "basename": "case",
+                "basedir": str(tmp_path),
+                "compare_grid_res": 0.5,
+                "compare_tim_res": "Month",
+                "weight": "none",
+                "num_cores": 1,
+            }
+        },
+        [],
+        [],
+    )
+    sim_nml = {
+        "general": {f"{item}_sim_source": [sim_src]},
+        item: {f"{sim_src}_data_type": "grid", f"{sim_src}_varname": "f_respc"},
+    }
+    ref_nml = {
+        "general": {f"{item}_ref_source": ref_src},
+        item: {f"{ref_src}_data_type": "grid", f"{ref_src}_varname": "NEE"},
+    }
+
+    processor.scenarios_Single_Model_Performance_Index_comparison(str(tmp_path), sim_nml, ref_nml, [item], [], [], {})
+
+    smpi_dir = tmp_path / "comparisons" / "Single_Model_Performance_Index"
+    assert (smpi_dir / f"{item}_ref_{ref_src}_sim_{sim_src}_SMPI_grid.nc").exists()
+
+
+def test_core_flat_file_readers_do_not_hard_index_configured_varname():
+    import re
+    from pathlib import Path
+
+    import openbench.core
+
+    raw_read = re.compile(r"(?:\bds|_ds|_file)\[\s*f?\"?\{?(?:sim|ref)_varname\d?\}?\"?\s*\]")
+    core_dir = Path(openbench.core.__file__).parent
+    offenders = [
+        f"{path.relative_to(core_dir)}:{lineno}"
+        for path in sorted(core_dir.rglob("*.py"))
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if raw_read.search(line)
+    ]
+
+    assert offenders == []

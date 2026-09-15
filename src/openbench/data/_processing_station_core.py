@@ -153,13 +153,13 @@ class StationProcessingCoreMixin:
                 logging.error("Variable name list is empty")
                 raise ValueError("Variable name list cannot be empty for station data")
 
+            source_key = self.sim_source if datasource == "sim" else self.ref_source
+            try:
+                source_name = getattr(self, f"{source_key}_model")
+            except AttributeError:
+                source_name = source_key
             actual_station_var = get_xarray_key_case_insensitive(stn_data, current_var_list[0])
             if actual_station_var is None:
-                source_key = self.sim_source if datasource == "sim" else self.ref_source
-                try:
-                    source_name = getattr(self, f"{source_key}_model")
-                except AttributeError:
-                    source_name = source_key
                 # Same priority: runtime fallback → compute → filter → direct
                 runtime_fallback_used = False
                 for fb in getattr(self, f"{source_key}_fallbacks", None) or []:
@@ -219,7 +219,21 @@ class StationProcessingCoreMixin:
                     else:
                         raise StationDataUnavailable(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
-                ds = stn_data[actual_station_var]
+                # Catalog compute wins over a same-named raw variable, as on the grid
+                # path (e.g. -ds['FIRA']); read the raw variable only when the compute
+                # does not apply or its own dependencies are absent from this file.
+                try:
+                    computed = self._try_compute_from_profile(source_name, stn_data, datasource)
+                except MissingComputeVariable as exc:
+                    logging.debug(
+                        "Station compute skipped for %s; using raw '%s': %s", source_name, actual_station_var, exc
+                    )
+                    computed = None
+                if computed is not None:
+                    current_var_list = [getattr(self, "item", current_var_list[0])]
+                    ds = computed
+                else:
+                    ds = stn_data[actual_station_var]
 
             # Apply fallback conversion expressions. Supports multi-variable expressions: 'value' is current var,
             # other NC variables are accessible by name (e.g., f_assim).

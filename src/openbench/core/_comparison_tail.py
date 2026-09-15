@@ -137,7 +137,7 @@ class TailComparisonMixin:
                                 basedir, evaluation_item, ref_source, ref_varname, sim_source
                             )
                             with xr.open_dataset(ref_path) as ref_ds:
-                                ref = ref_ds[f"{ref_varname}"].load()
+                                ref = select_data_array(ref_ds, ref_varname, evaluation_item).load()
                             ref = Convert_Type.convert_nc(ref)
                             result = method_function(*[ref])
                             output_file = os.path.join(
@@ -157,7 +157,7 @@ class TailComparisonMixin:
                     try:
                         ref_path = self._ref_data_path(basedir, evaluation_item, ref_source, ref_varname)
                         with xr.open_dataset(ref_path) as ref_ds:
-                            ref = ref_ds[f"{ref_varname}"].load()
+                            ref = select_data_array(ref_ds, ref_varname, evaluation_item).load()
                         ref = Convert_Type.convert_nc(ref)
                         result = method_function(*[ref])
                         output_file = os.path.join(
