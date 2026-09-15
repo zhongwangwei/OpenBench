@@ -828,7 +828,7 @@ LM4:
           varunit: kg m-2 s-1
     Ecosystem_Respiration:
       compute: "ds['resp'] / 31536000.0 if 'year' in ds['resp'].attrs.get('units', '').lower() else ds['resp']"
-      varname: Ecosystem_Respiration
+      varname: resp
       varunit: kg C m-2 s-1
     Evapotranspiration:
       varname: evap
@@ -839,11 +839,11 @@ LM4:
           convert: value / 2.5e6
     Gross_Primary_Productivity:
       compute: "ds['gpp'] / 31536000.0 if 'year' in ds['gpp'].attrs.get('units', '').lower() else ds['gpp']"
-      varname: Gross_Primary_Productivity
+      varname: gpp
       varunit: kg C m-2 s-1
     Ground_Evaporation:
       compute: "ds['evspsblsoi'] if 'evspsblsoi' in ds else ds['levapg'] + ds['fevapg'] if 'levapg' in ds and 'fevapg' in ds else ds['soil_evap']"
-      varname: Ground_Evaporation
+      varname: evspsblsoi
       varunit: kg m-2 s-1
     Ground_Heat:
       varname: grnd_flux
@@ -859,13 +859,13 @@ LM4:
       varname: lai
       varunit: m2 m-2
     Net_Ecosystem_Exchange:
-      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: Net_Ecosystem_Exchange
+#      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
+      varname: fco2
       varunit: kg C m-2 s-1
-    Net_Ecosystem Exchange:
-      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: Exchange
-      varunit: kg C m-2 s-1
+      fallbacks:
+        - varname: nbp
+          varunit: kg C m-2 s-1
+          convert: -value
     Net_Radiation:
       compute: ds['fsw'] + ds['flw']
       varname: Net_Radiation
@@ -896,7 +896,7 @@ LM4:
           varunit: kg m-2
     Soil_Evaporation:
       compute: "ds['evspsblsoi'] if 'evspsblsoi' in ds else ds['levapg'] + ds['fevapg'] if 'levapg' in ds and 'fevapg' in ds else ds['soil_evap']"
-      varname: Soil_Evaporation
+      varname: evspsblsoi
       varunit: kg m-2 s-1
     Subsurface_Runoff:
       varname: soil_rbf
@@ -909,7 +909,7 @@ LM4:
           varunit: K
     Surface_Albedo:
       compute: "ds['albedo_dif'].mean('band') if 'band' in ds['albedo_dif'].dims else ds['albedo_dif']"
-      varname: Surface_Albedo
+      varname: albedo_dif
       varunit: unitless
     Surface_Downward_LW_Radiation:
       varname: lwdn
@@ -969,7 +969,7 @@ LM4:
       varunit: m s-1
     Total_Runoff:
       compute: "ds['runf'] if 'runf' in ds else ds['wroff'] + ds['sroff']"
-      varname: Total_Runoff
+      varname: runf
       varunit: kg m-2 s-1
     Veg_Cover_In_Fraction:
       varname: vegn_cover
@@ -989,7 +989,7 @@ ORCHIDEE:
           varunit: kg m-2 s-1
     Gross_Primary_Productivity:
       compute: "((ds['gpp'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['gpp'].dims else ds['gpp'] * 1000.0 if 'kg' in ds['gpp'].attrs.get('units', '').lower() else ds['gpp'])"
-      varname: Gross_Primary_Productivity
+      varname: gpp
       varunit: gC m-2 s-1
     Ground_Evaporation:
       varname: evapnu
@@ -1005,15 +1005,15 @@ ORCHIDEE:
           varunit: W m-2
     Leaf_Area_Index:
       compute: "(ds['LAImean'] if 'LAImean' in ds else (ds['lai'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['lai'].dims else ds['lai'])"
-      varname: Leaf_Area_Index
+      varname: lai
       varunit: unitless
     Net_Ecosystem_Exchange:
       compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
-      varname: Net_Ecosystem_Exchange
+      varname: nee
       varunit: gC m-2 s-1
     Net_Ecosystem Exchange:
       compute: "((ds['nee'] * ds['maxvegetfrac']).sum('nvm') if 'nvm' in ds['nee'].dims else ds['nee'] * 1000.0 if 'kg' in ds['nee'].attrs.get('units', '').lower() else ds['nee'])"
-      varname: Net_Ecosystem
+      varname: nee
       varunit: gC m-2 s-1
     Net_Radiation:
       varname: netrad
@@ -1059,7 +1059,7 @@ ORCHIDEE:
           varunit: K
     Surface_Albedo:
       compute: "(ds['Albedo'] if 'Albedo' in ds else ds['albedo'].mean('albtyp') if 'albtyp' in ds['albedo'].dims else ds['albedo'])"
-      varname: Surface_Albedo
+      varname: albedo
       varunit: unitless
     Surface_Downward_LW_Radiation:
       varname: lwdown
