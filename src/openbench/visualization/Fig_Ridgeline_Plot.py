@@ -64,13 +64,19 @@ def make_scenarios_comparison_Ridgeline_Plot(
                     continue
             logger.warning(
                 "Skipping Ridgeline for %s/%s/%s/%s: %s",
-                evaluation_item, ref_source, sim_source, varname, reason,
+                evaluation_item,
+                ref_source,
+                sim_source,
+                varname,
+                reason,
             )
 
         if not valid_sources:
             logger.warning(
                 "Skipping Ridgeline figure for %s/%s/%s: no valid curves",
-                evaluation_item, ref_source, varname,
+                evaluation_item,
+                ref_source,
+                varname,
             )
             return
 
@@ -165,7 +171,6 @@ def make_scenarios_comparison_Ridgeline_Plot(
                     fontsize=option["fontsize"],
                     zorder=n_plots + 2,
                 )
-
 
         axes.set_yticks([])
         xlabel = option["xlabel"]

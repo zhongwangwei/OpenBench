@@ -63,7 +63,10 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                 if filtered_data.size < 2:
                     logger.warning(
                         "Skipping KDE for %s/%s/%s/%s: only %d valid samples",
-                        evaluation_item, ref_source, sim_source, varname,
+                        evaluation_item,
+                        ref_source,
+                        sim_source,
+                        varname,
                         filtered_data.size,
                     )
                     continue
@@ -73,7 +76,11 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                 except np.linalg.LinAlgError as exc:
                     logger.warning(
                         "Skipping KDE for %s/%s/%s/%s: singular covariance (%s)",
-                        evaluation_item, ref_source, sim_source, varname, exc,
+                        evaluation_item,
+                        ref_source,
+                        sim_source,
+                        varname,
+                        exc,
                     )
                     continue
 
@@ -112,7 +119,9 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
         if not lines:
             logger.warning(
                 "Skipping KDE figure for %s/%s/%s: no valid curves",
-                evaluation_item, ref_source, varname,
+                evaluation_item,
+                ref_source,
+                varname,
             )
             plt.close(fig)
             return
