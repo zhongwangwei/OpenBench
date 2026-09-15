@@ -518,6 +518,16 @@ class Evaluation_stn(metrics, scores):
         try:
             return dataset[selector_list]
         except KeyError:
+            item = getattr(self, "item", None)
+            if len(selector_list) == 1 and item and item in dataset.data_vars:
+                logging.debug(
+                    "Variable '%s' is absent from %s station data; using derived evaluation variable '%s'",
+                    selector_list[0],
+                    datasource,
+                    item,
+                )
+                return dataset[[item]]
+
             fallback = self._apply_station_custom_filter(dataset, datasource, attr_name, selector_list[0])
             if fallback is not None:
                 return fallback

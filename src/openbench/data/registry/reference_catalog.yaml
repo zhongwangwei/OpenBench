@@ -2510,7 +2510,7 @@ OpenBench_Streamflow_Daily:
   - 2024
   station_matching:
     area_var: area
-    dataset_file: OpenBench_Streamflow_Daily.nc
+    dataset_file: OpenBench_Streamflow_Daily_full.nc
     discharge_var: discharge
     lat_var: lat
     lon_var: lon

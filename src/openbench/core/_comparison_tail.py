@@ -105,7 +105,7 @@ class TailComparisonMixin:
                     try:
                         sim_path = os.path.join(basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc")
                         with xr.open_dataset(sim_path) as sim_ds:
-                            sim = sim_ds[f"{sim_varname}"].load()
+                            sim = select_data_array(sim_ds, sim_varname, evaluation_item).load()
                         sim = Convert_Type.convert_nc(sim)
 
                         result = method_function(*[sim])
@@ -749,9 +749,9 @@ class TailComparisonMixin:
                                 )
 
                                 with xr.open_dataset(ds1_path) as ds1_file:
-                                    ds1 = ds1_file[sim_varname1].load()
+                                    ds1 = select_data_array(ds1_file, sim_varname1, evaluation_item).load()
                                 with xr.open_dataset(ds2_path) as ds2_file:
-                                    ds2 = ds2_file[sim_varname2].load()
+                                    ds2 = select_data_array(ds2_file, sim_varname2, evaluation_item).load()
 
                                 ds1 = Convert_Type.convert_nc(ds1)
                                 ds2 = Convert_Type.convert_nc(ds2)
