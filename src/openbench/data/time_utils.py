@@ -414,7 +414,7 @@ def normalize_station_time(data_array, compare_tim_res):
         normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
     elif compare_res in {"hour", "h", "1h", "hourly"}:
         normalized = (times.floor("h") + pd.Timedelta(minutes=30)).values
-    elif compare_res in {"month", "mon", "m", "1m", "monthly"}:
+    elif compare_res in {"month", "mon", "m", "1m", "1me", "1ms", "monthly"}:
         normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
     elif compare_res in {"year", "yr", "y", "1y", "annual", "yearly"}:
         normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values

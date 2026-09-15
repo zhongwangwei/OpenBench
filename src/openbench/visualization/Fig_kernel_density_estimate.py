@@ -60,7 +60,23 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                         filtered_data = np.where(data < -1, -1, data)
                 elif varname in ["MFM"]:
                     filtered_data = np.where(data < 0, 0, data)
-                kde = gaussian_kde(filtered_data)
+                if filtered_data.size < 2:
+                    logger.warning(
+                        "Skipping KDE for %s/%s/%s/%s: only %d valid samples",
+                        evaluation_item, ref_source, sim_source, varname,
+                        filtered_data.size,
+                    )
+                    continue
+
+                try:
+                    kde = gaussian_kde(filtered_data)
+                except np.linalg.LinAlgError as exc:
+                    logger.warning(
+                        "Skipping KDE for %s/%s/%s/%s: singular covariance (%s)",
+                        evaluation_item, ref_source, sim_source, varname, exc,
+                    )
+                    continue
+
                 covariance_matrix = kde.covariance
                 covariance_matrix += np.eye(covariance_matrix.shape[0]) * 1e-6  # Regularization
                 kde.covariance = covariance_matrix
@@ -92,6 +108,14 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                     varname,
                 )
                 raise
+
+        if not lines:
+            logger.warning(
+                "Skipping KDE figure for %s/%s/%s: no valid curves",
+                evaluation_item, ref_source, varname,
+            )
+            plt.close(fig)
+            return
 
         if varname == "percent_bias":
             legend_title = "Percent Bias showing value between [-100,100]"

@@ -812,13 +812,13 @@ OpenBench_Streamflow_Daily:
   scan:
     layout: station_shared_files
     root_sub_dir: Station/Water/StreamFlow/Daily
-    file_glob: OpenBench_Streamflow_Daily.nc
+    file_glob: OpenBench_Streamflow_Daily_full.nc
   description: OpenBench consolidated daily streamflow
   tim_res: Day
   data_groupby: single
   station_matching:
     method: cama_allocation
-    dataset_file: OpenBench_Streamflow_Daily.nc
+    dataset_file: OpenBench_Streamflow_Daily_full.nc
     station_id_var: station
     time_var: time
     discharge_var: discharge

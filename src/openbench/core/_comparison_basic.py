@@ -19,6 +19,7 @@ from openbench.core._comparison_helpers import (
 )
 from openbench.data.station_missing import StationDataUnavailable
 from openbench.util.converttype import Convert_Type
+from openbench.util.names import select_data_array
 
 
 def _comparison_callable(name: str):
@@ -153,7 +154,7 @@ class BasicComparisonMixin:
                                 ref_sim_source,
                             )
                             with xr.open_dataset(ref_path) as ds_file:
-                                ds = ds_file[f"{ref_varname}"].load()
+                                ds = select_data_array(ds_file, ref_varname, evaluation_item).load()
                             ds = Convert_Type.convert_nc(ds)
                             method_function = _require_stat_method(self, basic_method)
                             result = method_function(*[ds])
@@ -187,7 +188,7 @@ class BasicComparisonMixin:
                         with xr.open_dataset(
                             os.path.join(basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc")
                         ) as ds_file:
-                            ds = ds_file[f"{sim_varname}"].load()
+                            ds = select_data_array(ds_file, sim_varname, evaluation_item).load()
                         ds = Convert_Type.convert_nc(ds)
                         method_function = _require_stat_method(self, basic_method)
                         result = method_function(*[ds])

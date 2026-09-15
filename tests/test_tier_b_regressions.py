@@ -502,6 +502,34 @@ def test_station_single_variable_fallback_is_not_implicit():
         processor._load_station_dataset(dataset, "ref")
 
 
+def test_station_reads_named_derived_output_before_raw_variable_fallback():
+    from openbench.core.evaluation import Evaluation_stn
+
+    processor = object.__new__(Evaluation_stn)
+    processor.item = "Net_Ecosystem_Exchange"
+    processor.sim_varname = ["f_respc"]
+    dataset = xr.Dataset(
+        {"Net_Ecosystem_Exchange": ("time", [1.0, 2.0], {"units": "g m-2 s-1"})},
+        coords={"time": pd.date_range("2000-01-01", periods=2)},
+    )
+
+    actual = processor._load_station_dataset(dataset, "sim")
+
+    xr.testing.assert_identical(actual, dataset[["Net_Ecosystem_Exchange"]])
+    assert processor.sim_varname == ["f_respc"]
+
+
+def test_station_uses_configured_raw_variable_when_both_are_present():
+    from openbench.core.evaluation import Evaluation_stn
+
+    processor = object.__new__(Evaluation_stn)
+    processor.item = "Net_Ecosystem_Exchange"
+    processor.sim_varname = ["f_nee"]
+    dataset = xr.Dataset({"f_nee": ("time", [1.0]), "Net_Ecosystem_Exchange": ("time", [2.0])})
+
+    xr.testing.assert_identical(processor._load_station_dataset(dataset, "sim"), dataset[["f_nee"]])
+
+
 def test_station_plot_scalarizes_vector_metric_values(caplog):
     from openbench.core.evaluation import _scalar_plot_value
 

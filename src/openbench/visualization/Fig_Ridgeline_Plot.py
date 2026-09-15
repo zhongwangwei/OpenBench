@@ -1,3 +1,5 @@
+import logging
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,6 +9,8 @@ from openbench.visualization._rc_isolation import with_isolated_rc  # noqa: E402
 from ._sampling import sample_distribution_series, sample_series_for_plot
 from openbench.visualization._figure_io import save_figure
 from openbench.visualization._filenames import join_filename_components
+
+logger = logging.getLogger(__name__)
 
 
 @with_isolated_rc
@@ -29,12 +33,52 @@ def make_scenarios_comparison_Ridgeline_Plot(
         }
         rcParams.update(params)
 
-        n_plots = len(sim_sources)
-        fig, axes = plt.subplots(figsize=(option["x_wise"], option["y_wise"] * len(sim_sources) / 2))
-
-        MLINES = generate_lines(sim_sources, option)
-
         datasets_filtered = sample_distribution_series(datasets_filtered, option, purpose="kde")
+        valid_sources = []
+        valid_data = []
+        valid_kdes = []
+        for data, sim_source in zip(datasets_filtered, sim_sources):
+            data = sample_series_for_plot(data, option, purpose="kde")
+            data = np.asarray(data, dtype=float).ravel()
+            data = data[np.isfinite(data)]
+            filtered_data = data
+            if varname in ["KGE", "NSE", "KGESS"]:
+                filtered_data = np.where(data < -1, -1, data)
+            elif varname == "MFM":
+                filtered_data = np.where(data < 0, 0, data)
+
+            # Check after clipping, which can collapse distinct values.
+            if filtered_data.size < 2:
+                reason = f"only {filtered_data.size} valid samples"
+            elif np.ptp(filtered_data) == 0:
+                reason = "all values are identical after clipping"
+            else:
+                try:
+                    kde = gaussian_kde(filtered_data)
+                except np.linalg.LinAlgError as exc:
+                    reason = f"singular covariance ({exc})"
+                else:
+                    valid_sources.append(sim_source)
+                    valid_data.append(data)
+                    valid_kdes.append(kde)
+                    continue
+            logger.warning(
+                "Skipping Ridgeline for %s/%s/%s/%s: %s",
+                evaluation_item, ref_source, sim_source, varname, reason,
+            )
+
+        if not valid_sources:
+            logger.warning(
+                "Skipping Ridgeline figure for %s/%s/%s: no valid curves",
+                evaluation_item, ref_source, varname,
+            )
+            return
+
+        sim_sources = valid_sources
+        datasets_filtered = valid_data
+        n_plots = len(sim_sources)
+        fig, axes = plt.subplots(figsize=(option["x_wise"], option["y_wise"] * n_plots / 2))
+        MLINES = generate_lines(sim_sources, option)
 
         def remove_outliers(data_list):
             q1, q3 = np.percentile(data_list, [1.5, 98.5])
@@ -57,15 +101,7 @@ def make_scenarios_comparison_Ridgeline_Plot(
         y_shift_increment = 0.1
         scale_factor = 0.15
 
-        for i, (data, sim_source) in enumerate(zip(datasets_filtered, sim_sources)):
-            data = sample_series_for_plot(data, option, purpose="kde")
-            filtered_data = data
-            if varname in ["KGE", "NSE", "KGESS"]:
-                filtered_data = np.where(data < -1, -1, data)
-            elif varname in ["MFM"]:
-                filtered_data = np.where(data < 0, 0, data)
-
-            kde = gaussian_kde(filtered_data)
+        for i, (data, sim_source, kde) in enumerate(zip(datasets_filtered, sim_sources, valid_kdes)):
             y_range = kde(x_range)
 
             # Scale and shift the densities. Guard near-constant inputs:
@@ -129,6 +165,7 @@ def make_scenarios_comparison_Ridgeline_Plot(
                     fontsize=option["fontsize"],
                     zorder=n_plots + 2,
                 )
+
 
         axes.set_yticks([])
         xlabel = option["xlabel"]
