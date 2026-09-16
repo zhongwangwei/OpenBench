@@ -104,6 +104,39 @@ def test_parallel_coordinates_station_summary_masks_status_unavailable_rows(tmp_
     assert result.loc[0, "bias"] == pytest.approx(2.0)
 
 
+def test_parallel_coordinates_keeps_two_finite_metrics_after_status_merge(tmp_path, monkeypatch):
+    """Two valid stations must not be removed as outliers after unavailable rows are restored."""
+    import openbench.core.comparison as comparison_module
+
+    (tmp_path / "scores").mkdir()
+    (tmp_path / "metrics").mkdir()
+    status_dir = tmp_path / "data/stn_RefA_SimA"
+    status_dir.mkdir(parents=True)
+    ids = ["S1", "S2", "S3", "S4"]
+    pd.DataFrame({"ID": ids, "Overall_Score": [0.8, 0.6, 999.0, 999.0]}).to_csv(
+        tmp_path / "scores/Runoff_stn_RefA_SimA_evaluations.csv", index=False
+    )
+    pd.DataFrame({"ID": ids, "bias": [0.8348533, 1.7359673, 999.0, 999.0]}).to_csv(
+        tmp_path / "metrics/Runoff_stn_RefA_SimA_evaluations.csv", index=False
+    )
+    pd.DataFrame(
+        {
+            "ID": ids,
+            "status": ["ok", "ok", "unavailable", "unavailable"],
+            "reason": ["", "", "missing station variable", "missing station variable"],
+        }
+    ).to_csv(status_dir / "Runoff_evaluation_status.csv", index=False)
+    monkeypatch.setattr(comparison_module, "make_scenarios_comparison_parallel_coordinates", lambda *args: None)
+    sim, ref = _station_namelists()
+
+    _processor(tmp_path, scores=["Overall_Score"], metrics=["bias"]).scenarios_Parallel_Coordinates_comparison(
+        str(tmp_path), sim, ref, ["Runoff"], ["Overall_Score"], ["bias"], {}
+    )
+
+    result = pd.read_csv(tmp_path / "comparisons/Parallel_Coordinates/Parallel_Coordinates_evaluations.csv", sep="\t")
+    assert result.loc[0, "bias"] == pytest.approx(1.29)
+
+
 def test_heatmap_station_summary_masks_status_unavailable_rows(tmp_path, monkeypatch):
     import openbench.core.comparison as comparison_module
 

@@ -103,7 +103,8 @@ class ParallelCoordinatesComparisonMixin:
 
                                                 for metric in metrics:
                                                     metric_values = metric_df[metric].replace([np.inf, -np.inf], np.nan)
-                                                    if metric_values.shape[0] > 2:
+                                                    finite_count = np.isfinite(metric_values).sum()
+                                                    if finite_count > 2:
                                                         q_low, q_high = metric_values.quantile([0.05, 0.95])
                                                         metric_values = metric_values.where(
                                                             (metric_values >= q_low) & (metric_values <= q_high), np.nan
