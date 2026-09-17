@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.0.3] - 2026-09-17
+
+Feature and reliability release for station-mode preprocessing and comparisons.
+
+### Added
+- Support a derived-variable fallback for station datasets when the configured
+  variable is absent, and normalize `1ME`/`1MS` monthly station timestamps
+  before alignment (#198).
+
+### Fixed
+- Run catalog compute (sign flips, unit conversions, PFT aggregation) on
+  station-mode model output before falling back to the raw variable, matching
+  the order grid preprocessing already uses.
+- Read relabelled flat files by their catalog item name in the SMPI,
+  Mann-Kendall reference, mass-weighted score and groupby readers, instead of
+  the raw configured varname.
+- Harden KDE and ridgeline plots against sparse and constant data; update
+  streamflow dataset configuration and plot defaults.
+- Only clip Parallel Coordinates metric quantiles when enough finite values
+  are present, rather than counting NaNs toward the sample size (#199).
+
 ## [3.0.2] - 2026-09-14
 
 Patch release for station evaluation and comparison reliability.
