@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.0.3] - 2026-09-17
+## [3.0.3] - 2026-09-18
 
 Feature and reliability release for station-mode preprocessing and comparisons.
 
@@ -20,6 +20,15 @@ Feature and reliability release for station-mode preprocessing and comparisons.
   streamflow dataset configuration and plot defaults.
 - Only clip Parallel Coordinates metric quantiles when enough finite values
   are present, rather than counting NaNs toward the sample size (#199).
+
+### Packaging
+- Published GitHub release v3.0.3, PyPI 3.0.3 (uploaded manually with
+  `twine`, since the `publish.yml` trusted-publishing workflow is not yet
+  registered on PyPI for this repository) and updated the pending
+  conda-forge recipe in
+  [conda-forge/staged-recipes#34807](https://github.com/conda-forge/staged-recipes/pull/34807)
+  to 3.0.3, dropping the Windows console-encoding patch the source no
+  longer needs. conda-forge review/merge is still pending.
 
 ## [3.0.2] - 2026-09-14
 
