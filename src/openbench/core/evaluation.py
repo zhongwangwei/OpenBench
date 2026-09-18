@@ -2,6 +2,7 @@ import gc
 import importlib
 import logging
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,8 @@ import xarray as xr
 from joblib import Parallel, delayed
 
 from openbench.data._system_resources import effective_cpu_count, get_system_resources
+from openbench.data.station_missing import StationDataUnavailable
+from openbench.data.time_utils import align_station_times, normalize_station_time
 
 try:
     from openbench.util.dataset_loader import open_dataset as open_dataset_chunked
@@ -515,6 +518,16 @@ class Evaluation_stn(metrics, scores):
         try:
             return dataset[selector_list]
         except KeyError:
+            item = getattr(self, "item", None)
+            if len(selector_list) == 1 and item and item in dataset.data_vars:
+                logging.debug(
+                    "Variable '%s' is absent from %s station data; using derived evaluation variable '%s'",
+                    selector_list[0],
+                    datasource,
+                    item,
+                )
+                return dataset[[item]]
+
             fallback = self._apply_station_custom_filter(dataset, datasource, attr_name, selector_list[0])
             if fallback is not None:
                 return fallback
@@ -547,8 +560,10 @@ class Evaluation_stn(metrics, scores):
 
         try:
             custom_module = importlib.import_module(f"openbench.data.custom.{model}_filter")
-            custom_filter = getattr(custom_module, f"filter_{model}")
-        except (ImportError, AttributeError):
+        except ModuleNotFoundError as exc:
+            module_name = f"openbench.data.custom.{model}_filter"
+            if exc.name != module_name and not module_name.startswith(f"{exc.name}."):
+                raise
             logging.warning(
                 "Variable '%s' missing in %s dataset for %s, no custom filter available",
                 canonical_name,
@@ -556,6 +571,7 @@ class Evaluation_stn(metrics, scores):
                 model,
             )
             return None
+        custom_filter = getattr(custom_module, f"filter_{model}")
 
         attr_value = getattr(self, attr_name)
         attr_is_sequence = isinstance(attr_value, (list, tuple, np.ndarray))
@@ -599,37 +615,10 @@ class Evaluation_stn(metrics, scores):
         return data_array.to_dataset(name=canonical_name)
 
     def _normalize_time_coordinate(self, data_array):
-        """
-        Normalize time coordinates to the configured comparison resolution.
+        return normalize_station_time(data_array, getattr(self, "compare_tim_res", ""))
 
-        Ensures reference/simulation station series use identical timestamps even when
-        source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
-        """
-        compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
-        from openbench.util.time import normalize_time_coordinate
-
-        return normalize_time_coordinate(data_array, compare_res)
-
-    def _align_station_times(self, s: xr.DataArray, o: xr.DataArray, station_id) -> tuple[xr.DataArray, xr.DataArray]:
-        """Align station series using the representation with the most paired steps."""
-        from openbench.util.time import align_time_coordinates
-
-        compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
-        aligned_s, aligned_o, normalized = align_time_coordinates(s, o, compare_res)
-        if aligned_s.sizes.get("time", 0):
-            if normalized:
-                logging.warning(
-                    "Station %s time coordinates required normalization before alignment; using %d overlapping steps",
-                    station_id,
-                    aligned_s.sizes["time"],
-                )
-            return aligned_s, aligned_o
-        if normalized:
-            logging.warning(
-                "Station %s time coordinate normalization produced no overlapping steps",
-                station_id,
-            )
-        raise ValueError(f"Station {station_id} has no overlapping time steps after exact or normalized alignment")
+    def _align_station_times(self, s, o, station_id):
+        return align_station_times(s, o, station_id, getattr(self, "compare_tim_res", ""))
 
     def make_evaluation_parallel(self, station_list, iik):
         sim_ds = None
@@ -649,53 +638,43 @@ class Evaluation_stn(metrics, scores):
             )
 
             if not os.path.exists(sim_path) or not os.path.exists(ref_path):
-                station_id = station_list["ID"][iik]
-                logging.warning(f"Skipping station {station_id} - data files not found (time range mismatch)")
-                return None
+                missing = [path for path in (sim_path, ref_path) if not os.path.exists(path)]
+                reasons = []
+                for path in missing:
+                    marker = Path(path).with_suffix(".skip.txt")
+                    if not marker.is_file():
+                        raise FileNotFoundError(
+                            f"Preprocessed station data missing without a recorded data gap: {path}"
+                        )
+                    reasons.append(f"{Path(path).name}: {marker.read_text(encoding='utf-8')}")
+                raise StationDataUnavailable("; ".join(reasons))
 
             # Open datasets (station files are small, no chunking needed)
             sim_ds = open_dataset_chunked(sim_path, use_chunking=False)
             ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
             s_ds = self._load_station_dataset(sim_ds, "sim")
             o_ds = self._load_station_dataset(ref_ds, "ref")
-            s = s_ds.to_array().squeeze()
-            o = o_ds.to_array().squeeze()
+            s = s_ds.to_array()
+            o = o_ds.to_array()
+            # Keep even a single time step indexed so data-gap checks still apply.
+            s = s.squeeze([dim for dim in s.dims if dim != "time" and s.sizes[dim] == 1])
+            o = o.squeeze([dim for dim in o.dims if dim != "time" and o.sizes[dim] == 1])
             o = Convert_Type.convert_nc(o)
             s = Convert_Type.convert_nc(s)
 
             # Align by common timestamps to avoid dimension conflicts
-            try:
-                station_id = station_list["ID"][iik]
-                s, o = self._align_station_times(s, o, station_id)
-            except Exception as e:
-                logging.debug(f"Time alignment fallback due to: {e}")
-                station_id = station_list["ID"][iik]
-                logging.warning(f"Skipping station {station_id} - failed to align time coordinates")
-                return None
+            station_id = station_list["ID"][iik]
+            s, o = self._align_station_times(s, o, station_id)
             if not _has_any_valid_pair(s, o):
-                station_id = station_list["ID"][iik]
-                logging.warning(f"Skipping station {station_id} - no shared finite sim/ref pairs")
-                return None
+                raise StationDataUnavailable("no shared finite sim/ref pairs")
             s, o = _apply_pairwise_valid_mask(s, o)
 
             row = {}
             shared_mfm_names = _mfm_shared_metric_names(self.metrics)
             shared_mfm = self._MFM_shared_components(s, o) if shared_mfm_names else {}
-            try:
-                row["KGESS"] = self.KGESS(s, o).values
-            except (ValueError, RuntimeError, AttributeError) as e:
-                logging.warning("Station %s KGESS calculation failed: %s", station_id, e)
-                row["KGESS"] = np.nan
-            try:
-                row["RMSE"] = self.RMSE(s, o).values
-            except (ValueError, RuntimeError, AttributeError) as e:
-                logging.warning("Station %s RMSE calculation failed: %s", station_id, e)
-                row["RMSE"] = np.nan
-            try:
-                row["correlation"] = self.correlation(s, o).values
-            except (ValueError, RuntimeError, AttributeError) as e:
-                logging.warning("Station %s correlation calculation failed: %s", station_id, e)
-                row["correlation"] = np.nan
+            for name in ("KGESS", "RMSE", "correlation"):
+                value = getattr(self, name)(s, o)
+                row[name] = value.values if hasattr(value, "values") else value
 
             for metric in self.metrics:
                 if hasattr(self, metric):
@@ -742,6 +721,8 @@ class Evaluation_stn(metrics, scores):
                 lat_lon,
             )
             return row
+        except StationDataUnavailable as exc:
+            return {"_skip_reason": str(exc)}
         finally:
             if sim_ds is not None:
                 sim_ds.close()
@@ -795,12 +776,40 @@ class Evaluation_stn(metrics, scores):
                     )
                     results = [self.make_evaluation_parallel(station_list, iik) for iik in station_indices]
 
-            skipped = sum(1 for r in results if r is None)
-            if skipped:
-                raise RuntimeError(f"Station evaluation failed for {skipped}/{len(station_indices)} station(s)")
-            if not results:
-                raise RuntimeError("Station evaluation produced no station results")
-            station_list = pd.concat([station_list, pd.DataFrame(results)], axis=1)
+            if len(results) != len(station_indices) or any(not isinstance(r, dict) or not r for r in results):
+                raise RuntimeError("Station evaluation returned incomplete or invalid worker results")
+            skipped = [
+                {"station": str(station_list.iloc[i]["ID"]), "reason": result["_skip_reason"]}
+                for i, result in enumerate(results)
+                if "_skip_reason" in result
+            ]
+            for entry in skipped:
+                logging.warning("Skipping station %s: %s", entry["station"], entry["reason"])
+            valid_indices = [i for i, result in enumerate(results) if "_skip_reason" not in result]
+            self.station_summary = {"total": len(results), "succeeded": len(valid_indices), "skipped": skipped}
+            # Keep unavailable sites durable for comparison-only runs without
+            # changing the successful-only metric/score table contract.
+            station_status = station_list.copy()
+            station_status["status"] = ["unavailable" if "_skip_reason" in r else "ok" for r in results]
+            station_status["reason"] = [r.get("_skip_reason", "") for r in results]
+            status_path = os.path.join(
+                self.casedir,
+                "data",
+                f"stn_{self.ref_source}_{self.sim_source}",
+                f"{self.item}_evaluation_status.csv",
+            )
+            _write_file_atomic(status_path, lambda path: station_status.to_csv(path, index=False), suffix=".tmp.csv")
+            if not valid_indices:
+                raise RuntimeError(
+                    f"Station evaluation produced no valid station results ({len(skipped)}/{len(results)} skipped)"
+                )
+            station_list = pd.concat(
+                [
+                    station_list.iloc[valid_indices].reset_index(drop=True),
+                    pd.DataFrame([results[i] for i in valid_indices]),
+                ],
+                axis=1,
+            )
             requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
             if not requested_columns:
                 requested_columns = ["KGESS", "RMSE", "correlation"]
@@ -875,6 +884,13 @@ class Evaluation_stn(metrics, scores):
                     )
 
             make_plot_index_stn(self)
+            if skipped:
+                logging.warning(
+                    "Station evaluation partial success: %d/%d succeeded, %d skipped",
+                    len(valid_indices),
+                    len(results),
+                    len(skipped),
+                )
 
         finally:
             gc.collect()  # Final cleanup

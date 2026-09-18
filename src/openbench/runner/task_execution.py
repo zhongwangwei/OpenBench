@@ -154,6 +154,8 @@ def evaluate_single(
                     "skipped": False,
                 }
 
+        station_summary = getattr(evaluator, "station_summary", None)
+        partial_stations = bool(station_summary and station_summary["skipped"])
         if cache is not None and update_cache:
             # The evaluation already succeeded — its output files are on
             # disk. A failure to update the cache index (e.g. fcntl.flock
@@ -161,10 +163,14 @@ def evaluate_single(
             # otherwise GUI / CLI reports a false negative and the user
             # re-runs an already-completed evaluation. Log and continue.
             try:
-                cache.mark_done(cache_key, config_hash)
+                if partial_stations:
+                    # Retry omitted stations next run; do not cache partial data as complete.
+                    cache.invalidate(cache_key)
+                else:
+                    cache.mark_done(cache_key, config_hash)
             except Exception as mark_err:
                 logger.warning(
-                    "mark_done failed for %s (sim=%s ref=%s): %s — evaluation succeeded, cache index not updated",
+                    "Cache update failed for %s (sim=%s ref=%s): %s — evaluation succeeded, cache index not updated",
                     var_name,
                     sim_source,
                     ref_source,
@@ -180,6 +186,7 @@ def evaluate_single(
             "cache_key": cache_key,
             "config_hash": config_hash,
             "skipped": False,
+            **({"station_summary": station_summary} if station_summary else {}),
         }
 
     except Exception as exc:

@@ -170,6 +170,15 @@ def test_sdist_has_no_forbidden_files() -> None:
     )
 
 
+def test_sdist_contains_only_release_inputs() -> None:
+    root_files = {"README.md", "LICENSE", "pyproject.toml", "CHANGELOG.md", "PKG-INFO", ".gitignore"}
+    paths = [member.split("/", 1)[1] for member in _sdist_members()]
+    unexpected = [
+        path for path in paths if path not in root_files and not path.startswith(("src/openbench/", "tests/"))
+    ]
+    assert not unexpected, f"Sdist contains files outside the release inputs: {unexpected}"
+
+
 @pytest.mark.parametrize("archive_members", [_wheel_members, _sdist_members], ids=["wheel", "sdist"])
 def test_archives_contain_required_data_files(archive_members) -> None:
     """Sanity: the registry YAML files MUST ship in the wheel."""

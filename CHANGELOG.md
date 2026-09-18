@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased] — 3.0 release preparation
+## [Unreleased] — uncertainty branch preparation
+
+Notes carried over from the uncertainty-aware evaluation branch's own
+pre-3.0 changelog; kept here since the branch has not cut a numbered
+release of its own. Overlaps with fixes now also documented under the
+numbered releases below once this branch synced main's history.
 
 ### Fixed
 - Shared grid preprocessing no longer depends on which reference is evaluated
@@ -17,6 +22,105 @@
   credential handling without removing public compatibility entry points.
 - Share wheel/sdist resource checks between CI and publishing, require explicitly
   selected artifacts to exist, and document fresh-build release verification.
+
+## [3.0.3] - 2026-09-18
+
+Feature and reliability release for station-mode preprocessing and comparisons.
+
+### Added
+- Support a derived-variable fallback for station datasets when the configured
+  variable is absent, and normalize `1ME`/`1MS` monthly station timestamps
+  before alignment (#198).
+
+### Fixed
+- Run catalog compute (sign flips, unit conversions, PFT aggregation) on
+  station-mode model output before falling back to the raw variable, matching
+  the order grid preprocessing already uses.
+- Read relabelled flat files by their catalog item name in the SMPI,
+  Mann-Kendall reference, mass-weighted score and groupby readers, instead of
+  the raw configured varname.
+- Harden KDE and ridgeline plots against sparse and constant data; update
+  streamflow dataset configuration and plot defaults.
+- Only clip Parallel Coordinates metric quantiles when enough finite values
+  are present, rather than counting NaNs toward the sample size (#199).
+
+### Packaging
+- Published GitHub release v3.0.3, PyPI 3.0.3 (uploaded manually with
+  `twine`, since the `publish.yml` trusted-publishing workflow is not yet
+  registered on PyPI for this repository) and updated the pending
+  conda-forge recipe in
+  [conda-forge/staged-recipes#34807](https://github.com/conda-forge/staged-recipes/pull/34807)
+  to 3.0.3, dropping the Windows console-encoding patch the source no
+  longer needs. conda-forge review/merge is still pending.
+
+## [3.0.2] - 2026-09-14
+
+Patch release for station evaluation and comparison reliability.
+
+### Fixed
+- Retain station comparison rows with unavailable values and explicit reasons,
+  without excluding valid grid pairs in mixed grid/station configurations.
+- Distinguish known station data gaps from processing failures; report partial
+  evaluation success and do not cache it as a complete result.
+- Align station timestamps before using configured-resolution normalization,
+  preserving exact non-Gregorian calendar coordinates and singleton time axes.
+- Include station results in Correlation, Basic, seasonal and tail-statistic
+  comparisons and drawing-only runs; preserve undefined statistics as NA.
+- Restrict Relative Score to configured compatible sources, retain undefined
+  station results, and use signed z-score color scales rather than score bounds.
+- Preserve per-statistic valid sample counts in group-by tables and figures.
+- Resolve Diff Plot color-normalization conflicts and retain Matplotlib 3.4+
+  Whisker Plot compatibility; honor station plot limits and neutral NA markers.
+- Fall back directly from missing PLUMBER2 `Qle_cor` / `Qh_cor` to `Qle` / `Qh`,
+  and accept the supported carbon-flux and temperature unit aliases.
+
+### Packaging
+- Advance the GitHub source and Conda recipe to 3.0.2. The source already includes
+  the Windows console fix, so its old Conda backport patch is no longer needed.
+- This GitHub update does not publish a package to PyPI or conda-forge.
+
+## [3.0.1] - 2026-09-11
+
+Patch release over 3.0.0 for release metadata and CLI output compatibility.
+
+### Fixed
+- Prevent Unicode output crashes in redirected CP1252 and other legacy-encoded
+  CLI streams while preserving UTF-8 output on normal terminals.
+- Backport the Windows-default `surrogateescape` correction into Conda builds
+  of the immutable GitHub 3.0.1 source; the PyPI 3.0.1 release includes it directly.
+- Correct distribution metadata and bundled third-party license coverage for
+  vendored `cmaps` and NCL color-table resources.
+
+### Packaging
+- Keep Conda-forge availability documented as pending review in
+  [conda-forge/staged-recipes#34807](https://github.com/conda-forge/staged-recipes/pull/34807);
+  no conda-forge channel package has been published yet.
+
+## [3.0.0] - 2026-09-11
+
+First stable 3.0 release, including the main-branch fixes validated across Linux,
+macOS and Windows on Python 3.10–3.12. The opt-in uncertainty-aware pipeline
+remains on its separate development branch.
+
+### Fixed
+- Shared grid preprocessing no longer depends on which reference is evaluated
+  first; per-pair masked references survive cache reuse and post-processing errors.
+- Statistics respect preprocessed units, finite observations and coordinate
+  alignment; ANOVA, PLSR and Three-Cornered Hat receive the correct source layout.
+- Non-Gregorian monthly conversions, computed reference variables and mixed
+  flat/resolution-specific reference directories retain their intended data.
+- Remote configuration changes apply atomically without retaining another
+  host's passwords; recursive deletes clear matching cached and pending files.
+
+### Maintenance
+- Remove obsolete processing scaffolding and consolidate calendar and saved
+  credential handling without removing public compatibility entry points.
+- Share wheel/sdist resource checks between CI and publishing, require explicitly
+  selected artifacts to exist, and document fresh-build release verification.
+- Remove redundant comments and duplicate test scaffolding while retaining
+  meaningful scientific documentation and deterministic regression coverage.
+- Align the Conda recipe with the stable PyPI version and verify its dependency,
+  command-line and bundled-data installation contracts.
 
 ## [3.0.0b16] - 2026-08-31
 

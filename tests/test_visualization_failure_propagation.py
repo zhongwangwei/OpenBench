@@ -448,50 +448,53 @@ def test_relative_score_station_inner_plot_failures_propagate(tmp_path, monkeypa
         )
 
 
-def test_relative_score_station_all_nan_raises_before_plot(tmp_path, monkeypatch):
-    """Relative Score station renderer should fail on all-NaN data instead of silently skipping."""
+def test_relative_score_station_all_nan_renders_neutral_map_without_colorbar(tmp_path, monkeypatch):
+    """Relative Score station renderer should keep all-NaN rows as neutral markers."""
     import openbench.visualization.Fig_Relative_Score as fig_relative
 
-    plot_calls = []
-    monkeypatch.setattr(fig_relative.plt, "figure", lambda *args, **kwargs: plot_calls.append(args))
+    axes_counts = []
 
-    with pytest.raises(ValueError, match="no finite data"):
-        fig_relative.make_stn_plot_index(
-            str(tmp_path / "relative.csv"),
-            "Overall_Score",
-            np.array([np.nan]),
-            np.array([30.0]),
-            np.array([100.0]),
-            {"min_lon": 0, "max_lon": 360, "min_lat": -90, "max_lat": 90},
-            {
-                "cmap": "viridis",
-                "vmin_max_on": False,
-                "font": "DejaVu Sans",
-                "labelsize": 8,
-                "xtick": 8,
-                "ytick": 8,
-                "x_wise": 4,
-                "y_wise": 3,
-                "markersize": 10,
-                "marker": "o",
-                "line_width": 1,
-                "set_lat_lon": False,
-                "max_lon": 360,
-                "min_lon": 0,
-                "max_lat": 90,
-                "min_lat": -90,
-                "xticklabel": "",
-                "yticklabel": "",
-                "title": "",
-                "title_size": 10,
-                "colorbar_position_set": False,
-                "colorbar_position": "vertical",
-                "saving_format": "png",
-                "dpi": 80,
-            },
-        )
+    def capture(fig, *args, **kwargs):
+        axes_counts.append(len(fig.axes))
 
-    assert plot_calls == []
+    monkeypatch.setattr(fig_relative, "save_figure", capture)
+
+    fig_relative.make_stn_plot_index(
+        str(tmp_path / "relative.csv"),
+        "Overall_Score",
+        np.array([np.nan]),
+        np.array([30.0]),
+        np.array([100.0]),
+        {"min_lon": 0, "max_lon": 360, "min_lat": -90, "max_lat": 90},
+        {
+            "cmap": "viridis",
+            "vmin_max_on": False,
+            "font": "DejaVu Sans",
+            "labelsize": 8,
+            "xtick": 8,
+            "ytick": 8,
+            "x_wise": 4,
+            "y_wise": 3,
+            "markersize": 10,
+            "marker": "o",
+            "line_width": 1,
+            "set_lat_lon": False,
+            "max_lon": 360,
+            "min_lon": 0,
+            "max_lat": 90,
+            "min_lat": -90,
+            "xticklabel": "",
+            "yticklabel": "",
+            "title": "",
+            "title_size": 10,
+            "colorbar_position_set": False,
+            "colorbar_position": "vertical",
+            "saving_format": "png",
+            "dpi": 80,
+        },
+    )
+
+    assert axes_counts == [1]
 
 
 def test_diff_plot_grid_all_nan_raises_before_map(tmp_path, monkeypatch):
@@ -700,20 +703,60 @@ def test_basic_grid_renderer_rejects_all_nan_netcdf(tmp_path):
         fig_basic.make_Basic(str(source_nc), "Mean", "RefA", {}, {"cmap": "viridis"})
 
 
-def test_stn_plot_index_renderer_rejects_all_nan_inputs(tmp_path):
-    """Standalone station plot renderer should fail fast on stale all-NaN CSV data."""
+def test_stn_plot_index_renderer_keeps_all_nan_station_status(tmp_path, monkeypatch):
+    """Known unavailable station comparisons remain visible without a fake scale."""
     import openbench.visualization.Fig_stn_plot_index as fig_stn
 
     source_csv = tmp_path / "basic.csv"
-    pd.DataFrame([{"ID": "S1", "ref_lon": 100.0, "ref_lat": 30.0, "ref_value": np.nan, "sim_value": np.nan}]).to_csv(
-        source_csv, index=False
+    pd.DataFrame(
+        [
+            {
+                "ID": "S1",
+                "ref_lon": 100.0,
+                "ref_lat": 30.0,
+                "ref_value": np.nan,
+                "sim_value": np.nan,
+                "status": "unavailable",
+            }
+        ]
+    ).to_csv(source_csv, index=False)
+    figures = []
+    monkeypatch.setattr(fig_stn, "save_figure", lambda figure, *args, **kwargs: figures.append(figure))
+    option = {
+        "cmap": "viridis",
+        "vmin_max_on": False,
+        "font": "DejaVu Sans",
+        "labelsize": 8,
+        "xtick": 8,
+        "ytick": 8,
+        "x_wise": 4,
+        "y_wise": 3,
+        "markersize": 20,
+        "marker": "o",
+        "line_width": 1,
+        "max_lat": 90,
+        "min_lat": -90,
+        "max_lon": 180,
+        "min_lon": -180,
+        "set_lat_lon": False,
+        "xticklabel": "",
+        "yticklabel": "",
+        "title": "",
+        "title_size": 10,
+        "colorbar_position_set": False,
+        "colorbar_position": "vertical",
+        "saving_format": "png",
+        "dpi": 80,
+    }
+    fig_stn.make_stn_plot_index(
+        str(source_csv),
+        "Mean",
+        {"min_lon": 0, "max_lon": 180, "min_lat": -90, "max_lat": 90},
+        ("RefA", "SimA"),
+        option,
     )
-
-    with pytest.raises(ValueError, match="Mean station map/ref_value: no finite data to plot"):
-        fig_stn.make_stn_plot_index(
-            str(source_csv),
-            "Mean",
-            {"min_lon": 0, "max_lon": 180, "min_lat": -90, "max_lat": 90},
-            ("RefA", "SimA"),
-            {"cmap": "viridis"},
-        )
+    assert len(figures) == 2
+    for figure in figures:
+        assert len(figure.axes) == 1  # No colorbar on an unavailable result.
+        assert "No valid station data" in [text.get_text() for text in figure.axes[0].texts]
+        assert "Unavailable (n=1)" in [text.get_text() for text in figure.axes[0].get_legend().texts]

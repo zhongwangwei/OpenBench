@@ -70,3 +70,32 @@ def test_decode_nonstandard_year_offsets_reject_fractional_values():
 
     with pytest.raises(ValueError, match="Non-integer year offsets"):
         decode_nonstandard_time(ds)
+
+
+@pytest.mark.parametrize("calendar", ["DatetimeNoLeap", "Datetime360Day"])
+def test_station_alignment_preserves_exact_cftime_calendar(calendar):
+    from openbench.data.time_utils import align_station_times
+
+    date = getattr(pytest.importorskip("cftime"), calendar)
+    dates = (
+        [date(2000, 2, day) for day in (27, 28, 29)]
+        if calendar == "Datetime360Day"
+        else [date(2000, 2, 27), date(2000, 2, 28), date(2000, 3, 1)]
+    )
+    sim = xr.DataArray([3.0, 2.0, 1.0], dims="time", coords={"time": dates[::-1]})
+    ref = xr.DataArray([10.0, 20.0], dims="time", coords={"time": dates[:2]})
+    aligned_sim, aligned_ref = align_station_times(sim, ref, "A", "day")
+    assert aligned_sim.time.values.tolist() == dates[:2]
+    assert aligned_sim.values.tolist() == [1.0, 2.0]
+    xr.testing.assert_equal(aligned_sim.time, aligned_ref.time)
+
+
+def test_station_alignment_reports_nonoverlapping_cftime_as_data_gap():
+    from openbench.data.station_missing import StationDataUnavailable
+    from openbench.data.time_utils import align_station_times
+
+    date = pytest.importorskip("cftime").DatetimeNoLeap
+    sim = xr.DataArray([1.0], dims="time", coords={"time": [date(2000, 1, 1)]})
+    ref = xr.DataArray([1.0], dims="time", coords={"time": [date(2000, 1, 2)]})
+    with pytest.raises(StationDataUnavailable, match="no overlapping time"):
+        align_station_times(sim, ref, "A", "day")

@@ -59,7 +59,7 @@ BCC_AVIM:
       varunit: '-'
     Surface_Net_LW_Radiation: &id009
       compute: -ds['FIRA']
-      varname: FIRA
+      varname: Surface_Net_LW_Radiation
       varunit: W m-2
     Surface_Soil_Moisture: &id010
       compute: (ds['SOILLIQ'].isel(levsoi=0) + ds['SOILLIQ'].isel(levsoi=1)) / 0.06 / 1000.0
@@ -859,13 +859,13 @@ LM4:
       varname: lai
       varunit: m2 m-2
     Net_Ecosystem_Exchange:
-      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: nbp
+#      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
+      varname: fco2
       varunit: kg C m-2 s-1
-    Net_Ecosystem Exchange:
-      compute: "-ds['nbp'] if 'nbp' in ds else ds['fco2']"
-      varname: nbp
-      varunit: kg C m-2 s-1
+      fallbacks:
+        - varname: nbp
+          varunit: kg C m-2 s-1
+          convert: -value
     Net_Radiation:
       compute: ds['fsw'] + ds['flw']
       varname: Net_Radiation
@@ -1091,7 +1091,7 @@ ORCHIDEE:
     Surface_Soil_Moisture:
       # mrsos is the upper 0.1 m water column (kg m-2); divide by 100 kg m-2.
       compute: "ds['mrsos'] / 100.0"
-      varname: mrsos
+      varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature:
       varname: temp_sol
@@ -1564,7 +1564,7 @@ GLDAS:
       varname: SWE_inst
       varunit: kg m-2
     Surface_Soil_Moisture:
-      varname: SoilMoi0_10cm_inst
+      varname: Surface_Soil_Moisture
       # Noah layer thickness 0.1 m: https://ldas.gsfc.nasa.gov/gldas/specifications
       compute: ds['SoilMoi0_10cm_inst'] / 100.0
       varunit: m3 m-3
@@ -1614,12 +1614,12 @@ GLDAS:
       varname: Tveg_tavg
       varunit: W m-2
     Root_Zone_Soil_Moisture:
-      varname: RootMoist_inst
+      varname: Root_Zone_Soil_Moisture
       # ponytail: user-selected 1 m root zone; adjust depth below for other products.
       compute: ds['RootMoist_inst'] / (1000.0 * 1.0)
       varunit: m3 m-3
     Soil_Moisture_Lev2:
-      varname: SoilMoi10_40cm_inst
+      varname: Soil_Moisture_Lev2
       # Noah layer thickness 0.3 m; divide water mass by density * layer thickness.
       compute: ds['SoilMoi10_40cm_inst'] / 300.0
       varunit: m3 m-3
@@ -3121,11 +3121,11 @@ WRF:
       varunit: Pa
     Surface_Soil_Moisture:
       compute: ds['SMOIS'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['SMOIS'].isel(soil=0)
-      varname: SMOIS
+      varname: Surface_Soil_Moisture
       varunit: m3 m-3
     Surface_Soil_Temperature:
       compute: ds['TSLB'].isel(soil_layers_stag=0) if 'soil_layers_stag' in ds.dims else ds['TSLB'].isel(soil=0)
-      varname: TSLB
+      varname: Surface_Soil_Temperature
       varunit: K
     Surface_Specific_Humidity:
       varname: Q2

@@ -1,11 +1,15 @@
 """CLI integration tests — verify commands work end-to-end."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 from click.testing import CliRunner
 
+from openbench import __version__
 from openbench.cli.main import cli
 
 runner = CliRunner()
@@ -54,16 +58,31 @@ def test_run_dry_run(tmp_path):
     assert "test-full" in result.output
 
 
-def test_run_actual(tmp_path):
+@pytest.mark.parametrize("partial_stations", [False, True])
+def test_run_actual(tmp_path, partial_stations):
     import openbench.runner.local as local_runner
 
     def fake_run_evaluation(cfg, force=False, comparison_only=False):
         return {
-            "status": "success",
+            "status": "partial" if partial_stations else "success",
             "output_dir": "/tmp/openbench-out",
             "variables": ["Evapotranspiration"],
             "simulations": ["CoLM2024"],
             "errors": [],
+            "evaluated": [
+                {
+                    "variable": "Runoff",
+                    "sim": "Sim",
+                    "ref": "Ref",
+                    "station_summary": {
+                        "total": 504,
+                        "succeeded": 499,
+                        "skipped": [{"station": "A", "reason": "no shared finite sim/ref pairs"}],
+                    },
+                }
+            ]
+            if partial_stations
+            else [],
         }
 
     original = local_runner.run_evaluation
@@ -75,7 +94,11 @@ def test_run_actual(tmp_path):
         local_runner.run_evaluation = original
 
     assert result.exit_code == 0
-    assert "Evaluation complete" in result.output
+    if partial_stations:
+        assert "Evaluation partial success" in result.output
+        assert "499/504" in result.output and "A: no shared finite sim/ref pairs" in result.output
+    else:
+        assert "Evaluation complete" in result.output
 
 
 def test_run_only_drawing_fail_fast_errors_exit_nonzero(tmp_path):
@@ -130,6 +153,41 @@ def test_model_list():
     result = runner.invoke(cli, ["model", "list"])
     assert result.exit_code == 0
     assert "CoLM2024" in result.output
+
+
+@pytest.mark.parametrize(
+    "io_encoding, separator",
+    [
+        ("cp1252:strict", r"\u2500"),
+        ("cp1252:surrogateescape", r"\u2500"),
+        ("cp1252:surrogatepass", r"\u2500"),
+        ("cp1252:replace", "?"),
+        ("utf-8:strict", "─"),
+        (None, None),
+    ],
+)
+@pytest.mark.parametrize("command, expected", [(["model", "list"], "CoLM2024"), (["ref", "list"], "GLEAM")])
+def test_cli_redirected_output_encoding(tmp_path, io_encoding, separator, command, expected):
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        "OPENBENCH_HOME": str(tmp_path),
+    }
+    if io_encoding is None:
+        env.pop("PYTHONIOENCODING", None)
+    else:
+        env["PYTHONIOENCODING"] = io_encoding
+    result = subprocess.run(
+        [sys.executable, "-m", "openbench", *command],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="backslashreplace")
+    assert expected.encode("ascii") in result.stdout
+    if command == ["model", "list"] and separator is not None:
+        assert separator.encode(io_encoding.split(":")[0]) in result.stdout
 
 
 def test_model_show():
@@ -192,7 +250,7 @@ def test_migrate():
 def test_version():
     result = runner.invoke(cli, ["version"])
     assert result.exit_code == 0
-    assert "3.0.0" in result.output
+    assert result.output.strip() == f"openbench {__version__}"
 
 
 def test_init_output_is_loadable(tmp_path, monkeypatch):

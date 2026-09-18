@@ -109,6 +109,7 @@ class UnitProcessing:
                 "gc m-2 s-1": lambda x: x * 86400,  # Carbon-specific (explicit)
                 "g c m-2 s-1": lambda x: x * 86400,  # Carbon-specific with space
                 "g c m-2 day-1": lambda x: x,  # Carbon-specific with day
+                "gc m-2 d-1": lambda x: x,  # Carbon-specific day alias
                 "kg c m-2 s-1": lambda x: x * 1000 * 86400,
                 "kgc m-2 s-1": lambda x: x * 1000 * 86400,
                 "g m-2 s-1": lambda x: x * 86400,  # Carbon-implicit (common in models)
@@ -188,6 +189,7 @@ class UnitProcessing:
                 "degc": lambda x: x + 273.15,
                 "degreec": lambda x: x + 273.15,
                 "degree c": lambda x: x + 273.15,
+                "degrees c": lambda x: x + 273.15,
                 "degree_celsius": lambda x: x + 273.15,
                 "celsius": lambda x: x + 273.15,
                 "kelvin": lambda x: x,

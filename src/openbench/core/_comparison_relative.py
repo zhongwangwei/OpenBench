@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import glob
 import logging
 import os
 import sys
@@ -12,7 +11,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from openbench.core._comparison_helpers import _finite_distribution_values, _write_csv_atomic
+from openbench.core._comparison_helpers import (
+    _comparison_sim_groups,
+    _station_evaluation_frame,
+    _station_frames_aligned_by_id,
+    _write_csv_atomic,
+)
 from openbench.util.converttype import Convert_Type
 from openbench.util.filenames import relative_grid_score_filename, relative_station_scores_filename
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
@@ -47,246 +51,188 @@ class RelativeScoreComparisonMixin:
                             sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
                             if isinstance(sim_sources, str):
                                 sim_sources = [sim_sources]
+                            sim_groups = _comparison_sim_groups(
+                                evaluation_item, sim_sources, ref_source, sim_nml, ref_nml
+                            )
 
-                            for sim_source in sim_sources:
+                            station_sources = sim_groups.get("stn", [])
+                            for sim_source in station_sources:
                                 try:
-                                    ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                    sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-
-                                    if ref_data_type == "stn" or sim_data_type == "stn":
-                                        file_pattern = os.path.join(
-                                            casedir, "scores", f"{evaluation_item}_stn_{ref_source}_*_evaluations.csv"
-                                        )
-                                        all_files = glob.glob(file_pattern)
-
-                                        if not all_files:
-                                            logging.warning(f"No files found for pattern: {file_pattern}")
-                                            continue
-                                        if len(all_files) < 2:
-                                            logging.warning(f"Files less than 2, passing stn {ref_source}-{sim_source}")
-                                            continue
-
-                                        combined_relative_scores = pd.DataFrame()
-                                        filex = os.path.join(
-                                            casedir,
-                                            "scores",
-                                            f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                        )
-                                        df_sim = pd.read_csv(filex, sep=",", header=0)
-                                        df_sim = Convert_Type.convert_Frame(df_sim)
-
-                                        ID = df_sim["ID"]
-                                        combined_relative_scores["ID"] = df_sim["ID"]
-                                        df_sim.set_index("ID", inplace=True)
-
-                                        for score in scores:
-                                            try:
-                                                dfs = []
-                                                for i, file in enumerate(all_files):
-                                                    df = pd.read_csv(file, sep=",", header=0)
-                                                    df = Convert_Type.convert_Frame(df)
-
-                                                    df.set_index("ID", inplace=True)
-                                                    df = df.reindex(ID)
-                                                    dfs.append(df[f"{score}"])
-                                                # Empty-list check belongs AFTER the file loop, not
-                                                # inside it (the original `if not dfs` ran after the
-                                                # first append so it was always False). When the file
-                                                # list is empty, skip the concat — otherwise
-                                                # pd.concat(axis=1, []) raises.
-                                                if not dfs:
-                                                    logging.warning(
-                                                        f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}"
-                                                    )
-                                                    continue
-                                                combined_df = pd.concat(dfs, axis=1)
-                                                score_mean = combined_df.mean(axis=1, skipna=True).astype("float32")
-                                                score_std = combined_df.std(axis=1, skipna=True).astype("float32")
-                                                with np.errstate(divide="ignore", invalid="ignore"):
-                                                    relative_scores = (
-                                                        df_sim[f"{score}"].values - score_mean.values
-                                                    ) / score_std.values
-                                                _finite_distribution_values(
-                                                    relative_scores,
-                                                    plot="Relative Score",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=f"relative_{score}",
-                                                )
-                                                relative_scores = np.where(
-                                                    np.isfinite(relative_scores), relative_scores, np.nan
-                                                )
-
-                                                combined_relative_scores[f"relative_{score}_{sim_source}"] = (
-                                                    relative_scores
-                                                )
-                                            finally:
-                                                gc.collect()  # Clean up memory after processing each score
-
-                                        # Check if any valid relative scores were calculated.
-                                        # The ID column is populated before score calculation,
-                                        # so DataFrame.empty is not a valid signal here.
-                                        relative_score_columns = [
-                                            column
-                                            for column in combined_relative_scores.columns
-                                            if column.startswith("relative_")
-                                        ]
-                                        has_valid_relative_scores = bool(relative_score_columns) and bool(
-                                            combined_relative_scores[relative_score_columns].notna().any().any()
-                                        )
-                                        if has_valid_relative_scores:
-                                            ilat_lon = []
-                                            for file in all_files:
-                                                df = pd.read_csv(file, sep=",", header=0)
-                                                del_col = ["ID", "sim_lat", "sim_lon", "ref_lon", "ref_lat"]
-                                                df.drop(
-                                                    columns=[col for col in df.columns if col not in del_col],
-                                                    inplace=True,
-                                                )
-                                                ilat_lon.append(df)
-                                            merged_df = pd.concat(ilat_lon).groupby("ID").first().reset_index()
-                                            try:
-                                                lon_mapping = merged_df.set_index("ID")["ref_lon"].to_dict()
-                                                lat_mapping = merged_df.set_index("ID")["ref_lat"].to_dict()
-                                                combined_relative_scores["ref_lon"] = combined_relative_scores[
-                                                    "ID"
-                                                ].map(lon_mapping)
-                                                combined_relative_scores["ref_lat"] = combined_relative_scores[
-                                                    "ID"
-                                                ].map(lat_mapping)
-                                            except (KeyError, ValueError) as e:
-                                                logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
-                                                lon_mapping = merged_df.set_index("ID")["sim_lon"].to_dict()
-                                                lat_mapping = merged_df.set_index("ID")["sim_lat"].to_dict()
-                                                combined_relative_scores["sim_lon"] = combined_relative_scores[
-                                                    "ID"
-                                                ].map(lon_mapping)
-                                                combined_relative_scores["sim_lat"] = combined_relative_scores[
-                                                    "ID"
-                                                ].map(lat_mapping)
-                                            combined_relative_scores = Convert_Type.convert_Frame(
-                                                combined_relative_scores
+                                    frames = _station_frames_aligned_by_id(
+                                        {
+                                            source: _station_evaluation_frame(
+                                                casedir, evaluation_item, ref_source, source, kind="scores"
                                             )
-                                            output_path = os.path.join(
-                                                dir_path,
-                                                relative_station_scores_filename(
-                                                    evaluation_item, ref_source, sim_source
-                                                ),
-                                            )
-                                            _write_csv_atomic(combined_relative_scores, output_path, index=False)
-                                        else:
-                                            logging.warning(
-                                                f"No valid relative scores found for {evaluation_item}, {ref_source}, {sim_source}"
-                                            )
-                                            continue
+                                            for source in station_sources
+                                        }
+                                    )
+                                    base = frames[sim_source]
+                                    combined_relative_scores = pd.DataFrame({"ID": base["ID"]})
+                                    coord_cols = [
+                                        col
+                                        for col in ("ref_lon", "ref_lat", "sim_lon", "sim_lat")
+                                        if col in base.columns
+                                    ]
+                                    for col in coord_cols:
+                                        combined_relative_scores[col] = base[col]
 
+                                    for score in scores:
                                         try:
-                                            _comparison_callable("make_scenarios_comparison_Relative_Score")(
-                                                dir_path,
-                                                evaluation_item,
-                                                ref_source,
-                                                sim_source,
-                                                scores,
-                                                "stn",
-                                                self.main_nml["general"],
-                                                option,
+                                            score_frames = _station_frames_aligned_by_id(frames, score)
+                                            values = pd.DataFrame(
+                                                {source: score_frames[source][score] for source in station_sources}
+                                            ).where(lambda x: np.isfinite(x))
+                                            n_models = values.count(axis=1)
+                                            score_mean = values.mean(axis=1, skipna=True)
+                                            score_std = values.std(axis=1, skipna=True)
+                                            relative_scores = ((values[sim_source] - score_mean) / score_std).where(
+                                                (n_models >= 2) & (score_std > 0)
                                             )
-                                        except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
-                                            logging.error(f"Error creating relative score plot: {e}")
-                                            raise
 
-                                    else:
-                                        for score in scores:
-                                            try:
-                                                file_pattern = os.path.join(
-                                                    casedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_*_{score}.nc",
-                                                )
-                                                all_files = glob.glob(file_pattern)
+                                            value_col = f"relative_{score}_{sim_source}"
+                                            status_col = f"status_{value_col}"
+                                            reason_col = f"reason_{value_col}"
+                                            combined_relative_scores[value_col] = relative_scores.astype("float32")
+                                            own_missing_reason = (
+                                                score_frames[sim_source]
+                                                .get("reason", pd.Series("", index=relative_scores.index))
+                                                .fillna("")
+                                                .replace("", "no finite station evaluation")
+                                            )
+                                            reasons = pd.Series("", index=relative_scores.index, dtype="object")
+                                            reasons = reasons.mask(values[sim_source].isna(), own_missing_reason)
+                                            reasons = reasons.mask(
+                                                values[sim_source].notna() & (n_models < 2),
+                                                "fewer than two finite model evaluations",
+                                            )
+                                            reasons = reasons.mask(
+                                                values[sim_source].notna() & (n_models >= 2) & ~(score_std > 0),
+                                                "zero across-model variance",
+                                            )
+                                            combined_relative_scores[status_col] = np.where(
+                                                relative_scores.notna(), "ok", "unavailable"
+                                            )
+                                            combined_relative_scores[reason_col] = reasons.where(
+                                                relative_scores.isna(), ""
+                                            )
+                                        finally:
+                                            gc.collect()  # Clean up memory after processing each score
 
-                                                if not all_files:
-                                                    logging.warning(f"No files found for pattern: {file_pattern}")
-                                                    continue
-                                                if len(all_files) < 2:
-                                                    logging.warning(
-                                                        f"Files less than 2, passing {score} {ref_source}-{sim_source}"
-                                                    )
-                                                    continue
+                                    value_columns = [
+                                        column
+                                        for column in combined_relative_scores.columns
+                                        if column.startswith("relative_")
+                                        and not column.endswith(("_status", "_reason"))
+                                    ]
+                                    status_columns = [f"status_{column}" for column in value_columns]
+                                    reason_columns = [f"reason_{column}" for column in value_columns]
+                                    valid_counts = (
+                                        combined_relative_scores[status_columns].eq("ok").sum(axis=1)
+                                        if status_columns
+                                        else pd.Series(0, index=combined_relative_scores.index)
+                                    )
+                                    combined_relative_scores["status"] = np.select(
+                                        [valid_counts == len(status_columns), valid_counts > 0],
+                                        ["ok", "partial"],
+                                        default="unavailable",
+                                    )
+                                    combined_relative_scores["reason"] = ""
+                                    if reason_columns:
+                                        combined_relative_scores.loc[
+                                            combined_relative_scores["status"] == "unavailable", "reason"
+                                        ] = combined_relative_scores.loc[
+                                            combined_relative_scores["status"] == "unavailable", reason_columns
+                                        ].agg("; ".join, axis=1)
+                                    combined_relative_scores = Convert_Type.convert_Frame(combined_relative_scores)
+                                    output_path = os.path.join(
+                                        dir_path,
+                                        relative_station_scores_filename(evaluation_item, ref_source, sim_source),
+                                    )
+                                    _write_csv_atomic(combined_relative_scores, output_path, index=False)
 
-                                                datasets = []
-                                                for file in all_files:
-                                                    with xr.open_dataset(file) as ds_file:
-                                                        ds = Convert_Type.convert_nc(ds_file.load())
-                                                    datasets.append(ds)
+                                    try:
+                                        _comparison_callable("make_scenarios_comparison_Relative_Score")(
+                                            dir_path,
+                                            evaluation_item,
+                                            ref_source,
+                                            sim_source,
+                                            scores,
+                                            "stn",
+                                            self.main_nml["general"],
+                                            option,
+                                        )
+                                    except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
+                                        logging.error(f"Error creating relative score plot: {e}")
+                                        raise
+                                finally:
+                                    gc.collect()  # Clean up memory after processing each simulation source
 
-                                                if not datasets:
-                                                    logging.warning(
-                                                        f"No valid data found for {evaluation_item}, {ref_source}, {sim_source}, {score}"
-                                                    )
-                                                    continue
-
-                                                combined_ds = xr.concat(datasets, dim="file")
-
-                                                score_mean = (
-                                                    combined_ds[score].mean(dim="file", skipna=True).astype("float32")
-                                                )
-                                                score_std = (
-                                                    combined_ds[score].std(dim="file", skipna=True).astype("float32")
-                                                )
-
+                            grid_sources = sim_groups.get("grid", [])
+                            for sim_source in grid_sources:
+                                try:
+                                    for score in scores:
+                                        try:
+                                            datasets = []
+                                            for source in grid_sources:
                                                 file = os.path.join(
                                                     casedir,
                                                     "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                                    f"{evaluation_item}_ref_{ref_source}_sim_{source}_{score}.nc",
                                                 )
                                                 with xr.open_dataset(file) as ds_file:
                                                     ds = Convert_Type.convert_nc(ds_file.load())
-                                                relative_score = xr.where(
-                                                    score_std != 0,
-                                                    (ds[score] - score_mean) / score_std,
-                                                    np.nan,
-                                                )
-                                                relative_score = relative_score.where(
-                                                    np.isfinite(relative_score), np.nan
-                                                )
-                                                _finite_distribution_values(
-                                                    relative_score.values,
-                                                    plot="Relative Score",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=f"relative_{score}",
-                                                )
+                                                datasets.append(ds)
 
-                                                result_ds = xr.Dataset()
-                                                result_ds[f"relative_{score}"] = Convert_Type.convert_nc(relative_score)
+                                            combined_ds = xr.concat(datasets, dim="file")
 
-                                                output_file = os.path.join(
-                                                    dir_path,
-                                                    relative_grid_score_filename(
-                                                        evaluation_item, ref_source, sim_source, score
-                                                    ),
-                                                )
-                                                _write_netcdf_atomic(result_ds, output_file)
-                                            finally:
-                                                gc.collect()  # Clean up memory after processing each score
-
-                                        try:
-                                            _comparison_callable("make_scenarios_comparison_Relative_Score")(
-                                                dir_path,
-                                                evaluation_item,
-                                                ref_source,
-                                                sim_source,
-                                                scores,
-                                                "grid",
-                                                self.main_nml["general"],
-                                                option,
+                                            score_mean = (
+                                                combined_ds[score].mean(dim="file", skipna=True).astype("float32")
                                             )
-                                        except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
-                                            logging.error(f"Error creating relative score plot: {e}")
-                                            raise
+                                            score_std = (
+                                                combined_ds[score].std(dim="file", skipna=True).astype("float32")
+                                            )
+
+                                            file = os.path.join(
+                                                casedir,
+                                                "scores",
+                                                f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                            )
+                                            with xr.open_dataset(file) as ds_file:
+                                                ds = Convert_Type.convert_nc(ds_file.load())
+                                            relative_score = xr.where(
+                                                (len(grid_sources) >= 2) & (score_std != 0),
+                                                (ds[score] - score_mean) / score_std,
+                                                np.nan,
+                                            )
+                                            relative_score = relative_score.where(np.isfinite(relative_score), np.nan)
+
+                                            result_ds = xr.Dataset()
+                                            result_ds[f"relative_{score}"] = Convert_Type.convert_nc(relative_score)
+
+                                            output_file = os.path.join(
+                                                dir_path,
+                                                relative_grid_score_filename(
+                                                    evaluation_item, ref_source, sim_source, score
+                                                ),
+                                            )
+                                            _write_netcdf_atomic(result_ds, output_file)
+                                        finally:
+                                            gc.collect()  # Clean up memory after processing each score
+
+                                    try:
+                                        _comparison_callable("make_scenarios_comparison_Relative_Score")(
+                                            dir_path,
+                                            evaluation_item,
+                                            ref_source,
+                                            sim_source,
+                                            scores,
+                                            "grid",
+                                            self.main_nml["general"],
+                                            option,
+                                        )
+                                    except (FileNotFoundError, ValueError, RuntimeError, IOError) as e:
+                                        logging.error(f"Error creating relative score plot: {e}")
+                                        raise
                                 finally:
                                     gc.collect()  # Clean up memory after processing each simulation source
                         finally:

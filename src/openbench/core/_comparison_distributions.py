@@ -7,11 +7,16 @@ import logging
 import os
 import sys
 
-import pandas as pd
 import xarray as xr
 
-from openbench.core._comparison_helpers import _finite_distribution_values
+from openbench.core._comparison_helpers import _finite_distribution_values, _station_evaluation_frame
 from openbench.util.converttype import Convert_Type
+
+
+def _station_summary_values(basedir, item, ref_source, sim_source, kind, variable):
+    """Return status-aware station summary values for distribution comparisons."""
+    frame = _station_evaluation_frame(basedir, item, ref_source, sim_source, kind=kind)
+    return frame[variable].values
 
 
 def _comparison_callable(name: str):
@@ -62,14 +67,9 @@ class DistributionComparisonMixin:
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                                data = _station_summary_values(
+                                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
                                                 )
-                                                df = pd.read_csv(file_path, sep=",", header=0)
-                                                df = Convert_Type.convert_Frame(df)
-                                                data = df[score].values
                                             else:
                                                 file_path = os.path.join(
                                                     basedir,
@@ -130,13 +130,9 @@ class DistributionComparisonMixin:
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                                data = _station_summary_values(
+                                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
                                                 )
-                                                df = pd.read_csv(file_path, sep=",", header=0)
-                                                data = df[metric].values
                                             else:
                                                 file_path = os.path.join(
                                                     basedir,
@@ -222,14 +218,9 @@ class DistributionComparisonMixin:
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                                data = _station_summary_values(
+                                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
                                                 )
-                                                df = pd.read_csv(file_path, sep=",", header=0)
-                                                df = Convert_Type.convert_Frame(df)
-                                                data = df[score].values
                                             else:
                                                 file_path = os.path.join(
                                                     basedir,
@@ -290,13 +281,9 @@ class DistributionComparisonMixin:
                                                 if ref_varname is None or ref_varname == "":
                                                     ref_varname = evaluation_item
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                                data = _station_summary_values(
+                                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
                                                 )
-                                                df = pd.read_csv(file_path, sep=",", header=0)
-                                                data = df[metric].values
                                             else:
                                                 file_path = os.path.join(
                                                     basedir,
@@ -380,12 +367,9 @@ class DistributionComparisonMixin:
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == "":
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(
-                                basedir, "scores", f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                            data = _station_summary_values(
+                                basedir, evaluation_item, ref_source, sim_source, "scores", score
                             )
-                            df = pd.read_csv(file_path, sep=",", header=0)
-                            df = Convert_Type.convert_Frame(df)
-                            data = df[score].values
                         else:
                             file_path = os.path.join(
                                 basedir, "scores", f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc"
@@ -435,11 +419,9 @@ class DistributionComparisonMixin:
                                 sim_varname = evaluation_item
                             if ref_varname is None or ref_varname == "":
                                 ref_varname = evaluation_item
-                            file_path = os.path.join(
-                                basedir, "metrics", f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+                            data = _station_summary_values(
+                                basedir, evaluation_item, ref_source, sim_source, "metrics", metric
                             )
-                            df = pd.read_csv(file_path, sep=",", header=0)
-                            data = df[metric].values
                         else:
                             file_path = os.path.join(
                                 basedir, "metrics", f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc"

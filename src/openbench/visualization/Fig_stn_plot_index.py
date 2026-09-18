@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @with_isolated_rc
-def make_stn_plot_index(file, method_name, main_nml, sources, option):
+def make_stn_plot_index(file, method_name, main_nml, sources, option, *, value_columns=("ref_value", "sim_value")):
     option = option.copy()
     # Snapshot the (already-copied) option so each loop iteration starts
     # from a fresh dict; the previous code mutated option["vmin"]/vmax/extend
@@ -29,30 +29,43 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
     option_base = option.copy()
     df = pd.read_csv(file, header=0)
     df = Convert_Type.convert_Frame(df)
-    for type, source in zip(["ref_value", "sim_value"], sources):
+    if len(value_columns) != len(sources):
+        raise ValueError("Station plot columns and source labels must have the same length")
+    for type, source in zip(value_columns, sources):
         option = option_base.copy()
-        min_metric = -999.0
-        max_metric = 100000.0
-
-        ind0 = df[df["%s" % (type)] > min_metric].index
-        data_select0 = df.loc[ind0]
-        ind1 = data_select0[data_select0["%s" % (type)] < max_metric].index
-        data_select = data_select0.loc[ind1]
-
-        try:
-            stn_lon = data_select["ref_lon"].values
-            stn_lat = data_select["ref_lat"].values
-        except Exception:
-            stn_lon = data_select["sim_lon"].values
-            stn_lat = data_select["sim_lat"].values
-        metric = data_select["%s" % (type)].values
+        available = np.isfinite(df[type])
+        data_select = df.loc[available]
+        coord_prefix = "ref" if "ref_lon" in df else "sim"
+        stn_lon = data_select[f"{coord_prefix}_lon"].values
+        stn_lat = data_select[f"{coord_prefix}_lat"].values
+        metric = data_select[type].values
+        missing = df.loc[~available]
 
         if not option["cmap"]:
             option["cmap"] = "coolwarm"
-        min_value, max_value = finite_min_max(metric, label=f"{method_name} station map/{type}", percentile=(5, 95))
-        cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], type)
-        if not option["vmin_max_on"]:
-            option["vmax"], option["vmin"] = mticks[-1], mticks[0]
+        min_value, max_value = (
+            finite_min_max(metric, label=f"{method_name} station map/{type}", percentile=(5, 95))
+            if metric.size
+            else (0.0, 1.0)
+        )
+        limits = None
+        if option["vmin_max_on"]:
+            limits = (option["vmin"], option["vmax"])
+        elif method_name in {"Correlation", "Mann_Kendall_Trend_Test"}:
+            limits = (-1.0, 1.0)
+        elif method_name == "Functional_Response":
+            limits = (0.0, 1.0)
+        elif method_name == "Standard_Deviation":
+            upper = float(np.percentile(metric, 95)) if metric.size else 1.0
+            limits = (0.0, upper if upper > 0 else 1.0)
+        cmap, mticks, _norm, _bnd, extend = get_index(min_value, max_value, option["cmap"], type)
+        if limits is not None:
+            if not np.isfinite(limits).all() or limits[0] >= limits[1]:
+                raise ValueError(f"Station map requires finite increasing color limits: {limits}")
+            mticks = np.linspace(*limits, 5)
+            low = bool(metric.size and metric.min() < limits[0])
+            high = bool(metric.size and metric.max() > limits[1])
+            extend = "both" if low and high else "min" if low else "max" if high else "neither"
 
         option["extend"] = extend
 
@@ -79,17 +92,31 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         cs = ax.scatter(
             stn_lon,
             stn_lat,
-            s=option["markersize"],
+            s=option.get("markersize", 20),
             c=metric,
             cmap=cmap,
             vmin=mticks[0],
             vmax=mticks[-1],
-            marker=option["marker"],
+            marker=option.get("marker", "o"),
             linewidths=0.5,
             edgecolors="black",
             alpha=0.9,
             zorder=10,
         )
+
+        if not missing.empty:
+            ax.scatter(
+                missing[f"{coord_prefix}_lon"],
+                missing[f"{coord_prefix}_lat"],
+                s=option.get("markersize", 20),
+                c="0.6",
+                marker="x",
+                zorder=10,
+                label=f"Unavailable (n={len(missing)})",
+            )
+            ax.legend(loc="lower right", fontsize=option["xtick"])
+        if not metric.size:
+            ax.text(0.5, 0.5, "No valid station data", transform=ax.transAxes, ha="center")
 
         for spine in ax.spines.values():
             spine.set_linewidth(option["line_width"])
@@ -140,48 +167,51 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option):
         title = option["title"]
         if not option["title"]:
             title = f"{source} {method_name}"
+            if type not in ("ref_value", "sim_value"):
+                title += f" {type}"
         ax.set_title(title, fontsize=option["title_size"], weight="bold")
-        if not option["colorbar_position_set"]:
-            pos = ax.get_position()
-            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-            if (
-                (option["min_lat"] < -60)
-                & (option["max_lat"] > 89)
-                & (option["min_lon"] < -179)
-                & (option["max_lon"] > 179)
-            ):
-                if option["colorbar_position"] == "horizontal":
-                    cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
-                else:
-                    cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
-            else:
-                if option["colorbar_position"] == "horizontal":
-                    if len(option["xticklabel"]) == 0:
-                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+        if metric.size:
+            if not option["colorbar_position_set"]:
+                pos = ax.get_position()
+                left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+                if (
+                    (option["min_lat"] < -60)
+                    & (option["max_lat"] > 89)
+                    & (option["min_lon"] < -179)
+                    & (option["max_lon"] > 179)
+                ):
+                    if option["colorbar_position"] == "horizontal":
+                        cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
                     else:
-                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                        cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
                 else:
-                    cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
-        else:
-            cbaxes = fig.add_axes(
-                [
-                    option["colorbar_left"],
-                    option["colorbar_bottom"],
-                    option["colorbar_width"],
-                    option["colorbar_height"],
-                ]
-            )
+                    if option["colorbar_position"] == "horizontal":
+                        if len(option["xticklabel"]) == 0:
+                            cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+                        else:
+                            cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                    else:
+                        cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
+            else:
+                cbaxes = fig.add_axes(
+                    [
+                        option["colorbar_left"],
+                        option["colorbar_bottom"],
+                        option["colorbar_width"],
+                        option["colorbar_height"],
+                    ]
+                )
 
-        cb = fig.colorbar(
-            cs,
-            cax=cbaxes,
-            ticks=mticks,
-            spacing="uniform",
-            label="",
-            extend=option["extend"],
-            orientation=option["colorbar_position"],
-        )
-        cb.solids.set_edgecolor("face")
+            cb = fig.colorbar(
+                cs,
+                cax=cbaxes,
+                ticks=mticks,
+                spacing="uniform",
+                label="",
+                extend=option["extend"],
+                orientation=option["colorbar_position"],
+            )
+            cb.solids.set_edgecolor("face")
 
         filename2 = file[:-4]
         save_figure(

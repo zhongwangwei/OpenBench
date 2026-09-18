@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
+from itertools import combinations
 import os
 
+import numpy as np
 import pandas as pd
 
 from openbench.core._comparison_helpers import (
+    _station_evaluation_frame,
     _station_frames_aligned_by_id,
-    _station_pairwise_difference_by_id,
     _write_csv_atomic,
 )
-from openbench.util.converttype import Convert_Type
 from openbench.util.filenames import diff_station_anomaly_filename, diff_station_difference_filename
 
 
@@ -27,238 +27,95 @@ def process_station_diff_plot(
     metrics: list[str],
     scores: list[str],
 ) -> None:
-    for metric in metrics:
-        try:
-            station_frames = {}
-            for sim_source in sim_sources:
-                sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                file_path = os.path.join(
-                    basedir,
-                    "metrics",
-                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                )
-                df = pd.read_csv(file_path, sep=",", header=0)
-                df = Convert_Type.convert_Frame(df)
-                station_frames[sim_source] = df
-
-            aligned_frames = _station_frames_aligned_by_id(station_frames, metric)
-            station_df = pd.DataFrame(
-                {sim_source: aligned_frames[sim_source][metric].reset_index(drop=True) for sim_source in sim_sources}
+    for kind, variables in (("metrics", metrics), ("scores", scores)):
+        for variable in variables:
+            frames = _station_frames_aligned_by_id(
+                {
+                    source: _station_evaluation_frame(basedir, evaluation_item, ref_source, source, kind)
+                    for source in sim_sources
+                },
+                variable,
             )
-            base_df = aligned_frames[sim_sources[0]]
+            values = pd.DataFrame({source: frames[source][variable] for source in sim_sources})
+            values = values.where(np.isfinite(values))
+            base = frames[sim_sources[0]]
+            n_models = values.count(axis=1)
+            mean = values.mean(axis=1)
 
-            ensemble_mean = station_df.mean(axis=1).astype("float32")
-            ensemble_df = pd.DataFrame({"ID": base_df["ID"], f"{metric}_ensemble_mean": ensemble_mean})
-            ensemble_df = Convert_Type.convert_Frame(ensemble_df)
+            def missing_reason(frame):
+                return (
+                    frame.get("reason", pd.Series("", index=frame.index))
+                    .fillna("")
+                    .replace("", "no finite station evaluation")
+                )
+
+            missing_causes = pd.concat(
+                [source + ": " + missing_reason(frames[source]) for source in sim_sources], axis=1
+            ).agg("; ".join, axis=1)
             _write_csv_atomic(
-                ensemble_df,
-                os.path.join(dir_path, f"{evaluation_item}_stn_{ref_source}_ensemble_mean_{metric}.csv"),
+                pd.DataFrame(
+                    {
+                        "ID": base.ID,
+                        f"{variable}_ensemble_mean": mean,
+                        "n_models": n_models,
+                        "status": np.where(n_models > 0, "ok", "unavailable"),
+                        "reason": missing_causes.where(n_models == 0, ""),
+                    }
+                ),
+                os.path.join(dir_path, f"{evaluation_item}_stn_{ref_source}_ensemble_mean_{variable}.csv"),
                 index=False,
             )
 
-            for sim_source in sim_sources:
-                df = aligned_frames[sim_source]
-                try:
-                    lon_select = df["ref_lon"].values
-                    lat_select = df["ref_lat"].values
-                except (KeyError, ValueError) as e:
-                    logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
-                    lon_select = df["sim_lon"].values
-                    lat_select = df["sim_lat"].values
-                anomaly = station_df[sim_source] - ensemble_mean
-                anomaly_df = pd.DataFrame(
-                    {"ID": df["ID"], "lat": lat_select, "lon": lon_select, f"{metric}_anomaly": anomaly}
+            def output_frame(frame, data, column, reason):
+                lat = frame["ref_lat"] if "ref_lat" in frame else frame["sim_lat"]
+                lon = frame["ref_lon"] if "ref_lon" in frame else frame["sim_lon"]
+                return pd.DataFrame(
+                    {
+                        "ID": frame.ID,
+                        "lat": lat,
+                        "lon": lon,
+                        column: data,
+                        "status": np.where(data.notna(), "ok", "unavailable"),
+                        "reason": reason.where(data.isna(), ""),
+                    }
                 )
-                anomaly_df = Convert_Type.convert_Frame(anomaly_df)
+
+            for source in sim_sources:
+                frame = frames[source]
+                # A lone available model has no meaningful inter-model anomaly.
+                anomaly = (values[source] - mean).where(n_models >= 2)
+                reason = missing_reason(frame).where(values[source].isna(), "fewer than two finite model evaluations")
+                output = output_frame(frame, anomaly, f"{variable}_anomaly", reason)
+                output["n_models"] = n_models
                 _write_csv_atomic(
-                    anomaly_df,
+                    output,
                     os.path.join(
-                        dir_path,
-                        diff_station_anomaly_filename(evaluation_item, ref_source, sim_source, metric),
+                        dir_path, diff_station_anomaly_filename(evaluation_item, ref_source, source, variable)
                     ),
                     index=False,
                 )
 
-        except Exception as e:
-            logging.error(f"Error processing station ensemble calculations for metric {metric}: {e}")
-            raise
-
-    for score in scores:
-        try:
-            station_frames = {}
-            for sim_source in sim_sources:
-                file_path = f"{basedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
-                df = pd.read_csv(file_path, sep=",", header=0)
-                df = Convert_Type.convert_Frame(df)
-                station_frames[sim_source] = df
-
-            aligned_frames = _station_frames_aligned_by_id(station_frames, score)
-            station_df = pd.DataFrame(
-                {sim_source: aligned_frames[sim_source][score].reset_index(drop=True) for sim_source in sim_sources}
-            )
-            base_df = aligned_frames[sim_sources[0]]
-
-            ensemble_mean = station_df.mean(axis=1).astype("float32")
-            ensemble_df = pd.DataFrame({"ID": base_df["ID"], f"{score}_ensemble_mean": ensemble_mean})
-            ensemble_df = Convert_Type.convert_Frame(ensemble_df)
-            _write_csv_atomic(
-                ensemble_df,
-                os.path.join(dir_path, f"{evaluation_item}_stn_{ref_source}_ensemble_mean_{score}.csv"),
-                index=False,
-            )
-
-            for sim_source in sim_sources:
-                df = aligned_frames[sim_source]
-                try:
-                    lon_select = df["ref_lon"].values
-                    lat_select = df["ref_lat"].values
-                except (KeyError, ValueError) as e:
-                    logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
-                    lon_select = df["sim_lon"].values
-                    lat_select = df["sim_lat"].values
-                anomaly = station_df[sim_source] - ensemble_mean
-                anomaly_df = pd.DataFrame(
-                    {"ID": df["ID"], "lat": lat_select, "lon": lon_select, f"{score}_anomaly": anomaly}
-                )
-                anomaly_df = Convert_Type.convert_Frame(anomaly_df)
+            for left, right in combinations(sim_sources, 2):
+                difference = values[left] - values[right]
+                reason = pd.Series("", index=base.index)
+                for source in (left, right):
+                    unavailable = values[source].isna()
+                    detail = source + ": " + missing_reason(frames[source])
+                    reason = reason + detail.where(unavailable, "") + np.where(unavailable, "; ", "")
+                output = output_frame(base, difference, f"{variable}_diff", reason.str.rstrip("; "))
                 _write_csv_atomic(
-                    anomaly_df,
+                    output,
                     os.path.join(
                         dir_path,
-                        diff_station_anomaly_filename(evaluation_item, ref_source, sim_source, score),
+                        diff_station_difference_filename(
+                            evaluation_item,
+                            ref_source,
+                            left,
+                            sim_nml[evaluation_item][f"{left}_varname"],
+                            right,
+                            sim_nml[evaluation_item][f"{right}_varname"],
+                            variable,
+                        ),
                     ),
                     index=False,
                 )
-
-        except Exception as e:
-            logging.error(f"Error processing station ensemble calculations for score {score}: {e}")
-            raise
-    if len(sim_sources) >= 2:
-        for metric in metrics:
-            for i, sim1 in enumerate(sim_sources):
-                sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
-                for j, sim2 in enumerate(sim_sources[i + 1 :], i + 1):
-                    sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
-                    try:
-                        df1 = pd.read_csv(
-                            os.path.join(
-                                basedir,
-                                "metrics",
-                                f"{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv",
-                            )
-                        )
-                        df2 = pd.read_csv(
-                            os.path.join(
-                                basedir,
-                                "metrics",
-                                f"{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv",
-                            )
-                        )
-                        df1 = Convert_Type.convert_Frame(df1)
-                        df2 = Convert_Type.convert_Frame(df2)
-
-                        df1, diff = _station_pairwise_difference_by_id(
-                            df1,
-                            df2,
-                            metric,
-                            left_label=sim1,
-                            right_label=sim2,
-                        )
-                        try:
-                            lon_select = df1["ref_lon"].values
-                            lat_select = df1["ref_lat"].values
-                        except (KeyError, ValueError) as e:
-                            logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
-                            lon_select = df1["sim_lon"].values
-                            lat_select = df1["sim_lat"].values
-                        diff_df = pd.DataFrame(
-                            {
-                                "ID": df1["ID"],
-                                "lat": lat_select,
-                                "lon": lon_select,
-                                f"{metric}_diff": diff,
-                            }
-                        )
-
-                        output_file = os.path.join(
-                            dir_path,
-                            diff_station_difference_filename(
-                                evaluation_item,
-                                ref_source,
-                                sim1,
-                                sim_varname_1,
-                                sim2,
-                                sim_varname_2,
-                                metric,
-                            ),
-                        )
-                        diff_df = Convert_Type.convert_Frame(diff_df)
-                        _write_csv_atomic(diff_df, output_file, index=False)
-
-                    except Exception as e:
-                        logging.error(f"Error processing station metric {metric} for {sim1} vs {sim2}: {e}")
-                        raise
-
-        for score in scores:
-            for i, sim1 in enumerate(sim_sources):
-                sim_varname_1 = sim_nml[f"{evaluation_item}"][f"{sim1}_varname"]
-                for j, sim2 in enumerate(sim_sources[i + 1 :], i + 1):
-                    sim_varname_2 = sim_nml[f"{evaluation_item}"][f"{sim2}_varname"]
-                    try:
-                        df1 = pd.read_csv(
-                            os.path.join(
-                                basedir,
-                                "scores",
-                                f"{evaluation_item}_stn_{ref_source}_{sim1}_evaluations.csv",
-                            )
-                        )
-                        df2 = pd.read_csv(
-                            os.path.join(
-                                basedir,
-                                "scores",
-                                f"{evaluation_item}_stn_{ref_source}_{sim2}_evaluations.csv",
-                            )
-                        )
-                        df1 = Convert_Type.convert_Frame(df1)
-                        df2 = Convert_Type.convert_Frame(df2)
-                        df1, diff = _station_pairwise_difference_by_id(
-                            df1,
-                            df2,
-                            score,
-                            left_label=sim1,
-                            right_label=sim2,
-                        )
-                        try:
-                            lon_select = df1["ref_lon"].values
-                            lat_select = df1["ref_lat"].values
-                        except (KeyError, ValueError) as e:
-                            logging.debug(f"Using sim coordinates instead of ref coordinates: {e}")
-                            lon_select = df1["sim_lon"].values
-                            lat_select = df1["sim_lat"].values
-                        diff_df = pd.DataFrame(
-                            {
-                                "ID": df1["ID"],
-                                "lat": lat_select,
-                                "lon": lon_select,
-                                f"{score}_diff": diff,
-                            }
-                        )
-
-                        output_file = os.path.join(
-                            dir_path,
-                            diff_station_difference_filename(
-                                evaluation_item,
-                                ref_source,
-                                sim1,
-                                sim_varname_1,
-                                sim2,
-                                sim_varname_2,
-                                score,
-                            ),
-                        )
-                        diff_df = Convert_Type.convert_Frame(diff_df)
-                        _write_csv_atomic(diff_df, output_file, index=False)
-
-                    except Exception as e:
-                        logging.error(f"Error processing station score {score} for {sim1} vs {sim2}: {e}")
-                        raise

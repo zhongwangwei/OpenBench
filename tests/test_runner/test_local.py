@@ -2025,8 +2025,9 @@ def test_preprocessing_errors_are_reported_and_skip_evaluation(tmp_path, monkeyp
     assert any("sim preprocessing exploded" in err["message"] for err in result["errors"])
 
 
-def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path, monkeypatch):
-    """A normal run must not build comparison/statistics/report outputs from a partial task set."""
+@pytest.mark.parametrize("station_skip", [False, True])
+def test_normal_run_distinguishes_station_skips_from_evaluation_errors(tmp_path, monkeypatch, station_skip):
+    """Data-gap station skips permit postprocessing; failed evaluation tasks do not."""
     import openbench.config.adapter as adapter
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
@@ -2091,6 +2092,20 @@ def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path,
 
     def fake_evaluate(task):
         if task["var_name"] == "ET":
+            if station_skip:
+                return {
+                    "variable": "ET",
+                    "sim": "SimA",
+                    "ref": "RefA",
+                    "status": "success",
+                    "station_summary": {
+                        "total": 2,
+                        "succeeded": 1,
+                        "skipped": [
+                            {"station": "A", "reason": "no shared finite sim/ref pairs"},
+                        ],
+                    },
+                }
             return {
                 "variable": "ET",
                 "sim": "SimA",
@@ -2127,9 +2142,15 @@ def test_normal_run_skips_post_phases_after_partial_evaluation_failure(tmp_path,
     result = run_evaluation(cfg, force=True)
 
     assert result["status"] == "partial"
-    assert [item["variable"] for item in result["evaluated"]] == ["Runoff"]
-    assert any(err["phase"] == "evaluation" and "ET failed" in err["message"] for err in result["errors"])
-    assert post_calls == []
+    if station_skip:
+        assert [item["variable"] for item in result["evaluated"]] == ["Runoff", "ET"]
+        assert result["evaluated"][1]["station_summary"]["skipped"][0]["station"] == "A"
+        assert result["errors"] == []
+        assert post_calls == ["comparison", "groupby", "statistics", "report"]
+    else:
+        assert [item["variable"] for item in result["evaluated"]] == ["Runoff"]
+        assert any(err["phase"] == "evaluation" and "ET failed" in err["message"] for err in result["errors"])
+        assert post_calls == []
 
 
 def test_partial_run_cache_marks_only_successful_tasks(tmp_path, monkeypatch):
@@ -5154,8 +5175,8 @@ def test_basic_only_drawing_reports_missing_precomputed_grid_input(tmp_path, mon
     assert plot_calls == []
 
 
-def test_correlation_only_drawing_fails_fast_for_station_sources(tmp_path, monkeypatch):
-    """Requested Correlation only_drawing should not warn/continue when inputs are unsupported."""
+def test_correlation_only_drawing_requires_station_comparison_output(tmp_path, monkeypatch):
+    """Station Correlation redraw requires a computed station table, not a blanket type error."""
     import openbench.visualization.Mod_Only_Drawing as only_drawing_module
 
     plot_calls = []
@@ -5173,7 +5194,7 @@ def test_correlation_only_drawing_fails_fast_for_station_sources(tmp_path, monke
         metrics=["Correlation"],
     )
 
-    with pytest.raises(ValueError, match="Correlation only_drawing cannot render requested figure"):
+    with pytest.raises(FileNotFoundError, match="Correlation_Runoff_stn_RefA_SimA_and_SimB.csv"):
         renderer.scenarios_Correlation_comparison(
             str(tmp_path / "case"),
             {
@@ -7906,7 +7927,7 @@ def test_core_score_comparison_rejects_empty_scores(tmp_path, method_name, messa
         ("scenarios_Target_Diagram_comparison", "make_scenarios_comparison_Target_Diagram"),
     ],
 )
-def test_core_diagram_station_all_sites_skipped_raises(tmp_path, monkeypatch, method_name, plot_func):
+def test_core_diagram_unrecorded_station_inputs_raise(tmp_path, monkeypatch, method_name, plot_func):
     """Taylor/Target station diagrams should fail when every listed site lacks task input files."""
     import pandas as pd
 
@@ -7944,7 +7965,7 @@ def test_core_diagram_station_all_sites_skipped_raises(tmp_path, monkeypatch, me
     )
     monkeypatch.setattr(comparison_module, plot_func, lambda *args, **kwargs: None)
 
-    with pytest.raises(FileNotFoundError, match="no usable station data"):
+    with pytest.raises(FileNotFoundError, match="Runoff_sim_S1_2001_2002.nc"):
         getattr(processor, method_name)(
             str(tmp_path),
             {
@@ -8240,8 +8261,8 @@ def test_core_relative_score_plot_failures_propagate(tmp_path, monkeypatch):
         )
 
 
-def test_core_relative_score_nonfinite_station_result_raises(tmp_path, monkeypatch):
-    """Relative Score should not emit all-NaN/inf station relative scores when model spread is zero."""
+def test_core_relative_score_zero_spread_retains_unavailable_stations(tmp_path, monkeypatch):
+    """Zero spread is undefined, not grounds for dropping station rows or failing comparison."""
     import pandas as pd
 
     import openbench.core.comparison as comparison_module
@@ -8278,29 +8299,40 @@ def test_core_relative_score_nonfinite_station_result_raises(tmp_path, monkeypat
         [],
     )
 
-    with pytest.raises(ValueError, match="no finite data"):
-        processor.scenarios_Relative_Score_comparison(
-            str(tmp_path),
-            {
-                "general": {"Runoff_sim_source": ["SimA", "SimB"]},
-                "Runoff": {
-                    "SimA_data_type": "stn",
-                    "SimA_varname": "runoff_sim",
-                    "SimB_data_type": "stn",
-                    "SimB_varname": "runoff_sim",
-                },
+    processor.scenarios_Relative_Score_comparison(
+        str(tmp_path),
+        {
+            "general": {"Runoff_sim_source": ["SimA", "SimB"]},
+            "Runoff": {
+                "SimA_data_type": "stn",
+                "SimA_varname": "runoff_sim",
+                "SimB_data_type": "stn",
+                "SimB_varname": "runoff_sim",
             },
-            {
-                "general": {"Runoff_ref_source": "RefA"},
-                "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
-            },
-            ["Runoff"],
-            ["Overall_Score"],
-            [],
-            {},
-        )
+        },
+        {
+            "general": {"Runoff_ref_source": "RefA"},
+            "Runoff": {"RefA_data_type": "stn", "RefA_varname": "runoff_ref"},
+        },
+        ["Runoff"],
+        ["Overall_Score"],
+        [],
+        {},
+    )
 
-    assert plot_calls == []
+    from openbench.util.filenames import relative_station_scores_filename
+    from openbench.visualization.only_drawing import _require_station_csv_values
+
+    assert len(plot_calls) == 2
+    for sim_source in ("SimA", "SimB"):
+        path = tmp_path / "comparisons/Relative_Score" / relative_station_scores_filename("Runoff", "RefA", sim_source)
+        result = pd.read_csv(path)
+        assert result.ID.tolist() == ["S1"]
+        value = f"relative_Overall_Score_{sim_source}"
+        assert result[value].isna().all()
+        assert result[f"status_{value}"].tolist() == ["unavailable"]
+        assert result[f"reason_{value}"].tolist() == ["zero across-model variance"]
+        _require_station_csv_values(str(path), value)
 
 
 def test_core_diff_plot_missing_station_score_input_raises(tmp_path, monkeypatch):

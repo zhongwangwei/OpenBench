@@ -376,6 +376,7 @@ def run_evaluation_impl(
                         "ref": res["ref"],
                         "status": "success",
                         "skipped": res.get("skipped", False),
+                        **({"station_summary": res["station_summary"]} if res.get("station_summary") else {}),
                     }
                 )
             else:
@@ -480,12 +481,13 @@ def run_evaluation_impl(
             )
         )
 
+    partial_stations = any(result.get("station_summary", {}).get("skipped") for result in evaluated)
     if errors and evaluated:
         status = "partial"
     elif errors:
         status = "error"
     else:
-        status = "success"
+        status = "partial" if partial_stations else "success"
 
     results: dict[str, Any] = {
         "status": status,

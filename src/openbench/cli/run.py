@@ -139,8 +139,20 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     _release_worker_pools()
 
     status = results.get("status", "success")
-    if status == "success":
-        click.secho("\n✓ Evaluation complete", fg="green", bold=True)
+    if status == "success" or (status == "partial" and not results.get("errors")):
+        if status == "partial":
+            click.secho("\n⚠ Evaluation partial success (stations skipped)", fg="yellow", bold=True)
+            for result in results.get("evaluated", []):
+                summary = result.get("station_summary", {})
+                if summary.get("skipped"):
+                    click.echo(
+                        f"  {result['variable']} ({result['sim']} / {result['ref']}): "
+                        f"{summary['succeeded']}/{summary['total']} stations succeeded"
+                    )
+                    for skipped in summary["skipped"]:
+                        click.echo(f"    - {skipped['station']}: {skipped['reason']}")
+        else:
+            click.secho("\n✓ Evaluation complete", fg="green", bold=True)
         click.echo(f"  Output: {results.get('output_dir', 'unknown')}")
         click.echo(f"  Variables: {len(results.get('variables', []))}")
         click.echo(f"  Simulations: {len(results.get('simulations', []))}")

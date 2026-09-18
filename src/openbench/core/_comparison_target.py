@@ -13,14 +13,41 @@ import xarray as xr
 from joblib import delayed
 
 from openbench.core._comparison_helpers import (
-    _apply_pairwise_valid_mask,
     _atomic_text_writer,
-    _require_station_diagram_results,
+    _load_station_pair,
+    _station_evaluation_frame,
     _write_csv_atomic,
 )
+from openbench.data.station_missing import StationDataUnavailable
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
 from openbench.util.filenames import join_filename_components
+
+
+def _to_float(value):
+    arr = np.asarray(value).squeeze()
+    return float(arr.item()) if arr.size == 1 else np.nan
+
+
+def _mean_or_nan(values):
+    values = np.asarray(values, dtype=float)
+    return float(np.nanmean(values)) if np.isfinite(values).any() else np.nan
+
+
+def _station_metadata_for_results(station_list: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
+    """Keep station metadata only before appending freshly computed result columns."""
+    metadata_columns = [
+        "ID",
+        "sim_lat",
+        "sim_lon",
+        "ref_lon",
+        "ref_lat",
+        "lon",
+        "lat",
+        "use_syear",
+        "use_eyear",
+    ]
+    return station_list[[column for column in metadata_columns if column in station_list.columns]]
 
 
 def _comparison_callable(name: str):
@@ -87,25 +114,8 @@ class TargetDiagramComparisonMixin:
                                                 sim_varname = evaluation_item
                                             if ref_varname is None or ref_varname == "":
                                                 ref_varname = evaluation_item
-                                            stnlist = os.path.join(
-                                                casedir,
-                                                "metrics",
-                                                f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                            )
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = [
-                                                "ID",
-                                                "sim_lat",
-                                                "sim_lon",
-                                                "ref_lon",
-                                                "ref_lat",
-                                                "use_syear",
-                                                "use_eyear",
-                                            ]
-                                            station_list.drop(
-                                                columns=[col for col in station_list.columns if col not in del_col],
-                                                inplace=True,
+                                            station_list = _station_evaluation_frame(
+                                                casedir, evaluation_item, ref_source, sim_source, kind="metrics"
                                             )
 
                                             def _make_validation_parallel(
@@ -115,59 +125,42 @@ class TargetDiagramComparisonMixin:
                                                 item,
                                                 sim_varname,
                                                 ref_varname,
-                                                station_list,
-                                                iik,
+                                                station_row,
                                             ):
                                                 try:
-                                                    sim_path = os.path.join(
+                                                    s, o = _load_station_pair(
+                                                        self,
                                                         casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+                                                        item,
+                                                        ref_source,
+                                                        sim_source,
+                                                        station_row,
+                                                        ref_varname,
+                                                        sim_varname,
                                                     )
-                                                    ref_path = os.path.join(
-                                                        casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
-                                                    )
-
-                                                    with xr.open_dataset(sim_path) as sim_ds:
-                                                        s = select_data_array(sim_ds, sim_varname).squeeze().load()
-                                                    with xr.open_dataset(ref_path) as ref_ds:
-                                                        o = select_data_array(ref_ds, ref_varname).squeeze().load()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
-
-                                                    if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(
-                                                        s["time"].values, o["time"].values
-                                                    ):
-                                                        s, o = xr.align(s, o, join="inner")
-                                                    s, o = _apply_pairwise_valid_mask(s, o)
-                                                    row = {}
-                                                    try:
-                                                        row["CRMSD"] = self.CRMSD(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"CRMSD calculation failed: {e}")
-                                                        row["CRMSD"] = np.nan
-                                                    try:
-                                                        row["bias"] = self.bias(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"bias calculation failed: {e}")
-                                                        row["bias"] = np.nan
-                                                    try:
-                                                        row["rmse"] = self.RMSE(s, o).values
-                                                    except (ValueError, RuntimeError, AttributeError) as e:
-                                                        logging.debug(f"rmse calculation failed: {e}")
-                                                        row["rmse"] = np.nan
-                                                    return row
-                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
-                                                    logging.debug(
-                                                        f"Station {station_list['ID'][iik]} skipped in Target: {e}"
-                                                    )
-                                                    return None
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
+                                                    result = {
+                                                        "CRMSD": _to_float(self.CRMSD(s, o)),
+                                                        "bias": _to_float(self.bias(s, o)),
+                                                        "rmse": _to_float(self.RMSE(s, o)),
+                                                    }
+                                                    if not np.isfinite(list(result.values())).any():
+                                                        result.update(
+                                                            {
+                                                                "status": "unavailable",
+                                                                "reason": "computed target metrics are undefined",
+                                                            }
+                                                        )
+                                                    else:
+                                                        result.update({"status": "ok", "reason": ""})
+                                                    return result
+                                                except StationDataUnavailable as exc:
+                                                    return {
+                                                        "CRMSD": np.nan,
+                                                        "bias": np.nan,
+                                                        "rmse": np.nan,
+                                                        "status": "unavailable",
+                                                        "reason": str(exc),
+                                                    }
 
                                             results = self._run_parallel_or_serial(
                                                 delayed(_make_validation_parallel)(
@@ -177,46 +170,37 @@ class TargetDiagramComparisonMixin:
                                                     evaluation_item,
                                                     sim_varname,
                                                     ref_varname,
-                                                    station_list,
-                                                    iik,
+                                                    station_row,
                                                 )
-                                                for iik in range(len(station_list["ID"]))
+                                                for _, station_row in station_list.iterrows()
                                             )
 
-                                            # Replace None results with empty dicts so pd.DataFrame
-                                            # produces zero-length rows that align by ID rather than
-                                            # 0-column placeholder rows that break column alignment
-                                            # in the subsequent concat.
-                                            results_clean = [r if isinstance(r, dict) else {} for r in results]
-                                            _require_station_diagram_results(
-                                                results_clean,
-                                                diagram="Target",
-                                                item=evaluation_item,
-                                                ref_source=ref_source,
-                                                sim_source=sim_source,
+                                            result_frame = pd.DataFrame(results)
+                                            station_list = pd.concat(
+                                                [
+                                                    _station_metadata_for_results(station_list, result_frame),
+                                                    result_frame,
+                                                ],
+                                                axis=1,
                                             )
-                                            results_df = pd.DataFrame(results_clean, index=station_list.index)
-                                            station_list = pd.concat([station_list, results_df], axis=1)
                                             station_list = Convert_Type.convert_Frame(station_list)
 
                                             output_stn_path = os.path.join(
                                                 dir_path,
                                                 f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
                                             )
-                                            _write_csv_atomic(station_list, output_stn_path)
+                                            _write_csv_atomic(station_list, output_stn_path, index=False)
 
-                                            station_list = pd.read_csv(output_stn_path, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            bias_sim = station_list["bias"].mean(skipna=True)
-                                            output_file.write(f"{bias_sim}\t")
+                                            bias_sim = _mean_or_nan(station_list["bias"])
+                                            output_file.write(f"{bias_sim}	")
                                             biases[i] = bias_sim
 
-                                            rmse_sim = station_list["rmse"].mean(skipna=True)
-                                            output_file.write(f"{rmse_sim}\t")
+                                            rmse_sim = _mean_or_nan(station_list["rmse"])
+                                            output_file.write(f"{rmse_sim}	")
                                             rmses[i] = rmse_sim
 
-                                            crmsd_sim = station_list["CRMSD"].mean(skipna=True)
-                                            output_file.write(f"{crmsd_sim}\t")
+                                            crmsd_sim = _mean_or_nan(station_list["CRMSD"])
+                                            output_file.write(f"{crmsd_sim}	")
                                             crmsds[i] = crmsd_sim
                                         else:
                                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]

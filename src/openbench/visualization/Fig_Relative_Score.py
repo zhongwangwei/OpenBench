@@ -20,9 +20,9 @@ from openbench.util.filenames import (
     relative_station_scores_filename,
 )
 
-from .Fig_toolbox import get_index, tick_length
+from .Fig_toolbox import get_colormap, tick_length
 from ._downsample import downsample_for_plot, lat_lon_plot_args
-from ._validation import finite_min_max, finite_values
+from ._validation import finite_values
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,27 @@ def _relative_station_scores_path(output_dir, evaluation_item, ref_source, sim_s
     )
 
 
+def _relative_score_style(data, option):
+    values = np.asarray(data, dtype=float)
+    finite = values[np.isfinite(values)]
+    if option.get("vmin_max_on"):
+        vmin, vmax = float(option["vmin"]), float(option["vmax"])
+    else:
+        limit = float(np.nanmax(np.abs(finite))) if finite.size else 1.0
+        if not np.isfinite(limit) or limit == 0:
+            limit = 1.0
+        vmin, vmax = -limit, limit
+    if not np.isfinite(vmin) or not np.isfinite(vmax) or vmin >= vmax:
+        raise ValueError(f"Relative Score requires finite increasing bounds, got vmin={vmin}, vmax={vmax}")
+    ticks = np.linspace(vmin, vmax, 5)
+    extend = "neither"
+    if finite.size:
+        below = finite.min() < vmin
+        above = finite.max() > vmax
+        extend = "both" if below and above else "min" if below else "max" if above else "neither"
+    return get_colormap(option["cmap"]), ticks, matplotlib.colors.Normalize(vmin=vmin, vmax=vmax), ticks, extend
+
+
 def _relative_grid_score_path(output_dir, evaluation_item, ref_source, sim_source, score):
     return _first_existing_path(
         os.path.join(output_dir, relative_grid_score_filename(evaluation_item, ref_source, sim_source, score)),
@@ -51,15 +72,15 @@ def _relative_grid_score_path(output_dir, evaluation_item, ref_source, sim_sourc
 @with_isolated_rc
 def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, option):
     option = option.copy()
-    finite_values(metric, label=f"Relative Score station {method_name}")
+    metric = np.asarray(metric, dtype=float)
+    stn_lat = np.asarray(stn_lat, dtype=float)
+    stn_lon = np.asarray(stn_lon, dtype=float)
+    available = np.isfinite(metric)
 
     if not option["cmap"]:
         option["cmap"] = "coolwarm"
-    min_value, max_value = finite_min_max(metric, label=f"Relative Score station {method_name}", percentile=(5, 95))
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], method_name)
-    if not option["vmin_max_on"]:
-        option["vmax"], option["vmin"] = mticks[-1], mticks[0]
-
+    cmap, mticks, norm, bnd, extend = _relative_score_style(metric, option)
+    option["vmin"], option["vmax"] = mticks[0], mticks[-1]
     option["extend"] = extend
 
     font = {"family": option["font"]}
@@ -82,20 +103,44 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    cs = ax.scatter(
-        stn_lon,
-        stn_lat,
-        s=option["markersize"],
-        c=metric,
-        cmap=cmap,
-        vmin=mticks[0],
-        vmax=mticks[-1],
-        marker=option["marker"],
-        linewidths=0.5,
-        edgecolors="black",
-        alpha=0.9,
-        zorder=10,
-    )
+    cs = None
+    if available.any():
+        cs = ax.scatter(
+            stn_lon[available],
+            stn_lat[available],
+            s=option["markersize"],
+            c=metric[available],
+            cmap=cmap,
+            vmin=mticks[0],
+            vmax=mticks[-1],
+            marker=option["marker"],
+            linewidths=0.5,
+            edgecolors="black",
+            alpha=0.9,
+            zorder=10,
+        )
+    if (~available).any():
+        ax.scatter(
+            stn_lon[~available],
+            stn_lat[~available],
+            s=option["markersize"],
+            c="0.6",
+            marker="x",
+            linewidths=0.8,
+            zorder=10,
+        )
+        ax.text(
+            0.5,
+            0.06,
+            f"× Unavailable (n={(~available).sum()})",
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=option["xtick"],
+            bbox={"facecolor": "white", "edgecolor": "0.8", "alpha": 0.8, "pad": 2},
+        )
+    if not available.any():
+        ax.text(0.5, 0.5, "No available relative score", transform=ax.transAxes, ha="center")
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -146,42 +191,48 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
 
     ax.set_title(title, fontsize=option["title_size"], weight="bold")
 
-    if not option["colorbar_position_set"]:
-        pos = ax.get_position()
-        left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
-        if (
-            (option["min_lat"] < -60)
-            & (option["max_lat"] > 89)
-            & (option["min_lon"] < -179)
-            & (option["max_lon"] > 179)
-        ):
-            if option["colorbar_position"] == "horizontal":
-                cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
-            else:
-                cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
-        else:
-            if option["colorbar_position"] == "horizontal":
-                if len(option["xticklabel"]) == 0:
-                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+    if cs is not None:
+        if not option["colorbar_position_set"]:
+            pos = ax.get_position()
+            left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
+            if (
+                (option["min_lat"] < -60)
+                & (option["max_lat"] > 89)
+                & (option["min_lon"] < -179)
+                & (option["max_lon"] > 179)
+            ):
+                if option["colorbar_position"] == "horizontal":
+                    cbaxes = fig.add_axes([left + 0.03, bottom + 0.14, 0.15, 0.02])
                 else:
-                    cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                    cbaxes = fig.add_axes([left + 0.015, bottom + 0.08, 0.02, height / 3])
             else:
-                cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
-    else:
-        cbaxes = fig.add_axes(
-            [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]]
-        )
+                if option["colorbar_position"] == "horizontal":
+                    if len(option["xticklabel"]) == 0:
+                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.1, width / 4 * 3, 0.03])
+                    else:
+                        cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
+                else:
+                    cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
+        else:
+            cbaxes = fig.add_axes(
+                [
+                    option["colorbar_left"],
+                    option["colorbar_bottom"],
+                    option["colorbar_width"],
+                    option["colorbar_height"],
+                ]
+            )
 
-    cb = fig.colorbar(
-        cs,
-        cax=cbaxes,
-        ticks=mticks,
-        spacing="uniform",
-        label="",
-        extend=option["extend"],
-        orientation=option["colorbar_position"],
-    )
-    cb.solids.set_edgecolor("face")
+        cb = fig.colorbar(
+            cs,
+            cax=cbaxes,
+            ticks=mticks,
+            spacing="uniform",
+            label="",
+            extend=option["extend"],
+            orientation=option["colorbar_position"],
+        )
+        cb.solids.set_edgecolor("face")
 
     filename2 = file[:-4]
     save_figure(fig, f"{filename2}.{option['saving_format']}", format=f"{option['saving_format']}", dpi=option["dpi"])
@@ -193,22 +244,16 @@ def prepare_stn(output_dir, evaluation_item, ref_source, sim_source, scores, mai
     if os.path.exists(file):
         df = pd.read_csv(file, header=0)
         df = Convert_Type.convert_Frame(df)
-        min_metric = -999.0
-        max_metric = 1000.0
-
         for score in scores:
             var = f"relative_{score}_{sim_source}"
-            ind0 = df[df["%s" % (var)] > min_metric].index
-            data_select0 = df.loc[ind0]
-            ind1 = data_select0[data_select0["%s" % (var)] < max_metric].index
-            data_select = data_select0.loc[ind1]
+            data_select = df
             try:
                 stn_lon = data_select["ref_lon"].values
                 stn_lat = data_select["ref_lat"].values
             except Exception:
                 stn_lon = data_select["sim_lon"].values
                 stn_lat = data_select["sim_lat"].values
-            metric = data_select["%s" % (var)].values
+            metric = data_select[var].values
             output_file = os.path.join(
                 output_dir, f"{relative_station_score_plot_stem(evaluation_item, ref_source, sim_source, score)}.csv"
             )
@@ -228,14 +273,8 @@ def make_geo_plot_index(file, data, ilat, ilon, main_nml, option):
 
     if not option["cmap"]:
         option["cmap"] = "coolwarm"
-    min_value, max_value = finite_min_max(data, label=f"Relative Score grid {file}")
-    cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"], "Overall_Score")
-    if not option["vmin_max_on"]:
-        try:
-            option["vmax"], option["vmin"] = mticks[-1], mticks[0]
-        except Exception:
-            option["vmax"], option["vmin"] = mticks[0] + 1, mticks[0]
-
+    cmap, mticks, norm, bnd, extend = _relative_score_style(data, option)
+    option["vmin"], option["vmax"] = mticks[0], mticks[-1]
     option["extend"] = extend
 
     font = {"family": option["font"]}
