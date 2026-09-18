@@ -123,7 +123,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
 
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
-    for item, references in item_references.items():
+    for item, references in item_references.items() if scores else []:
         for reference in references:
             data_score = np.zeros((4, len(scores), len(sim_sources)))
 
@@ -155,6 +155,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     cmap_bounds=np.linspace(vmin, vmax, 11),
                     cbar_kw=cbar_kw,
                     cbar_option=cbar_option,
+                    allow_empty=True,
                     cbar_label_fontsize=option["colorbar_labelsize"],
                     cbar_tick_fontsize=option["fontsize"],
                     missing_color="grey",
@@ -190,22 +191,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             except Exception:
                 logging.exception(f"Error in {item} - {reference}")
                 raise
-    del (
-        df,
-        unique_items,
-        item_references,
-        sim_sources,
-        item,
-        references,
-        data_score,
-        xaxis_labels,
-        yaxis_labels,
-        fig,
-        ax,
-        cbar,
-        filename,
-        output_file_path,
-    )
 
     # 第二种：基于多变量，多个模型，单个评估指标的对比
 
@@ -265,6 +250,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     cmap_bounds=np.linspace(vmin, vmax, 11),
                     cbar_kw=cbar_kw,
                     cbar_option=cbar_option,
+                    allow_empty=True,
                     cbar_label_fontsize=option["colorbar_labelsize"],
                     cbar_tick_fontsize=option["fontsize"],
                     missing_color="grey",
@@ -297,24 +283,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             except Exception:
                 logging.exception(f"Error in {score} - {item_combination}")
                 raise
-    del (
-        df,
-        filtered_df,
-        unique_items,
-        sim_sources,
-        all_combinations,
-        score,
-        item_combination,
-        mask,
-        data_score,
-        xaxis_labels,
-        yaxis_labels,
-        fig,
-        ax,
-        cbar,
-        filename,
-        output_file_path,
-    )
 
     # end of the function
 
@@ -330,7 +298,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
     sim_sources = df["Simulation"].unique()
     # Initialize variables that may not be assigned if all iterations fail
     fig, ax, cbar, filename, output_file_path = None, None, None, None, None
-    for item, references in item_references.items():
+    for item, references in item_references.items() if metrics else []:
         for reference in references:
             #     Initialize data_metric array
             data_metric = np.zeros((4, len(evaluation_items), 1, len(sim_sources)))
@@ -374,6 +342,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                         cmap=option["cmap"],
                         cbar_kw=cbar_kw,
                         cbar_option=cbar_option,
+                        allow_empty=True,
                         cbar_label_fontsize=option["colorbar_labelsize"],
                         cbar_tick_fontsize=option["fontsize"],
                         missing_color="grey",
@@ -433,24 +402,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 raise
             finally:
                 plt.close(figure)
-    del (
-        df,
-        unique_items,
-        item_references,
-        metric,
-        sim_sources,
-        item,
-        references,
-        data_metric,
-        xaxis_labels,
-        yaxis_labels,
-        mfigsize,
-        fig,
-        ax,
-        cbar,
-        filename,
-        output_file_path,
-    )
 
     # 第二种：基于多变量，多个模型，单个评估指标的对比
     # Read file with fallback and auto-detection
@@ -493,7 +444,8 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                 if option["vmin_max_on"]:
                     vmin, vmax = option["vmin"], option["vmax"]
                 else:
-                    vmin, vmax = np.percentile(data_metric[~np.isnan(data_metric)], [5, 95])
+                    finite = data_metric[np.isfinite(data_metric)]
+                    vmin, vmax = np.percentile(finite, [5, 95]) if finite.size else (0.0, 1.0)
                 fig, ax, cbar = portrait_plot(
                     data_metric,
                     xaxis_labels=xaxis_labels,
@@ -509,6 +461,7 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     cmap_bounds=np.linspace(vmin, vmax, 11),
                     cbar_kw=cbar_kw,
                     cbar_option=cbar_option,
+                    allow_empty=True,
                     cbar_label_fontsize=option["colorbar_labelsize"],
                     cbar_tick_fontsize=option["fontsize"],
                     missing_color="grey",
@@ -541,25 +494,6 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
             except Exception:
                 logging.exception(f"Error in {metric} - {item_combination}")
                 raise
-
-    del (
-        df,
-        filtered_df,
-        unique_items,
-        sim_sources,
-        all_combinations,
-        metric,
-        item_combination,
-        mask,
-        data_metric,
-        xaxis_labels,
-        yaxis_labels,
-        fig,
-        ax,
-        cbar,
-        filename,
-        output_file_path,
-    )
 
 
 @with_isolated_rc
@@ -605,6 +539,7 @@ def portrait_plot(
     debug=False,
     use_axes=False,
     ifigure=None,
+    allow_empty=False,
 ):
     """
     Parameters
@@ -671,7 +606,12 @@ def portrait_plot(
     cbar_option.setdefault("colorbar_position_set", False)
 
     data, num_divide = prepare_data(data, xaxis_labels, yaxis_labels, debug=debug)
-    finite_values(data, label="Portrait Plot seasonal")
+    has_values = bool(np.isfinite(data).any())
+    if not has_values:
+        if not allow_empty:
+            finite_values(data, label="Portrait Plot seasonal")
+        colorbar_off = True
+        vrange = (0.0, 1.0)
 
     if num_divide not in [1, 2, 4]:
         raise ValueError("Error: Number of (stacked) array is not 1, 2, or 4.")
@@ -691,6 +631,17 @@ def portrait_plot(
         ax = fig.add_subplot(111)
 
     ax.set_facecolor(missing_color)
+    if not has_values:
+        ax.text(
+            0.5,
+            0.5,
+            "N/A",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=min(xaxis_fontsize, yaxis_fontsize),
+            zorder=20,
+        )
 
     if vrange is None:
         vmin, vmax = finite_min_max(data, label="Portrait Plot seasonal")

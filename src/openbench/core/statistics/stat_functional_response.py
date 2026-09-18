@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
 import xarray as xr
+
+from openbench.data.time_utils import align_station_times
 
 
 def stat_functional_response(self, v, u):
@@ -15,12 +18,14 @@ def stat_functional_response(self, v, u):
     Returns:
         xarray.DataArray: Functional response score for each grid point
     """
-    import pandas as pd
-
     if isinstance(v, xr.Dataset):
         v = list(v.data_vars.values())[0]
     if isinstance(u, xr.Dataset):
         u = list(u.data_vars.values())[0]
+
+    if "time" in v.dims and "time" in u.dims:
+        v, u = align_station_times(v, u, "Functional_Response", getattr(self, "compare_tim_res", ""))
+        v, u = xr.align(v, u, join="inner")
 
     try:
         nbins = self.stats_nml["Functional_Response"]["nbins"]
@@ -28,7 +33,7 @@ def stat_functional_response(self, v, u):
         nbins = self.compare_nml["Functional_Response"]["nbins"]
 
     def calc_functional_response(v_series, u_series):
-        mask = ~np.isnan(v_series) & ~np.isnan(u_series)
+        mask = np.isfinite(v_series) & np.isfinite(u_series)
         v_valid = v_series[mask]
         u_valid = u_series[mask]
 

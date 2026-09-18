@@ -24,6 +24,8 @@ general:
   colorbar_bottom: 0.14
   colorbar_width: 0.5
   colorbar_height: 0.03
+  marker: o
+  markersize: 15
   vmin_max_on: false
   vmin: -1
   vmax: 1

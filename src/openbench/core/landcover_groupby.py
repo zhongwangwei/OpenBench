@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -12,6 +13,7 @@ from openbench.util.filenames import (
     groupby_table_filename,
     join_filename_components,
 )
+from openbench.util.names import select_data_array
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 from openbench.util.static_datasets import static_dataset_path
@@ -123,6 +125,28 @@ def _write_class_bundle_atomic(class_datasets: list[xr.Dataset], class_names: li
     bundled = xr.concat(class_datasets, dim=xr.IndexVariable("class", class_names))
     bundled["class_id"] = ("class", np.arange(len(class_names), dtype=np.int32))
     _write_netcdf_atomic(bundled, output_path)
+
+
+def _record_statistic_counts(statistic_counts: dict[str, list[int]], statistic: str, counts: list[int]) -> None:
+    statistic_counts[statistic] = counts
+
+
+def _finish_count_rows(
+    rows: list[str],
+    header_index: int,
+    output_path: str,
+    header_values: list[str],
+    statistic_counts: dict[str, list[int]],
+) -> None:
+    """Keep legacy n_valid for shared masks; store per-stat counts when masks differ."""
+    if not statistic_counts:
+        raise ValueError(f"{output_path}: no statistics available; CSV generation stopped")
+    counts = list(statistic_counts.values())
+    if all(row == counts[0] for row in counts[1:]):
+        rows.append("n_valid\t" + "\t".join(map(str, counts[0])) + "\n")
+        return
+    payload = {name: dict(zip(header_values[1:], row_counts)) for name, row_counts in statistic_counts.items()}
+    rows.insert(header_index, "# n_valid_by_statistic: " + json.dumps(payload, separators=(",", ":")) + "\n")
 
 
 class LC_groupby(metrics, scores):
@@ -254,12 +278,12 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                statistic_counts = {}
                                 header_values = ["metric"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
                                 header_values.append("Overall")
+                                header_index = len(rows)
                                 rows.append("\t".join(header_values) + "\n")
 
                                 for metric in self.metrics:
@@ -310,22 +334,12 @@ class LC_groupby(metrics, scores):
                                         ),
                                     )
                                     row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, metric
-                                    else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
-                                                )
+                                    _record_statistic_counts(statistic_counts, metric, row_counts)
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
-                                    raise ValueError(
-                                        f"{output_file_path}: no statistics available; CSV generation stopped"
-                                    )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                _finish_count_rows(
+                                    rows, header_index, output_file_path, header_values, statistic_counts
+                                )
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -363,12 +377,12 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                statistic_counts = {}
                                 header_values = ["score"]
                                 for igbp_class_name in igbp_class_names.values():
                                     header_values.append(igbp_class_name)
                                 header_values.append("Overall")
+                                header_index = len(rows)
                                 rows.append("\t".join(header_values) + "\n")
 
                                 # Cache the mass-weight reference once per
@@ -401,7 +415,9 @@ class LC_groupby(metrics, scores):
                                             with _open_dataset_safe(
                                                 f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                                             ) as ref_ds:
-                                                cached_mass_ref = ref_ds[f"{ref_varname}"].load()
+                                                cached_mass_ref = select_data_array(
+                                                    ref_ds, ref_varname, evaluation_item
+                                                ).load()
                                         o = cached_mass_ref
 
                                         area_weights = np.cos(np.deg2rad(ds.lat))
@@ -476,22 +492,12 @@ class LC_groupby(metrics, scores):
                                     if score_weights is not None:
                                         score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
                                     row_counts.append(int(score_mask.sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, score
-                                    else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
-                                                )
+                                    _record_statistic_counts(statistic_counts, score, row_counts)
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
-                                    raise ValueError(
-                                        f"{output_file_path2}: no statistics available; CSV generation stopped"
-                                    )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                _finish_count_rows(
+                                    rows, header_index, output_file_path2, header_values, statistic_counts
+                                )
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores
@@ -612,12 +618,12 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                statistic_counts = {}
                                 header_values = ["metric"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
                                 header_values.append("Overall")
+                                header_index = len(rows)
                                 rows.append("\t".join(header_values) + "\n")
 
                                 for metric in self.metrics:
@@ -668,22 +674,12 @@ class LC_groupby(metrics, scores):
                                         ),
                                     )
                                     row_counts.append(int(np.isfinite(overall_ds[metric]).sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, metric
-                                    else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {metric}={new}; CSV generation stopped"
-                                                )
+                                    _record_statistic_counts(statistic_counts, metric, row_counts)
                                     row_values.append(overall_median_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
-                                    raise ValueError(
-                                        f"{output_file_path}: no statistics available; CSV generation stopped"
-                                    )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                _finish_count_rows(
+                                    rows, header_index, output_file_path, header_values, statistic_counts
+                                )
                                 _write_lines_atomic(output_file_path, rows)
 
                                 selected_metrics = self.metrics
@@ -720,12 +716,12 @@ class LC_groupby(metrics, scores):
                                 ]
                                 # Keep each metadata entry on one comment line.
                                 rows = [line.rstrip("\n").replace("\n", " ").replace("\r", " ") + "\n" for line in rows]
-                                common_counts = None
-                                first_statistic = None
+                                statistic_counts = {}
                                 header_values = ["score"]
                                 for PFT_class_name in PFT_class_names.values():
                                     header_values.append(PFT_class_name)
                                 header_values.append("Overall")
+                                header_index = len(rows)
                                 rows.append("\t".join(header_values) + "\n")
 
                                 # Cache mass-weight ref once per (sim, ref)
@@ -756,7 +752,9 @@ class LC_groupby(metrics, scores):
                                             with _open_dataset_safe(
                                                 f"{self.casedir}/data/{evaluation_item}_ref_{ref_source}_{ref_varname}.nc"
                                             ) as ref_ds:
-                                                cached_mass_ref = ref_ds[f"{ref_varname}"].load()
+                                                cached_mass_ref = select_data_array(
+                                                    ref_ds, ref_varname, evaluation_item
+                                                ).load()
                                         o = cached_mass_ref
 
                                         area_weights = np.cos(np.deg2rad(ds.lat))
@@ -830,22 +828,12 @@ class LC_groupby(metrics, scores):
                                     if score_weights is not None:
                                         score_mask = score_mask & np.isfinite(score_weights) & (score_weights != 0)
                                     row_counts.append(int(score_mask.sum().item()))
-                                    if common_counts is None:
-                                        common_counts, first_statistic = row_counts, score
-                                    else:
-                                        for column, old, new in zip(header_values[1:], common_counts, row_counts):
-                                            if old != new:
-                                                raise ValueError(
-                                                    f"{output_file_path2}: inconsistent n_valid for {column}: "
-                                                    f"{first_statistic}={old}, {score}={new}; CSV generation stopped"
-                                                )
+                                    _record_statistic_counts(statistic_counts, score, row_counts)
                                     row_values.append(overall_mean_str)
                                     rows.append("\t".join(row_values) + "\n")
-                                if common_counts is None:
-                                    raise ValueError(
-                                        f"{output_file_path2}: no statistics available; CSV generation stopped"
-                                    )
-                                rows.append("n_valid\t" + "\t".join(map(str, common_counts)) + "\n")
+                                _finish_count_rows(
+                                    rows, header_index, output_file_path2, header_values, statistic_counts
+                                )
                                 _write_lines_atomic(output_file_path2, rows)
 
                                 selected_scores = self.scores

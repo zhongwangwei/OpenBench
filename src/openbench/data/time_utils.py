@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.data.station_missing import StationDataUnavailable
+
 # CF calendars that produce cftime objects when xarray decodes them.
 # `proleptic_gregorian` and `gregorian` decode to numpy.datetime64 directly.
 _CFTIME_CALENDARS = {
@@ -382,3 +384,69 @@ def _decode_numeric_time(offsets: np.ndarray) -> np.ndarray | None:
         return np.array(dates, dtype="datetime64[ns]")
 
     return None
+
+
+def normalize_station_time(data_array, compare_tim_res):
+    """
+    Normalize time coordinates to the configured comparison resolution.
+
+    Ensures reference/simulation station series use identical timestamps even when
+    source files encode different daily/hourly conventions (e.g., 00 UTC vs 12 UTC).
+    """
+    if not hasattr(data_array, "coords") or "time" not in data_array.coords:
+        return data_array
+
+    compare_res = str(compare_tim_res or "").strip().lower()
+    if not compare_res:
+        return data_array
+
+    try:
+        times = pd.to_datetime(data_array["time"].values)
+    except Exception as err:
+        logging.debug(f"Station time normalization skipped: {err}")
+        return data_array
+
+    if times.size == 0:
+        return data_array
+
+    normalized = None
+    if compare_res in {"day", "d", "1d", "daily"}:
+        normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
+    elif compare_res in {"hour", "h", "1h", "hourly"}:
+        normalized = (times.floor("h") + pd.Timedelta(minutes=30)).values
+    elif compare_res in {"month", "mon", "m", "1m", "1me", "1ms", "monthly"}:
+        normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
+    elif compare_res in {"year", "yr", "y", "1y", "annual", "yearly"}:
+        normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values
+    else:
+        return data_array
+
+    try:
+        data_array = data_array.assign_coords(time=("time", normalized))
+    except Exception as err:
+        logging.debug(f"Failed to assign normalized station times: {err}")
+    return data_array
+
+
+def align_station_times(
+    s: xr.DataArray, o: xr.DataArray, station_id, compare_tim_res=""
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Align station series exactly first; normalize only as a fallback."""
+    # Keep CF calendars intact; pandas cannot represent e.g. 360-day dates.
+    common_times = np.intersect1d(s["time"].values, o["time"].values)
+    if common_times.size:
+        return s.sel(time=common_times).sortby("time"), o.sel(time=common_times).sortby("time")
+
+    s_norm = normalize_station_time(s, compare_tim_res)
+    o_norm = normalize_station_time(o, compare_tim_res)
+    common_times = np.intersect1d(s_norm["time"].values, o_norm["time"].values)
+    if common_times.size:
+        logging.warning(
+            "Station %s time coordinates required normalization before alignment; using %d overlapping steps",
+            station_id,
+            common_times.size,
+        )
+        return s_norm.sel(time=common_times).sortby("time"), o_norm.sel(time=common_times).sortby("time")
+    raise StationDataUnavailable(
+        f"Station {station_id} has no overlapping time steps after exact or normalized alignment"
+    )

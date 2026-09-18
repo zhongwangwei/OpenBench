@@ -10,14 +10,47 @@ from __future__ import annotations
 from contextlib import contextmanager
 import logging
 import os
+from pathlib import Path
 import tempfile
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.data.station_missing import StationDataUnavailable
+from openbench.data.time_utils import align_station_times
+from openbench.util.names import select_data_array
 from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
+
+
+_STATION_STATISTIC_COLUMNS = {
+    "Standard_Deviation": ("ref_value", "sim_value"),
+    "Mann_Kendall_Trend_Test": ("ref_tau", "sim_tau", "ref_trend", "sim_trend"),
+    "Functional_Response": ("functional_response_score",),
+    "Correlation": ("Correlation",),
+}
+
+
+def _station_statistic_sources(columns, ref_source, sim_source):
+    return tuple(
+        ref_source
+        if column.startswith("ref_")
+        else sim_source
+        if column.startswith("sim_")
+        else f"{ref_source} / {sim_source}"
+        for column in columns
+    )
+
+
+def _comparison_sim_groups(item, sim_sources, ref_source, sim_nml, ref_nml):
+    """Group actual evaluated representations, not raw simulation data types."""
+    ref_type = ref_nml[item][f"{ref_source}_data_type"]
+    groups = {"stn": [], "grid": []}
+    for source in sim_sources:
+        sim_type = sim_nml[item][f"{source}_data_type"]
+        groups["stn" if "stn" in (ref_type, sim_type) else "grid"].append(source)
+    return {kind: sources for kind, sources in groups.items() if sources}
 
 
 def _station_csv_column_mean(file_path: str, column: str, *, label: str) -> float:
@@ -38,74 +71,83 @@ def _station_pairwise_difference_by_id(
     right_label: str,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Align station evaluation rows by ID before subtracting a metric/score."""
-    required = {"ID", value_column}
-    for label, frame in ((left_label, df1), (right_label, df2)):
-        missing = required.difference(frame.columns)
-        if missing:
-            raise KeyError(f"{label} station file is missing required columns: {sorted(missing)}")
-        duplicated = frame["ID"].duplicated()
-        if duplicated.any():
-            duplicate_ids = frame.loc[duplicated, "ID"].astype(str).unique().tolist()
-            raise ValueError(f"{label} station file contains duplicate station IDs: {duplicate_ids}")
-
-    left = df1.set_index("ID", drop=False)
-    right = df2.set_index("ID", drop=False)
-    common_ids = left.index.intersection(right.index)
-    if common_ids.empty:
-        raise ValueError(f"{left_label} and {right_label} have no station IDs in common")
-
-    missing_right = left.index.difference(right.index)
-    missing_left = right.index.difference(left.index)
-    if not missing_right.empty or not missing_left.empty:
-        raise ValueError(
-            f"{left_label} and {right_label} station IDs differ; "
-            f"missing from {right_label}: {list(missing_right.astype(str))}; "
-            f"missing from {left_label}: {list(missing_left.astype(str))}"
-        )
-
-    aligned_left = left.loc[common_ids].reset_index(drop=True)
-    aligned_right = right.loc[common_ids].reset_index(drop=True)
-    diff = aligned_left[value_column].reset_index(drop=True) - aligned_right[value_column].reset_index(drop=True)
-    return aligned_left, diff
+    frames = _station_frames_aligned_by_id({left_label: df1, right_label: df2}, value_column)
+    left, right = frames[left_label], frames[right_label]
+    return left, left[value_column] - right[value_column]
 
 
-def _station_frames_aligned_by_id(frames: dict[str, pd.DataFrame], value_column: str) -> dict[str, pd.DataFrame]:
-    """Return station frames in first-frame ID order, failing on implicit row-order assumptions."""
+def _station_frames_aligned_by_id(
+    frames: dict[str, pd.DataFrame], value_column: str | None = None
+) -> dict[str, pd.DataFrame]:
+    """Align the union of station IDs, retaining absent evaluations as NaN."""
     if not frames:
         return {}
 
-    labels = list(frames)
-    first_label = labels[0]
-    first = frames[first_label]
-    required = {"ID", value_column}
+    required = {"ID"} | ({value_column} if value_column is not None else set())
     for label, frame in frames.items():
         missing = required.difference(frame.columns)
         if missing:
             raise KeyError(f"{label} station file is missing required columns: {sorted(missing)}")
-        duplicated = frame["ID"].duplicated()
-        if duplicated.any():
-            duplicate_ids = frame.loc[duplicated, "ID"].astype(str).unique().tolist()
-            raise ValueError(f"{label} station file contains duplicate station IDs: {duplicate_ids}")
+        if frame["ID"].isna().any() or frame["ID"].duplicated().any():
+            raise ValueError(f"{label} station file contains missing or duplicate station IDs")
 
-    first_ids = pd.Index(first["ID"])
-    first_set = set(first_ids)
-    for label in labels[1:]:
-        ids = pd.Index(frames[label]["ID"])
-        missing_from_current = first_ids.difference(ids)
-        missing_from_first = ids.difference(first_ids)
-        if missing_from_current.size or missing_from_first.size:
-            raise ValueError(
-                f"{first_label} and {label} station IDs differ; "
-                f"missing from {label}: {list(missing_from_current.astype(str))}; "
-                f"missing from {first_label}: {list(missing_from_first.astype(str))}"
-            )
-        if set(ids) != first_set:
-            raise ValueError(f"{first_label} and {label} station IDs differ")
+    ids = pd.Index(pd.concat([frame["ID"] for frame in frames.values()]).drop_duplicates(), name="ID")
+    aligned = {label: frame.set_index("ID").reindex(ids) for label, frame in frames.items()}
+    # Coalesce only station metadata, never scores or missing-data status.
+    for column in ("ref_lon", "ref_lat", "sim_lon", "sim_lat", "use_syear", "use_eyear"):
+        available = [frame[column] for frame in aligned.values() if column in frame]
+        if available:
+            metadata = pd.concat(available, axis=1).bfill(axis=1).iloc[:, 0]
+            for frame in aligned.values():
+                frame[column] = frame[column].combine_first(metadata) if column in frame else metadata
+    return {label: frame.reset_index() for label, frame in aligned.items()}
 
-    return {
-        label: frame.set_index("ID", drop=False).loc[first_ids].reset_index(drop=True)
-        for label, frame in frames.items()
-    }
+
+def _station_evaluation_frame(basedir, item, ref_source, sim_source, kind="metrics"):
+    """Reload full station membership, including recorded evaluation data gaps."""
+    root = Path(basedir)
+    filename = f"{item}_stn_{ref_source}_{sim_source}_evaluations.csv"
+    path = root / kind / filename
+    if not path.exists():
+        alternative = root / ("scores" if kind == "metrics" else "metrics") / filename
+        if alternative.exists():
+            path = alternative
+    frame = pd.read_csv(path, dtype={"ID": str})
+    status_path = root / "data" / f"stn_{ref_source}_{sim_source}" / f"{item}_evaluation_status.csv"
+    if status_path.exists():
+        status = pd.read_csv(status_path, dtype={"ID": str}).fillna({"reason": ""})
+        values = frame.drop(columns=[col for col in status if col != "ID" and col in frame])
+        frame = status.merge(values, on="ID", how="left", validate="one_to_one")
+        # Never revive stale values from an earlier successful evaluation.
+        metadata = {"ID", "sim_lat", "sim_lon", "ref_lat", "ref_lon", "use_syear", "use_eyear"}
+        columns = [col for col in values if col not in metadata]
+        frame.loc[frame["status"] == "unavailable", columns] = np.nan
+    return Convert_Type.convert_Frame(frame)
+
+
+def _load_station_pair(handler, basedir, item, ref_source, sim_source, row, ref_varname, sim_varname):
+    """Load a station pair; only recorded or proven data gaps are recoverable."""
+    if row.get("status") == "unavailable":
+        raise StationDataUnavailable(str(row.get("reason") or "station data unavailable"))
+    arrays = []
+    for role, varname in (("sim", sim_varname), ("ref", ref_varname)):
+        path = (
+            Path(basedir)
+            / "data"
+            / f"stn_{ref_source}_{sim_source}"
+            / (f"{item}_{role}_{row['ID']}_{int(row['use_syear'])}_{int(row['use_eyear'])}.nc")
+        )
+        if not path.exists() and path.with_suffix(".skip.txt").exists():
+            raise StationDataUnavailable(path.with_suffix(".skip.txt").read_text(encoding="utf-8"))
+        with xr.open_dataset(path) as ds:
+            data = select_data_array(ds, varname).load()
+        data = data.squeeze([dim for dim in data.dims if dim != "time" and data.sizes[dim] == 1])
+        arrays.append(Convert_Type.convert_nc(data))
+    s, o = align_station_times(*arrays, row["ID"], getattr(handler, "compare_tim_res", ""))
+    s, o = _apply_pairwise_valid_mask(s, o)
+    if not bool(np.isfinite(s).any()):
+        raise StationDataUnavailable("no shared finite sim/ref pairs")
+    return s, o
 
 
 def _grid_score_mean(
@@ -129,7 +171,7 @@ def _grid_score_mean(
     if weight == "mass":
         ref_path = handler._ref_data_path(casedir, evaluation_item, ref_source, ref_varname, sim_source)
         with xr.open_dataset(ref_path) as o_file:
-            o = Convert_Type.convert_nc(o_file[f"{ref_varname}"].load())
+            o = Convert_Type.convert_nc(select_data_array(o_file, ref_varname, evaluation_item).load())
 
         area_weights = np.cos(np.deg2rad(ds.lat))
         flux_weights = np.abs(o.mean("time"))

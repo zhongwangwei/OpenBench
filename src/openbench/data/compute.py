@@ -36,8 +36,10 @@ class _CaseInsensitiveDatasetProxy:
     def __getitem__(self, key: Any) -> Any:
         if isinstance(key, str):
             actual = get_xarray_key_case_insensitive(self._dataset, key)
-            if actual is not None:
-                return self._dataset[actual]
+            try:
+                return self._dataset[actual if actual is not None else key]
+            except KeyError as exc:
+                raise MissingComputeVariable(f"Variable {key!r} not found in dataset") from exc
         return self._dataset[key]
 
     def __contains__(self, key: Any) -> bool:
@@ -246,6 +248,8 @@ def execute_compute(ds: Any, expression: str, var_name: str = "") -> Any:
         logger.debug("Computed %s successfully", var_name)
         return result
 
+    except MissingComputeVariable as e:
+        raise MissingComputeVariable(f"{e} when computing {var_name}") from e
     except KeyError as e:
         raise ComputeError(
             f"Variable {e} not found in dataset when computing {var_name}. Available: {list(ds.data_vars)[:10]}..."
@@ -256,3 +260,7 @@ def execute_compute(ds: Any, expression: str, var_name: str = "") -> Any:
 
 class ComputeError(Exception):
     """Raised when a compute expression fails."""
+
+
+class MissingComputeVariable(ComputeError):
+    """A compute expression references a variable absent from the source dataset."""

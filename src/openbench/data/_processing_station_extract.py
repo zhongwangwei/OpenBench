@@ -6,13 +6,14 @@ import gc
 import logging
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
-from openbench.data.station_missing import mask_station_missing
+from openbench.data.station_missing import StationDataUnavailable, mask_station_missing, record_station_skip
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 
@@ -51,7 +52,24 @@ class StationExtractionMixin:
             if processed_data is not None:
                 self.save_extracted_data(processed_data, station, datasource)
             else:
-                logging.info(f"Skipping station {station['ID']} - no data in time range {start_year}-{end_year}")
+                reason = f"No data in time range {start_year}-{end_year}"
+                output = (
+                    Path(self.casedir)
+                    / "data"
+                    / f"stn_{self.ref_source}_{self.sim_source}"
+                    / (f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
+                )
+                record_station_skip(output, reason)
+                logging.warning("Skipping station %s (%s): %s", station["ID"], datasource, reason)
+        except StationDataUnavailable as exc:
+            output = (
+                Path(self.casedir)
+                / "data"
+                / f"stn_{self.ref_source}_{self.sim_source}"
+                / (f"{self.item}_{datasource}_{station['ID']}_{station['use_syear']}_{station['use_eyear']}.nc")
+            )
+            record_station_skip(output, str(exc))
+            logging.warning("Skipping station %s (%s): %s", station["ID"], datasource, exc)
         finally:
             gc.collect()
 
@@ -108,7 +126,7 @@ class StationExtractionMixin:
             lat_delta = abs(float(lat_values[lat_idx]) - target_lat)
             lon_delta = float(lon_distances[lon_idx])
             if lat_delta > tolerance or lon_delta > tolerance:
-                raise ValueError(
+                raise StationDataUnavailable(
                     f"Nearest grid cell for station {station['ID']} is outside tolerance "
                     f"({lat_delta:.6g}°, {lon_delta:.6g}° > {tolerance:.6g}°)"
                 )
@@ -150,6 +168,7 @@ class StationExtractionMixin:
             )
 
             _write_netcdf_atomic(data, output_file, compression=False)
+            Path(output_file).with_suffix(".skip.txt").unlink(missing_ok=True)
             logging.debug(f"Saved extracted station data to {output_file}")
         finally:
             if hasattr(data, "close"):

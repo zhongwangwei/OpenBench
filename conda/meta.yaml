@@ -13,7 +13,7 @@ source:
 build:
   noarch: python
   number: 0
-  script: {{ PYTHON }} -m pip install . -vv
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
   entry_points:
     - openbench = openbench.cli.main:cli
 
@@ -21,7 +21,7 @@ requirements:
   host:
     - python >=3.10
     - pip
-    - hatchling
+    - hatchling >=1.27.0
   run:
     - python >=3.10
     - xarray >=0.19.0
@@ -48,17 +48,27 @@ requirements:
     - f90nml >=1.4.4
 
 test:
+  requires:
+    - pip
   imports:
     - openbench
+    - openbench.config
+    - openbench.data.registry
   commands:
+    - python -m pip check
     - openbench --version
+    - openbench model list
+    - openbench smoke-test
 
 about:
   home: https://github.com/CoLM-SYSU/OpenBench
   dev_url: https://github.com/zhongwangwei/OpenBench
-  license: MIT
-  license_family: MIT
-  license_file: LICENSE
+  license: MIT AND GPL-3.0-only AND LicenseRef-NCL-6.3.0
+  license_file:
+    - LICENSE
+    - src/openbench/visualization/cmaps/LICENSE
+    - src/openbench/visualization/cmaps/colormaps/ncar_ncl/Copyright
+    - src/openbench/visualization/cmaps/colormaps/ncar_ncl/NCL_source_license.txt
   summary: Open Source Land Surface Model Benchmarking System
   description: |
     OpenBench is a fully automated, cross-platform framework for

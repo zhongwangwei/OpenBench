@@ -372,7 +372,7 @@ def test_correlation_does_not_mutate_empty_sim_varnames(tmp_path, monkeypatch):
     assert sim_nml["Runoff"]["Sim2_varname"] is None
 
 
-def test_mann_kendall_logs_station_skips(tmp_path, caplog):
+def test_mann_kendall_requires_station_inputs_instead_of_skipping_source(tmp_path, caplog):
     from openbench.core.comparison import ComparisonProcessing
 
     main_nml = {
@@ -390,11 +390,11 @@ def test_mann_kendall_logs_station_skips(tmp_path, caplog):
     processor.stat_mann_kendall_trend_test = lambda ds: ds
 
     caplog.set_level(logging.INFO)
-    processor.scenarios_Mann_Kendall_Trend_Test_comparison(
-        str(tmp_path / "case"), sim_nml, ref_nml, ["Runoff"], [], [], {"significance_level": 0.05}
-    )
-
-    assert "Skipping Mann_Kendall_Trend_Test" in caplog.text
+    with pytest.raises(FileNotFoundError, match="Runoff_stn_RefA_SimA_evaluations.csv"):
+        processor.scenarios_Mann_Kendall_Trend_Test_comparison(
+            str(tmp_path / "case"), sim_nml, ref_nml, ["Runoff"], [], [], {"significance_level": 0.05}
+        )
+    assert "Skipping Mann_Kendall_Trend_Test" not in caplog.text
 
 
 def test_climatology_unsupported_metric_raises(tmp_path, monkeypatch):
@@ -502,6 +502,34 @@ def test_station_single_variable_fallback_is_not_implicit():
         processor._load_station_dataset(dataset, "ref")
 
 
+def test_station_reads_named_derived_output_before_raw_variable_fallback():
+    from openbench.core.evaluation import Evaluation_stn
+
+    processor = object.__new__(Evaluation_stn)
+    processor.item = "Net_Ecosystem_Exchange"
+    processor.sim_varname = ["f_respc"]
+    dataset = xr.Dataset(
+        {"Net_Ecosystem_Exchange": ("time", [1.0, 2.0], {"units": "g m-2 s-1"})},
+        coords={"time": pd.date_range("2000-01-01", periods=2)},
+    )
+
+    actual = processor._load_station_dataset(dataset, "sim")
+
+    xr.testing.assert_identical(actual, dataset[["Net_Ecosystem_Exchange"]])
+    assert processor.sim_varname == ["f_respc"]
+
+
+def test_station_uses_configured_raw_variable_when_both_are_present():
+    from openbench.core.evaluation import Evaluation_stn
+
+    processor = object.__new__(Evaluation_stn)
+    processor.item = "Net_Ecosystem_Exchange"
+    processor.sim_varname = ["f_nee"]
+    dataset = xr.Dataset({"f_nee": ("time", [1.0]), "Net_Ecosystem_Exchange": ("time", [2.0])})
+
+    xr.testing.assert_identical(processor._load_station_dataset(dataset, "sim"), dataset[["f_nee"]])
+
+
 def test_station_plot_scalarizes_vector_metric_values(caplog):
     from openbench.core.evaluation import _scalar_plot_value
 
@@ -520,11 +548,25 @@ def test_parallel_coordinates_no_longer_drops_columns_for_single_nan():
     assert "all_missing_value_columns" in source
 
 
-def test_relative_score_validity_does_not_use_id_column_only():
-    source = Path("src/openbench/core/_comparison_relative.py").read_text(encoding="utf-8")
+def test_relative_score_validity_does_not_use_id_column_only(tmp_path, monkeypatch):
+    from types import SimpleNamespace
 
-    assert "relative_score_columns" in source
-    assert "if not combined_relative_scores.empty" not in source
+    import pandas as pd
+
+    import openbench.core._comparison_relative as relative
+
+    monkeypatch.setattr(relative, "_station_evaluation_frame", lambda *a, **kw: pd.DataFrame({"ID": ["A"]}))
+    with pytest.raises(KeyError, match="Overall_Score"):
+        relative.RelativeScoreComparisonMixin.scenarios_Relative_Score_comparison(
+            SimpleNamespace(main_nml={"general": {}}),
+            str(tmp_path),
+            {"general": {"Runoff_sim_source": "Sim"}, "Runoff": {"Sim_data_type": "stn"}},
+            {"general": {"Runoff_ref_source": "Ref"}, "Runoff": {"Ref_data_type": "stn"}},
+            ["Runoff"],
+            ["Overall_Score"],
+            [],
+            {},
+        )
 
 
 def test_groupby_default_compare_tim_res_is_parseable_without_config_value(tmp_path):

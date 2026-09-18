@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from openbench.core._comparison_helpers import _atomic_text_writer, _grid_score_mean, _station_csv_column_mean
+from openbench.core._comparison_helpers import _atomic_text_writer, _grid_score_mean, _station_evaluation_frame
 
 
 def _as_list(value):
@@ -64,8 +64,10 @@ class HeatMapComparisonMixin:
                                 sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
 
                                 if ref_data_type == "stn" or sim_data_type == "stn":
-                                    file = f"{casedir}/scores/{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv"
-                                    overall_mean = _station_csv_column_mean(file, score, label="Score")
+                                    frame = _station_evaluation_frame(
+                                        casedir, evaluation_item, ref_source, sim_source, kind="scores"
+                                    )
+                                    overall_mean = frame[score].mean(skipna=True)
                                 else:
                                     overall_mean = _grid_score_mean(
                                         self, casedir, evaluation_item, ref_source, sim_source, ref_varname, score

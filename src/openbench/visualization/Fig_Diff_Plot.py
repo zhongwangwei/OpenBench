@@ -137,6 +137,9 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    if hasattr(cmap, "copy"):
+        cmap = cmap.copy()
+    cmap.set_bad("#d9d9d9")
     option["vmin"], option["vmax"] = mticks[0], mticks[-1]
     # `get_index` already computed `extend` against the *original* min/max
     # (before we overwrote option["vmin"]/vmax with mticks bounds); reuse it
@@ -156,7 +159,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     if option["show_method"] == "interpolate":
         cs = ax.contourf(lon, lat, var, levels=bnd, cmap=cmap, norm=norm, extend=extend)
     else:
-        cs = ax.imshow(var.T, cmap=cmap, vmin=mticks[0], vmax=mticks[-1], extent=extent, origin=origin)
+        cs = ax.imshow(var.T, cmap=cmap, norm=norm, extent=extent, origin=origin)
 
     for spine in ax.spines.values():
         spine.set_linewidth(option["line_width"])
@@ -266,7 +269,9 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         "text.usetex": False,
     }
     rcParams.update(params)
-    finite_values(metric, label=f"Diff Plot station {filename}/{varname}")
+    metric_values = np.asarray(metric, dtype=float)
+    valid_values = metric_values[np.isfinite(metric_values)]
+    has_valid_values = valid_values.size > 0
 
     if not option["vmin_max_on"]:
         if var in [
@@ -282,8 +287,10 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
             "kappa_coeff",
             "rSpearman",
         ]:
-            min_value, max_value = finite_min_max(
-                metric, label=f"Diff Plot station {filename}/{varname}", percentile=(5, 95)
+            min_value, max_value = (
+                finite_min_max(metric_values, label=f"Diff Plot station {filename}/{varname}", percentile=(5, 95))
+                if has_valid_values
+                else (-1.0, 1.0)
             )
             max_value = math.ceil(max_value)
             min_value = math.floor(min_value)
@@ -293,30 +300,50 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
                 if min_value < -100:
                     min_value = -100
         else:
-            min_value, max_value = finite_min_max(metric, label=f"Diff Plot station {filename}/{varname}")
+            min_value, max_value = (
+                finite_min_max(metric_values, label=f"Diff Plot station {filename}/{varname}")
+                if has_valid_values
+                else (-1.0, 1.0)
+            )
     else:
         min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    if hasattr(cmap, "copy"):
+        cmap = cmap.copy()
+    cmap.set_bad("#d9d9d9")
     option["vmin"], option["vmax"] = mticks[0], mticks[-1]
+    option["extend"] = extend
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    cs = ax.scatter(
-        stn_lon,
-        stn_lat,
-        s=option["markersize"],
-        c=metric,
-        cmap=cmap,
-        norm=norm,
-        vmin=mticks[0],
-        vmax=mticks[-1],
-        marker=option["marker"],
-        linewidths=0.5,
-        edgecolors="black",
-        alpha=0.9,
-    )
+    if has_valid_values:
+        cs = ax.scatter(
+            stn_lon,
+            stn_lat,
+            s=option["markersize"],
+            c=np.ma.masked_invalid(metric_values),
+            plotnonfinite=True,
+            cmap=cmap,
+            norm=norm,
+            marker=option["marker"],
+            linewidths=0.5,
+            edgecolors="black",
+            alpha=0.9,
+        )
+    else:
+        cs = None
+        ax.scatter(
+            stn_lon,
+            stn_lat,
+            s=option["markersize"],
+            color="#d9d9d9",
+            marker=option["marker"],
+            linewidths=0.5,
+            edgecolors="black",
+            alpha=0.9,
+        )
     coastline = cfeature.NaturalEarthFeature("physical", "coastline", "110m", edgecolor="0.6", facecolor="none")
     rivers = cfeature.NaturalEarthFeature(
         "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
@@ -359,9 +386,12 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=50)
-    ax.set_title(option["title"], fontsize=option["title_size"], weight="bold")
+    title = option["title"]
+    if not has_valid_values:
+        title = f"{title}\nNo valid paired data" if title else "No valid paired data"
+    ax.set_title(title, fontsize=option["title_size"], weight="bold")
 
-    if not option["colorbar_position_set"]:
+    if has_valid_values and not option["colorbar_position_set"]:
         pos = ax.get_position()
         left, right, bottom, width, height = pos.x0, pos.x1, pos.y0, pos.width, pos.height
         if (
@@ -382,21 +412,22 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
                     cbaxes = fig.add_axes([left + width / 8, bottom - 0.15, width / 4 * 3, 0.03])
             else:
                 cbaxes = fig.add_axes([right + 0.01, bottom, 0.015, height])
-    else:
+    elif has_valid_values:
         cbaxes = fig.add_axes(
             [option["colorbar_left"], option["colorbar_bottom"], option["colorbar_width"], option["colorbar_height"]]
         )
 
-    cb = fig.colorbar(
-        cs,
-        cax=cbaxes,
-        ticks=mticks,
-        spacing="uniform",
-        label="",
-        extend=option["extend"],
-        orientation=option["colorbar_position"],
-    )
-    cb.solids.set_edgecolor("face")
+    if has_valid_values:
+        cb = fig.colorbar(
+            cs,
+            cax=cbaxes,
+            ticks=mticks,
+            spacing="uniform",
+            label="",
+            extend=extend,
+            orientation=option["colorbar_position"],
+        )
+        cb.solids.set_edgecolor("face")
     # cb.set_label('%s' % (varname), position=(0.5, 1.5), labelpad=-35)
     filename2 = filename[:-4]
     save_figure(

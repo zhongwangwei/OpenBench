@@ -136,8 +136,7 @@ def test_extract_station_data_honors_configured_num_cores(tmp_path, monkeypatch)
             calls.append(n_jobs)
 
         def __call__(self, tasks):
-            list(tasks)
-            return []
+            return [func(*args, **kwargs) for func, args, kwargs in tasks]
 
     def fake_delayed(func):
         def wrapper(*args, **kwargs):
@@ -215,7 +214,7 @@ def test_process_station_data_honors_configured_num_cores(monkeypatch):
     proc.station_list = pd.DataFrame(
         {"ID": ["US-ARM"], "use_syear": [2004], "use_eyear": [2005], "sim_dir": ["unused.nc"]}
     )
-    proc._make_stn_parallel = lambda *args, **kwargs: None
+    proc._make_stn_parallel = lambda *args, **kwargs: {"ok": True, "station": "US-ARM"}
 
     monkeypatch.setattr(processing, "Parallel", FakeParallel)
     monkeypatch.setattr(processing, "delayed", fake_delayed)
@@ -576,7 +575,8 @@ def test_setup_output_directories_reuses_already_merged_station_fulllist(tmp_pat
     assert list(proc.station_list.columns) == ["ID", "sim_dir", "ref_dir", "use_syear", "use_eyear"]
 
 
-def test_process_station_data_hard_fails_partial_station_failures(tmp_path):
+@pytest.mark.parametrize("all_failed", [False, True])
+def test_process_station_data_retains_successful_stations(tmp_path, caplog, all_failed):
     from openbench.data.processing import StationDatasetProcessing
 
     proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
@@ -584,13 +584,22 @@ def test_process_station_data_hard_fails_partial_station_failures(tmp_path):
     proc.station_list = pd.DataFrame(
         {"ID": ["A", "B"], "use_syear": [2000, 2000], "use_eyear": [2000, 2000], "sim_dir": ["a.nc", "b.nc"]}
     )
-    proc._make_stn_parallel = lambda station_list, datasource, i: {"ok": i == 0, "station": station_list.iloc[i]["ID"]}
+    proc._make_stn_parallel = lambda station_list, datasource, i: {
+        "ok": i == 0 and not all_failed,
+        "station": station_list.iloc[i]["ID"],
+        "error": "missing variable Qg",
+    }
 
-    with pytest.raises(RuntimeError, match="1/2 sim station"):
+    if all_failed:
+        with pytest.raises(RuntimeError, match="2/2 sim station"):
+            StationDatasetProcessing.process_station_data(proc, {"datasource": "sim"})
+    else:
         StationDatasetProcessing.process_station_data(proc, {"datasource": "sim"})
+        assert "partial success" in caplog.text
+        assert "B" in caplog.text and "missing variable Qg" in caplog.text
 
 
-def test_station_evaluation_hard_fails_when_any_station_skips(tmp_path, monkeypatch):
+def test_station_evaluation_retains_successful_station_alignment(tmp_path, monkeypatch, caplog):
     import openbench.core.evaluation as evaluation
     from openbench.core.evaluation import Evaluation_stn
 
@@ -613,12 +622,20 @@ def test_station_evaluation_hard_fails_when_any_station_skips(tmp_path, monkeypa
     ev.metrics = ["bias"]
     ev.scores = []
     ev.make_evaluation_parallel = lambda station_list, i: (
-        {"KGESS": 1.0, "RMSE": 0.0, "correlation": 1.0, "bias": 0.0} if i == 0 else None
+        {"_skip_reason": "no shared finite sim/ref pairs"} if i == 0 else {"bias": 2.5}
     )
     monkeypatch.setattr(evaluation, "make_plot_index_stn", lambda self: None)
 
-    with pytest.raises(RuntimeError, match="1/2 station"):
-        ev.make_evaluation_P()
+    ev.make_evaluation_P()
+    saved = pd.read_csv(tmp_path / "metrics" / "Runoff_stn_Ref_Sim_evaluations.csv")
+    assert saved["ID"].tolist() == ["B"]
+    assert saved["bias"].tolist() == [2.5]
+    assert ev.station_summary == {
+        "total": 2,
+        "succeeded": 1,
+        "skipped": [{"station": "A", "reason": "no shared finite sim/ref pairs"}],
+    }
+    assert "partial success" in caplog.text
 
 
 def test_station_evaluation_hard_fails_when_all_results_are_nonfinite(tmp_path, monkeypatch):

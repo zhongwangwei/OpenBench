@@ -8,7 +8,6 @@ import os
 import sys
 
 import numpy as np
-import pandas as pd
 import xarray as xr
 from joblib import delayed
 
@@ -16,13 +15,50 @@ from openbench.core._comparison_helpers import (
     _apply_pairwise_valid_mask,
     _atomic_text_writer,
     _finite_reduced_value,
+    _load_station_pair,
+    _station_evaluation_frame,
 )
+from openbench.data.station_missing import StationDataUnavailable
 from openbench.core._comparison_portrait_calculations import (
     process_portrait_metric,
     process_portrait_score,
 )
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
+
+
+def _has_finite_pair(s, o) -> bool:
+    return bool(np.isfinite(np.asarray(s)).any() and np.isfinite(np.asarray(o)).any())
+
+
+def _select_season_pair(s, o, season: str):
+    s_season = s.sel(time=s["time.season"] == season)
+    o_season = o.sel(time=o["time.season"] == season)
+    if s_season.sizes.get("time", 0) == 0 or o_season.sizes.get("time", 0) == 0:
+        raise StationDataUnavailable(f"No {season} station data")
+    s_season, o_season = _apply_pairwise_valid_mask(s_season, o_season)
+    if not _has_finite_pair(s_season, o_season):
+        raise StationDataUnavailable(f"No valid {season} station pairs")
+    return s_season, o_season
+
+
+def _nan_or_reduced(values, *, reducer, plot, item, ref_source, sim_source, variable):
+    values = np.asarray(values, dtype=float)
+    if not np.isfinite(values).any():
+        return np.nan
+    return _finite_reduced_value(
+        values,
+        reducer=reducer,
+        plot=plot,
+        item=item,
+        ref_source=ref_source,
+        sim_source=sim_source,
+        variable=variable,
+    )
+
+
+def _format_portrait_value(value):
+    return "nan" if not np.isfinite(value) else f"{value:.2f}"
 
 
 def _comparison_callable(name: str):
@@ -89,25 +125,8 @@ class PortraitSeasonalComparisonMixin:
                                             if ref_varname is None or ref_varname == "":
                                                 ref_varname = evaluation_item
 
-                                            stnlist = os.path.join(
-                                                basedir,
-                                                "metrics",
-                                                f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                            )
-                                            station_list = pd.read_csv(stnlist, header=0)
-                                            station_list = Convert_Type.convert_Frame(station_list)
-                                            del_col = [
-                                                "ID",
-                                                "sim_lat",
-                                                "sim_lon",
-                                                "ref_lon",
-                                                "ref_lat",
-                                                "use_syear",
-                                                "use_eyear",
-                                            ]
-                                            station_list.drop(
-                                                columns=[col for col in station_list.columns if col not in del_col],
-                                                inplace=True,
+                                            station_list = _station_evaluation_frame(
+                                                basedir, evaluation_item, ref_source, sim_source, kind="metrics"
                                             )
 
                                             def _process_station_data_parallel(
@@ -117,51 +136,24 @@ class PortraitSeasonalComparisonMixin:
                                                 item,
                                                 sim_varname,
                                                 ref_varname,
-                                                station_list,
-                                                iik,
+                                                station_row,
                                                 metric_or_score,
                                                 season,
                                                 metric=None,
                                                 score=None,
                                             ):
                                                 try:
-                                                    sim_path = os.path.join(
+                                                    s, o = _load_station_pair(
+                                                        self,
                                                         casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_sim_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
+                                                        item,
+                                                        ref_source,
+                                                        sim_source,
+                                                        station_row,
+                                                        ref_varname,
+                                                        sim_varname,
                                                     )
-                                                    ref_path = os.path.join(
-                                                        casedir,
-                                                        "data",
-                                                        f"stn_{ref_source}_{sim_source}",
-                                                        f"{item}_ref_{station_list['ID'][iik]}_{station_list['use_syear'][iik]}_{station_list['use_eyear'][iik]}.nc",
-                                                    )
-
-                                                    with xr.open_dataset(sim_path) as sim_ds:
-                                                        s = select_data_array(sim_ds, sim_varname).squeeze().load()
-                                                    with xr.open_dataset(ref_path) as ref_ds:
-                                                        o = select_data_array(ref_ds, ref_varname).squeeze().load()
-                                                    o = Convert_Type.convert_nc(o)
-                                                    s = Convert_Type.convert_nc(s)
-
-                                                    # Align time axes safely. The previous code did an unconditional
-
-                                                    # s["time"] = o["time"], which (a) raises when lengths differ and
-
-                                                    # (b) silently pairs values against wrong timestamps when lengths
-
-                                                    # match but coords are offset. Use inner-join intersect instead.
-
-                                                    if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(
-                                                        s["time"].values, o["time"].values
-                                                    ):
-                                                        s, o = xr.align(s, o, join="inner")
-                                                    s, o = _apply_pairwise_valid_mask(s, o)
-
-                                                    s_season = s.sel(time=s["time.season"] == season)
-                                                    o_season = o.sel(time=o["time.season"] == season)
-
+                                                    s_season, o_season = _select_season_pair(s, o, season)
                                                     if metric_or_score == "metric":
                                                         return process_portrait_metric(
                                                             self,
@@ -172,8 +164,9 @@ class PortraitSeasonalComparisonMixin:
                                                             metric,
                                                             s_season,
                                                             o_season,
+                                                            allow_empty=True,
                                                         )
-                                                    elif metric_or_score == "score":
+                                                    if metric_or_score == "score":
                                                         return process_portrait_score(
                                                             self,
                                                             casedir,
@@ -183,18 +176,27 @@ class PortraitSeasonalComparisonMixin:
                                                             score,
                                                             s_season,
                                                             o_season,
+                                                            allow_empty=True,
                                                         )
-                                                except (FileNotFoundError, KeyError, ValueError, OSError) as e:
-                                                    logging.debug(
-                                                        f"Station {station_list['ID'][iik]} skipped in Portrait: {e}"
+                                                    raise ValueError(
+                                                        f"Unsupported portrait statistic kind: {metric_or_score}"
                                                     )
-                                                    return None
-                                                finally:
-                                                    pass  # Memory cleanup handled at higher level
+                                                except StationDataUnavailable as e:
+                                                    logging.debug(
+                                                        "Station %s has no Portrait seasonal value for %s/%s: %s",
+                                                        station_row.get("ID", "<unknown>"),
+                                                        metric or score,
+                                                        season,
+                                                        e,
+                                                    )
+                                                    return np.nan
 
+                                            station_rows = [row for _, row in station_list.iterrows()]
                                             seasons = ["DJF", "MAM", "JJA", "SON"]
                                             for metric in metrics:
                                                 try:
+                                                    if not hasattr(self, metric):
+                                                        raise ValueError(f"No such metric: {metric}")
                                                     for season in seasons:
                                                         results = self._run_parallel_or_serial(
                                                             delayed(_process_station_data_parallel)(
@@ -204,25 +206,22 @@ class PortraitSeasonalComparisonMixin:
                                                                 evaluation_item,
                                                                 sim_varname,
                                                                 ref_varname,
-                                                                station_list,
-                                                                iik,
+                                                                station_row,
                                                                 "metric",
                                                                 season,
                                                                 metric=metric,
                                                             )
-                                                            for iik in range(len(station_list["ID"]))
+                                                            for station_row in station_rows
                                                         )
-                                                        results = np.array(
-                                                            [r if r is not None else np.nan for r in results],
-                                                            dtype=float,
-                                                        )
-                                                        if results[~np.isnan(results)].shape[0] > 2:
-                                                            q1, q3 = np.percentile(results[~np.isnan(results)], [5, 95])
+                                                        results = np.asarray(results, dtype=float)
+                                                        finite = results[np.isfinite(results)]
+                                                        if finite.size > 2:
+                                                            q1, q3 = np.percentile(finite, [5, 95])
                                                             results = np.where(
                                                                 (results >= q1) & (results <= q3), results, np.nan
                                                             )
 
-                                                        mean_value = _finite_reduced_value(
+                                                        mean_value = _nan_or_reduced(
                                                             results,
                                                             reducer="median",
                                                             plot="Portrait Plot seasonal",
@@ -231,13 +230,14 @@ class PortraitSeasonalComparisonMixin:
                                                             sim_source=sim_source,
                                                             variable=f"{metric}_{season}",
                                                         )
-                                                        kk_str = f"{mean_value:.2f}"
-                                                        output_file.write(f"{kk_str}\t")
+                                                        output_file.write(f"{_format_portrait_value(mean_value)}\t")
                                                 finally:
                                                     gc.collect()  # Clean up memory after processing each metric
 
                                             for score in scores:
                                                 try:
+                                                    if not hasattr(self, score):
+                                                        raise ValueError(f"No such score: {score}")
                                                     for season in seasons:
                                                         results = self._run_parallel_or_serial(
                                                             delayed(_process_station_data_parallel)(
@@ -247,20 +247,15 @@ class PortraitSeasonalComparisonMixin:
                                                                 evaluation_item,
                                                                 sim_varname,
                                                                 ref_varname,
-                                                                station_list,
-                                                                iik,
+                                                                station_row,
                                                                 "score",
                                                                 season,
                                                                 score=score,
                                                             )
-                                                            for iik in range(len(station_list["ID"]))
+                                                            for station_row in station_rows
                                                         )
-                                                        results_clean = np.array(
-                                                            [r if r is not None else np.nan for r in results],
-                                                            dtype=float,
-                                                        )
-                                                        mean_value = _finite_reduced_value(
-                                                            results_clean,
+                                                        mean_value = _nan_or_reduced(
+                                                            results,
                                                             reducer="mean",
                                                             plot="Portrait Plot seasonal",
                                                             item=evaluation_item,
@@ -268,8 +263,7 @@ class PortraitSeasonalComparisonMixin:
                                                             sim_source=sim_source,
                                                             variable=f"{score}_{season}",
                                                         )
-                                                        kk_str = f"{mean_value:.2f}"
-                                                        output_file.write(f"{kk_str}\t")
+                                                        output_file.write(f"{_format_portrait_value(mean_value)}\t")
                                                 finally:
                                                     gc.collect()  # Clean up memory after processing each score
                                         else:
