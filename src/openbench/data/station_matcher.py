@@ -77,6 +77,23 @@ def _station_id_to_string(value) -> str:
     return str(value)
 
 
+def _unique_station_ids(station_ids: np.ndarray, data_source_names: np.ndarray | None = None) -> list[str]:
+    """Return station IDs that stay unique for consolidated station products."""
+    ids = [_station_id_to_string(station_id) for station_id in station_ids]
+    if len(ids) == len(set(ids)):
+        return ids
+
+    if data_source_names is not None:
+        source_ids = [
+            f"{_station_id_to_string(source)}::{station_id}"
+            for source, station_id in zip(data_source_names, ids, strict=False)
+        ]
+        if len(source_ids) == len(set(source_ids)):
+            return source_ids
+
+    return [f"{station_id}::idx{idx}" for idx, station_id in enumerate(ids)]
+
+
 def _get_dim_case_insensitive(dims, requested: str | None) -> str | None:
     if not requested:
         return None
@@ -159,11 +176,13 @@ def _process_site_cama(
     area_err_threshold: float,
     min_uparea: float,
     max_uparea: float,
+    output_station_ids: list[str],
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
 ):
     """Process one station for CaMA allocation matching.  Returns metadata row or None."""
     station_id = _station_id_to_string(station_ids[idx])
+    output_station_id = output_station_ids[idx]
     lon = float(lons[idx])
     lat = float(lats[idx])
     area = float(areas[idx]) if not np.isnan(areas[idx]) else -9999.0
@@ -208,7 +227,7 @@ def _process_site_cama(
     ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
-    return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
+    return [output_station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +247,14 @@ def _process_site_direct(
     scratch_dir: Path,
     min_uparea: float,
     max_uparea: float,
+    output_station_ids: list[str],
     time_format: Optional[str] = None,
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
 ):
     """Process one station with direct coordinate matching (no CaMA)."""
     station_id = _station_id_to_string(station_ids[idx])
+    output_station_id = output_station_ids[idx]
     lon = float(lons[idx])
     lat = float(lats[idx])
     area = float(areas[idx]) if not np.isnan(areas[idx]) else -9999.0
@@ -277,7 +298,7 @@ def _process_site_direct(
         ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
-    return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
+    return [output_station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +353,8 @@ def run_station_matching(
         if time_key is None:
             time_key = _require_dataset_field(ds, time_var, "time_var", dataset_path)
         station_ids = ds[station_id_key].values
+        source_key = get_xarray_key_case_insensitive(ds, "data_source_name")
+        data_source_names = ds[source_key].values if source_key else None
         lons = ds[lon_key].values
         lats = ds[lat_key].values
 
@@ -357,6 +380,7 @@ def run_station_matching(
         normalized_station_ids = [_station_id_to_string(station_id) for station_id in station_ids]
         station_id_counts = Counter(normalized_station_ids)
         duplicate_station_ids = {station_id for station_id, count in station_id_counts.items() if count > 1}
+        output_station_ids = _unique_station_ids(station_ids, data_source_names)
 
         if method == "cama_allocation":
             res_suffix = get_resolution_suffix(info.sim_grid_res)
@@ -396,6 +420,7 @@ def run_station_matching(
                     area_error_threshold,
                     min_uparea,
                     max_uparea,
+                    output_station_ids,
                     duplicate_station_ids,
                     missing_sentinels,
                 )
@@ -421,6 +446,7 @@ def run_station_matching(
                     scratch_dir,
                     min_uparea,
                     max_uparea,
+                    output_station_ids,
                     time_format,
                     duplicate_station_ids,
                     missing_sentinels,

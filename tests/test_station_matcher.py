@@ -50,6 +50,42 @@ def test_station_matching_duplicate_station_ids_do_not_overwrite_scratch_files(t
             assert "discharge" in station_ds
 
 
+def test_station_matching_uses_source_qualified_ids_for_consolidated_sources(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("2000-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {
+            "station": ("station", np.array([0, 0])),
+            "data_source_name": ("station", np.array(["GRDC", "CAMELS_BR"], dtype=object)),
+            "lon": ("station", np.array([10.0, 11.0])),
+            "lat": ("station", np.array([20.0, 21.0])),
+            "discharge": (("station", "time"), np.array([[1.0, 2.0], [3.0, 4.0]])),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2000,
+        sim_eyear=2000,
+        syear=2000,
+        eyear=2000,
+        min_year=0,
+        min_lon=-180,
+        max_lon=180,
+        min_lat=-90,
+        max_lat=90,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+
+    assert info.stn_list["ID"].tolist() == ["GRDC::0", "CAMELS_BR::0"]
+    assert info.stn_list["ID"].is_unique
+
+
 def test_station_matching_preserves_existing_station_list_when_csv_write_fails(tmp_path, monkeypatch):
     from openbench.data.station_matcher import run_station_matching
 
