@@ -149,8 +149,11 @@ def test_only_drawing_layout_and_colorbars(tmp_path, monkeypatch, group, kind, r
         if group == "IGBP" and kind == "metric" and row_count == 1:
             with matplotlib.rc_context({"savefig.bbox": None}):
                 fig.savefig(path, **kwargs)
+            # HiDPI canvases (e.g. macOS Retina) measure fig.bbox in physical
+            # pixels, while savefig writes at the figure's logical dpi.
+            ratio = getattr(fig.canvas, "device_pixel_ratio", 1) or 1
             with Image.open(path) as image:
-                assert image.size == (int(canvas.width), int(canvas.height))
+                assert image.size == (int(canvas.width / ratio), int(canvas.height / ratio))
         saved.append(path)
 
     monkeypatch.setattr(plot, "save_figure", save)
