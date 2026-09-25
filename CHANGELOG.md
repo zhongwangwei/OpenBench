@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.0.4] - 2026-09-25
+
+Interactive `openbench init` now asks for the evaluation settings it used to
+fill in silently.
+
+### Added
+- New wizard step "Domain, Resolution & Runtime": latitude/longitude range,
+  target `tim_res` and `grid_res` (defaults inferred from the selected
+  references and simulations), `time_alignment`, IGBP/PFT/climate-zone
+  group-by, and `num_cores` (`auto` = all CPU cores). Answers are written to
+  `project` as active values.
+- New wizard step "Metrics, Scores & Analyses": pick metrics, scores,
+  comparison figures and statistics methods by number or name from numbered
+  lists, with defaults marked `*`.
+- `openbench init` asks to confirm scanned simulation cases before station
+  lists are materialized; answering no returns to the simulation roots prompt.
+
+### Changed
+- Every init prompt explains the setting and shows its default; Enter keeps
+  the default. Yes/no prompts read `[yes/no/back, Enter = …]`.
+- `b` is accepted as `back` in all init prompts and in yes/no and numbered
+  prompts of other wizards. Free-text data-name prompts (NetCDF variable
+  names, units, globs) still require the full word `back`.
+- Going back skips comparison/statistics item prompts for disabled phases.
+- `--refresh-ref` help now states that init never rescans without it, and init
+  prints a hint when the reference catalog was not rescanned.
+
 ## [3.0.3] - 2026-09-18
 
 Feature and reliability release for station-mode preprocessing and comparisons.

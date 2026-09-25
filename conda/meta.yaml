@@ -1,6 +1,6 @@
 {% set name = "colm-openbench" %}
 {% set dist_name = name|replace("-", "_") %}
-{% set version = "3.0.3" %}
+{% set version = "3.0.4" %}
 
 package:
   name: {{ name|lower }}
@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://github.com/zhongwangwei/OpenBench/releases/download/v{{ version }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: ff09d00a2e5dacdae00ee59722d38c85ba50e9cfa506fad37b3b3be8d63d00cf
+  sha256: 4cc57506009067450306642043d461587e8ed632a50b4158449a60f3ddd2c9c0
 
 build:
   noarch: python
