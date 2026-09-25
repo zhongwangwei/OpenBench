@@ -205,7 +205,8 @@ assets on a clean machine.
 ## Quick Start
 
 ```bash
-# 1. Generate a config interactively (picks variables, references, models)
+# 1. Generate a config interactively (variables, references, simulations,
+#    domain & resolution, metrics/scores; Enter keeps each default, b goes back)
 openbench init
 
 # 2. Validate the config and check reference data availability

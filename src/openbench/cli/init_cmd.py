@@ -15,8 +15,15 @@ import yaml
 
 from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields, prompt_steps
 from openbench.cli._wizard import confirm as _wizard_confirm
-from openbench.cli._wizard import prompt as _wizard_prompt
+from openbench.cli._wizard import prompt as _base_wizard_prompt
 from openbench.core.registry import IMPLEMENTED_METRIC_NAMES, IMPLEMENTED_SCORE_NAMES
+
+
+def _wizard_prompt(text: str, **kwargs):
+    """Init prompts accept the short ``b`` for back everywhere."""
+    kwargs.setdefault("short_back", True)
+    return _base_wizard_prompt(text, **kwargs)
+
 
 _SEED_MANIFEST_NAME = ".seeded_defaults.yaml"
 _UNRESOLVED_ENV_RE = re.compile(r"(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%[A-Za-z_][A-Za-z0-9_]*%)")
@@ -554,10 +561,11 @@ def _init_reference_registry_preflight(
     settings_path = remember_reference_root(root)
     click.echo(f"Saved reference root: {root} ({settings_path})")
     if not refresh_ref:
+        click.echo(f"Reference catalog was not rescanned; re-run with --refresh-ref to rescan {root}.")
         click.echo()
         return
 
-    click.echo("Refreshing reference catalog without prompt because --refresh-ref was set.")
+    click.echo("Rescanning the reference root because --refresh-ref was set.")
     variants = _scan_reference_variants(root)
     if not variants:
         click.secho(
@@ -642,7 +650,7 @@ def _scan_simulation_config(
     case_pattern: str | None,
     exclude: tuple[str, ...],
     climatology: str,
-) -> dict:
+) -> dict | None:
     from openbench.cli.sim import (
         _handle_climatology_candidates,
         _print_scan_summary,
@@ -693,6 +701,12 @@ def _scan_simulation_config(
                 else "Register the model first or re-run with --sim-model MODEL."
             )
             raise click.ClickException(f"Simulation scan has unresolved model inference for: {labels}. {hint}")
+
+    labels = [case.label for case in result.cases]
+    click.echo(f"  Found {len(labels)} simulation case(s): {', '.join(labels)}")
+    click.echo("  Answer 'no' to enter different roots or add simulations manually.")
+    if not _wizard_confirm("  Use these scanned simulation cases?", default=True):
+        return None
 
     output = Path(output_path)
     station_output = output.with_name(f"{output.stem}_sim_station_lists")
@@ -755,9 +769,11 @@ def _prompt_manual_simulations(mgr) -> dict:
                     (
                         "root_dir",
                         f"  Data root directory for {model_name}",
-                        {"default": root_default} if root_default is not None else {},
+                        {"default": root_default, "short_back": True}
+                        if root_default is not None
+                        else {"short_back": True},
                     ),
-                    ("label", "  Label for this run", {"default": label_default}),
+                    ("label", "  Label for this run", {"default": label_default, "short_back": True}),
                 ]
             )
         except BackRequested:
@@ -863,71 +879,440 @@ def _unique_non_null_values(values) -> list:
     return result
 
 
-def _prompt_project_options(project_resolution: dict, simulation: dict) -> tuple[bool, bool, dict]:
-    resolution = dict(project_resolution)
+TIME_ALIGNMENT_OPTIONS = ("intersection", "per_pair", "strict")
+_UNSET_WORDS = {"", "none"}
+
+
+class _NumericRangeType(click.ParamType):
+    """Parse ``min,max`` into a validated two-float list."""
+
+    name = "range"
+
+    def __init__(self, lower: float, upper: float):
+        self.lower = lower
+        self.upper = upper
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, (list, tuple)):
+            parts = list(value)
+        else:
+            parts = [part for part in re.split(r"[,\s]+", str(value).strip()) if part]
+        try:
+            low, high = (float(part) for part in parts)
+        except (TypeError, ValueError):
+            self.fail(
+                f"enter two numbers separated by a comma, e.g. {self.lower:g},{self.upper:g}",
+                param,
+                ctx,
+            )
+        if not self.lower <= low < high <= self.upper:
+            self.fail(
+                f"need {self.lower:g} <= min < max <= {self.upper:g}, got {low:g},{high:g}",
+                param,
+                ctx,
+            )
+        return [low, high]
+
+
+class _TargetTimResType(click.ParamType):
+    """Accept a supported tim_res, or ``none`` to leave it unset."""
+
+    name = "tim_res"
+
+    def convert(self, value, param, ctx):
+        if value is None or str(value).strip().lower() in _UNSET_WORDS:
+            return None
+        from openbench.config.loader import ConfigError, _validated_optional_tim_res
+
+        try:
+            return _validated_optional_tim_res(str(value).strip(), "tim_res")
+        except ConfigError as exc:
+            self.fail(str(exc), param, ctx)
+
+
+class _TargetGridResType(click.ParamType):
+    """Accept a positive grid spacing in degrees, or ``none`` to leave it unset."""
+
+    name = "grid_res"
+
+    def convert(self, value, param, ctx):
+        if value is None or str(value).strip().lower() in _UNSET_WORDS:
+            return None
+        try:
+            grid_res = float(value)
+        except (TypeError, ValueError):
+            self.fail(f"enter a positive number of degrees (e.g. 0.5) or 'none', got {value!r}", param, ctx)
+        if grid_res <= 0:
+            self.fail(f"grid_res must be positive, got {value!r}", param, ctx)
+        return grid_res
+
+
+class _NumCoresType(click.ParamType):
+    """Accept a positive core count, or ``auto`` for all CPU cores."""
+
+    name = "cores"
+
+    def convert(self, value, param, ctx):
+        if value is None or str(value).strip().lower() in {"", "auto"}:
+            return None
+        try:
+            cores = int(str(value).strip())
+        except ValueError:
+            self.fail(f"enter a whole number of cores or 'auto', got {value!r}", param, ctx)
+        if cores < 1:
+            self.fail(f"number of cores must be at least 1 (or 'auto'), got {cores}", param, ctx)
+        return cores
+
+
+def _parse_item_selection(selection: str, options: list[str]) -> list[str]:
+    selected = []
+    invalid = []
+    by_lower = {option.lower(): option for option in options}
+    for token in selection.split(","):
+        item = token.strip()
+        if not item:
+            continue
+        if item.isdigit():
+            index = int(item)
+            if 1 <= index <= len(options):
+                selected.append(options[index - 1])
+            else:
+                invalid.append(f"{item} (expected 1-{len(options)})")
+            continue
+        match = by_lower.get(item.lower())
+        if match:
+            selected.append(match)
+        else:
+            invalid.append(item)
+    if invalid:
+        raise ValueError(
+            "unknown item(s): " + ", ".join(invalid) + ". Use numbers or names from the list, separated by commas."
+        )
+    if not selected:
+        raise ValueError("select at least one item.")
+    return _unique_preserving_order(selected)
+
+
+class _ItemSelectionType(click.ParamType):
+    """Parse comma-separated numbers or names from a fixed option list."""
+
+    name = "selection"
+
+    def __init__(self, options: list[str]):
+        self.options = list(options)
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, list):
+            return value
+        try:
+            return _parse_item_selection(str(value), self.options)
+        except ValueError as exc:
+            self.fail(str(exc), param, ctx)
+
+
+def _echo_numbered_options(options: list[str], defaults: list[str], *, max_columns: int = 3) -> None:
+    default_set = set(defaults)
+    number_width = len(str(len(options)))
+    cells = [
+        f"[{index:>{number_width}}] {name}{'*' if name in default_set else ''}" for index, name in enumerate(options, 1)
+    ]
+    cell_width = max(len(cell) for cell in cells) + 2
+    columns = max(1, min(max_columns, 96 // cell_width))
+    for start in range(0, len(cells), columns):
+        row = "".join(cell.ljust(cell_width) for cell in cells[start : start + columns])
+        click.echo("    " + row.rstrip())
+    click.echo("    (* = default)")
+
+
+def _format_number(value) -> str:
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, state: dict) -> dict:
+    """Ask for spatial domain, target resolution, alignment, group-by and cores."""
     sim_entries = _simulation_entries_with_defaults(simulation)
+    sim_tim_values = _unique_non_null_values(entry.get("tim_res") for entry in sim_entries)
+    sim_grid_values = _unique_non_null_values(entry.get("grid_res") for entry in sim_entries)
+    inferred_tim = project_resolution.get("tim_res")
+    inferred_grid = project_resolution.get("grid_res")
+    tim_default = inferred_tim or (sim_tim_values[0] if sim_tim_values else None)
+    grid_default = inferred_grid if inferred_grid is not None else (sim_grid_values[0] if sim_grid_values else None)
+    cpu_count = os.cpu_count() or 1
+
     defaults = {
-        "comparison": True,
-        "statistics": False,
-        "tim_res": str(resolution.get("tim_res", "")),
-        "grid_res": resolution.get("grid_res"),
+        "lat_range": "-90,90",
+        "lon_range": "-180,180",
+        "tim_res": str(tim_default) if tim_default else "none",
+        "grid_res": _format_number(grid_default) if grid_default is not None else "none",
+        "time_alignment": "intersection",
+        "IGBP_groupby": False,
+        "PFT_groupby": False,
+        "climate_zone_groupby": False,
+        "num_cores": "auto",
     }
+    defaults.update(state)
 
-    def remembered_confirm(key: str, text: str) -> bool:
+    def ask(key: str, text: str, param_type, *explanation: str) -> Any:
+        for line in explanation:
+            click.echo(line)
+        value = _wizard_prompt(text, type=param_type, default=defaults[key])
+        defaults[key] = _format_prompt_default(value, fallback=defaults[key])
+        state[key] = defaults[key]
+        return value
+
+    def ask_yes_no(key: str, text: str, *explanation: str) -> bool:
+        for line in explanation:
+            click.echo(line)
         defaults[key] = _wizard_confirm(text, default=defaults[key])
+        state[key] = defaults[key]
         return defaults[key]
 
-    def remembered_prompt(key: str, text: str, **kwargs):
-        kwargs["default"] = defaults[key]
-        defaults[key] = _wizard_prompt(text, **kwargs)
-        return defaults[key]
+    if len(sim_tim_values) > 1:
+        tim_source_note = f"    Simulations use mixed time resolutions ({', '.join(map(str, sim_tim_values))})."
+    elif tim_default:
+        tim_source_note = "    Default = coarsest resolution among the selected references and simulations."
+    else:
+        tim_source_note = "    No resolution could be inferred; 'none' leaves it for OpenBench to derive at run time."
+    if len(sim_grid_values) > 1 and inferred_grid is None:
+        mixed = ", ".join(map(_format_number, sim_grid_values))
+        grid_source_note = f"    Simulations use mixed grid spacings ({mixed})."
+    elif inferred_grid is not None:
+        grid_source_note = "    Default = grid spacing of the selected references (or of the simulations)."
+    else:
+        grid_source_note = "    No grid spacing could be inferred; 'none' leaves it unset (fine for station-only runs)."
 
     steps = [
         (
+            "lat_range",
+            "Latitude range",
+            lambda: ask(
+                "lat_range",
+                "    Latitude range (south,north; -90..90)",
+                _NumericRangeType(-90.0, 90.0),
+                "  Spatial domain - only grid cells and stations inside this box are evaluated.",
+                "    Global coverage is -90,90 and -180,180.",
+            ),
+        ),
+        (
+            "lon_range",
+            "Longitude range",
+            lambda: ask(
+                "lon_range",
+                "    Longitude range (west,east; -180..180)",
+                _NumericRangeType(-180.0, 180.0),
+            ),
+        ),
+        (
+            "tim_res",
+            "Target tim_res",
+            lambda: ask(
+                "tim_res",
+                "    Target tim_res",
+                _TargetTimResType(),
+                "",
+                "  Target time resolution - all data are aggregated to this step before metrics are computed.",
+                "    Choices: Year, Month, Day, Hour, 3hr, Nmonth (e.g. 3month), or 'none'.",
+                tim_source_note,
+            ),
+        ),
+        (
+            "grid_res",
+            "Target grid_res",
+            lambda: ask(
+                "grid_res",
+                "    Target grid_res in degrees",
+                _TargetGridResType(),
+                "",
+                "  Target grid resolution - gridded data are regridded to this spacing (degrees).",
+                grid_source_note,
+            ),
+        ),
+        (
+            "time_alignment",
+            "Time alignment",
+            lambda: ask(
+                "time_alignment",
+                "    Time alignment (intersection, per_pair, strict)",
+                click.Choice(TIME_ALIGNMENT_OPTIONS, case_sensitive=False),
+                "",
+                "  Time alignment - how the evaluation period is chosen when data coverage differs:",
+                "    intersection  overlap of project years, references and simulations (OpenBench default)",
+                "    per_pair      overlap computed separately for each simulation/reference pair",
+                "    strict        use project years exactly; warn on coverage gaps, fail on time mismatch",
+            ),
+        ),
+        (
+            "IGBP_groupby",
+            "Group by IGBP",
+            lambda: ask_yes_no(
+                "IGBP_groupby",
+                "    Group results by IGBP land cover class?",
+                "",
+                "  Group-by analysis - extra per-class summaries of the results.",
+            ),
+        ),
+        (
+            "PFT_groupby",
+            "Group by PFT",
+            lambda: ask_yes_no("PFT_groupby", "    Group results by PFT (plant functional type)?"),
+        ),
+        (
+            "climate_zone_groupby",
+            "Group by climate zone",
+            lambda: ask_yes_no("climate_zone_groupby", "    Group results by Koppen climate zone?"),
+        ),
+        (
+            "num_cores",
+            "Number of cores",
+            lambda: ask(
+                "num_cores",
+                "    Number of cores",
+                _NumCoresType(),
+                "",
+                f"  Parallel workers - 'auto' uses all CPU cores on this machine ({cpu_count}).",
+                "    On shared HPC login or compute nodes, enter the number of cores you were allocated.",
+            ),
+        ),
+    ]
+
+    values = prompt_steps(steps)
+    options = {
+        "lat_range": values["lat_range"],
+        "lon_range": values["lon_range"],
+        "time_alignment": values["time_alignment"].lower(),
+        "IGBP_groupby": values["IGBP_groupby"],
+        "PFT_groupby": values["PFT_groupby"],
+        "climate_zone_groupby": values["climate_zone_groupby"],
+    }
+    for key in ("tim_res", "grid_res", "num_cores"):
+        if values[key] is not None:
+            options[key] = values[key]
+    return options
+
+
+def _format_prompt_default(value, *, fallback: str) -> str:
+    """Turn a converted prompt answer back into the text shown as its default."""
+    if value is None:
+        return "auto" if fallback == "auto" else "none"
+    if isinstance(value, list):
+        return ",".join(_format_number(item) for item in value)
+    return _format_number(value)
+
+
+def _prompt_analysis_options(state: dict) -> dict:
+    """Ask for metrics, scores, and comparison/statistics items."""
+    defaults = {
+        "metrics": list(DEFAULT_METRICS),
+        "scores": list(DEFAULT_SCORES),
+        "comparison": True,
+        "comparison_items": list(DEFAULT_COMPARISONS),
+        "statistics": False,
+        "statistics_items": list(DEFAULT_STATISTICS),
+    }
+    defaults.update(state)
+
+    def select(key: str, title: str, text: str, options: list[str], *explanation: str) -> list[str]:
+        click.echo()
+        for line in explanation:
+            click.echo(line)
+        click.echo(f"  {title} ({len(options)} available):")
+        _echo_numbered_options(options, defaults[key])
+        value = _wizard_prompt(
+            f"    {text}",
+            type=_ItemSelectionType(options),
+            default=", ".join(defaults[key]),
+        )
+        defaults[key] = value
+        state[key] = value
+        return value
+
+    def ask_yes_no(key: str, text: str, *explanation: str) -> bool:
+        click.echo()
+        for line in explanation:
+            click.echo(line)
+        defaults[key] = _wizard_confirm(text, default=defaults[key])
+        state[key] = defaults[key]
+        return defaults[key]
+
+    click.echo("  Enter numbers or names separated by commas; press Enter to keep the defaults marked with *.")
+    steps = [
+        (
+            "metrics",
+            "Metrics",
+            lambda: select(
+                "metrics",
+                "Metrics",
+                "Metrics",
+                METRIC_OPTIONS,
+                "  Metrics - statistics computed between each simulation and its reference.",
+            ),
+        ),
+        (
+            "scores",
+            "Scores",
+            lambda: select(
+                "scores",
+                "Scores",
+                "Scores",
+                SCORE_OPTIONS,
+                "  Scores - normalized 0-1 skill scores (higher is better).",
+            ),
+        ),
+        (
             "comparison",
             "Enable comparison?",
-            lambda: remembered_confirm("comparison", "  Enable comparison?"),
+            lambda: ask_yes_no(
+                "comparison",
+                "  Enable comparison?",
+                "  Comparison - cross-simulation figures such as Taylor diagrams and heat maps.",
+            ),
+        ),
+        (
+            "comparison_items",
+            "Comparison items",
+            lambda: select(
+                "comparison_items",
+                "Comparison figures",
+                "Comparison items",
+                COMPARISON_OPTIONS,
+            ),
+            lambda: defaults["comparison"],
         ),
         (
             "statistics",
             "Enable statistics?",
-            lambda: remembered_confirm("statistics", "  Enable statistics?"),
+            lambda: ask_yes_no(
+                "statistics",
+                "  Enable statistics?",
+                "  Statistics - independent statistical analysis of each dataset.",
+            ),
+        ),
+        (
+            "statistics_items",
+            "Statistics items",
+            lambda: select(
+                "statistics_items",
+                "Statistics methods",
+                "Statistics items",
+                STATISTICS_OPTIONS,
+            ),
+            lambda: defaults["statistics"],
         ),
     ]
 
-    tim_values = _unique_non_null_values(entry.get("tim_res") for entry in sim_entries)
-    if len(tim_values) > 1:
-        defaults["tim_res"] = defaults["tim_res"] or str(tim_values[0])
-        steps.append(
-            (
-                "tim_res",
-                "Target tim_res for mixed simulation resolutions",
-                lambda: remembered_prompt(
-                    "tim_res",
-                    "  Target tim_res for mixed simulation resolutions",
-                ),
-            )
-        )
-
-    if "grid_res" not in resolution:
-        grid_values = _unique_non_null_values(entry.get("grid_res") for entry in sim_entries)
-        if len(grid_values) > 1:
-            defaults["grid_res"] = defaults["grid_res"] or float(grid_values[0])
-            steps.append(
-                (
-                    "grid_res",
-                    "Target grid_res for mixed simulation resolutions",
-                    lambda: remembered_prompt(
-                        "grid_res",
-                        "  Target grid_res for mixed simulation resolutions",
-                        type=float,
-                    ),
-                )
-            )
-
     values = prompt_steps(steps)
-    resolution.update({key: values[key] for key in ("tim_res", "grid_res") if key in values})
-    return values["comparison"], values["statistics"], resolution
+    return {
+        "metrics": values["metrics"],
+        "scores": values["scores"],
+        "comparison": {
+            "enabled": values["comparison"],
+            "items": values.get("comparison_items") if values["comparison"] else None,
+        },
+        "statistics": {
+            "enabled": values["statistics"],
+            "items": values.get("statistics_items") if values["statistics"] else None,
+        },
+    }
 
 
 def _parse_variable_selection(selection: str, var_list: list[str]) -> list[str]:
@@ -1135,10 +1520,19 @@ def _render_project_section(lines: list[str], project: dict) -> None:
         "min_year_threshold",
         "tim_res",
         "grid_res",
+        "lat_range",
+        "lon_range",
+        "time_alignment",
+        "IGBP_groupby",
+        "PFT_groupby",
+        "climate_zone_groupby",
+        "num_cores",
     ]
     for key in active_order:
         if key in project:
             _append_key_value(lines, key, project[key], indent=2)
+    if "num_cores" not in project:
+        lines.append("  # num_cores: 4  # unset = all CPU cores (auto)")
 
     lines.append("  # Optional project controls:")
     examples = {
@@ -1146,7 +1540,6 @@ def _render_project_section(lines: list[str], project: dict) -> None:
         "lon_range": [-180.0, 180.0],
         "timezone": 0,
         "weight": "area",
-        "num_cores": 4,
         "time_alignment": "intersection",
         "unified_mask": True,
         "generate_report": True,
@@ -1333,7 +1726,8 @@ def _render_init_config_template(config: dict, *, all_refs: list, all_vars: list
 @click.option(
     "--refresh-ref",
     is_flag=True,
-    help="Refresh the reference catalog during init without asking first.",
+    help="Rescan the reference root and update the reference catalog during init. "
+    "Without this flag init never rescans.",
 )
 @click.option(
     "--no-ref-check",
@@ -1405,7 +1799,7 @@ def init_cmd(
     click.secho("OpenBench Configuration Wizard", bold=True)
     click.echo()
 
-    navigation_hint()
+    navigation_hint(short_back=True)
     step = 1
     reference_step_interactive = False
     reference_defaults = {}
@@ -1415,7 +1809,9 @@ def init_cmd(
         "syear": 2004,
         "eyear": 2010,
     }
-    while step <= 5:
+    domain_state = {}
+    analysis_state = {}
+    while step <= 6:
         try:
             if step == 1:
                 click.secho("1. Project Settings", bold=True)
@@ -1602,42 +1998,51 @@ def init_cmd(
                         roots = _parse_simulation_roots(root_input)
 
                     if roots:
-                        simulation = _scan_simulation_config(
-                            roots,
-                            model_name=sim_model,
-                            output_path=output,
-                            project_years=(syear, eyear),
-                            case_depth=sim_case_depth,
-                            case_pattern=sim_case_pattern,
-                            exclude=tuple(sim_exclude),
-                            climatology=sim_climatology,
-                        )
-                        break
+                        try:
+                            simulation = _scan_simulation_config(
+                                roots,
+                                model_name=sim_model,
+                                output_path=output,
+                                project_years=(syear, eyear),
+                                case_depth=sim_case_depth,
+                                case_pattern=sim_case_pattern,
+                                exclude=tuple(sim_exclude),
+                                climatology=sim_climatology,
+                            )
+                        except BackRequested:
+                            simulation = None
+                        if simulation is not None:
+                            break
+                        roots = []
+                        click.secho("  Returning to simulation data roots.", fg="yellow")
+                        continue
                     try:
                         simulation = _prompt_manual_simulations(mgr)
                         break
                     except BackRequested:
                         roots = []
                         click.secho("  Returning to simulation data roots.", fg="yellow")
+                # References or simulations may have changed; re-infer the resolution defaults.
+                domain_state.pop("tim_res", None)
+                domain_state.pop("grid_res", None)
                 step = 5
                 continue
 
-            click.echo()
-            click.secho("5. Options", bold=True)
-            project_resolution = _infer_project_resolution_fields(
-                selected_reference_objects,
-                simulation,
-            )
-            comparison, statistics, project_resolution = _prompt_project_options(
-                project_resolution,
-                simulation,
-            )
-            if project_resolution:
-                click.echo(
-                    "  Inferred target resolution: "
-                    + ", ".join(f"{key}={value}" for key, value in project_resolution.items())
+            if step == 5:
+                click.echo()
+                click.secho("5. Domain, Resolution & Runtime", bold=True)
+                project_options = _prompt_domain_runtime_options(
+                    _infer_project_resolution_fields(selected_reference_objects, simulation),
+                    simulation,
+                    domain_state,
                 )
-            step = 6
+                step = 6
+                continue
+
+            click.echo()
+            click.secho("6. Metrics, Scores & Analyses", bold=True)
+            analysis_options = _prompt_analysis_options(analysis_state)
+            step = 7
         except BackRequested:
             if step == 1:
                 click.secho("  Already at the first step; restarting Project Settings.", fg="yellow")
@@ -1654,23 +2059,14 @@ def init_cmd(
         "output_dir": output_dir,
         "years": [syear, eyear],
         "min_year_threshold": _default_min_year_threshold_for_span(syear, eyear),
-        **project_resolution,
+        **project_options,
     }
     config = {
         "project": project,
         "evaluation": {"variables": selected_vars},
         "reference": reference,
         "simulation": simulation,
-        "metrics": DEFAULT_METRICS.copy(),
-        "scores": DEFAULT_SCORES.copy(),
-        "comparison": {
-            "enabled": comparison,
-            "items": DEFAULT_COMPARISONS.copy() if comparison else None,
-        },
-        "statistics": {
-            "enabled": statistics,
-            "items": DEFAULT_STATISTICS.copy() if statistics else None,
-        },
+        **analysis_options,
     }
 
     rendered = _render_init_config_template(

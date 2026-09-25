@@ -69,6 +69,25 @@ def _install_single_reference_registry(monkeypatch, refs=None, models=None):
     return refs
 
 
+# Step 5 of `openbench init`: lat, lon, tim_res, grid_res, time alignment,
+# IGBP / PFT / climate-zone group-by, and cores. Enter keeps every default.
+_INIT_DOMAIN_DEFAULTS = [""] * 9
+
+
+def _init_options_input(comparison="n", statistics="n", *, scanned=False, domain=None) -> str:
+    """Answers for `openbench init` from the scan confirmation to the end."""
+    answers = [""] if scanned else []
+    answers += list(domain if domain is not None else _INIT_DOMAIN_DEFAULTS)
+    answers += ["", ""]  # metrics, scores
+    answers.append(comparison)
+    if comparison.lower() in {"", "y", "yes"}:
+        answers.append("")  # comparison items
+    answers.append(statistics)
+    if statistics.lower() in {"y", "yes"}:
+        answers.append("")  # statistics items
+    return "\n".join(answers) + "\n"
+
+
 def test_run_help():
     result = runner.invoke(cli, ["run", "--help"])
     assert result.exit_code == 0
@@ -3246,7 +3265,7 @@ def test_init_command_initializes_user_registry_overlays(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n\n\n\n\n\n\n\n",
+        input="\n" * 7 + _init_options_input("", ""),
     )
 
     assert result.exit_code == 0
@@ -3270,7 +3289,7 @@ def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
         "",
         "",
         "",
-        "back",  # variables -> project
+        "b",  # variables -> project (free-text prompt still accepts the short form in init)
         "fixed-project",
         "",
         "2005",
@@ -3283,17 +3302,15 @@ def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
         "2",
         "",
         "",
-        "back",  # options -> simulation
+        "b",  # options -> simulation
         "",
         "",
-        "n",
-        "n",
     ]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3308,12 +3325,12 @@ def test_init_back_skips_promptless_reference_step(tmp_path, monkeypatch):
     monkeypatch.setattr("openbench.cli.init_cmd.ensure_user_registry_overlays", lambda: tmp_path / "user")
     _install_single_reference_registry(monkeypatch)
     output = tmp_path / "openbench.yaml"
-    answers = ["", "", "", "", "", "back", "", "", "", "n", "n"]
+    answers = ["", "", "", "", "", "back", "", "", ""]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3340,28 +3357,203 @@ def test_prompt_fields_back_keeps_latest_value():
     assert "2019-2020" in result.output
 
 
-def test_init_mixed_simulation_resolutions_keep_target_prompt(monkeypatch):
+def _run_prompt(func, answers):
+    """Invoke an interactive helper inside a click command and return (result, value)."""
+    captured = {}
+
+    @click.command()
+    def demo():
+        captured["value"] = func()
+
+    result = runner.invoke(demo, input="\n".join(answers) + "\n")
+    return result, captured.get("value")
+
+
+def test_init_mixed_simulation_resolutions_keep_target_prompt():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    simulation = {
+        "Monthly": {"tim_res": "Month"},
+        "Daily": {"tim_res": "Day"},
+    }
+    answers = ["", "", "Day", "", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, simulation, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Simulations use mixed time resolutions (Month, Day)" in result.output
+    assert "Target tim_res [Month]" in result.output
+    assert options["tim_res"] == "Day"
+    assert "grid_res" not in options
+
+
+def test_init_domain_options_show_defaults_and_validate_input():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = [
+        "10,95",  # rejected: outside -90..90
+        "10, 60",
+        "70 140",
+        "",
+        "none",
+        "STRICT",
+        "y",
+        "",
+        "",
+        "0",  # rejected: must be >= 1
+        "8",
+    ]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Latitude range (south,north; -90..90) [-90,90]" in result.output
+    assert "need -90 <= min < max <= 90" in result.output
+    assert "Time alignment (intersection, per_pair, strict) [intersection]" in result.output
+    assert "[yes/no/back, Enter = no]" in result.output
+    assert "Number of cores [auto]" in result.output
+    assert "number of cores must be at least 1" in result.output
+    assert options == {
+        "lat_range": [10.0, 60.0],
+        "lon_range": [70.0, 140.0],
+        "tim_res": "Month",
+        "time_alignment": "strict",
+        "IGBP_groupby": True,
+        "PFT_groupby": False,
+        "climate_zone_groupby": False,
+        "num_cores": 8,
+    }
+
+
+def test_init_domain_options_b_returns_to_previous_prompt_with_last_answer():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = ["10,60", "b", "", "", "", "", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Returning to: Latitude range" in result.output
+    assert "Latitude range (south,north; -90..90) [10,60]" in result.output
+    assert options["lat_range"] == [10.0, 60.0]
+    assert "tim_res" not in options
+    assert "num_cores" not in options
+
+
+def test_init_analysis_options_select_by_number_or_name_without_all():
+    from openbench.cli.init_cmd import METRIC_OPTIONS, _prompt_analysis_options
+
+    kge_number = str(METRIC_OPTIONS.index("KGE") + 1)
+    answers = [
+        "all",  # rejected: no 'all' shortcut
+        f"{kge_number}, rmse",
+        "",
+        "",
+        "Taylor_Diagram, Target_Diagram",
+        "yes",
+        "Mean, Z_Score",
+    ]
+    result, options = _run_prompt(lambda: _prompt_analysis_options({}), answers)
+
+    assert result.exit_code == 0, result.output
+    assert "'all'" not in result.output
+    assert "unknown item(s): all" in result.output
+    assert "Metrics [bias, RMSE, correlation]" in result.output
+    assert "Scores [Overall_Score]" in result.output
+    assert "Enable comparison? [yes/no/back, Enter = yes]" in result.output
+    assert options == {
+        "metrics": ["KGE", "RMSE"],
+        "scores": ["Overall_Score"],
+        "comparison": {"enabled": True, "items": ["Taylor_Diagram", "Target_Diagram"]},
+        "statistics": {"enabled": True, "items": ["Mean", "Z_Score"]},
+    }
+
+
+def test_init_analysis_options_back_skips_items_of_disabled_phase():
+    from openbench.cli.init_cmd import _prompt_analysis_options
+
+    # Disable comparison, go back from the statistics toggle, then re-enable it.
+    answers = ["", "", "n", "b", "y", "", ""]
+    result, options = _run_prompt(lambda: _prompt_analysis_options({}), answers)
+
+    assert result.exit_code == 0, result.output
+    assert "Returning to: Enable comparison?" in result.output
+    assert "Enable comparison? [yes/no/back, Enter = no]" in result.output
+    assert options["comparison"] == {"enabled": True, "items": ["Taylor_Diagram", "HeatMap"]}
+    assert options["statistics"] == {"enabled": False, "items": None}
+
+
+def test_wizard_confirm_accepts_b_for_back():
+    from openbench.cli._wizard import BackRequested
+    from openbench.cli._wizard import confirm as wizard_confirm
+
+    def ask():
+        try:
+            return wizard_confirm("Continue?", default=True)
+        except BackRequested:
+            return "back"
+
+    result, value = _run_prompt(ask, ["b"])
+
+    assert result.exit_code == 0, result.output
+    assert "Continue? [yes/no/back, Enter = yes]" in result.output
+    assert value == "back"
+
+
+def test_init_rejecting_scanned_cases_returns_to_simulation_roots(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
+    import openbench.data.sim_scanner as sim_scanner
+    from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
 
-    confirmations = iter([True, False])
-    prompts = []
-    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *_args, **_kwargs: next(confirmations))
-    monkeypatch.setattr(
-        init_module,
-        "_wizard_prompt",
-        lambda text, **_kwargs: prompts.append(text) or "Day",
+    sim_root = tmp_path / "Simulation"
+    sim_root.mkdir()
+    materialized = []
+
+    def fake_scan_simulation_roots(roots, **kwargs):
+        return SimulationScanResult(
+            roots=[sim_root],
+            cases=[
+                SimulationCase(
+                    label="Case01",
+                    root_dir=sim_root / "Case01",
+                    model="CoLM",
+                    depth=1,
+                    data_type="grid",
+                    tim_res="Month",
+                    grid_res=0.5,
+                    data_groupby="Month",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(init_module, "ensure_user_registry_overlays", lambda: tmp_path / "user")
+    _install_single_reference_registry(monkeypatch)
+    monkeypatch.setattr(sim_scanner, "scan_simulation_roots", fake_scan_simulation_roots)
+    monkeypatch.setattr(sim_scanner, "materialize_station_cases", lambda *args, **kwargs: materialized.append(1))
+    output = tmp_path / "openbench.yaml"
+
+    # Reject the scan, then add a simulation manually.
+    answers = ["", "", "2004", "2004", "", "n", "", "MyLSM", str(sim_root), "", ""]
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
-    _comparison, _statistics, resolution = init_module._prompt_project_options(
-        {"tim_res": "Month"},
-        {
-            "Monthly": {"tim_res": "Month"},
-            "Daily": {"tim_res": "Day"},
-        },
-    )
-
-    assert prompts == ["  Target tim_res for mixed simulation resolutions"]
-    assert resolution["tim_res"] == "Day"
+    assert result.exit_code == 0, result.output
+    assert "Found 1 simulation case(s): Case01" in result.output
+    assert "Use these scanned simulation cases? [yes/no/back, Enter = yes]" in result.output
+    assert "Returning to simulation data roots." in result.output
+    assert materialized == []
+    assert yaml.safe_load(output.read_text(encoding="utf-8"))["simulation"] == {
+        "MyLSM": {"model": "MyLSM", "root_dir": str(sim_root)}
+    }
 
 
 def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, monkeypatch):
@@ -3381,14 +3573,12 @@ def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, mon
         "",
         "",
         "",
-        "n",
-        "n",
     ]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3409,12 +3599,12 @@ def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
     )
     _install_single_reference_registry(monkeypatch, refs=refs)
     output = tmp_path / "openbench.yaml"
-    answers = ["", "", "2004", "2004", "", "1", "back", "2", "2", "", "", "n", "n"]
+    answers = ["", "", "2004", "2004", "", "1", "back", "2", "2", "", ""]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3438,7 +3628,7 @@ def test_init_uses_timestamped_default_output(tmp_path, monkeypatch):
     )
     _install_single_reference_registry(monkeypatch)
 
-    result = runner.invoke(cli, ["init", "--no-ref-check"], input="\n\n\n\n\n\n\n\n\n")
+    result = runner.invoke(cli, ["init", "--no-ref-check"], input="\n" * 7 + _init_options_input("", ""))
 
     assert result.exit_code == 0
     assert (tmp_path / "openbench_init_20260501-140305.yaml").exists()
@@ -3524,7 +3714,7 @@ def test_init_scans_simulation_roots_into_generated_config(tmp_path, monkeypatch
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n1996\n1996\n\nn\nn\n",
+        input="\n\n1996\n1996\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3623,7 +3813,7 @@ def test_init_passes_explicit_sim_model_to_scan(tmp_path, monkeypatch):
             "-o",
             str(output),
         ],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3695,7 +3885,7 @@ def test_init_min_year_threshold_defaults_to_one(tmp_path, monkeypatch):
             "-o",
             str(output),
         ],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3770,7 +3960,7 @@ def test_init_sets_project_resolution_from_selected_reference_when_sim_scan_is_m
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n1996\n1996\n\nn\nn\n",
+        input="\n\n1996\n1996\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3853,7 +4043,7 @@ def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, mon
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2005\n1\n1\n\nn\n",
+        input="\n\n2004\n2005\n1\n1\n" + _init_options_input("", "n", scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3866,7 +4056,10 @@ def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, mon
     assert cfg.scores == ["Overall_Score"]
     assert cfg.comparison.items == ["Taylor_Diagram", "HeatMap"]
 
-    assert "# lat_range: [-90.0, 90.0]" in text
+    assert "  lat_range: [-90.0, 90.0]" in text
+    assert "  time_alignment: intersection" in text
+    assert "  IGBP_groupby: false" in text
+    assert "  # num_cores: 4  # unset = all CPU cores (auto)" in text
     assert "# - Evapotranspiration" in text
     assert "# Latent_Heat: ERA5LAND_LowRes" in text
     assert "# - KGE" in text
@@ -3942,7 +4135,7 @@ def test_init_deduplicates_variables_that_appear_in_multiple_categories(tmp_path
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4012,7 +4205,7 @@ def test_init_accepts_variable_and_reference_names(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nlatent_heat\nera5land_lowres\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nlatent_heat\nera5land_lowres\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4039,7 +4232,7 @@ def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nall\n0\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nall\n0\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4102,7 +4295,7 @@ def test_init_reloads_reference_status_after_overlay_creation(tmp_path, monkeypa
     _install_single_reference_registry(monkeypatch)
 
     output = tmp_path / "openbench.yaml"
-    result = runner.invoke(cli, ["init", "-o", str(output)], input="\n\n2004\n2004\n\n\n\nn\nn\n")
+    result = runner.invoke(cli, ["init", "-o", str(output)], input="\n\n2004\n2004\n\n\n\n" + _init_options_input())
 
     assert result.exit_code == 0, result.output
     assert captured
@@ -4146,7 +4339,7 @@ def test_init_writes_default_statistics_items_when_enabled(tmp_path, monkeypatch
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\ny\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input("n", "y", scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4202,7 +4395,7 @@ def test_init_warns_when_reference_or_simulation_years_do_not_overlap_project_ye
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4256,7 +4449,7 @@ def test_init_no_ref_check_allows_template_when_reference_registry_has_no_variab
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nLatent_Heat, Runoff\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nLatent_Heat, Runoff\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4354,14 +4547,15 @@ def test_init_prompts_for_missing_grid_resolution_when_simulation_scan_is_mixed(
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n0.5\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True, domain=["", "", "", "0.25", "", "", "", "", ""]),
     )
 
     assert result.exit_code == 0, result.output
     project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["tim_res"] == "Month"
-    assert project["grid_res"] == 0.5
-    assert "Target grid_res" in result.output
+    assert project["grid_res"] == 0.25
+    assert "Simulations use mixed grid spacings (0.5, 0.25)" in result.output
+    assert "Target grid_res in degrees [0.5]" in result.output
 
 
 def test_init_metric_and_score_options_are_implemented():
@@ -4481,7 +4675,7 @@ def test_init_keeps_all_variables_in_template_when_some_are_skipped(tmp_path, mo
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4884,7 +5078,7 @@ def test_init_creates_output_parent_directory(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4917,7 +5111,7 @@ def test_init_rejects_directory_output_without_traceback(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="y\n\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="y\n\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code != 0
@@ -4936,7 +5130,7 @@ def test_init_rejects_unresolved_environment_variable_in_output(tmp_path, monkey
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", "$OPENBENCH_MISSING_OUT/openbench.yaml"],
-        input="\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code != 0
@@ -4948,6 +5142,8 @@ def test_scan_simulation_config_prompts_for_model_when_auto_inference_is_unresol
     import openbench.cli.init_cmd as init_module
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
+
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
 
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
@@ -5000,6 +5196,8 @@ def test_scan_simulation_config_writes_absolute_station_fulllist(tmp_path, monke
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
 
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
+
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
     case_root.mkdir(parents=True)
@@ -5046,6 +5244,8 @@ def test_scan_simulation_config_aborts_on_partial_station_materialization(tmp_pa
     import openbench.cli.init_cmd as init_module
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
+
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
 
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
