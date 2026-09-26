@@ -383,6 +383,7 @@ def run_evaluation(\n    cfg: OpenBenchConfig,\n    force: bool = False,\n    co
                 cfg,
                 force=force,
                 comparison_only=comparison_only,
+                resume=resume,
                 dask_distributed_active=dask_handle is not None,
             )
         finally:
@@ -393,6 +394,7 @@ def _run_evaluation_impl(
     cfg: OpenBenchConfig,
     force: bool = False,
     comparison_only: bool = False,
+    resume: bool = False,
     dask_distributed_active: bool | None = None,
 ) -> dict[str, Any]:
     """Compatibility wrapper for the split runner orchestration."""
@@ -400,6 +402,7 @@ def _run_evaluation_impl(
         cfg,
         force=force,
         comparison_only=comparison_only,
+        resume=resume,
         dask_distributed_active=dask_distributed_active,
     )
 
