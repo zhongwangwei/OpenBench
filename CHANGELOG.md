@@ -10,7 +10,10 @@ fill in silently.
   target `tim_res` and `grid_res` (defaults inferred from the selected
   references and simulations), `time_alignment`, IGBP/PFT/climate-zone
   group-by, and `num_cores` (`auto` = all CPU cores). Answers are written to
-  `project` as active values.
+  `project` as active values. When simulations disagree on `tim_res` or
+  `grid_res`, a target is required (`none` would fail `openbench check`), and
+  an unsupported inferred `tim_res` (e.g. `2-Day`) is not offered as the
+  default.
 - New wizard step "Metrics, Scores & Analyses": pick metrics, scores,
   comparison figures and statistics methods by number or name from numbered
   lists, with defaults marked `*`.

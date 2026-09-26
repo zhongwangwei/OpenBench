@@ -8,7 +8,7 @@ package:
 
 source:
   url: https://github.com/zhongwangwei/OpenBench/releases/download/v{{ version }}/{{ dist_name }}-{{ version }}.tar.gz
-  sha256: 4cc57506009067450306642043d461587e8ed632a50b4158449a60f3ddd2c9c0
+  sha256: 6d6c99d02c53ebba96052e88d52193a41e53a1c581e3292c559c5afa72aa0f6e
 
 build:
   noarch: python
