@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from openbench.runner.pair_ref import pair_ref_path
+from openbench.util.station_ids import read_station_csv
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,89 @@ def task_output_data_types(
             )
 
     return "grid", "grid"
+
+
+def station_preprocessed_inputs_ready(
+    output_dir: Path,
+    task: dict[str, Any],
+    *,
+    build_runtime_info_fn: RuntimeInfoBuilder | None = None,
+) -> tuple[bool, str]:
+    """Return whether a station-involved task can reuse preprocessing outputs.
+
+    A resumable station task must have the same station list the evaluator will
+    consume and, for every station row, both reference and simulation artifacts
+    must be present. Expected data gaps are represented by durable .skip.txt
+    markers and count as complete preprocessing.
+    """
+    ref_dtype, sim_dtype = task_output_data_types(task, build_runtime_info_fn=build_runtime_info_fn)
+    if ref_dtype != "stn" and sim_dtype != "stn":
+        return False, "resume currently reuses station-involved preprocessing only"
+    if build_runtime_info_fn is None:
+        return False, "runtime info builder is unavailable"
+
+    try:
+        info = build_runtime_info_fn(task)
+    except Exception as exc:
+        return False, f"could not resolve runtime info: {exc}"
+
+    var_name = str(task["var_name"])
+    ref_source = str(task["ref_source"])
+    sim_source = str(task["sim_source"])
+
+    explicit_ref_list = str(info.get("ref_fulllist") or "").strip()
+    if explicit_ref_list and Path(explicit_ref_list).is_file():
+        station_list_path = Path(explicit_ref_list)
+    else:
+        station_list_path = output_dir / f"stn_{ref_source}_{sim_source}_list.txt"
+
+    if not station_list_path.is_file():
+        return False, f"station list is missing: {station_list_path}"
+
+    try:
+        station_list = read_station_csv(station_list_path, header=0)
+    except Exception as exc:
+        return False, f"station list is unreadable: {station_list_path} ({exc})"
+
+    required_columns = {"ID", "use_syear", "use_eyear"}
+    missing_columns = sorted(required_columns.difference(station_list.columns))
+    if missing_columns:
+        return False, f"station list is missing columns: {', '.join(missing_columns)}"
+    if station_list.empty:
+        return False, f"station list is empty: {station_list_path}"
+
+    data_dir = output_dir / "data" / f"stn_{ref_source}_{sim_source}"
+    if not data_dir.is_dir():
+        return False, f"station preprocessing directory is missing: {data_dir}"
+
+    missing_count = 0
+    examples: list[str] = []
+    for record in station_list[["ID", "use_syear", "use_eyear"]].to_dict("records"):
+        station_id = str(record["ID"]).strip()
+        try:
+            start_year = int(float(record["use_syear"]))
+            end_year = int(float(record["use_eyear"]))
+        except (TypeError, ValueError):
+            return False, f"invalid station year bounds for {station_id!r}"
+
+        for side in ("ref", "sim"):
+            data_path = data_dir / f"{var_name}_{side}_{station_id}_{start_year}_{end_year}.nc"
+            skip_path = data_path.with_suffix(".skip.txt")
+            data_ready = data_path.is_file() and data_path.stat().st_size > 0
+            skip_ready = skip_path.is_file() and skip_path.stat().st_size > 0
+            if data_ready or skip_ready:
+                continue
+            missing_count += 1
+            if len(examples) < 4:
+                examples.append(str(data_path))
+
+    if missing_count:
+        detail = "; ".join(examples)
+        if missing_count > len(examples):
+            detail += f"; ... ({missing_count - len(examples)} more)"
+        return False, f"{missing_count} preprocessed station artifact(s) missing: {detail}"
+
+    return True, f"{len(station_list)} station rows have complete ref/sim preprocessing artifacts"
 
 
 def expected_output_paths(
