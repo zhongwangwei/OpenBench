@@ -367,9 +367,19 @@ Run `openbench <command> --help` for full options on any command.
 | `openbench gui` | Launch the GUI wizard (requires `[gui]` extra) |
 | `openbench version` / `--version` | Print version |
 
-Useful `run` flags: `--force` (ignore cache), `--comparison-only` (re-run only
-comparisons on existing outputs), `--dry-run`, `--cores N`,
-`--variable VAR` (repeatable), `--output-dir DIR`, `--dump-config`.
+Useful `run` flags: `--force` (ignore cache), `--resume` (reuse compatible
+station preprocessing from the previous run and continue evaluation),
+`--comparison-only` (re-run only comparisons on existing outputs), `--dry-run`,
+`--cores N`, `--variable VAR` (repeatable), `--output-dir DIR`, `--dump-config`.
+
+For long grid-to-station workflows, `--resume` is intended for failures that occur
+after expensive preprocessing. It compares the previous `run_manifest.json`
+against the current preprocessing inputs/configuration, verifies every expected
+station-side artifact (a readable non-empty `.nc` or an explicit `.skip.txt`
+data-gap marker), and only then skips preprocessing for that task. Evaluation
+metrics/scores are recomputed, so a failed evaluation is not treated as a cache
+hit. If the manifest, inputs, configuration, or station artifacts are incomplete,
+OpenBench falls back to normal preprocessing.
 
 ### `openbench ref` — reference registry
 
