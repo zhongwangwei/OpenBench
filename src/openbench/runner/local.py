@@ -363,7 +363,12 @@ def _clone_or_link_ref_for_pair(src: str, dst: str) -> str:
     )
 
 
-def run_evaluation(\n    cfg: OpenBenchConfig,\n    force: bool = False,\n    comparison_only: bool = False,\n    resume: bool = False,\n) -> dict[str, Any]:
+def run_evaluation(
+    cfg: OpenBenchConfig,
+    force: bool = False,
+    comparison_only: bool = False,
+    resume: bool = False,
+) -> dict[str, Any]:
     """Run evaluation with optional runner-level dask.distributed scheduling."""
     project = getattr(cfg, "project", None)
     io_env_defaults = _local_attr("_io_env_defaults")(_local_attr("_project_io_config")(cfg))
