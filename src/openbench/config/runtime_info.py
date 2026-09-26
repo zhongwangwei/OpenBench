@@ -11,8 +11,10 @@ Date: July 2025
 """
 
 import logging
+import multiprocessing
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from typing import Any, Dict, Tuple
 
@@ -45,6 +47,17 @@ except ImportError:
             return func
 
         return decorator
+
+
+def _validate_station_pair_worker(args: tuple[str, str, str]) -> tuple[bool, str | None]:
+    """Validate one station pair in an isolated process for HDF5 safety."""
+    sim_path, ref_path, compare_tim_res = args
+    reader = object.__new__(GeneralInfoReader)
+    reader.compare_tim_res = compare_tim_res
+    try:
+        return reader._station_files_have_valid_pair(sim_path, ref_path), None
+    except Exception as exc:
+        return True, str(exc)
 
 
 class GeneralInfoReader:
@@ -683,13 +696,13 @@ class GeneralInfoReader:
         data_dir = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}")
         rows = []
         missing_pairs = 0
-        for _, row in self.stn_list.iterrows():
+        for index, row in self.stn_list.iterrows():
             sim_path = self._station_pair_data_path(row, "sim", data_dir)
             ref_path = self._station_pair_data_path(row, "ref", data_dir)
             if not os.path.exists(sim_path) or not os.path.exists(ref_path):
                 missing_pairs += 1
                 continue
-            rows.append((row, sim_path, ref_path))
+            rows.append((index, row, sim_path, ref_path))
 
         if missing_pairs:
             logging.debug(
@@ -705,16 +718,30 @@ class GeneralInfoReader:
         logging.info("Station finite-pair filtering: validating %d existing station file pair(s)", len(rows))
         keep_indices = []
         dropped = []
-        for index, (row, sim_path, ref_path) in zip(self.stn_list.index, rows):
-            station_id = row["ID"]
+        requested_workers = max(1, int(getattr(self, "num_cores", 1) or 1))
+        workers = min(requested_workers, len(rows), 4)
+        compare_tim_res = str(getattr(self, "compare_tim_res", "") or "")
+
+        if workers > 1 and len(rows) >= 100:
+            logging.info("Station finite-pair filtering: using %d worker processes", workers)
+            work = [(sim_path, ref_path, compare_tim_res) for _, _, sim_path, ref_path in rows]
             try:
-                if self._station_files_have_valid_pair(sim_path, ref_path):
-                    keep_indices.append(index)
-                else:
-                    dropped.append(station_id)
+                with ProcessPoolExecutor(
+                    max_workers=workers,
+                    mp_context=multiprocessing.get_context("spawn"),
+                ) as executor:
+                    results = executor.map(_validate_station_pair_worker, work, chunksize=16)
+                    validation_rows = zip(rows, results)
+                    self._collect_station_pair_validation(validation_rows, keep_indices, dropped, len(rows))
             except Exception as exc:
-                logging.debug("Could not validate station %s finite pairs: %s", station_id, exc)
-                keep_indices.append(index)
+                logging.warning("Parallel station finite-pair filtering failed; retrying serially: %s", exc)
+                keep_indices.clear()
+                dropped.clear()
+                results = self._serial_station_pair_validation(rows)
+                self._collect_station_pair_validation(zip(rows, results), keep_indices, dropped, len(rows))
+        else:
+            results = self._serial_station_pair_validation(rows)
+            self._collect_station_pair_validation(zip(rows, results), keep_indices, dropped, len(rows))
 
         if not dropped:
             return
@@ -730,6 +757,32 @@ class GeneralInfoReader:
             len(rows),
         )
         logging.debug("Dropped station(s) with no shared finite sim/ref data: %s", ", ".join(map(str, dropped)))
+
+    @staticmethod
+    def _collect_station_pair_validation(validation_rows, keep_indices, dropped, total: int) -> None:
+        for completed, ((index, row, _sim_path, _ref_path), (is_valid, error)) in enumerate(
+            validation_rows,
+            start=1,
+        ):
+            station_id = row["ID"]
+            if error is not None:
+                logging.debug("Could not validate station %s finite pairs: %s", station_id, error)
+                keep_indices.append(index)
+            elif is_valid:
+                keep_indices.append(index)
+            else:
+                dropped.append(station_id)
+            if completed % 100 == 0 or completed == total:
+                logging.info("Station finite-pair filtering progress: %d/%d", completed, total)
+
+    def _serial_station_pair_validation(self, rows):
+        results = []
+        for _, _, sim_path, ref_path in rows:
+            try:
+                results.append((self._station_files_have_valid_pair(sim_path, ref_path), None))
+            except Exception as exc:
+                results.append((True, str(exc)))
+        return results
 
     def _station_pair_data_path(self, row, datasource: str, data_dir: str) -> str:
         return os.path.join(

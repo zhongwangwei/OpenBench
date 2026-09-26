@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import gc
-import glob
 import logging
 import os
 import sys
 import time
 from typing import Any, Dict, List
 
+import numpy as np
+import pandas as pd
 import xarray as xr
 from dask.diagnostics import ProgressBar
 from joblib import Parallel, delayed
@@ -18,9 +19,12 @@ from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 try:
-    from openbench.util.dataset_loader import cached_glob, write_mfdataset_atomic as write_mfdataset_chunked_atomic
+    from openbench.util.dataset_loader import (
+        open_mfdataset as open_mfdataset_chunked,
+        write_mfdataset_atomic as write_mfdataset_chunked_atomic,
+    )
 except ImportError:  # pragma: no cover - mirrors processing.py fallback
-    cached_glob = lambda pattern, **kwargs: sorted(glob.glob(pattern))
+    open_mfdataset_chunked = xr.open_mfdataset
 
     def write_mfdataset_chunked_atomic(paths, output_path, *, sortby=None, compression=None, **kwargs):
         with xr.open_mfdataset(paths, **kwargs) as ds:
@@ -101,8 +105,8 @@ class GridProcessingCoreMixin:
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
         try:
             self.prepare_grid_data(data_params)
-            self.remap_and_combine_data(data_params)
-            self.extract_station_data_if_needed(data_params)
+            yearly_files = self.remap_and_combine_data(data_params)
+            self.extract_station_data_if_needed(data_params, yearly_files)
         finally:
             gc.collect()
 
@@ -169,7 +173,7 @@ class GridProcessingCoreMixin:
             for year in years
         )
 
-    def remap_and_combine_data(self, data_params: Dict[str, Any]) -> None:
+    def remap_and_combine_data(self, data_params: Dict[str, Any]) -> List[str]:
         data_dir = os.path.join(self.casedir, "scratch")
         years = list(range(self.minyear, self.maxyear + 1))
 
@@ -203,20 +207,32 @@ class GridProcessingCoreMixin:
                 )
                 for year in years
             )
-            # Force refresh since files were just created by parallel processing
-            var_files = cached_glob(
-                os.path.join(self.casedir, "scratch", f"{data_source}_{data_params['varname'][0]}_remap_*.nc"),
-                force_refresh=True,
-            )
+            var_files = [
+                os.path.join(data_dir, f"{data_source}_{data_params['varname'][0]}_remap_{year}.nc")
+                for year in years
+            ]
         else:
-            # Same as the grid branch: these scratch files may have just been written,
-            # so bypass the glob cache to avoid a stale listing (consistency with above).
-            var_files = cached_glob(
-                os.path.join(data_dir, f"{data_source}_{data_params['prefix']}*{data_params['suffix']}.nc"),
-                force_refresh=True,
+            prefix = data_params.get("prefix") or ""
+            suffix = data_params.get("suffix") or ""
+            var_files = [os.path.join(data_dir, f"{data_source}_{prefix}{year}{suffix}.nc") for year in years]
+
+        missing_files = [path for path in var_files if not os.path.isfile(path)]
+        if missing_files:
+            examples = ", ".join(missing_files[:3])
+            raise FileNotFoundError(
+                f"Missing {len(missing_files)} configured-year scratch file(s) for {data_source}: {examples}"
             )
 
+        if self.ref_data_type == "stn" or self.sim_data_type == "stn":
+            logging.info(
+                "Station-involved workflow: extracting directly from %d configured-year file(s); "
+                "skipping flat NetCDF combine",
+                len(var_files),
+            )
+            return var_files
+
         self.combine_and_save_data(var_files, data_params)
+        return var_files
 
     def _get_regrid_worker_count(
         self,
@@ -327,16 +343,33 @@ class GridProcessingCoreMixin:
             for file_path, error in failed_removals:
                 logging.debug(f"  Failed to remove {file_path}: {error}")
 
-    def extract_station_data_if_needed(self, data_params: Dict[str, Any]) -> None:
+    def extract_station_data_if_needed(
+        self,
+        data_params: Dict[str, Any],
+        yearly_files: List[str] | None = None,
+    ) -> None:
         if self.ref_data_type == "stn" or self.sim_data_type == "stn":
             logging.debug(f"Extracting station data for {data_params['datasource']} data")
-            self.extract_station_data(data_params)
+            self.extract_station_data(data_params, source_files=yearly_files)
 
-    def extract_station_data(self, data_params: Dict[str, Any]) -> None:
+    def extract_station_data(
+        self,
+        data_params: Dict[str, Any],
+        source_files: List[str] | None = None,
+    ) -> None:
         output_file = self.get_output_filename(data_params)
         try:
-            with xr.open_dataset(output_file) as ds:
+            if source_files:
+                dataset_context = open_mfdataset_chunked(source_files, combine="by_coords")
+            else:
+                dataset_context = xr.open_dataset(output_file)
+
+            with dataset_context as ds:
                 ds = Convert_Type.convert_nc(ds)
+                if source_files:
+                    ds = self._subset_grid_for_station_extraction(ds, data_params["datasource"])
+                    if "time" in ds.coords:
+                        ds = ds.sortby("time")
                 if hasattr(ds, "load"):
                     ds = ds.load()
                 _parallel()(n_jobs=self.num_cores)(
@@ -345,16 +378,58 @@ class GridProcessingCoreMixin:
                 )
                 gc.collect()  # Add garbage collection after extracting station data
         finally:
-            # Remove the consumed flat NC even if station extraction raised mid-loop.
-            # Without this, a partial extraction leaves the flat behind and the next
-            # rescan thinks the prep is done. The runner-side backup-restore (in
-            # runner.local._catalog_write_lock + _backup_then_write) preserves the
-            # flat across this consumption when needed for downstream grid eval.
-            try:
-                if os.path.exists(output_file):
-                    os.remove(output_file)
-            except OSError as e:
-                logging.debug("Could not remove flat NC %s: %s", output_file, e)
+            if not source_files:
+                # Remove the consumed flat NC even if station extraction raised mid-loop.
+                # Direct-from-year extraction never creates this large intermediate.
+                try:
+                    if os.path.exists(output_file):
+                        os.remove(output_file)
+                except OSError as e:
+                    logging.debug("Could not remove flat NC %s: %s", output_file, e)
+
+    def _subset_grid_for_station_extraction(self, dataset: xr.Dataset, datasource: str) -> xr.Dataset:
+        """Load only the grid rows/columns needed by the configured stations."""
+        from openbench.data.coordinates import find_lat_name, find_lon_name
+        from openbench.data._processing_station_extract import _cyclic_lon_delta
+
+        all_names = set(dataset.coords) | set(dataset.dims)
+        lat_coord = find_lat_name(all_names) or "lat"
+        lon_coord = find_lon_name(all_names) or "lon"
+        if lat_coord not in dataset.coords or lon_coord not in dataset.coords:
+            return dataset
+        if dataset[lat_coord].ndim != 1 or dataset[lon_coord].ndim != 1:
+            return dataset
+
+        lat_values = dataset[lat_coord].values
+        lon_values = dataset[lon_coord].values
+        lat_indices: set[int] = set()
+        lon_indices: set[int] = set()
+        for _, station in self.station_list.iterrows():
+            if datasource == "ref":
+                lat_key, lon_key = "sim_lat", "sim_lon"
+                fallback_lat_key, fallback_lon_key = "ref_lat", "ref_lon"
+            else:
+                lat_key, lon_key = "ref_lat", "ref_lon"
+                fallback_lat_key, fallback_lon_key = "sim_lat", "sim_lon"
+
+            if lat_key not in station or pd.isna(station.get(lat_key)):
+                lat_key = fallback_lat_key
+            if lon_key not in station or pd.isna(station.get(lon_key)):
+                lon_key = fallback_lon_key
+
+            target_lat = float(station[lat_key])
+            target_lon = float(station[lon_key])
+            lat_indices.add(int(np.argmin(np.abs(lat_values - target_lat))))
+            lon_indices.add(int(np.argmin(_cyclic_lon_delta(lon_values, target_lon))))
+
+        if not lat_indices or not lon_indices:
+            return dataset
+        return dataset.isel(
+            {
+                lat_coord: sorted(lat_indices),
+                lon_coord: sorted(lon_indices),
+            }
+        )
 
     def _make_grid_parallel(
         self,

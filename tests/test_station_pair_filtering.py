@@ -1,3 +1,4 @@
+import logging
 import os
 
 import numpy as np
@@ -88,3 +89,72 @@ def test_station_pair_filtering_validates_files_older_than_regenerated_list(tmp_
     info._filter_existing_station_pairs_with_valid_data()
 
     assert info.stn_list["ID"].tolist() == ["good"]
+
+
+def test_station_pair_filtering_reports_progress_every_100_pairs(tmp_path, caplog):
+    case_dir = tmp_path / "case"
+    data_dir = case_dir / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    rows = []
+    for index in range(101):
+        station_id = f"station-{index}"
+        rows.append({"ID": station_id, "use_syear": 2001, "use_eyear": 2001})
+        (data_dir / f"Streamflow_sim_{station_id}_2001_2001.nc").touch()
+        (data_dir / f"Streamflow_ref_{station_id}_2001_2001.nc").touch()
+
+    info = object.__new__(GeneralInfoReader)
+    info.casedir = str(case_dir)
+    info.ref_source = "Ref"
+    info.sim_source = "Sim"
+    info.item = "Streamflow"
+    info.ref_data_type = "stn"
+    info.sim_data_type = "grid"
+    info.compare_tim_res = "Day"
+    info.num_cores = 1
+    info.stn_list = pd.DataFrame(rows)
+    info._station_files_have_valid_pair = lambda _sim, _ref: True
+
+    with caplog.at_level(logging.INFO):
+        info._filter_existing_station_pairs_with_valid_data()
+
+    assert "Station finite-pair filtering progress: 100/101" in caplog.text
+    assert "Station finite-pair filtering progress: 101/101" in caplog.text
+
+
+def test_station_pair_filtering_process_pool_path(tmp_path):
+    case_dir = tmp_path / "case"
+    data_dir = case_dir / "data" / "stn_Ref_Sim"
+    rows = [
+        {"ID": f"station-{index}", "use_syear": 2001, "use_eyear": 2001}
+        for index in range(100)
+    ]
+    times = ["2001-01-01", "2001-01-02"]
+    for row in rows:
+        station_id = row["ID"]
+        _write_station_file(
+            data_dir / f"Streamflow_sim_{station_id}_2001_2001.nc",
+            times,
+            [1.0, 2.0],
+            "f_discharge",
+        )
+        _write_station_file(
+            data_dir / f"Streamflow_ref_{station_id}_2001_2001.nc",
+            times,
+            [1.5, 2.5],
+            "discharge",
+        )
+
+    info = object.__new__(GeneralInfoReader)
+    info.casedir = str(case_dir)
+    info.ref_source = "Ref"
+    info.sim_source = "Sim"
+    info.item = "Streamflow"
+    info.ref_data_type = "stn"
+    info.sim_data_type = "grid"
+    info.compare_tim_res = "Day"
+    info.num_cores = 2
+    info.stn_list = pd.DataFrame(rows)
+
+    info._filter_existing_station_pairs_with_valid_data()
+
+    assert len(info.stn_list) == 100
