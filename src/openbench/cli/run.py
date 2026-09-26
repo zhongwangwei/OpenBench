@@ -33,9 +33,10 @@ from openbench.cli._simulation_validation import simulation_root_errors
 )
 @click.option("--dump-config", is_flag=True, help="Write intermediate runner/debug configs to output dir.")
 @click.option("--comparison-only", is_flag=True, help="Skip evaluation, only run comparisons on existing results.")
+@click.option("--resume", is_flag=True, help="Reuse compatible preprocessed station data and continue evaluation.")
 @click.option("--force", is_flag=True, help="Bypass incremental cache and re-run evaluations.")
 @click.option("--output-dir", type=click.Path(file_okay=False), default=None, help="Override project.output_dir.")
-def run(config, dry_run, cores, variables, remote, dump_config, comparison_only, force, output_dir):
+def run(config, dry_run, cores, variables, remote, dump_config, comparison_only, resume, force, output_dir):
     """Run evaluation from a config file.
 
     Performance settings live in ``project.io`` and ``project.dask``:
@@ -75,6 +76,13 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     if comparison_only and cfg.project.only_drawing:
         raise click.ClickException("--comparison-only conflicts with project.only_drawing=true; choose one mode")
 
+    if resume and comparison_only:
+        raise click.ClickException("--resume conflicts with --comparison-only; resume already continues evaluation")
+    if resume and cfg.project.only_drawing:
+        raise click.ClickException("--resume conflicts with project.only_drawing=true")
+    if resume and (force or cfg.project.force):
+        raise click.ClickException("--resume conflicts with --force/project.force because force rebuilds evaluation inputs")
+
     _run_static_preflight(cfg)
 
     output_only = comparison_only or cfg.project.only_drawing
@@ -103,6 +111,7 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         click.echo(f"  Simulations: {', '.join(cfg.simulation.keys())}")
         click.echo(f"  Metrics: {cfg.metrics or 'all'}")
         click.echo(f"  Force: {force or cfg.project.force}")
+        click.echo(f"  Resume: {resume}")
         click.echo(f"  Time alignment: {cfg.project.time_alignment}")
         click.echo(f"  Unified mask: {cfg.project.unified_mask}")
         for r in resolved or []:
@@ -121,11 +130,13 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
 
     if comparison_only:
         click.secho(f"Running comparisons only: {cfg.project.name}", bold=True)
+    elif resume:
+        click.secho(f"Resuming evaluation from compatible preprocessed data: {cfg.project.name}", bold=True)
     else:
         click.secho(f"Running evaluation: {cfg.project.name}", bold=True)
     with _run_file_logging(cfg):
         try:
-            results = run_evaluation(cfg, force=force, comparison_only=comparison_only)
+            results = run_evaluation(cfg, force=force, comparison_only=comparison_only, resume=resume)
         except Exception as e:
             logging.getLogger(__name__).exception("Evaluation failed")
             _release_worker_pools()
