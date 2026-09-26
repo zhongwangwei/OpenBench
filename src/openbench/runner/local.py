@@ -84,6 +84,7 @@ _FACADE_ATTRS = {
     "_missing_expected_outputs": (_runner_preflight_facade, "missing_expected_outputs"),
     "_station_outputs_missing_required_columns": (_runner_preflight_facade, "station_outputs_missing_required_columns"),
     "_has_complete_outputs": (_runner_preflight_facade, "has_complete_outputs"),
+    "_station_preprocessed_inputs_ready": (_runner_preflight_facade, "station_preprocessed_inputs_ready"),
     "_validate_comparison_only_inputs": (_runner_preflight_facade, "validate_comparison_only_inputs"),
     "_filter_evaluation_items_with_outputs": (_runner_preflight_facade, "filter_evaluation_items_with_outputs"),
     "_task_sources_from_bindings": (_runner_preflight_facade, "task_sources_from_bindings"),
@@ -362,7 +363,7 @@ def _clone_or_link_ref_for_pair(src: str, dst: str) -> str:
     )
 
 
-def run_evaluation(cfg: OpenBenchConfig, force: bool = False, comparison_only: bool = False) -> dict[str, Any]:
+def run_evaluation(\n    cfg: OpenBenchConfig,\n    force: bool = False,\n    comparison_only: bool = False,\n    resume: bool = False,\n) -> dict[str, Any]:
     """Run evaluation with optional runner-level dask.distributed scheduling."""
     project = getattr(cfg, "project", None)
     io_env_defaults = _local_attr("_io_env_defaults")(_local_attr("_project_io_config")(cfg))
