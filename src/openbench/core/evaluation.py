@@ -61,6 +61,7 @@ except ImportError:
 from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
+from openbench.util.station_ids import read_station_csv
 from openbench.core._visualization_bridge import visualization_callable
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
@@ -736,7 +737,7 @@ class Evaluation_stn(metrics, scores):
                 stnlist = self.ref_fulllist
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
-            station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
+            station_list = Convert_Type.convert_Frame(read_station_csv(stnlist, header=0))
 
             station_indices = list(range(len(station_list["ID"])))
             n_jobs = getattr(self, "num_cores", -1)

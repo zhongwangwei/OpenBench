@@ -14,6 +14,7 @@ from openbench.data._processing_utils import performance_monitor
 from openbench.data._system_resources import calculate_optimal_chunk_size, calculate_optimal_cores, get_system_resources
 from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_file_atomic
+from openbench.util.station_ids import merge_on_station_id, read_station_csv
 
 try:
     pd_version = tuple(int(x) for x in pd.__version__.split(".")[:2])
@@ -304,7 +305,7 @@ class ProcessingConfigMixin:
 
             if stnlist_path == "__merged__" or (stnlist_path and os.path.exists(stnlist_path)):
                 if stnlist_path != "__merged__":
-                    self.station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist_path, header=0))
+                    self.station_list = Convert_Type.convert_Frame(read_station_csv(stnlist_path, header=0))
                 canonical_list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
                 os.makedirs(os.path.dirname(canonical_list_path), exist_ok=True)
                 write_file_atomic(
@@ -344,13 +345,13 @@ class ProcessingConfigMixin:
         return df
 
     def _merge_station_fulllists(self, sim_path: str, ref_path: str) -> pd.DataFrame:
-        sim = self._normalize_station_fulllist(pd.read_csv(sim_path, header=0), "sim")
-        ref = self._normalize_station_fulllist(pd.read_csv(ref_path, header=0), "ref")
+        sim = self._normalize_station_fulllist(read_station_csv(sim_path, header=0), "sim")
+        ref = self._normalize_station_fulllist(read_station_csv(ref_path, header=0), "ref")
         from openbench.config.runtime_info import GeneralInfoReader
 
         GeneralInfoReader._resolve_relative_paths(sim, "sim_dir", sim_path, getattr(self, "sim_dir", ""))
         GeneralInfoReader._resolve_relative_paths(ref, "ref_dir", ref_path, getattr(self, "ref_dir", ""))
-        merged = pd.merge(sim, ref, how="inner", on="ID", suffixes=("", "_refdup"))
+        merged = merge_on_station_id(sim, ref, suffixes=("", "_refdup"))
         if merged.empty:
             raise RuntimeError(
                 f"No shared station IDs between simulation fulllist {sim_path} and reference fulllist {ref_path}"

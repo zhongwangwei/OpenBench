@@ -30,6 +30,16 @@ fill in silently.
 - `--refresh-ref` help now states that init never rescans without it, and init
   prints a hint when the reference catalog was not rescanned.
 
+### Fixed
+- Keep station IDs as text when reading station lists and station metadata,
+  so IDs with leading zeros (e.g. `0000000009463`) are no longer turned into
+  integers and lost. ID-like columns are recognised in any case (`ID`, `Id`,
+  `site_id`, ...).
+- Match station IDs regardless of zero padding (`0000000009463` == `9463`)
+  when merging simulation and reference station lists, selecting stations
+  from merged NetCDF files, and looking up sidecar metadata. HydroWeb also
+  finds station files named by the unpadded ID.
+
 ## [3.0.3] - 2026-09-18
 
 Feature and reliability release for station-mode preprocessing and comparisons.
