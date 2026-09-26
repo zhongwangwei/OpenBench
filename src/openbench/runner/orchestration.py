@@ -265,6 +265,12 @@ def run_evaluation_impl(
         force = bool(getattr(cfg.project, "force", False))
 
     only_drawing = bool(general.get("only_drawing", False))
+    if resume and comparison_only:
+        raise ValueError("resume cannot be combined with comparison_only")
+    if resume and only_drawing:
+        raise ValueError("resume cannot be combined with only_drawing")
+    if resume and force:
+        raise ValueError("resume cannot be combined with force")
     use_cache = not force and not only_drawing
 
     tasks = _build_evaluation_tasks(
