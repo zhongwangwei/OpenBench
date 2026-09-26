@@ -46,6 +46,87 @@ def _manifest_data(value: Any) -> Any:
     return value
 
 
+def _load_previous_run_manifest(path: Path) -> dict[str, Any] | None:
+    """Load the previous run manifest for explicit resume checks."""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception as exc:
+        logger.warning("Resume manifest is unreadable at %s: %s", path, exc)
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _resume_preprocess_signature(payload: Any) -> dict[str, Any] | None:
+    """Return the config/input subset that must match before reusing preprocessing."""
+    if not isinstance(payload, dict):
+        return None
+
+    general = dict(payload.get("general") or {})
+    project = dict(payload.get("project") or {})
+    # Drawing mode changes execution only; it does not change preprocessed data.
+    general.pop("only_drawing", None)
+    project.pop("only_drawing", None)
+
+    return {
+        "variable": payload.get("variable"),
+        "sim_source": payload.get("sim_source"),
+        "ref_source": payload.get("ref_source"),
+        "general": general,
+        "project": project,
+        "regrid_backend": payload.get("regrid_backend"),
+        "reference": payload.get("reference"),
+        "simulation": payload.get("simulation"),
+        "shared_unified_mask": payload.get("shared_unified_mask"),
+    }
+
+
+def _mark_resumable_preprocessing(
+    output_dir: Path,
+    tasks: list[dict[str, Any]],
+    previous_manifest: dict[str, Any] | None,
+    station_preprocessed_inputs_ready,
+) -> None:
+    """Mark station tasks whose previous preprocessing can be safely reused."""
+    if previous_manifest is None:
+        logger.info("Resume requested but no previous run_manifest.json is available")
+        return
+
+    previous_tasks: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in previous_manifest.get("tasks", []):
+        if not isinstance(item, dict):
+            continue
+        key = (str(item.get("variable")), str(item.get("simulation")), str(item.get("reference")))
+        previous_tasks[key] = item
+
+    for task in tasks:
+        key = (str(task["var_name"]), str(task["sim_source"]), str(task["ref_source"]))
+        previous = previous_tasks.get(key)
+        if previous is None:
+            logger.info("Resume: no previous manifest task for %s/%s/%s", *key)
+            continue
+
+        current_signature = _resume_preprocess_signature(task.get("hash_payload"))
+        previous_signature = _resume_preprocess_signature(previous.get("hash_payload"))
+        if current_signature is None or previous_signature is None:
+            logger.info("Resume: preprocessing signature unavailable for %s/%s/%s", *key)
+            continue
+        if current_signature != previous_signature:
+            logger.info("Resume: preprocessing inputs/config changed for %s/%s/%s; rebuilding", *key)
+            continue
+
+        ready, reason = station_preprocessed_inputs_ready(output_dir, task)
+        if not ready:
+            logger.info("Resume: cannot reuse preprocessing for %s/%s/%s: %s", *key, reason)
+            continue
+
+        task["preprocess_reused"] = True
+        task["ref_preprocessed"] = True
+        logger.info("Resume: reusing preprocessing for %s/%s/%s: %s", *key, reason)
+
+
 def _write_run_manifest(
     cfg: OpenBenchConfig,
     bindings: Any,
@@ -79,6 +160,7 @@ def _write_run_manifest(
                 "cache_key": task.get("cache_key"),
                 "config_hash": task.get("config_hash"),
                 "hash_payload": task.get("hash_payload"),
+                "preprocessing_reused": bool(task.get("preprocess_reused")),
             }
             for task in tasks
         ],
@@ -98,6 +180,7 @@ def run_evaluation_impl(
     cfg: OpenBenchConfig,
     force: bool = False,
     comparison_only: bool = False,
+    resume: bool = False,
     dask_distributed_active: bool | None = None,
 ) -> dict[str, Any]:
     """Run evaluation from a validated config.
@@ -145,6 +228,7 @@ def run_evaluation_impl(
     _run_groupby = _local_runner._run_groupby
     _run_report = _local_runner._run_report
     _run_statistics = _local_runner._run_statistics
+    _station_preprocessed_inputs_ready = _local_runner._station_preprocessed_inputs_ready
     _validate_comparison_only_inputs = _local_runner._validate_comparison_only_inputs
 
     os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
@@ -182,6 +266,12 @@ def run_evaluation_impl(
         force = bool(getattr(cfg.project, "force", False))
 
     only_drawing = bool(general.get("only_drawing", False))
+    if resume and comparison_only:
+        raise ValueError("resume cannot be combined with comparison_only")
+    if resume and only_drawing:
+        raise ValueError("resume cannot be combined with only_drawing")
+    if resume and force:
+        raise ValueError("resume cannot be combined with force")
     use_cache = not force and not only_drawing
 
     tasks = _build_evaluation_tasks(
@@ -195,6 +285,14 @@ def run_evaluation_impl(
         use_cache=use_cache,
         only_drawing=only_drawing,
     )
+    previous_manifest = _load_previous_run_manifest(output_dir / "run_manifest.json") if resume else None
+    if resume and not comparison_only and not only_drawing:
+        _mark_resumable_preprocessing(
+            output_dir,
+            tasks,
+            previous_manifest,
+            _station_preprocessed_inputs_ready,
+        )
     try:
         _write_run_manifest(cfg, bindings, output_dir, tasks)
     except Exception as exc:

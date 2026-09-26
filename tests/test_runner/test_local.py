@@ -9377,3 +9377,129 @@ def test_preprocess_per_pair_still_masks_each_pair(tmp_path, monkeypatch):
 
     assert [call[0] for call in calls] == ["SimA", "SimB"]
     assert all(task.get("ref_file_override") for task in tasks)
+
+
+def test_station_resume_preflight_accepts_complete_artifacts(tmp_path, monkeypatch):
+    import openbench.runner.local as local_runner
+
+    case = tmp_path / "case"
+    data_dir = case / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    (case / "stn_Ref_Sim_list.txt").write_text(
+        "ID,use_syear,use_eyear\n001,2000,2001\n002,2000,2001\n",
+        encoding="utf-8",
+    )
+    for side in ("ref", "sim"):
+        (data_dir / f"Runoff_{side}_001_2000_2001.nc").write_bytes(b"not-empty")
+    (data_dir / "Runoff_ref_002_2000_2001.skip.txt").write_text("no reference data", encoding="utf-8")
+    (data_dir / "Runoff_sim_002_2000_2001.skip.txt").write_text("no simulation data", encoding="utf-8")
+
+    task = {
+        "var_name": "Runoff",
+        "ref_source": "Ref",
+        "sim_source": "Sim",
+        "ref_data_type": "stn",
+        "sim_data_type": "grid",
+    }
+    monkeypatch.setattr(
+        local_runner,
+        "_build_bridge_runtime_info",
+        lambda _task: {
+            "ref_data_type": "stn",
+            "sim_data_type": "grid",
+            "ref_fulllist": "",
+        },
+    )
+
+    ready, reason = local_runner._station_preprocessed_inputs_ready(case, task)
+
+    assert ready
+    assert "2 station rows" in reason
+
+
+def test_station_resume_preflight_rejects_partial_artifacts(tmp_path, monkeypatch):
+    import openbench.runner.local as local_runner
+
+    case = tmp_path / "case"
+    data_dir = case / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    (case / "stn_Ref_Sim_list.txt").write_text(
+        "ID,use_syear,use_eyear\n001,2000,2001\n",
+        encoding="utf-8",
+    )
+    (data_dir / "Runoff_ref_001_2000_2001.nc").write_bytes(b"not-empty")
+
+    task = {
+        "var_name": "Runoff",
+        "ref_source": "Ref",
+        "sim_source": "Sim",
+        "ref_data_type": "stn",
+        "sim_data_type": "grid",
+    }
+    monkeypatch.setattr(
+        local_runner,
+        "_build_bridge_runtime_info",
+        lambda _task: {
+            "ref_data_type": "stn",
+            "sim_data_type": "grid",
+            "ref_fulllist": "",
+        },
+    )
+
+    ready, reason = local_runner._station_preprocessed_inputs_ready(case, task)
+
+    assert not ready
+    assert "1 preprocessed station artifact" in reason
+
+
+def test_resume_preprocess_signature_ignores_evaluation_code_fingerprint():
+    from openbench.runner.orchestration import _resume_preprocess_signature
+
+    base = {
+        "variable": "Runoff",
+        "sim_source": "Sim",
+        "ref_source": "Ref",
+        "general": {"compare_grid_res": 0.25, "only_drawing": False},
+        "project": {"years": [2000, 2001], "only_drawing": False},
+        "regrid_backend": {"selected": "openbench_conservative"},
+        "reference": {"inputs": {"files": [{"path": "ref.nc", "size": 10}]}},
+        "simulation": {"inputs": {"files": [{"path": "sim.nc", "size": 20}]}},
+        "shared_unified_mask": None,
+        "openbench": {"source_fingerprint": "old-evaluation-code"},
+    }
+    changed_eval = {**base, "openbench": {"source_fingerprint": "new-evaluation-code"}}
+
+    assert _resume_preprocess_signature(base) == _resume_preprocess_signature(changed_eval)
+
+    changed_input = {
+        **base,
+        "simulation": {"inputs": {"files": [{"path": "sim.nc", "size": 21}]}},
+    }
+    assert _resume_preprocess_signature(base) != _resume_preprocess_signature(changed_input)
+
+
+def test_resume_skips_dataset_preprocessing_for_reused_task(monkeypatch):
+    import openbench.data.processing as processing
+    import openbench.runner.local as local_runner
+
+    class ExplodingProcessor:
+        def __init__(self, _info):
+            raise AssertionError("resume must not instantiate DatasetProcessing")
+
+    monkeypatch.setattr(processing, "DatasetProcessing", ExplodingProcessor)
+    task = {
+        "var_name": "Runoff",
+        "sim_source": "Sim",
+        "ref_source": "Ref",
+        "preprocess_reused": True,
+    }
+
+    errors = local_runner._preprocess_variable_tasks(
+        "Runoff",
+        [task],
+        unified_mask=False,
+        time_alignment="intersection",
+    )
+
+    assert errors == []
+    assert task["ref_preprocessed"] is True
