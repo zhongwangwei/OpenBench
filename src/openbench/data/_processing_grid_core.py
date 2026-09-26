@@ -273,7 +273,10 @@ class GridProcessingCoreMixin:
                     combine="by_coords",
                     sortby="time",
                     batch_dir=batch_dir,
-                    compression=False,
+                    # None defers to OPENBENCH_NETCDF_COMPRESSION so the flat
+                    # sim/ref NetCDF can be compressed (f_discharge is ~47 GB
+                    # uncompressed and dominates run time).
+                    compression=None,
                 )
         except (OSError, IOError, BrokenPipeError):
             write_mfdataset_chunked_atomic(
@@ -282,7 +285,7 @@ class GridProcessingCoreMixin:
                 combine="by_coords",
                 sortby="time",
                 batch_dir=batch_dir,
-                compression=False,
+                compression=None,
             )
         gc.collect()  # Add garbage collection after saving combined data
 

@@ -35,7 +35,7 @@ class YearlyPreprocessingMixin:
                 ds_year = ds.sel(time=slice(f"{year}-01-01T00:00:00", f"{year}-12-31T23:59:59"))
                 ds_year.attrs = {}
                 output_file = os.path.join(casedir, "scratch", f"{datasource}_{prefix}{year}{suffix}.nc")
-                _write_netcdf_atomic(ds_year, output_file, compression=False)
+                _write_netcdf_atomic(ds_year, output_file, compression=None)
                 logging.debug(f"Saved {output_file}")
             finally:
                 # Clean up memory
@@ -193,7 +193,9 @@ class YearlyPreprocessingMixin:
         _write_netcdf_atomic(
             ds,
             os.path.join(casedir, "scratch", f"{datasource}_{prefix}{syear}{suffix}.nc"),
-            compression=False,
+            # None defers to OPENBENCH_NETCDF_COMPRESSION; yearly scratch files
+            # are the bulk of the data and feed the final flat-NC combine.
+            compression=None,
         )
 
     @performance_monitor
@@ -248,7 +250,7 @@ class YearlyPreprocessingMixin:
             _write_netcdf_atomic(
                 ds,
                 os.path.join(casedir, "scratch", f"{datasource}_{prefix}{syear}{suffix}.nc"),
-                compression=False,
+                compression=None,
             )
             write_seconds = time.perf_counter() - write_start
             if getattr(self, f"{datasource}_data_type", "grid") != "stn":
