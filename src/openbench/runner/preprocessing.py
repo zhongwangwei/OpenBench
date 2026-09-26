@@ -148,6 +148,7 @@ def preprocess_variable(
             if task.get("cache_skipped"):
                 continue
             if task.get("preprocess_reused"):
+                emit_gui_preprocessing_started(task)
                 task["ref_preprocessed"] = True
                 logger.info(
                     "Resume: skipping preprocessing for %s (sim=%s ref=%s)",
@@ -155,6 +156,7 @@ def preprocess_variable(
                     task["sim_source"],
                     task["ref_source"],
                 )
+                emit_gui_preprocessing_completion(task)
                 continue
             ref_source = task["ref_source"]
             sim_source = task["sim_source"]
