@@ -659,6 +659,8 @@ class GeneralInfoReader:
                 logging.error(message)
                 raise ValueError(message)
 
+            self._filter_existing_station_pairs_with_valid_data()
+
             # Always write to a case-specific path to avoid overwriting the original ref CSV
             stn_list_path = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.csv")
             os.makedirs(os.path.dirname(stn_list_path), exist_ok=True)
@@ -666,6 +668,152 @@ class GeneralInfoReader:
             self.stn_list.to_csv(stn_list_path, index=False)
             final_count = len(self.stn_list)
             logging.info(f"Station filtering: {initial_count} -> {final_count} stations")
+
+    def _filter_existing_station_pairs_with_valid_data(self):
+        """Drop station rows whose generated sim/ref files have no finite overlap."""
+        if getattr(self, "ref_data_type", None) != "stn" and getattr(self, "sim_data_type", None) != "stn":
+            return
+        if not hasattr(self, "stn_list") or self.stn_list is None or self.stn_list.empty:
+            return
+
+        required = {"ID", "use_syear", "use_eyear"}
+        if not required.issubset(self.stn_list.columns):
+            return
+
+        data_dir = os.path.join(self.casedir, "data", f"stn_{self.ref_source}_{self.sim_source}")
+        rows = []
+        missing_pairs = 0
+        for _, row in self.stn_list.iterrows():
+            sim_path = self._station_pair_data_path(row, "sim", data_dir)
+            ref_path = self._station_pair_data_path(row, "ref", data_dir)
+            if not os.path.exists(sim_path) or not os.path.exists(ref_path):
+                missing_pairs += 1
+                continue
+            rows.append((row, sim_path, ref_path))
+
+        if missing_pairs:
+            logging.debug(
+                "Station valid-pair filtering skipped for %s/%s: %d station file pair(s) are not ready",
+                self.ref_source,
+                self.sim_source,
+                missing_pairs,
+            )
+            return
+        if not rows:
+            return
+
+        logging.info("Station finite-pair filtering: validating %d existing station file pair(s)", len(rows))
+        keep_indices = []
+        dropped = []
+        for index, (row, sim_path, ref_path) in zip(self.stn_list.index, rows):
+            station_id = row["ID"]
+            try:
+                if self._station_files_have_valid_pair(sim_path, ref_path):
+                    keep_indices.append(index)
+                else:
+                    dropped.append(station_id)
+            except Exception as exc:
+                logging.debug("Could not validate station %s finite pairs: %s", station_id, exc)
+                keep_indices.append(index)
+
+        if not dropped:
+            return
+        if not keep_indices:
+            raise ValueError(
+                f"No stations selected after finite sim/ref pair filtering for {self.ref_source}/{self.sim_source}"
+            )
+
+        self.stn_list = self.stn_list.loc[keep_indices].reset_index(drop=True)
+        logging.info(
+            "Station finite-pair filtering: dropped %d/%d station(s) with no shared finite sim/ref data",
+            len(dropped),
+            len(rows),
+        )
+        logging.debug("Dropped station(s) with no shared finite sim/ref data: %s", ", ".join(map(str, dropped)))
+
+    def _station_pair_data_path(self, row, datasource: str, data_dir: str) -> str:
+        return os.path.join(
+            data_dir,
+            f"{self.item}_{datasource}_{row['ID']}_{int(row['use_syear'])}_{int(row['use_eyear'])}.nc",
+        )
+
+    def _station_files_have_valid_pair(self, sim_path: str, ref_path: str) -> bool:
+        sim = self._load_station_data_array(sim_path)
+        ref = self._load_station_data_array(ref_path)
+        if not np.isfinite(sim.values).any() or not np.isfinite(ref.values).any():
+            return False
+        sim, ref = self._align_station_pair_times(sim, ref)
+        valid = np.isfinite(sim) & np.isfinite(ref)
+        any_valid = valid.any()
+        if hasattr(any_valid, "compute"):
+            any_valid = any_valid.compute()
+        if hasattr(any_valid, "item"):
+            return bool(any_valid.item())
+        return bool(any_valid)
+
+    @staticmethod
+    def _load_station_data_array(path: str):
+        with xr.open_dataset(path) as ds:
+            data_vars = list(ds.data_vars)
+            if not data_vars:
+                raise ValueError(f"No data variables found in {path}")
+            return ds[data_vars[0]].squeeze().load()
+
+    def _align_station_pair_times(self, sim, ref):
+        sim_times = pd.to_datetime(sim["time"].values)
+        ref_times = pd.to_datetime(ref["time"].values)
+        common_times = np.intersect1d(
+            sim_times.values if hasattr(sim_times, "values") else sim_times,
+            ref_times.values if hasattr(ref_times, "values") else ref_times,
+        )
+        if common_times.size:
+            return sim.sel(time=common_times).sortby("time"), ref.sel(time=common_times).sortby("time")
+
+        sim = self._normalize_station_time_coordinate(sim)
+        ref = self._normalize_station_time_coordinate(ref)
+        sim_times = pd.to_datetime(sim["time"].values)
+        ref_times = pd.to_datetime(ref["time"].values)
+        common_times = np.intersect1d(
+            sim_times.values if hasattr(sim_times, "values") else sim_times,
+            ref_times.values if hasattr(ref_times, "values") else ref_times,
+        )
+        if common_times.size:
+            return sim.sel(time=common_times).sortby("time"), ref.sel(time=common_times).sortby("time")
+        return sim.isel(time=slice(0, 0)), ref.isel(time=slice(0, 0))
+
+    def _normalize_station_time_coordinate(self, data_array):
+        if not hasattr(data_array, "coords") or "time" not in data_array.coords:
+            return data_array
+
+        compare_res = str(getattr(self, "compare_tim_res", "") or "").strip().lower()
+        if not compare_res:
+            return data_array
+
+        try:
+            times = pd.to_datetime(data_array["time"].values)
+        except Exception as exc:
+            logging.debug("Station time normalization skipped: %s", exc)
+            return data_array
+
+        if times.size == 0:
+            return data_array
+
+        if compare_res in {"day", "d", "1d", "daily"}:
+            normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
+        elif compare_res in {"hour", "h", "1h", "hourly"}:
+            normalized = (times.floor("H") + pd.Timedelta(minutes=30)).values
+        elif compare_res in {"month", "mon", "m", "1m", "monthly"}:
+            normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
+        elif compare_res in {"year", "yr", "y", "1y", "annual", "yearly"}:
+            normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values
+        else:
+            return data_array
+
+        try:
+            return data_array.assign_coords(time=("time", normalized))
+        except Exception as exc:
+            logging.debug("Failed to assign normalized station times: %s", exc)
+            return data_array
 
     def _get_custom_filter(self):
         """Get custom filter function for the reference source.

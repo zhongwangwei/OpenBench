@@ -7,6 +7,7 @@ import glob
 import logging
 import os
 import sys
+import time
 from typing import Any, Dict, List
 
 import xarray as xr
@@ -48,6 +49,50 @@ def _parallel():
 
 def _delayed():
     return _processing_attr("delayed", delayed)
+
+
+def _regrid_worker_budget(
+    *,
+    requested: int,
+    year_count: int,
+    available_memory_gb: float,
+    source_shape: tuple[int, int],
+    target_shape: tuple[int, int],
+    time_length: int,
+    data_bytes: int,
+    backend: str,
+) -> tuple[int, str]:
+    """Return a conservative, explainable process budget for yearly regridding."""
+    requested = max(1, int(requested))
+    year_count = max(1, int(year_count))
+    source_cells = max(1, int(source_shape[0]) * int(source_shape[1]))
+    target_cells = max(1, int(target_shape[0]) * int(target_shape[1]))
+    data_bytes = max(int(data_bytes), source_cells * max(1, int(time_length)) * 4)
+    target_bytes = int(data_bytes * target_cells / source_cells)
+
+    # The dense fallback needs both source/target work arrays plus the two
+    # separable weight matrices. Budget for it even when sparse contraction is
+    # available so a runtime fallback cannot overcommit the host.
+    dense_weight_bytes = (source_shape[0] * target_shape[0] + source_shape[1] * target_shape[1]) * 8
+    estimated_peak = data_bytes * 3 + target_bytes * 4 + dense_weight_bytes * 2
+    usable_memory = max(1, int(float(available_memory_gb) * (1024**3) * 0.5))
+    memory_cap = max(1, usable_memory // max(1, estimated_peak))
+
+    backend_cap = 4 if backend == "openbench_conservative" else 8
+    if source_cells >= 10_000_000 or estimated_peak >= 4 * 1024**3:
+        size_cap = 1
+    elif source_cells >= 1_000_000 or estimated_peak >= 1024**3:
+        size_cap = 2
+    else:
+        size_cap = 8
+
+    workers = max(1, min(requested, year_count, memory_cap, backend_cap, size_cap))
+    reason = (
+        f"requested={requested} years={year_count} backend_cap={backend_cap} "
+        f"memory_cap={memory_cap} size_cap={size_cap} "
+        f"estimated_peak={estimated_peak / 1024**2:.1f}MiB"
+    )
+    return workers, reason
 
 
 class GridProcessingCoreMixin:
@@ -126,7 +171,7 @@ class GridProcessingCoreMixin:
 
     def remap_and_combine_data(self, data_params: Dict[str, Any]) -> None:
         data_dir = os.path.join(self.casedir, "scratch")
-        years = range(self.minyear, self.maxyear + 1)
+        years = list(range(self.minyear, self.maxyear + 1))
 
         data_source = data_params["datasource"]
         if data_source not in ["ref", "sim"]:
@@ -134,9 +179,27 @@ class GridProcessingCoreMixin:
             raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
 
         if self.ref_data_type != "stn" and self.sim_data_type != "stn":
-            _parallel()(n_jobs=self.num_cores)(
+            regrid_workers, worker_reason = self._get_regrid_worker_count(
+                years,
+                data_source=data_source,
+                prefix=data_params["prefix"],
+                suffix=data_params["suffix"],
+                data_dir=data_dir,
+            )
+            logging.info(
+                "[REGRID_PERF] yearly workers=%d requested=%d reason=%s",
+                regrid_workers,
+                self.num_cores,
+                worker_reason,
+            )
+            _parallel()(n_jobs=regrid_workers)(
                 _delayed()(self._make_grid_parallel)(
-                    data_source, data_params["suffix"], data_params["prefix"], data_dir, year
+                    data_source,
+                    data_params["suffix"],
+                    data_params["prefix"],
+                    data_dir,
+                    year,
+                    regrid_workers,
                 )
                 for year in years
             )
@@ -154,6 +217,49 @@ class GridProcessingCoreMixin:
             )
 
         self.combine_and_save_data(var_files, data_params)
+
+    def _get_regrid_worker_count(
+        self,
+        years: List[int],
+        *,
+        data_source: str,
+        prefix: str,
+        suffix: str,
+        data_dir: str,
+    ) -> tuple[int, str]:
+        requested = max(1, int(getattr(self, "num_cores", 1) or 1))
+        backend = str(getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative").lower()
+        available_memory_gb = float(getattr(self, "system_resources", {}).get("available_memory_gb", 4.0))
+        source_shape = (1, 1)
+        time_length = 1
+        data_bytes = 4
+
+        if years:
+            sample_file = os.path.join(data_dir, f"{data_source}_{prefix}{years[0]}{suffix}.nc")
+            try:
+                from openbench.data.coordinates import find_lat_name, find_lon_name
+
+                with xr.open_dataset(sample_file, decode_times=False) as sample:
+                    lat_name = find_lat_name(sample.dims) or find_lat_name(sample.coords) or "lat"
+                    lon_name = find_lon_name(sample.dims) or find_lon_name(sample.coords) or "lon"
+                    source_shape = (int(sample.sizes.get(lat_name, 1)), int(sample.sizes.get(lon_name, 1)))
+                    time_length = int(sample.sizes.get("time", 1))
+                    data_bytes = int(sample.nbytes)
+            except (OSError, ValueError, KeyError) as exc:
+                logging.debug("Could not inspect yearly regrid workload %s: %s", sample_file, exc)
+
+        target = self.create_target_grid()
+        target_shape = (int(target.sizes.get("lat", 1)), int(target.sizes.get("lon", 1)))
+        return _regrid_worker_budget(
+            requested=requested,
+            year_count=len(years),
+            available_memory_gb=available_memory_gb,
+            source_shape=source_shape,
+            target_shape=target_shape,
+            time_length=time_length,
+            data_bytes=data_bytes,
+            backend=backend,
+        )
 
     def combine_and_save_data(self, var_files: List[str], data_params: Dict[str, Any]) -> None:
         output_file = self.get_output_filename(data_params)
@@ -247,7 +353,16 @@ class GridProcessingCoreMixin:
             except OSError as e:
                 logging.debug("Could not remove flat NC %s: %s", output_file, e)
 
-    def _make_grid_parallel(self, data_source: str, suffix: str, prefix: str, dirx: str, year: int) -> None:
+    def _make_grid_parallel(
+        self,
+        data_source: str,
+        suffix: str,
+        prefix: str,
+        dirx: str,
+        year: int,
+        regrid_workers: int | None = None,
+    ) -> None:
+        total_start = time.perf_counter()
         try:
             if data_source not in ["ref", "sim"]:
                 logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
@@ -261,7 +376,10 @@ class GridProcessingCoreMixin:
             with xr.open_dataset(var_file) as data:
                 data = Convert_Type.convert_nc(data)
                 data = self.preprocess_grid_data(data)
+                read_seconds = time.perf_counter() - total_start
+                source_shape = (int(data.sizes.get("lat", 0)), int(data.sizes.get("lon", 0)))
                 # 1. Clip to evaluation region to reduce memory
+                crop_start = time.perf_counter()
                 from openbench.data.coordinates import find_lat_name, find_lon_name
 
                 lat_name = find_lat_name(data.dims) or find_lat_name(data.coords) or "lat"
@@ -274,18 +392,66 @@ class GridProcessingCoreMixin:
                         data = data.sel({lat_name: slice(self.min_lat - 1, self.max_lat + 1)})
                 if lon_name in data:
                     data = data.sel({lon_name: slice(self.min_lon - 1, self.max_lon + 1)})
+                crop_seconds = time.perf_counter() - crop_start
                 # 2. Resample BEFORE remap: e.g. daily→monthly first, then remap
                 #    much cheaper than remap daily then resample
+                resample_start = time.perf_counter()
                 if not self._is_climatology_mode():
                     data = self._resample_to_compare_resolution(data, f"{data_source} grid data")
+                resample_seconds = time.perf_counter() - resample_start
+
+                target_grid = self.create_target_grid()
+                target_shape = (int(target_grid.sizes.get("lat", 0)), int(target_grid.sizes.get("lon", 0)))
+                backend = str(
+                    getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative"
+                ).lower()
+                same_grid = backend == "openbench_conservative" and self._grids_match(data, target_grid)
+                conservative = None
+                if not same_grid and backend == "openbench_conservative":
+                    from openbench.data.regrid.methods import conservative
+
+                    conservative.reset_weight_cache_activity()
+                regrid_start = time.perf_counter()
                 remapped_data = self.remap_data(data)
+                regrid_seconds = time.perf_counter() - regrid_start
+                weight_cache = conservative.consume_weight_cache_activity() if conservative is not None else "n/a"
+                write_start = time.perf_counter()
                 self.save_remapped_data(remapped_data, data_source, year)
+                write_seconds = time.perf_counter() - write_start
+                logging.info(
+                    "[REGRID_PERF] source=%s year=%d backend=%s read=%.3fs crop=%.3fs "
+                    "resample=%.3fs regrid=%.3fs write=%.3fs total=%.3fs "
+                    "source_grid=%dx%d target_grid=%dx%d time=%d num_cores=%d "
+                    "regrid_workers=%d same_grid_bypass=%s weight_cache=%s",
+                    data_source,
+                    year,
+                    backend,
+                    read_seconds,
+                    crop_seconds,
+                    resample_seconds,
+                    regrid_seconds,
+                    write_seconds,
+                    time.perf_counter() - total_start,
+                    source_shape[0],
+                    source_shape[1],
+                    target_shape[0],
+                    target_shape[1],
+                    int(data.sizes.get("time", 0)),
+                    int(getattr(self, "num_cores", 1)),
+                    int(regrid_workers or 1),
+                    str(same_grid).lower(),
+                    weight_cache,
+                )
         finally:
             gc.collect()
 
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
         data = self.check_coordinate(data)
         if data["lon"].ndim == 2 and data["lat"].ndim == 2:
+            # This first pass regularizes a curvilinear grid over its own
+            # extent. Its cell centres generally differ from create_target_grid;
+            # remap_data therefore still performs the evaluation-grid remap.
+            # If they happen to match exactly, the shared same-grid check skips it.
             try:
                 from openbench.data.regrid.regrid_wgs84 import convert_to_wgs84_xesmf
                 from openbench.data.regrid.xesmf_cache import default_weight_cache_dir

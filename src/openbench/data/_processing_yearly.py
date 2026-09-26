@@ -6,6 +6,7 @@ import gc
 import logging
 import os
 import sys
+import time
 from typing import List
 
 import xarray as xr
@@ -209,6 +210,7 @@ class YearlyPreprocessingMixin:
         prefix: str,
         datasource: str,
     ) -> None:
+        total_start = time.perf_counter()
         # Use fallback-aware file search (supports prefix_fallback for CaMa etc.)
         found_files = self._find_data_files(dirx, prefix, syear, suffix, datasource, varname=varname)
         if not found_files:
@@ -234,16 +236,46 @@ class YearlyPreprocessingMixin:
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
             ds, varunit = self.process_units(ds, current_varunit)
             ds = self.select_timerange(ds, syear, eyear)
+            read_seconds = time.perf_counter() - total_start
+            resample_start = time.perf_counter()
             if getattr(self, f"{datasource}_data_type", "grid") != "stn" and not self._is_climatology_mode():
                 source_rank = self._frequency_rank(tim_res)
                 target_rank = self._frequency_rank(self.compare_tim_res)
                 if source_rank is not None and target_rank is not None and source_rank < target_rank:
                     ds = self._resample_to_compare_resolution(ds, f"{datasource} yearly grid data")
+            resample_seconds = time.perf_counter() - resample_start
+            write_start = time.perf_counter()
             _write_netcdf_atomic(
                 ds,
                 os.path.join(casedir, "scratch", f"{datasource}_{prefix}{syear}{suffix}.nc"),
                 compression=False,
             )
+            write_seconds = time.perf_counter() - write_start
+            if getattr(self, f"{datasource}_data_type", "grid") != "stn":
+                try:
+                    target = self.create_target_grid()
+                    target_shape = (int(target.sizes.get("lat", 0)), int(target.sizes.get("lon", 0)))
+                except AttributeError:
+                    target_shape = (0, 0)
+                logging.info(
+                    "[REGRID_PERF] source=%s year=%d stage=preprocess backend=%s "
+                    "read=%.3fs crop=0.000s resample=%.3fs regrid=0.000s write=%.3fs total=%.3fs "
+                    "source_grid=%dx%d target_grid=%dx%d time=%d num_cores=%d "
+                    "regrid_workers=0 same_grid_bypass=false weight_cache=n/a",
+                    datasource,
+                    syear,
+                    str(getattr(self, "regrid_backend", "openbench_conservative")),
+                    read_seconds,
+                    resample_seconds,
+                    write_seconds,
+                    time.perf_counter() - total_start,
+                    int(ds.sizes.get("lat", 0)),
+                    int(ds.sizes.get("lon", 0)),
+                    target_shape[0],
+                    target_shape[1],
+                    int(ds.sizes.get("time", 0)),
+                    int(getattr(self, "num_cores", 1)),
+                )
         finally:
             if source_ds is not None:
                 try:

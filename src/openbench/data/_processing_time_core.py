@@ -11,6 +11,7 @@ import xarray as xr
 
 
 logger = logging.getLogger(__name__)
+_TEMPORAL_RESOLUTION_ATTR = "_openbench_temporal_resolution"
 
 
 class TimeCoreMixin:
@@ -35,6 +36,11 @@ class TimeCoreMixin:
         if unit in {"y", "ye", "yr", "year", "annual", "yearly"}:
             return 4
         return None
+
+    @staticmethod
+    def _frequency_multiple(freq: str) -> int:
+        match = re.match(r"\s*(\d*)", str(freq or ""))
+        return int(match.group(1) or 1) if match else 1
 
     @staticmethod
     def _infer_time_rank(data: xr.Dataset | xr.DataArray) -> int | None:
@@ -74,7 +80,25 @@ class TimeCoreMixin:
             )
 
     def _resample_to_compare_resolution(self, data: xr.Dataset | xr.DataArray, context: str):
+        target_freq = str(self.compare_tim_res)
+        if "time" in getattr(data, "coords", {}):
+            completed_freq = str(data["time"].attrs.get(_TEMPORAL_RESOLUTION_ATTR, ""))
+            if completed_freq == target_freq:
+                logger.debug("%s: temporal resolution already %s; skipping resample", context, target_freq)
+                return data
+
         self._guard_against_temporal_upsampling(data, self.compare_tim_res, context)
+        source_rank = self._infer_time_rank(data)
+        target_rank = self._frequency_rank(target_freq)
+        if (
+            source_rank is not None
+            and target_rank is not None
+            and source_rank == target_rank
+            and self._frequency_multiple(target_freq) == 1
+        ):
+            logger.debug("%s: source already matches temporal resolution %s", context, target_freq)
+            return data
+
         item = re.sub(r"[\s-]+", "_", str(getattr(self, "item", "") or "").lower())
         units = str(getattr(data, "attrs", {}).get("units", "") or "").lower().strip()
         if isinstance(data, xr.Dataset) and not units:
@@ -126,13 +150,17 @@ class TimeCoreMixin:
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)
-            return data.resample(time=self.compare_tim_res).sum()
+            result = data.resample(time=self.compare_tim_res).sum()
+            result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
+            return result
         if units in accumulation_units and item not in accumulation_items | state_items:
             raise ValueError(
                 f"{context}: units {units!r} are ambiguous for item {item!r}; use a canonical "
                 "accumulation/state item name or an explicit rate unit"
             )
-        return data.resample(time=self.compare_tim_res).mean()
+        result = data.resample(time=self.compare_tim_res).mean()
+        result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
+        return result
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
         # Rename both coordinates and dimensions (e.g., WRF south_north → lat).
