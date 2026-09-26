@@ -1,5 +1,75 @@
 # Changelog
 
+## [3.0.4] - 2026-09-25
+
+Interactive `openbench init` now asks for the evaluation settings it used to
+fill in silently.
+
+### Added
+- New wizard step "Domain, Resolution & Runtime": latitude/longitude range,
+  target `tim_res` and `grid_res` (defaults inferred from the selected
+  references and simulations), `time_alignment`, IGBP/PFT/climate-zone
+  group-by, and `num_cores` (`auto` = all CPU cores). Answers are written to
+  `project` as active values. When simulations disagree on `tim_res` or
+  `grid_res`, a target is required (`none` would fail `openbench check`), and
+  an unsupported inferred `tim_res` (e.g. `2-Day`) is not offered as the
+  default.
+- New wizard step "Metrics, Scores & Analyses": pick metrics, scores,
+  comparison figures and statistics methods by number or name from numbered
+  lists, with defaults marked `*`.
+- `openbench init` asks to confirm scanned simulation cases before station
+  lists are materialized; answering no returns to the simulation roots prompt.
+
+### Changed
+- Every init prompt explains the setting and shows its default; Enter keeps
+  the default. Yes/no prompts read `[yes/no/back, Enter = …]`.
+- `b` is accepted as `back` in all init prompts and in yes/no and numbered
+  prompts of other wizards. Free-text data-name prompts (NetCDF variable
+  names, units, globs) still require the full word `back`.
+- Going back skips comparison/statistics item prompts for disabled phases.
+- `--refresh-ref` help now states that init never rescans without it, and init
+  prints a hint when the reference catalog was not rescanned.
+
+### Fixed
+- Keep station IDs as text when reading station lists and station metadata,
+  so IDs with leading zeros (e.g. `0000000009463`) are no longer turned into
+  integers and lost. ID-like columns are recognised in any case (`ID`, `Id`,
+  `site_id`, ...).
+- Match station IDs regardless of zero padding (`0000000009463` == `9463`)
+  when merging simulation and reference station lists, selecting stations
+  from merged NetCDF files, and looking up sidecar metadata. HydroWeb also
+  finds station files named by the unpadded ID.
+
+## [3.0.3] - 2026-09-18
+
+Feature and reliability release for station-mode preprocessing and comparisons.
+
+### Added
+- Support a derived-variable fallback for station datasets when the configured
+  variable is absent, and normalize `1ME`/`1MS` monthly station timestamps
+  before alignment (#198).
+
+### Fixed
+- Run catalog compute (sign flips, unit conversions, PFT aggregation) on
+  station-mode model output before falling back to the raw variable, matching
+  the order grid preprocessing already uses.
+- Read relabelled flat files by their catalog item name in the SMPI,
+  Mann-Kendall reference, mass-weighted score and groupby readers, instead of
+  the raw configured varname.
+- Harden KDE and ridgeline plots against sparse and constant data; update
+  streamflow dataset configuration and plot defaults.
+- Only clip Parallel Coordinates metric quantiles when enough finite values
+  are present, rather than counting NaNs toward the sample size (#199).
+
+### Packaging
+- Published GitHub release v3.0.3, PyPI 3.0.3 (uploaded manually with
+  `twine`, since the `publish.yml` trusted-publishing workflow is not yet
+  registered on PyPI for this repository) and updated the pending
+  conda-forge recipe in
+  [conda-forge/staged-recipes#34807](https://github.com/conda-forge/staged-recipes/pull/34807)
+  to 3.0.3, dropping the Windows console-encoding patch the source no
+  longer needs. conda-forge review/merge is still pending.
+
 ## [3.0.2] - 2026-09-14
 
 Patch release for station evaluation and comparison reliability.

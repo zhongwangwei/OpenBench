@@ -19,6 +19,7 @@ from openbench.data.station_missing import StationDataUnavailable, mask_station_
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_xarray_key_case_insensitive
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
+from openbench.util.station_ids import station_id_key
 
 _MERGED_STATION_DIMS = {
     "station",
@@ -377,6 +378,7 @@ class StationProcessingCoreMixin:
         return None
 
     def _merged_station_index(self, stn_data: xr.Dataset, station_dim: str, station_id: str) -> int | None:
+        wanted = station_id_key(station_id)
         for name in _MERGED_STATION_ID_VARS:
             actual_name = get_xarray_key_case_insensitive(stn_data, name)
             if actual_name is None:
@@ -386,12 +388,12 @@ class StationProcessingCoreMixin:
                 continue
             for index in range(stn_data.sizes[station_dim]):
                 station_value = values.isel({station_dim: index}).values
-                if _station_value_to_string(station_value) == station_id:
+                if station_id_key(_station_value_to_string(station_value)) == wanted:
                     return index
 
         if station_dim in stn_data.coords:
             for index, value in enumerate(stn_data[station_dim].values):
-                if _station_value_to_string(value) == station_id:
+                if station_id_key(_station_value_to_string(value)) == wanted:
                     return index
         return None
 
