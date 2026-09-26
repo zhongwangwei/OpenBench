@@ -1,5 +1,6 @@
 """openbench init command — interactive config generator."""
 
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -914,36 +915,55 @@ class _NumericRangeType(click.ParamType):
         return [low, high]
 
 
+_TIM_RES_CHOICES_TEXT = "Year, Month, Day, Hour, 3Hour, 6Hour, 8Day, Nmonth (e.g. 3month), climatology-month/-year"
+_MIXED_SIM_UNSET_MESSAGE = (
+    "the simulations use different {name} values, so a target is required ('none' would fail openbench check)"
+)
+
+
 class _TargetTimResType(click.ParamType):
-    """Accept a supported tim_res, or ``none`` to leave it unset."""
+    """Accept a supported tim_res, or ``none`` to leave it unset unless one is required."""
 
     name = "tim_res"
 
+    def __init__(self, *, required: bool = False):
+        self.required = required
+
     def convert(self, value, param, ctx):
-        if value is None or str(value).strip().lower() in _UNSET_WORDS:
+        text = "" if value is None else str(value).strip()
+        if text.lower() in _UNSET_WORDS:
+            if self.required:
+                self.fail(_MIXED_SIM_UNSET_MESSAGE.format(name="tim_res"), param, ctx)
             return None
         from openbench.config.loader import ConfigError, _validated_optional_tim_res
 
+        if re.fullmatch(r"[1-9]\d*month", text, flags=re.IGNORECASE):
+            text = text.lower()  # the loader only accepts the lower-case Nmonth form
         try:
-            return _validated_optional_tim_res(str(value).strip(), "tim_res")
-        except ConfigError as exc:
-            self.fail(str(exc), param, ctx)
+            return _validated_optional_tim_res(text, "tim_res")
+        except ConfigError:
+            self.fail(f"unsupported tim_res {value!r}; choose one of: {_TIM_RES_CHOICES_TEXT}", param, ctx)
 
 
 class _TargetGridResType(click.ParamType):
-    """Accept a positive grid spacing in degrees, or ``none`` to leave it unset."""
+    """Accept a positive grid spacing in degrees, or ``none`` to leave it unset unless one is required."""
 
     name = "grid_res"
 
+    def __init__(self, *, required: bool = False):
+        self.required = required
+
     def convert(self, value, param, ctx):
         if value is None or str(value).strip().lower() in _UNSET_WORDS:
+            if self.required:
+                self.fail(_MIXED_SIM_UNSET_MESSAGE.format(name="grid_res"), param, ctx)
             return None
         try:
             grid_res = float(value)
         except (TypeError, ValueError):
             self.fail(f"enter a positive number of degrees (e.g. 0.5) or 'none', got {value!r}", param, ctx)
-        if grid_res <= 0:
-            self.fail(f"grid_res must be positive, got {value!r}", param, ctx)
+        if not math.isfinite(grid_res) or grid_res <= 0:
+            self.fail(f"grid_res must be a positive finite number, got {value!r}", param, ctx)
         return grid_res
 
 
@@ -1052,11 +1072,11 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
     }
     defaults.update(state)
 
-    def ask(key: str, text: str, param_type, *explanation: str) -> Any:
+    def ask(key: str, text: str, param_type, *explanation: str, unset_word: str = "none") -> Any:
         for line in explanation:
             click.echo(line)
         value = _wizard_prompt(text, type=param_type, default=defaults[key])
-        defaults[key] = _format_prompt_default(value, fallback=defaults[key])
+        defaults[key] = _format_prompt_default(value, unset_word=unset_word)
         state[key] = defaults[key]
         return value
 
@@ -1067,15 +1087,25 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
         state[key] = defaults[key]
         return defaults[key]
 
-    if len(sim_tim_values) > 1:
-        tim_source_note = f"    Simulations use mixed time resolutions ({', '.join(map(str, sim_tim_values))})."
+    tim_required = len(sim_tim_values) > 1
+    grid_required = len(sim_grid_values) > 1
+    try:
+        _TargetTimResType().convert(defaults["tim_res"], None, None)
+    except click.BadParameter:
+        # e.g. a reference registered as "2-Day": never offer a default that Enter would reject.
+        click.secho(f"  Inferred tim_res {defaults['tim_res']!r} is not a supported target; choose one.", fg="yellow")
+        defaults["tim_res"] = "none"
+
+    if tim_required:
+        mixed = ", ".join(map(str, sim_tim_values))
+        tim_source_note = f"    Simulations use mixed time resolutions ({mixed}); a target is required."
     elif tim_default:
         tim_source_note = "    Default = coarsest resolution among the selected references and simulations."
     else:
         tim_source_note = "    No resolution could be inferred; 'none' leaves it for OpenBench to derive at run time."
-    if len(sim_grid_values) > 1 and inferred_grid is None:
+    if grid_required:
         mixed = ", ".join(map(_format_number, sim_grid_values))
-        grid_source_note = f"    Simulations use mixed grid spacings ({mixed})."
+        grid_source_note = f"    Simulations use mixed grid spacings ({mixed}); a target is required."
     elif inferred_grid is not None:
         grid_source_note = "    Default = grid spacing of the selected references (or of the simulations)."
     else:
@@ -1108,10 +1138,10 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
             lambda: ask(
                 "tim_res",
                 "    Target tim_res",
-                _TargetTimResType(),
+                _TargetTimResType(required=tim_required),
                 "",
                 "  Target time resolution - all data are aggregated to this step before metrics are computed.",
-                "    Choices: Year, Month, Day, Hour, 3hr, Nmonth (e.g. 3month), or 'none'.",
+                f"    Choices: {_TIM_RES_CHOICES_TEXT}" + ("." if tim_required else ", or 'none'."),
                 tim_source_note,
             ),
         ),
@@ -1121,7 +1151,7 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
             lambda: ask(
                 "grid_res",
                 "    Target grid_res in degrees",
-                _TargetGridResType(),
+                _TargetGridResType(required=grid_required),
                 "",
                 "  Target grid resolution - gridded data are regridded to this spacing (degrees).",
                 grid_source_note,
@@ -1148,7 +1178,8 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
                 "IGBP_groupby",
                 "    Group results by IGBP land cover class?",
                 "",
-                "  Group-by analysis - extra per-class summaries of the results.",
+                "  Group-by analysis - extra per-class summaries of gridded results (station pairs are skipped).",
+                "    The class masks (IGBP, PFT, Koppen climate zones) ship with OpenBench.",
             ),
         ),
         (
@@ -1171,6 +1202,7 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
                 "",
                 f"  Parallel workers - 'auto' uses all CPU cores on this machine ({cpu_count}).",
                 "    On shared HPC login or compute nodes, enter the number of cores you were allocated.",
+                unset_word="auto",
             ),
         ),
     ]
@@ -1190,10 +1222,10 @@ def _prompt_domain_runtime_options(project_resolution: dict, simulation: dict, s
     return options
 
 
-def _format_prompt_default(value, *, fallback: str) -> str:
+def _format_prompt_default(value, *, unset_word: str = "none") -> str:
     """Turn a converted prompt answer back into the text shown as its default."""
     if value is None:
-        return "auto" if fallback == "auto" else "none"
+        return unset_word
     if isinstance(value, list):
         return ",".join(_format_number(item) for item in value)
     return _format_number(value)

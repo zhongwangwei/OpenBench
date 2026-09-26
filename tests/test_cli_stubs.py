@@ -3446,6 +3446,74 @@ def test_init_domain_options_b_returns_to_previous_prompt_with_last_answer():
     assert "num_cores" not in options
 
 
+def test_init_domain_options_require_target_resolution_for_mixed_simulations():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    simulation = {
+        "Coarse": {"tim_res": "Month", "grid_res": 0.5},
+        "Fine": {"tim_res": "Day", "grid_res": 0.25},
+    }
+    answers = ["", "", "none", "Day", "none", "0.25", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({}, simulation, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "the simulations use different tim_res values, so a target is required" in result.output
+    assert "the simulations use different grid_res values, so a target is required" in result.output
+    assert "Simulations use mixed time resolutions (Month, Day); a target is required." in result.output
+    assert "or 'none'" not in result.output
+    assert (options["tim_res"], options["grid_res"]) == ("Day", 0.25)
+
+
+def test_init_domain_options_tim_res_help_matches_accepted_values():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = ["", "", "3hr", "3Month", "nan", "inf", "0.5", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "3hr" not in result.output.split("Target tim_res [Month]:")[0]
+    assert "Choices: Year, Month, Day, Hour, 3Hour, 6Hour, 8Day, Nmonth" in result.output
+    assert "unsupported tim_res '3hr'; choose one of:" in result.output
+    assert result.output.count("grid_res must be a positive finite number") == 2
+    assert (options["tim_res"], options["grid_res"]) == ("3month", 0.5)
+
+
+def test_init_domain_options_replace_unsupported_inferred_tim_res_default():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "2-Day"}, {}, {}),
+        [""] * 9,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Inferred tim_res '2-Day' is not a supported target; choose one." in result.output
+    assert "Target tim_res [none]" in result.output
+    assert "tim_res" not in options
+
+
+def test_init_domain_options_remember_auto_cores_after_revisits():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    state = {}
+    # Each call is one visit to step 5, e.g. after going back from step 6.
+    for cores in ("8", "auto", ""):
+        result, options = _run_prompt(
+            lambda: _prompt_domain_runtime_options({}, {}, state),
+            [""] * 8 + [cores],
+        )
+        assert result.exit_code == 0, result.output
+
+    assert "Number of cores [auto]" in result.output
+    assert "num_cores" not in options
+
+
 def test_init_analysis_options_select_by_number_or_name_without_all():
     from openbench.cli.init_cmd import METRIC_OPTIONS, _prompt_analysis_options
 

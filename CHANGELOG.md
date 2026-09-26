@@ -10,7 +10,10 @@ fill in silently.
   target `tim_res` and `grid_res` (defaults inferred from the selected
   references and simulations), `time_alignment`, IGBP/PFT/climate-zone
   group-by, and `num_cores` (`auto` = all CPU cores). Answers are written to
-  `project` as active values.
+  `project` as active values. When simulations disagree on `tim_res` or
+  `grid_res`, a target is required (`none` would fail `openbench check`), and
+  an unsupported inferred `tim_res` (e.g. `2-Day`) is not offered as the
+  default.
 - New wizard step "Metrics, Scores & Analyses": pick metrics, scores,
   comparison figures and statistics methods by number or name from numbered
   lists, with defaults marked `*`.
@@ -26,6 +29,16 @@ fill in silently.
 - Going back skips comparison/statistics item prompts for disabled phases.
 - `--refresh-ref` help now states that init never rescans without it, and init
   prints a hint when the reference catalog was not rescanned.
+
+### Fixed
+- Keep station IDs as text when reading station lists and station metadata,
+  so IDs with leading zeros (e.g. `0000000009463`) are no longer turned into
+  integers and lost. ID-like columns are recognised in any case (`ID`, `Id`,
+  `site_id`, ...).
+- Match station IDs regardless of zero padding (`0000000009463` == `9463`)
+  when merging simulation and reference station lists, selecting stations
+  from merged NetCDF files, and looking up sidecar metadata. HydroWeb also
+  finds station files named by the unpadded ID.
 
 ## [3.0.3] - 2026-09-18
 

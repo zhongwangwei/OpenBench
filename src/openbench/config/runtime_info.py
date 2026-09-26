@@ -17,6 +17,7 @@ from copy import deepcopy
 from typing import Any, Dict, Tuple
 
 from openbench.util.exceptions import ConfigurationError
+from openbench.util.station_ids import merge_on_station_id, read_station_csv
 
 # Heavy dependencies for data processing
 try:
@@ -390,8 +391,8 @@ class GeneralInfoReader:
         if self.ref_data_type == "stn" and self.sim_data_type == "stn":
             # Both ref and sim are station data
             if self.sim_fulllist and self.ref_fulllist:
-                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self.sim_stn_list = read_station_csv(self.sim_fulllist, header=0)
+                self.ref_stn_list = read_station_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns()
                 sim_root = getattr(self, "sim_dir", "")
                 ref_root = getattr(self, "ref_dir", "")
@@ -405,7 +406,7 @@ class GeneralInfoReader:
         elif self.sim_data_type == "stn":
             # Only sim is station data
             if self.sim_fulllist:
-                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self.sim_stn_list = read_station_csv(self.sim_fulllist, header=0)
                 self._rename_station_columns(sim_only=True)
                 sim_root = getattr(self, "sim_dir", "")
                 self._resolve_relative_paths(self.sim_stn_list, "sim_dir", self.sim_fulllist, sim_root)
@@ -416,7 +417,7 @@ class GeneralInfoReader:
         elif self.ref_data_type == "stn":
             # Only ref is station data (stn×grid case)
             if self.ref_fulllist:
-                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self.ref_stn_list = read_station_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns(ref_only=True)
                 ref_root = getattr(self, "ref_dir", "")
                 self._resolve_relative_paths(self.ref_stn_list, "ref_dir", self.ref_fulllist, ref_root)
@@ -436,14 +437,14 @@ class GeneralInfoReader:
         """Match two station lists for stn×stn evaluation.
 
         Strategy:
-        1. Inner join on ID (exact match) — standard, fast
+        1. Inner join on ID (zero padding ignored, e.g. "0009463" == "9463")
         2. If ID match yields nothing, fall back to nearest-neighbor spatial matching
            within `spatial_threshold_deg` (~1 km at equator)
 
         Returns merged DataFrame with both sim and ref columns.
         """
         # 1. Try ID match
-        merged = pd.merge(sim_stn, ref_stn, how="inner", on="ID")
+        merged = merge_on_station_id(sim_stn, ref_stn)
         if len(merged) > 0:
             n_sim = len(sim_stn)
             n_ref = len(ref_stn)
