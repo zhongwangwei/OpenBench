@@ -208,6 +208,47 @@ def test_station_matching_counts_single_year_and_wraps_longitude(tmp_path):
     assert info.stn_list["ref_lon"].tolist() == [-170.0]
 
 
+def test_station_matching_reads_only_candidate_stations_and_target_years(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("1999-01-01", periods=5, freq="YS")
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["A", "B"], dtype=object)),
+            "lon": ("station", np.array([-60.0, 10.0])),
+            "lat": ("station", np.array([0.0, 20.0])),
+            "area": ("station", np.array([10_000.0, 10_000.0])),
+            "discharge": (
+                ("station", "time"),
+                np.array([[1.0, 2.0, 3.0, 4.0, 5.0], [10.0, 20.0, 30.0, 40.0, 50.0]]),
+            ),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2001,
+        sim_eyear=2002,
+        syear=2001,
+        eyear=2002,
+        min_year=1,
+        min_lon=-80,
+        max_lon=-35,
+        min_lat=-22,
+        max_lat=12,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0, n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["A"]
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        assert station_ds.sizes["time"] == 2
+        np.testing.assert_allclose(station_ds["discharge"].values, [3.0, 4.0])
+
+
 def test_station_matching_reports_missing_cama_companion_fields(tmp_path):
     from openbench.data.station_matcher import run_station_matching
     from openbench.util.exceptions import DataProcessingError
