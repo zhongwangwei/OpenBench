@@ -33,7 +33,11 @@ from openbench.cli._simulation_validation import simulation_root_errors
 )
 @click.option("--dump-config", is_flag=True, help="Write intermediate runner/debug configs to output dir.")
 @click.option("--comparison-only", is_flag=True, help="Skip evaluation, only run comparisons on existing results.")
-@click.option("--resume", is_flag=True, help="Reuse compatible preprocessed station data and continue evaluation.")
+@click.option(
+    "--resume",
+    is_flag=True,
+    help="Reuse compatible preprocessed station data and continue evaluation.",
+)
 @click.option("--force", is_flag=True, help="Bypass incremental cache and re-run evaluations.")
 @click.option("--output-dir", type=click.Path(file_okay=False), default=None, help="Override project.output_dir.")
 def run(config, dry_run, cores, variables, remote, dump_config, comparison_only, resume, force, output_dir):
@@ -81,7 +85,9 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     if resume and cfg.project.only_drawing:
         raise click.ClickException("--resume conflicts with project.only_drawing=true")
     if resume and (force or cfg.project.force):
-        raise click.ClickException("--resume conflicts with --force/project.force because force rebuilds evaluation inputs")
+        raise click.ClickException(
+            "--resume conflicts with --force/project.force because force rebuilds evaluation inputs"
+        )
 
     _run_static_preflight(cfg)
 
