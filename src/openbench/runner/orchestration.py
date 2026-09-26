@@ -160,6 +160,7 @@ def _write_run_manifest(
                 "cache_key": task.get("cache_key"),
                 "config_hash": task.get("config_hash"),
                 "hash_payload": task.get("hash_payload"),
+                "preprocessing_reused": bool(task.get("preprocess_reused")),
             }
             for task in tasks
         ],
