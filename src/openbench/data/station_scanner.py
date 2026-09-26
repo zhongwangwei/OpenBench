@@ -27,6 +27,7 @@ import xarray as xr
 from openbench.data.coordinates import glob_nc as _glob_nc
 from openbench.util.dataset_loader import open_mfdataset as _open_mfdataset_chunked
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
+from openbench.util.station_ids import read_station_csv, station_id_key
 
 logger = logging.getLogger(__name__)
 
@@ -517,7 +518,7 @@ def _load_station_metadata(root: Path) -> pd.DataFrame | None:
         if not path.exists():
             continue
         try:
-            data = pd.read_csv(path)
+            data = read_station_csv(path)
         except Exception as exc:
             logger.warning("Could not read station metadata %s: %s", path, exc)
             continue
@@ -545,7 +546,7 @@ def _station_metadata_row(
 
     id_col = _metadata_column(data, ["ID", "id", "site_id", "site"])
     if id_col is not None:
-        matches = data[data[id_col].astype(str) == site_id]
+        matches = data[data[id_col].map(station_id_key) == station_id_key(site_id)]
         if not matches.empty:
             return matches.iloc[0]
 

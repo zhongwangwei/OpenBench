@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from openbench.util.station_ids import read_station_csv
+
 
 def _resolve_station_list(info) -> Path:
     """Return the station list path that matches the routing grid resolution."""
@@ -57,7 +59,7 @@ def filter_ResOpsUS(info, ds=None):
     station_list_path = _resolve_station_list(info)
     info.ref_fulllist = str(station_list_path)
 
-    df = pd.read_csv(station_list_path)
+    df = read_station_csv(station_list_path)
     df.rename(
         columns={
             "SYEAR": "ref_syear",
