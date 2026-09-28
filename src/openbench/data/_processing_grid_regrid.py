@@ -52,6 +52,49 @@ def _delayed():
 class GridRegridMixin:
     """Split grid processing helpers."""
 
+    _SAME_GRID_RTOL = 1e-7
+    _SAME_GRID_ATOL = 1e-8
+
+    @staticmethod
+    def _normalized_longitudes(values: np.ndarray) -> np.ndarray:
+        values = np.asarray(values)
+        return ((values + 180.0) % 360.0) - 180.0
+
+    @classmethod
+    def _grids_match(cls, data: xr.Dataset, target: xr.Dataset) -> bool:
+        """Return whether two ordered rectilinear grids have the same cell centres."""
+        if "lat" not in data.coords or "lon" not in data.coords:
+            return False
+        if "lat" not in target.coords or "lon" not in target.coords:
+            return False
+        if data["lat"].ndim != 1 or data["lon"].ndim != 1:
+            return False
+        if target["lat"].ndim != 1 or target["lon"].ndim != 1:
+            return False
+
+        source_lat = np.asarray(data["lat"].values)
+        target_lat = np.asarray(target["lat"].values)
+        source_lon = cls._normalized_longitudes(data["lon"].values)
+        target_lon = cls._normalized_longitudes(target["lon"].values)
+        if source_lat.shape != target_lat.shape or source_lon.shape != target_lon.shape:
+            return False
+        return bool(
+            np.allclose(source_lat, target_lat, rtol=cls._SAME_GRID_RTOL, atol=cls._SAME_GRID_ATOL)
+            and np.allclose(source_lon, target_lon, rtol=cls._SAME_GRID_RTOL, atol=cls._SAME_GRID_ATOL)
+        )
+
+    @staticmethod
+    def _assign_target_grid(data: xr.Dataset, target: xr.Dataset) -> xr.Dataset:
+        """Use exact target coordinates while retaining source coordinate metadata."""
+        coords = {}
+        for name in ("lat", "lon"):
+            coords[name] = xr.DataArray(
+                target[name].values,
+                dims=data[name].dims,
+                attrs=dict(data[name].attrs),
+            )
+        return data.assign_coords(coords)
+
     def remap_data(self, data: xr.Dataset) -> xr.Dataset:
         new_grid = self.create_target_grid()
         backend = str(getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative").lower()
@@ -64,6 +107,10 @@ class GridRegridMixin:
         if backend not in backend_methods:
             valid = ", ".join(sorted(backend_methods))
             raise ValueError(f"Unknown regrid_backend {backend!r}; expected one of: {valid}")
+
+        if backend == "openbench_conservative" and self._grids_match(data, new_grid):
+            logging.info("[REGRID] Skip regridding: source grid already matches target grid")
+            return self._mark_regrid_backend(self._assign_target_grid(data, new_grid), backend)
 
         try:
             data_regrid = backend_methods[backend](data, new_grid)
@@ -208,6 +255,8 @@ class GridRegridMixin:
             # Time resampling is now done before remap in _make_grid_parallel
             # (resample before remap is much more efficient for high-frequency data)
             data = data.sel(time=slice(f"{year}-01-01T00:00:00", f"{year}-12-31T23:59:59"))
+            if "time" in data.coords:
+                data["time"].attrs.pop("_openbench_temporal_resolution", None)
 
             varname = self.ref_varname[0] if data_source == "ref" else self.sim_varname[0]
 

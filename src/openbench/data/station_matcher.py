@@ -25,7 +25,7 @@ from openbench.data._system_resources import effective_cpu_count
 from openbench.data.station_missing import missing_sentinels as _as_missing_sentinels
 from openbench.data.station_missing import valid_station_mask as _valid_flow_mask
 from openbench.util.exceptions import DataProcessingError
-from openbench.util.filenames import station_file_path
+from openbench.util.filenames import filename_component, station_file_path
 from openbench.util.names import get_xarray_key_case_insensitive
 from openbench.util.netcdf import write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic
@@ -77,6 +77,48 @@ def _station_id_to_string(value) -> str:
     return str(value)
 
 
+def _unique_station_ids(station_ids: np.ndarray, data_source_names: np.ndarray | None = None) -> list[str]:
+    """Return filename-safe station IDs that stay unique for consolidated products.
+
+    Only duplicated IDs are qualified (by source name when available, otherwise
+    by row index); unique IDs are returned unchanged.
+    """
+    ids = [_station_id_to_string(station_id) for station_id in station_ids]
+    counts = Counter(ids)
+    if len(counts) == len(ids):
+        return ids
+
+    qualified = []
+    for idx, station_id in enumerate(ids):
+        if counts[station_id] == 1:
+            qualified.append(station_id)
+        elif data_source_names is not None:
+            source = filename_component(_station_id_to_string(data_source_names[idx]))
+            qualified.append(f"{source}_{station_id}")
+        else:
+            qualified.append(f"{station_id}_idx{idx}")
+
+    # A qualified ID can still collide with another row (same source, or an
+    # existing ID that happens to match); fall back to the row index there.
+    qualified_counts = Counter(qualified)
+    return [
+        f"{station_id}_idx{idx}" if qualified_counts[station_id] > 1 else station_id
+        for idx, station_id in enumerate(qualified)
+    ]
+
+
+def _valid_flow_in_year_window(valid_mask: np.ndarray, times: np.ndarray, start_year: int, end_year: int) -> bool:
+    years = pd.to_datetime(times).year
+    window_mask = (years >= int(start_year)) & (years <= int(end_year))
+    return bool((valid_mask & window_mask).any())
+
+
+def _valid_flow_in_yyyymm_window(valid_mask: np.ndarray, times: np.ndarray, start_year: int, end_year: int) -> bool:
+    years = np.asarray([int(str(int(t))[:4]) for t in times])
+    window_mask = (years >= int(start_year)) & (years <= int(end_year))
+    return bool((valid_mask & window_mask).any())
+
+
 def _get_dim_case_insensitive(dims, requested: str | None) -> str | None:
     if not requested:
         return None
@@ -87,7 +129,15 @@ def _get_dim_case_insensitive(dims, requested: str | None) -> str | None:
     return None
 
 
-def _station_time_flow_values(discharge_da: xr.DataArray, *, station_dim: str, time_key: str, n_stations: int):
+def _station_time_flow_values(
+    discharge_da: xr.DataArray,
+    *,
+    station_dim: str,
+    time_key: str,
+    n_stations: int,
+    station_indices: Optional[np.ndarray] = None,
+    time_indices: Optional[np.ndarray] = None,
+):
     """Return discharge values ordered as (station, time)."""
     time_dim = _get_dim_case_insensitive(discharge_da.dims, time_key) or _get_dim_case_insensitive(
         discharge_da.dims, "time"
@@ -106,7 +156,87 @@ def _station_time_flow_values(discharge_da: xr.DataArray, *, station_dim: str, t
             "Could not identify station/time dimensions for station matching discharge variable",
             context={"station_dim": station_dim, "time_var": time_key, "dims": list(discharge_da.dims)},
         )
-    return discharge_da.transpose(station_dim_key, time_dim).values
+    ordered = discharge_da.transpose(station_dim_key, time_dim)
+    if station_indices is not None:
+        ordered = ordered.isel({station_dim_key: station_indices})
+    if time_indices is not None:
+        ordered = ordered.isel({time_dim: time_indices})
+    return ordered.values
+
+
+def _target_year_window(info) -> tuple[int, int]:
+    return max(int(info.sim_syear), int(info.syear)), min(int(info.sim_eyear), int(info.eyear))
+
+
+def _target_time_indices(times: np.ndarray, info, time_format: Optional[str] = None) -> np.ndarray:
+    start_year, end_year = _target_year_window(info)
+    if time_format == "YYYYMM":
+        years = np.asarray([int(str(int(t))[:4]) for t in times])
+    else:
+        years = pd.to_datetime(times).year
+    return np.where((years >= start_year) & (years <= end_year))[0]
+
+
+def _area_within_bounds(area: float, min_uparea: float, max_uparea: float) -> bool:
+    return not ((area > 0 and area < min_uparea) or (area > 0 and area > max_uparea))
+
+
+def _direct_candidate_station_indices(
+    lons: np.ndarray,
+    lats: np.ndarray,
+    areas: np.ndarray,
+    info,
+    min_uparea: float,
+    max_uparea: float,
+) -> np.ndarray:
+    keep = []
+    for idx, (lon, lat, area) in enumerate(zip(lons, lats, areas)):
+        lon_for_bounds = _normalize_lon_to_range(float(lon), info.min_lon, info.max_lon)
+        area_value = float(area) if not np.isnan(area) else -9999.0
+        if lon_for_bounds < info.min_lon or lon_for_bounds > info.max_lon:
+            continue
+        if float(lat) < info.min_lat or float(lat) > info.max_lat:
+            continue
+        if not _area_within_bounds(area_value, min_uparea, max_uparea):
+            continue
+        keep.append(idx)
+    return np.asarray(keep, dtype=int)
+
+
+def _cama_candidate_station_indices(
+    lons: np.ndarray,
+    lats: np.ndarray,
+    areas: np.ndarray,
+    cama_lons: np.ndarray,
+    cama_lats: np.ndarray,
+    alloc_errs: np.ndarray,
+    info,
+    area_error_threshold: float,
+    min_uparea: float,
+    max_uparea: float,
+) -> np.ndarray:
+    keep = []
+    for idx, (lon, lat, area, cama_lon, cama_lat, alloc_err) in enumerate(
+        zip(lons, lats, areas, cama_lons, cama_lats, alloc_errs)
+    ):
+        lon_for_bounds = _normalize_lon_to_range(float(lon), info.min_lon, info.max_lon)
+        cama_lon = _normalize_lon_to_range(float(cama_lon), -180.0, 180.0)
+        cama_lat = float(cama_lat)
+        area_value = float(area) if not np.isnan(area) else -9999.0
+        if np.isnan(cama_lon) or np.isnan(cama_lat) or cama_lon < -180 or cama_lon > 180:
+            continue
+        if cama_lat < -90 or cama_lat > 90:
+            continue
+        if not np.isnan(alloc_err) and float(alloc_err) > area_error_threshold:
+            continue
+        if lon_for_bounds < info.min_lon or lon_for_bounds > info.max_lon:
+            continue
+        if float(lat) < info.min_lat or float(lat) > info.max_lat:
+            continue
+        if not _area_within_bounds(area_value, min_uparea, max_uparea):
+            continue
+        keep.append(idx)
+    return np.asarray(keep, dtype=int)
 
 
 def _normalize_lon_to_range(lon: float, min_lon: float, max_lon: float) -> float:
@@ -159,11 +289,15 @@ def _process_site_cama(
     area_err_threshold: float,
     min_uparea: float,
     max_uparea: float,
+    output_station_ids: list[str],
+    original_indices: Optional[np.ndarray] = None,
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
 ):
     """Process one station for CaMA allocation matching.  Returns metadata row or None."""
+    original_idx = int(original_indices[idx]) if original_indices is not None else idx
     station_id = _station_id_to_string(station_ids[idx])
+    output_station_id = output_station_ids[idx]
     lon = float(lons[idx])
     lat = float(lats[idx])
     area = float(areas[idx]) if not np.isnan(areas[idx]) else -9999.0
@@ -196,6 +330,8 @@ def _process_site_cama(
     # Time / spatial / area filters
     if (use_eyear - use_syear + 1) < info.min_year:
         return None
+    if not _valid_flow_in_year_window(valid_mask, times, use_syear, use_eyear):
+        return None
     if lon_for_bounds < info.min_lon or lon_for_bounds > info.max_lon or lat < info.min_lat or lat > info.max_lat:
         return None
     if area > 0 and area < min_uparea:
@@ -203,12 +339,12 @@ def _process_site_cama(
     if area > 0 and area > max_uparea:
         return None
 
-    file_path = station_file_path(scratch_dir, station_id, index=idx, duplicate_ids=duplicate_station_ids)
+    file_path = station_file_path(scratch_dir, station_id, index=original_idx, duplicate_ids=duplicate_station_ids)
     clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
     ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
-    return [station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
+    return [output_station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +364,16 @@ def _process_site_direct(
     scratch_dir: Path,
     min_uparea: float,
     max_uparea: float,
+    output_station_ids: list[str],
     time_format: Optional[str] = None,
+    original_indices: Optional[np.ndarray] = None,
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
 ):
     """Process one station with direct coordinate matching (no CaMA)."""
+    original_idx = int(original_indices[idx]) if original_indices is not None else idx
     station_id = _station_id_to_string(station_ids[idx])
+    output_station_id = output_station_ids[idx]
     lon = float(lons[idx])
     lat = float(lats[idx])
     area = float(areas[idx]) if not np.isnan(areas[idx]) else -9999.0
@@ -259,6 +399,12 @@ def _process_site_direct(
 
     if (use_eyear - use_syear + 1) < info.min_year:
         return None
+    if time_format == "YYYYMM":
+        has_valid_window_flow = _valid_flow_in_yyyymm_window(valid_mask, times, use_syear, use_eyear)
+    else:
+        has_valid_window_flow = _valid_flow_in_year_window(valid_mask, times, use_syear, use_eyear)
+    if not has_valid_window_flow:
+        return None
     if lon < info.min_lon or lon > info.max_lon or lat < info.min_lat or lat > info.max_lat:
         return None
     if area > 0 and area < min_uparea:
@@ -266,7 +412,7 @@ def _process_site_direct(
     if area > 0 and area > max_uparea:
         return None
 
-    file_path = station_file_path(scratch_dir, station_id, index=idx, duplicate_ids=duplicate_station_ids)
+    file_path = station_file_path(scratch_dir, station_id, index=original_idx, duplicate_ids=duplicate_station_ids)
 
     if time_format == "YYYYMM":
         time_dates = pd.to_datetime([str(int(t)) for t in times], format="%Y%m")
@@ -277,7 +423,7 @@ def _process_site_direct(
         ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
-    return [station_id, lon, lat, use_syear, use_eyear, str(file_path)]
+    return [output_station_id, lon, lat, use_syear, use_eyear, str(file_path)]
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +478,8 @@ def run_station_matching(
         if time_key is None:
             time_key = _require_dataset_field(ds, time_var, "time_var", dataset_path)
         station_ids = ds[station_id_key].values
+        source_key = get_xarray_key_case_insensitive(ds, "data_source_name")
+        data_source_names = ds[source_key].values if source_key else None
         lons = ds[lon_key].values
         lats = ds[lat_key].values
 
@@ -347,16 +495,15 @@ def run_station_matching(
         n_stations = len(station_ids)
         discharge_da = ds[discharge_key]
         missing_sentinels = _as_missing_sentinels(discharge_da.attrs, discharge_da.encoding)
-        flow_data = _station_time_flow_values(
-            discharge_da,
-            station_dim=station_dim,
-            time_key=time_key,
-            n_stations=n_stations,
-        )
         worker_count = _station_matching_jobs(n_stations, n_jobs)
         normalized_station_ids = [_station_id_to_string(station_id) for station_id in station_ids]
         station_id_counts = Counter(normalized_station_ids)
         duplicate_station_ids = {station_id for station_id, count in station_id_counts.items() if count > 1}
+        output_station_ids = _unique_station_ids(station_ids, data_source_names)
+        time_indices = _target_time_indices(times, info, time_format)
+        if time_indices.size == 0:
+            raise ValueError(f"No {dataset_path.name} time steps overlap target years {_target_year_window(info)}")
+        target_times = times[time_indices]
 
         if method == "cama_allocation":
             res_suffix = get_resolution_suffix(info.sim_grid_res)
@@ -378,28 +525,67 @@ def run_station_matching(
             cama_lons = ds[cama_lon_key].values
             cama_lats = ds[cama_lat_key].values
             alloc_errs = ds[alloc_err_key].values
+            station_indices = _cama_candidate_station_indices(
+                lons,
+                lats,
+                areas,
+                cama_lons,
+                cama_lats,
+                alloc_errs,
+                info,
+                area_error_threshold,
+                min_uparea,
+                max_uparea,
+            )
+            if station_indices.size == 0:
+                raise ValueError(f"No stations passed non-flow filters for {dataset_path.name}")
+            logging.info(
+                "Station matching candidate subset: %d/%d stations, %d/%d time steps",
+                station_indices.size,
+                n_stations,
+                time_indices.size,
+                len(times),
+            )
+            flow_data = _station_time_flow_values(
+                discharge_da,
+                station_dim=station_dim,
+                time_key=time_key,
+                n_stations=n_stations,
+                station_indices=station_indices,
+                time_indices=time_indices,
+            )
+            station_ids_subset = station_ids[station_indices]
+            lons_subset = lons[station_indices]
+            lats_subset = lats[station_indices]
+            areas_subset = areas[station_indices]
+            cama_lons_subset = cama_lons[station_indices]
+            cama_lats_subset = cama_lats[station_indices]
+            alloc_errs_subset = alloc_errs[station_indices]
+            output_station_ids_subset = [output_station_ids[int(idx)] for idx in station_indices]
 
             rows = Parallel(n_jobs=worker_count, verbose=1, prefer="threads")(
                 delayed(_process_site_cama)(
                     idx,
-                    station_ids,
-                    lons,
-                    lats,
-                    areas,
-                    cama_lons,
-                    cama_lats,
-                    alloc_errs,
+                    station_ids_subset,
+                    lons_subset,
+                    lats_subset,
+                    areas_subset,
+                    cama_lons_subset,
+                    cama_lats_subset,
+                    alloc_errs_subset,
                     flow_data[idx, :],
-                    times,
+                    target_times,
                     info,
                     scratch_dir,
                     area_error_threshold,
                     min_uparea,
                     max_uparea,
+                    output_station_ids_subset,
+                    station_indices,
                     duplicate_station_ids,
                     missing_sentinels,
                 )
-                for idx in range(n_stations)
+                for idx in range(station_indices.size)
             )
 
         elif method == "direct":
@@ -408,24 +594,50 @@ def run_station_matching(
                 dataset_path.name,
                 n_stations,
             )
+            station_indices = _direct_candidate_station_indices(lons, lats, areas, info, min_uparea, max_uparea)
+            if station_indices.size == 0:
+                raise ValueError(f"No stations passed non-flow filters for {dataset_path.name}")
+            logging.info(
+                "Station matching candidate subset: %d/%d stations, %d/%d time steps",
+                station_indices.size,
+                n_stations,
+                time_indices.size,
+                len(times),
+            )
+            flow_data = _station_time_flow_values(
+                discharge_da,
+                station_dim=station_dim,
+                time_key=time_key,
+                n_stations=n_stations,
+                station_indices=station_indices,
+                time_indices=time_indices,
+            )
+            station_ids_subset = station_ids[station_indices]
+            lons_subset = lons[station_indices]
+            lats_subset = lats[station_indices]
+            areas_subset = areas[station_indices]
+            output_station_ids_subset = [output_station_ids[int(idx)] for idx in station_indices]
+
             rows = Parallel(n_jobs=worker_count, verbose=1, prefer="threads")(
                 delayed(_process_site_direct)(
                     idx,
-                    station_ids,
-                    lons,
-                    lats,
-                    areas,
+                    station_ids_subset,
+                    lons_subset,
+                    lats_subset,
+                    areas_subset,
                     flow_data[idx, :],
-                    times,
+                    target_times,
                     info,
                     scratch_dir,
                     min_uparea,
                     max_uparea,
+                    output_station_ids_subset,
                     time_format,
+                    station_indices,
                     duplicate_station_ids,
                     missing_sentinels,
                 )
-                for idx in range(n_stations)
+                for idx in range(station_indices.size)
             )
         else:
             raise ValueError(f"Unknown station matching method: {method}")
