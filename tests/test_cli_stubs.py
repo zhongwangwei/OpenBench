@@ -5756,7 +5756,7 @@ def test_run_comparison_only_skips_missing_simulation_root_preflight(tmp_path, m
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "success",
             "output_dir": str(tmp_path),
@@ -5819,7 +5819,7 @@ def test_run_variable_alias_matches_legacy_variables_option(tmp_path, monkeypatc
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append(list(cfg.evaluation.variables))
         return {
             "status": "success",
@@ -5860,7 +5860,7 @@ def test_run_force_option_bypasses_cache_without_editing_yaml(tmp_path, monkeypa
 
     seen_force = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen_force.append(force)
         return {
             "status": "success",
@@ -5875,6 +5875,47 @@ def test_run_force_option_bypasses_cache_without_editing_yaml(tmp_path, monkeypa
 
     assert result.exit_code == 0, result.output
     assert seen_force == [True]
+
+
+def test_run_resume_option_is_forwarded_and_conflicts_with_force(tmp_path, monkeypatch):
+    config_path = tmp_path / "resume.yaml"
+    config_path.write_text(
+        yaml.dump(
+            {
+                "project": {"name": "resume_case", "output_dir": str(tmp_path), "years": [2004, 2005]},
+                "evaluation": {"variables": ["Latent_Heat"]},
+                "reference": {"Latent_Heat": "FLUXCOM_LowRes"},
+                "simulation": {
+                    "MyModel": {
+                        "model": "MyModel",
+                        "root_dir": str(tmp_path),
+                        "variables": {"Latent_Heat": {"varname": "Latent_Heat"}},
+                    }
+                },
+            }
+        )
+    )
+
+    seen_resume = []
+
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
+        seen_resume.append(resume)
+        return {
+            "status": "success",
+            "output_dir": str(tmp_path),
+            "variables": cfg.evaluation.variables,
+            "simulations": list(cfg.simulation),
+        }
+
+    monkeypatch.setattr("openbench.runner.local.run_evaluation", fake_run_evaluation)
+
+    result = runner.invoke(cli, ["run", str(config_path), "--resume"])
+    conflict = runner.invoke(cli, ["run", str(config_path), "--resume", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert seen_resume == [True]
+    assert conflict.exit_code != 0
+    assert "--resume conflicts with --force" in conflict.output
 
 
 def test_run_rejects_unknown_variable_override_before_runner(tmp_path, monkeypatch):
@@ -6032,7 +6073,7 @@ def test_run_only_drawing_skips_missing_simulation_root_preflight(tmp_path, monk
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "success",
             "output_dir": str(case_dir),
@@ -6079,7 +6120,7 @@ def test_run_expands_env_paths_before_runner(tmp_path, monkeypatch):
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append((cfg.project.output_dir, cfg.simulation["MyModel"].root_dir))
         return {
             "status": "success",
@@ -6125,7 +6166,7 @@ def test_run_output_dir_option_overrides_yaml_before_runner(tmp_path, monkeypatc
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append(cfg.project.output_dir)
         return {
             "status": "success",
@@ -6195,7 +6236,7 @@ def test_run_writes_per_run_log_with_debug_records(tmp_path, monkeypatch):
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         logger = logging.getLogger("openbench.tests.run_log")
         logger.debug("debug marker for run.log")
         logger.info("info marker for run.log")
@@ -6271,7 +6312,7 @@ def test_run_rejects_project_name_path_before_evaluation(tmp_path, monkeypatch):
     )
     called = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         called.append(cfg.project.name)
         return {
             "status": "success",
@@ -6500,7 +6541,7 @@ def test_run_exits_nonzero_when_runner_reports_errors(tmp_path, monkeypatch):
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "error",
             "output_dir": str(tmp_path),
@@ -6656,7 +6697,7 @@ def test_run_dump_config_writes_runner_facing_debug_artifacts_for_real_run(tmp_p
     monkeypatch.setattr(
         local_runner,
         "run_evaluation",
-        lambda cfg, force=False, comparison_only=False: {
+        lambda cfg, force=False, comparison_only=False, resume=False: {
             "status": "success",
             "output_dir": str(tmp_path / "dump_case"),
             "variables": ["Runoff"],

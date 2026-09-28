@@ -2922,6 +2922,7 @@ def _inspect_nc_file(
                     "alt",
                     "height",
                     "station",
+                    "station_uid",
                     "station_id",
                     "station_name",
                     "site",

@@ -1,6 +1,7 @@
 """Conservative regridding implementation."""
 
 import hashlib
+import logging
 import os
 import tempfile
 import threading
@@ -12,11 +13,6 @@ from typing import overload
 import numpy as np
 import pandas as pd
 import xarray as xr
-
-try:
-    import sparse  # type: ignore
-except ImportError:
-    sparse = None
 
 from .. import utils
 
@@ -33,6 +29,25 @@ _WEIGHTS_DISK_CACHE_TTL_DAYS_ENV = "OPENBENCH_REGRID_WEIGHT_CACHE_TTL_DAYS"
 _SPHERICAL_CORRECTION_CACHE_LOCK = threading.Lock()
 _SPHERICAL_CORRECTION_CACHE: OrderedDict[_WEIGHT_KEY, np.ndarray] = OrderedDict()
 _SPHERICAL_CORRECTION_CACHE_MAXSIZE = max(0, int(os.environ.get("OPENBENCH_REGRID_SPHERICAL_CACHE_SIZE", "64")))
+_WEIGHT_CACHE_ACTIVITY = threading.local()
+
+
+def reset_weight_cache_activity() -> None:
+    """Reset per-thread cache diagnostics for one regrid operation."""
+    _WEIGHT_CACHE_ACTIVITY.events = []
+
+
+def consume_weight_cache_activity() -> str:
+    """Return cache outcomes recorded since the last reset."""
+    events = list(getattr(_WEIGHT_CACHE_ACTIVITY, "events", []))
+    _WEIGHT_CACHE_ACTIVITY.events = []
+    return ",".join(events) if events else "unknown"
+
+
+def _record_weight_cache_activity(event: str) -> None:
+    events = getattr(_WEIGHT_CACHE_ACTIVITY, "events", None)
+    if events is not None:
+        events.append(event)
 
 
 @overload
@@ -212,6 +227,8 @@ def apply_weights(
     weights: dict[Hashable, xr.DataArray],
     skipna: bool,
     nan_threshold: float,
+    *,
+    use_sparse: bool | None = None,
 ) -> xr.DataArray:
     """Apply weights as an intensive area-weighted mean.
 
@@ -219,8 +236,40 @@ def apply_weights(
     sum is divided by valid coverage.  This preserves the mean of an intensive
     field over the valid overlap; callers that need extensive total
     conservation must multiply by cell areas before/after regridding and define
-    explicit missing-data policy.
+    explicit missing-data policy. ``use_sparse=True`` requests the experimental
+    SciPy CSR contraction; the production default retains dense ``xr.dot``.
     """
+    # SciPy CSR materially reduces zero-weight work, but benchmarks show that
+    # optimized BLAS can still be faster depending on grid shape and time
+    # length. Keep dense as the production default until a stable crossover is
+    # established; the explicit path remains available to the benchmark/tests.
+    prefer_sparse = use_sparse is True
+    if prefer_sparse and da.chunks is None:
+        try:
+            result = _apply_weights_sparse(da, weights, skipna, nan_threshold)
+            logging.debug("Conservative regrid contraction backend: scipy.sparse")
+            return result
+        except (ImportError, TypeError, ValueError, RuntimeError, NotImplementedError) as exc:
+            logging.debug("Conservative sparse contraction unavailable; using dense xr.dot: %s", exc)
+    elif prefer_sparse:
+        # xr.dot cannot reliably combine pydata/sparse weights with dask-backed
+        # arrays across supported xarray versions. Keep the established path.
+        logging.debug("Conservative regrid contraction backend: dense xr.dot (dask input)")
+
+    if use_sparse is None:
+        logging.debug("Conservative regrid contraction backend: dense xr.dot (default)")
+    else:
+        logging.debug("Conservative regrid contraction backend: dense xr.dot")
+    return _apply_weights_dense(da, weights, skipna, nan_threshold)
+
+
+def _apply_weights_dense(
+    da: xr.DataArray,
+    weights: dict[Hashable, xr.DataArray],
+    skipna: bool,
+    nan_threshold: float,
+) -> xr.DataArray:
+    """Established dense contraction retained as the compatibility fallback."""
     coords = list(weights.keys())
     weight_arrays = list(weights.values())
 
@@ -237,6 +286,73 @@ def apply_weights(
     da_regrid = da_regrid.rename(coord_map).transpose(*da.dims)
 
     return da_regrid
+
+
+def _sparse_contract_axis(da: xr.DataArray, weight: xr.DataArray, coord: Hashable, matrix) -> xr.DataArray:
+    """Contract one rectilinear axis with a SciPy CSR weight matrix."""
+    if coord not in da.dims:
+        raise ValueError(f"Data variable does not contain regrid dimension {coord!r}")
+    target_dim = f"target_{coord}"
+    if tuple(weight.dims) != (coord, target_dim):
+        raise ValueError(f"Unexpected weight dimensions for {coord!r}: {weight.dims!r}")
+
+    if matrix.shape[0] != da.sizes[coord]:
+        raise ValueError(f"Weight/source size mismatch for {coord!r}")
+    logging.debug(
+        "Sparse conservative weights axis=%s shape=%s nnz=%d density=%.6f",
+        coord,
+        matrix.shape,
+        matrix.nnz,
+        matrix.nnz / max(1, matrix.shape[0] * matrix.shape[1]),
+    )
+
+    output_dtype = np.result_type(da.dtype, matrix.dtype)
+
+    def contract(values: np.ndarray) -> np.ndarray:
+        flat = values.reshape((-1, values.shape[-1]))
+        contracted = matrix.transpose().dot(flat.transpose()).transpose()
+        return np.asarray(contracted).reshape(values.shape[:-1] + (matrix.shape[1],))
+
+    result = xr.apply_ufunc(
+        contract,
+        da,
+        input_core_dims=[[coord]],
+        output_core_dims=[[target_dim]],
+        dask="forbidden",
+        output_dtypes=[output_dtype],
+    )
+    return result.assign_coords({target_dim: weight[target_dim]})
+
+
+def _apply_weights_sparse(
+    da: xr.DataArray,
+    weights: dict[Hashable, xr.DataArray],
+    skipna: bool,
+    nan_threshold: float,
+) -> xr.DataArray:
+    """Apply separable rectilinear weights without multiplying stored zeros."""
+    from scipy import sparse as scipy_sparse
+
+    coords = list(weights.keys())
+    sparse_weights = {
+        coord: (weight, scipy_sparse.csr_matrix(np.asarray(weight.values))) for coord, weight in weights.items()
+    }
+
+    def contract_all(value: xr.DataArray) -> xr.DataArray:
+        for coord, (weight, matrix) in sparse_weights.items():
+            value = _sparse_contract_axis(value, weight, coord, matrix)
+        return value
+
+    if skipna:
+        valid_frac = contract_all(da.notnull())
+    da_regrid = contract_all(da.fillna(0))
+
+    if skipna:
+        da_regrid /= valid_frac
+        da_regrid = da_regrid.where(valid_frac >= get_valid_threshold(nan_threshold))
+
+    coord_map = {f"target_{coord}": coord for coord in coords}
+    return da_regrid.rename(coord_map).transpose(*da.dims)
 
 
 def get_valid_threshold(nan_threshold: float) -> float:
@@ -264,6 +380,7 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
         raise ValueError("Conservative regridding requires non-empty source and target coordinates")
     if source_coords.size == target_coords.size == 1:
         if np.isclose(source_coords[0], target_coords[0]):
+            _record_weight_cache_activity("identity")
             return np.array([[1.0]], dtype=float)
         raise ValueError(
             "Conservative regridding cannot infer finite cell bounds for a non-identical single-point coordinate"
@@ -277,11 +394,13 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
             cached = _WEIGHTS_CACHE.get(key)
             if cached is not None:
                 _WEIGHTS_CACHE.move_to_end(key)
+                _record_weight_cache_activity("memory")
                 return cached
 
     disk_cached = _load_weights_from_disk(key)
     if disk_cached is not None:
         _remember_weight(key, disk_cached)
+        _record_weight_cache_activity("disk")
         return disk_cached
 
     target_intervals = utils.to_intervalindex(target_coords)
@@ -294,6 +413,7 @@ def get_weights(source_coords: np.ndarray, target_coords: np.ndarray, *, spheric
     weights.setflags(write=False)
     _store_weights_to_disk(key, weights)
     existing = _remember_weight(key, weights)
+    _record_weight_cache_activity("miss")
     return existing if existing is not None else weights
 
 
@@ -627,8 +747,10 @@ def format_weights(
     2. Weights are chunked as requested in the target grid. If no chunks are
         provided, the same chunksize as the source grid will be used.
         See: https://github.com/dask/dask/issues/2225
-    3. Weights are converted to a sparse representation (on a per chunk basis)
-        if the `sparse` package is available.
+    The explicit sparse apply path converts these arrays to SciPy CSR matrices
+    immediately before contraction. Dask-backed inputs retain dense xr.dot
+    because xarray's sparse/dask dispatch is not stable across the supported
+    dependency range.
     """
     # Use single precision weights at minimum, double if input is double
     weights_dtype = np.result_type(np.float32, input_dtype)

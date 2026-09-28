@@ -406,7 +406,7 @@ def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]
     }
 
 
-def _simulation_data_years(entry, values: dict[str, Any]) -> list[int] | None:
+def _simulation_data_years(entry, values: dict[str, Any], *, max_workers: int | None = None) -> list[int] | None:
     if str(values["data_type"]).lower() == "stn":
         return None
 
@@ -423,7 +423,12 @@ def _simulation_data_years(entry, values: dict[str, Any]) -> list[int] | None:
     files = [path for path in glob_nc(data_dir) if path.stem.startswith(prefix) and path.stem.endswith(suffix)]
     if not files:
         return None
-    return _infer_time_coverage(data_dir, files=files, data_groupby=values["data_groupby"]).get("years")
+    return _infer_time_coverage(
+        data_dir,
+        files=files,
+        data_groupby=values["data_groupby"],
+        max_workers=max_workers,
+    ).get("years")
 
 
 def _append_simulation_model_findings(findings: dict[str, dict[str, list[str]]], cfg, registry) -> None:
@@ -509,7 +514,11 @@ def _simulation_findings(
                 str(values["data_groupby"] or ""),
             )
             if cache_key not in year_cache:
-                year_cache[cache_key] = _simulation_data_years(entry, values)
+                year_cache[cache_key] = _simulation_data_years(
+                    entry,
+                    values,
+                    max_workers=getattr(cfg.project, "num_cores", None),
+                )
             data_years = year_cache[cache_key]
             if data_years:
                 year_errors, year_warnings = _years_findings(

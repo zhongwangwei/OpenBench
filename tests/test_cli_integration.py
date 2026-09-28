@@ -62,7 +62,7 @@ def test_run_dry_run(tmp_path):
 def test_run_actual(tmp_path, partial_stations):
     import openbench.runner.local as local_runner
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "partial" if partial_stations else "success",
             "output_dir": "/tmp/openbench-out",
@@ -104,7 +104,7 @@ def test_run_actual(tmp_path, partial_stations):
 def test_run_only_drawing_fail_fast_errors_exit_nonzero(tmp_path):
     import openbench.runner.local as local_runner
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "error",
             "output_dir": str(tmp_path / "output" / "test"),

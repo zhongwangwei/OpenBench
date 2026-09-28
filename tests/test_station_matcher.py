@@ -50,6 +50,60 @@ def test_station_matching_duplicate_station_ids_do_not_overwrite_scratch_files(t
             assert "discharge" in station_ds
 
 
+def test_station_matching_uses_source_qualified_ids_for_consolidated_sources(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("2000-01-01", periods=2, freq="D")
+    xr.Dataset(
+        {
+            "station": ("station", np.array([0, 0])),
+            "data_source_name": ("station", np.array(["GRDC", "CAMELS_BR"], dtype=object)),
+            "lon": ("station", np.array([10.0, 11.0])),
+            "lat": ("station", np.array([20.0, 21.0])),
+            "discharge": (("station", "time"), np.array([[1.0, 2.0], [3.0, 4.0]])),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2000,
+        sim_eyear=2000,
+        syear=2000,
+        eyear=2000,
+        min_year=0,
+        min_lon=-180,
+        max_lon=180,
+        min_lat=-90,
+        max_lat=90,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+
+    assert info.stn_list["ID"].tolist() == ["GRDC_0", "CAMELS_BR_0"]
+    assert info.stn_list["ID"].is_unique
+
+
+def test_unique_station_ids_only_qualifies_duplicates_with_filename_safe_ids():
+    from openbench.data.station_matcher import _unique_station_ids
+
+    ids = _unique_station_ids(
+        np.array(["7", "0", "0", "GRDC_0"]),
+        np.array(["X", "GRDC", "a/b", "Y"], dtype=object),
+    )
+
+    assert ids[0] == "7"
+    assert ids[2] == "a%2Fb_0"
+    # "GRDC_0" collides with the qualified duplicate, so both fall back to row indices.
+    assert ids[1] == "GRDC_0_idx1"
+    assert ids[3] == "GRDC_0_idx3"
+    assert len(set(ids)) == len(ids)
+    assert not any(char in station_id for station_id in ids for char in '<>:"/\\|?*')
+    assert _unique_station_ids(np.array(["1", "1"])) == ["1_idx0", "1_idx1"]
+
+
 def test_station_matching_preserves_existing_station_list_when_csv_write_fails(tmp_path, monkeypatch):
     from openbench.data.station_matcher import run_station_matching
 
@@ -170,6 +224,47 @@ def test_station_matching_counts_single_year_and_wraps_longitude(tmp_path):
     assert info.stn_list["use_syear"].tolist() == [2000]
     assert info.stn_list["use_eyear"].tolist() == [2000]
     assert info.stn_list["ref_lon"].tolist() == [-170.0]
+
+
+def test_station_matching_reads_only_candidate_stations_and_target_years(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = tmp_path / "stations.nc"
+    times = pd.date_range("1999-01-01", periods=5, freq="YS")
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["A", "B"], dtype=object)),
+            "lon": ("station", np.array([-60.0, 10.0])),
+            "lat": ("station", np.array([0.0, 20.0])),
+            "area": ("station", np.array([10_000.0, 10_000.0])),
+            "discharge": (
+                ("station", "time"),
+                np.array([[1.0, 2.0, 3.0, 4.0, 5.0], [10.0, 20.0, 30.0, 40.0, 50.0]]),
+            ),
+        },
+        coords={"time": times},
+    ).to_netcdf(dataset_path)
+
+    info = SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_source="SimA",
+        sim_syear=2001,
+        sim_eyear=2002,
+        syear=2001,
+        eyear=2002,
+        min_year=1,
+        min_lon=-80,
+        max_lon=-35,
+        min_lat=-22,
+        max_lat=12,
+    )
+
+    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0, n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["A"]
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        assert station_ds.sizes["time"] == 2
+        np.testing.assert_allclose(station_ds["discharge"].values, [3.0, 4.0])
 
 
 def test_station_matching_reports_missing_cama_companion_fields(tmp_path):
