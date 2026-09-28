@@ -819,12 +819,12 @@ OpenBench_Streamflow_Daily:
   station_matching:
     method: cama_allocation
     dataset_file: OpenBench_Streamflow_Daily_full.nc
-    station_id_var: station_id
+    station_id_var: station
     time_var: time
     discharge_var: discharge
     lat_var: lat
     lon_var: lon
-    area_var: upstream_area
+    area_var: area
   variables:
     Streamflow:
       min_uparea: 1000.0
