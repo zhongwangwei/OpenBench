@@ -208,8 +208,7 @@ class GridProcessingCoreMixin:
                 for year in years
             )
             var_files = [
-                os.path.join(data_dir, f"{data_source}_{data_params['varname'][0]}_remap_{year}.nc")
-                for year in years
+                os.path.join(data_dir, f"{data_source}_{data_params['varname'][0]}_remap_{year}.nc") for year in years
             ]
         else:
             prefix = data_params.get("prefix") or ""
