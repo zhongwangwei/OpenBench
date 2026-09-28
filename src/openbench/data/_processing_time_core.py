@@ -38,11 +38,6 @@ class TimeCoreMixin:
         return None
 
     @staticmethod
-    def _frequency_multiple(freq: str) -> int:
-        match = re.match(r"\s*(\d*)", str(freq or ""))
-        return int(match.group(1) or 1) if match else 1
-
-    @staticmethod
     def _infer_time_rank(data: xr.Dataset | xr.DataArray) -> int | None:
         """Infer source temporal coarseness from its time coordinate."""
         if "time" not in getattr(data, "coords", {}):
@@ -87,18 +82,10 @@ class TimeCoreMixin:
                 logger.debug("%s: temporal resolution already %s; skipping resample", context, target_freq)
                 return data
 
+        # Same-frequency inputs are still resampled: resample() puts both sides on
+        # the same period anchor (e.g. month-end), which grid evaluation relies on
+        # for exact timestamp alignment.
         self._guard_against_temporal_upsampling(data, self.compare_tim_res, context)
-        source_rank = self._infer_time_rank(data)
-        target_rank = self._frequency_rank(target_freq)
-        if (
-            source_rank is not None
-            and target_rank is not None
-            and source_rank == target_rank
-            and self._frequency_multiple(target_freq) == 1
-        ):
-            logger.debug("%s: source already matches temporal resolution %s", context, target_freq)
-            return data
-
         item = re.sub(r"[\s-]+", "_", str(getattr(self, "item", "") or "").lower())
         units = str(getattr(data, "attrs", {}).get("units", "") or "").lower().strip()
         if isinstance(data, xr.Dataset) and not units:

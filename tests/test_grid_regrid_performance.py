@@ -115,21 +115,32 @@ def test_temporal_downsampling_runs_once(source_freq, periods, target_freq, expe
         assert Processor()._resample_to_compare_resolution(reopened, "scratch") is reopened
 
 
-def test_monthly_to_monthly_is_not_resampled():
+def test_same_frequency_input_is_resampled_to_shared_time_labels():
     from openbench.data._processing_time_core import TimeCoreMixin
 
     class Processor(TimeCoreMixin):
         item = "Sensible_Heat"
         compare_tim_res = "ME"
 
-    data = xr.DataArray(
-        [1.0, 2.0, 3.0],
+    # Labels as normalized by time integrity checks: daily at 12:00, monthly on the 15th.
+    daily = xr.DataArray(
+        np.arange(365, dtype=float),
         dims="time",
-        coords={"time": pd.date_range("2001-01-01", periods=3, freq="MS")},
+        coords={"time": pd.date_range("2001-01-01T12:00", periods=365, freq="D")},
+        attrs={"units": "W m-2"},
+    )
+    monthly = xr.DataArray(
+        np.arange(12, dtype=float),
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=12, freq="MS") + pd.Timedelta(days=14)},
         attrs={"units": "W m-2"},
     )
 
-    assert Processor()._resample_to_compare_resolution(data, "monthly") is data
+    sim = Processor()._resample_to_compare_resolution(daily, "sim")
+    ref = Processor()._resample_to_compare_resolution(monthly, "ref")
+
+    np.testing.assert_array_equal(sim["time"].values, ref["time"].values)
+    np.testing.assert_allclose(ref.values, monthly.values)
 
 
 def test_regrid_worker_budget_is_bounded_and_small_workloads_parallelize():
