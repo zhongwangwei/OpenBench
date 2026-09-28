@@ -82,8 +82,26 @@ def test_station_matching_uses_source_qualified_ids_for_consolidated_sources(tmp
 
     run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
 
-    assert info.stn_list["ID"].tolist() == ["GRDC::0", "CAMELS_BR::0"]
+    assert info.stn_list["ID"].tolist() == ["GRDC_0", "CAMELS_BR_0"]
     assert info.stn_list["ID"].is_unique
+
+
+def test_unique_station_ids_only_qualifies_duplicates_with_filename_safe_ids():
+    from openbench.data.station_matcher import _unique_station_ids
+
+    ids = _unique_station_ids(
+        np.array(["7", "0", "0", "GRDC_0"]),
+        np.array(["X", "GRDC", "a/b", "Y"], dtype=object),
+    )
+
+    assert ids[0] == "7"
+    assert ids[2] == "a%2Fb_0"
+    # "GRDC_0" collides with the qualified duplicate, so both fall back to row indices.
+    assert ids[1] == "GRDC_0_idx1"
+    assert ids[3] == "GRDC_0_idx3"
+    assert len(set(ids)) == len(ids)
+    assert not any(char in station_id for station_id in ids for char in '<>:"/\\|?*')
+    assert _unique_station_ids(np.array(["1", "1"])) == ["1_idx0", "1_idx1"]
 
 
 def test_station_matching_preserves_existing_station_list_when_csv_write_fails(tmp_path, monkeypatch):

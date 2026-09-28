@@ -25,7 +25,7 @@ from openbench.data._system_resources import effective_cpu_count
 from openbench.data.station_missing import missing_sentinels as _as_missing_sentinels
 from openbench.data.station_missing import valid_station_mask as _valid_flow_mask
 from openbench.util.exceptions import DataProcessingError
-from openbench.util.filenames import station_file_path
+from openbench.util.filenames import filename_component, station_file_path
 from openbench.util.names import get_xarray_key_case_insensitive
 from openbench.util.netcdf import write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic
@@ -78,20 +78,33 @@ def _station_id_to_string(value) -> str:
 
 
 def _unique_station_ids(station_ids: np.ndarray, data_source_names: np.ndarray | None = None) -> list[str]:
-    """Return station IDs that stay unique for consolidated station products."""
+    """Return filename-safe station IDs that stay unique for consolidated products.
+
+    Only duplicated IDs are qualified (by source name when available, otherwise
+    by row index); unique IDs are returned unchanged.
+    """
     ids = [_station_id_to_string(station_id) for station_id in station_ids]
-    if len(ids) == len(set(ids)):
+    counts = Counter(ids)
+    if len(counts) == len(ids):
         return ids
 
-    if data_source_names is not None:
-        source_ids = [
-            f"{_station_id_to_string(source)}::{station_id}"
-            for source, station_id in zip(data_source_names, ids, strict=False)
-        ]
-        if len(source_ids) == len(set(source_ids)):
-            return source_ids
+    qualified = []
+    for idx, station_id in enumerate(ids):
+        if counts[station_id] == 1:
+            qualified.append(station_id)
+        elif data_source_names is not None:
+            source = filename_component(_station_id_to_string(data_source_names[idx]))
+            qualified.append(f"{source}_{station_id}")
+        else:
+            qualified.append(f"{station_id}_idx{idx}")
 
-    return [f"{station_id}::idx{idx}" for idx, station_id in enumerate(ids)]
+    # A qualified ID can still collide with another row (same source, or an
+    # existing ID that happens to match); fall back to the row index there.
+    qualified_counts = Counter(qualified)
+    return [
+        f"{station_id}_idx{idx}" if qualified_counts[station_id] > 1 else station_id
+        for idx, station_id in enumerate(qualified)
+    ]
 
 
 def _valid_flow_in_year_window(valid_mask: np.ndarray, times: np.ndarray, start_year: int, end_year: int) -> bool:
