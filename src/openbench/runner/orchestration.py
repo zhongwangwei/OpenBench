@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -46,19 +47,6 @@ def _manifest_data(value: Any) -> Any:
     return value
 
 
-def _load_previous_run_manifest(path: Path) -> dict[str, Any] | None:
-    """Load the previous run manifest for explicit resume checks."""
-    if not path.is_file():
-        return None
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception as exc:
-        logger.warning("Resume manifest is unreadable at %s: %s", path, exc)
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _resume_preprocess_signature(payload: Any) -> dict[str, Any] | None:
     """Return the config/input subset that must match before reusing preprocessing."""
     if not isinstance(payload, dict):
@@ -83,40 +71,25 @@ def _resume_preprocess_signature(payload: Any) -> dict[str, Any] | None:
     }
 
 
+def _resume_signature_digest(payload: Any) -> str | None:
+    """Return a stable digest of the preprocessing signature for completion markers."""
+    signature = _resume_preprocess_signature(payload)
+    if signature is None:
+        return None
+    encoded = json.dumps(signature, sort_keys=True, default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _mark_resumable_preprocessing(
     output_dir: Path,
     tasks: list[dict[str, Any]],
-    previous_manifest: dict[str, Any] | None,
     station_preprocessed_inputs_ready,
 ) -> None:
-    """Mark station tasks whose previous preprocessing can be safely reused."""
-    if previous_manifest is None:
-        logger.info("Resume requested but no previous run_manifest.json is available")
-        return
-
-    previous_tasks: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for item in previous_manifest.get("tasks", []):
-        if not isinstance(item, dict):
-            continue
-        key = (str(item.get("variable")), str(item.get("simulation")), str(item.get("reference")))
-        previous_tasks[key] = item
-
+    """Mark station tasks whose completed preprocessing can be safely reused."""
     for task in tasks:
         key = (str(task["var_name"]), str(task["sim_source"]), str(task["ref_source"]))
-        previous = previous_tasks.get(key)
-        if previous is None:
-            logger.info("Resume: no previous manifest task for %s/%s/%s", *key)
+        if task.get("cache_skipped"):
             continue
-
-        current_signature = _resume_preprocess_signature(task.get("hash_payload"))
-        previous_signature = _resume_preprocess_signature(previous.get("hash_payload"))
-        if current_signature is None or previous_signature is None:
-            logger.info("Resume: preprocessing signature unavailable for %s/%s/%s", *key)
-            continue
-        if current_signature != previous_signature:
-            logger.info("Resume: preprocessing inputs/config changed for %s/%s/%s; rebuilding", *key)
-            continue
-
         ready, reason = station_preprocessed_inputs_ready(output_dir, task)
         if not ready:
             logger.info("Resume: cannot reuse preprocessing for %s/%s/%s: %s", *key, reason)
@@ -285,14 +258,12 @@ def run_evaluation_impl(
         use_cache=use_cache,
         only_drawing=only_drawing,
     )
-    previous_manifest = _load_previous_run_manifest(output_dir / "run_manifest.json") if resume else None
+    # Station preprocessing writes this digest into a completion marker; resume
+    # reuses artifacts only when the marker matches the current inputs/config.
+    for task in tasks:
+        task["preprocess_signature"] = _resume_signature_digest(task.get("hash_payload"))
     if resume and not comparison_only and not only_drawing:
-        _mark_resumable_preprocessing(
-            output_dir,
-            tasks,
-            previous_manifest,
-            _station_preprocessed_inputs_ready,
-        )
+        _mark_resumable_preprocessing(output_dir, tasks, _station_preprocessed_inputs_ready)
     try:
         _write_run_manifest(cfg, bindings, output_dir, tasks)
     except Exception as exc:

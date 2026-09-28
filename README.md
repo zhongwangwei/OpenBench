@@ -373,16 +373,16 @@ station preprocessing from the previous run and continue evaluation),
 `--cores N`, `--variable VAR` (repeatable), `--output-dir DIR`, `--dump-config`.
 
 For long grid-to-station workflows, `--resume` is intended for failures that occur
-after expensive preprocessing. It compares the previous `run_manifest.json`
-against the current preprocessing inputs/configuration, verifies every expected
-station-side artifact (a non-empty `.nc` or an explicit `.skip.txt` data-gap
-marker), and only then skips preprocessing for that task. Evaluation
-metrics/scores are recomputed, so a failed evaluation is not treated as a cache
-hit. If the manifest, inputs, configuration, or station artifacts are incomplete,
-OpenBench falls back to normal preprocessing. Because this is an explicit recovery
-mode, preprocessing source-code changes are not part of the compatibility check;
-use `--force` instead when preprocessing code itself has changed in a way that
-should invalidate existing station artifacts.
+after expensive preprocessing. Station preprocessing writes a completion marker
+carrying a digest of its inputs/configuration once it finishes; `--resume` reuses
+a task's station artifacts only when that marker matches the current run and
+every expected station-side artifact exists (a non-empty `.nc` or an explicit
+`.skip.txt` data-gap marker). Evaluation metrics/scores are recomputed, so a
+failed evaluation is not treated as a cache hit. Otherwise OpenBench falls back to
+normal preprocessing. Because this is an explicit recovery mode, preprocessing
+source-code changes are not part of the compatibility check; use `--force`
+instead when preprocessing code itself has changed in a way that should
+invalidate existing station artifacts.
 
 ### `openbench ref` — reference registry
 

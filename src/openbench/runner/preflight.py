@@ -10,6 +10,7 @@ orchestrator focused on orchestration.
 from __future__ import annotations
 
 import glob
+import json
 import logging
 from itertools import product
 from pathlib import Path
@@ -107,6 +108,20 @@ def task_output_data_types(
     return "grid", "grid"
 
 
+def station_preprocess_marker_path(casedir: str | Path, var_name: str, ref_source: str, sim_source: str) -> Path:
+    """Return the marker written after a station task's preprocessing completes."""
+    return Path(casedir) / "data" / f"stn_{ref_source}_{sim_source}" / f".{var_name}.preprocess_complete.json"
+
+
+def read_station_preprocess_marker(path: Path) -> dict[str, Any] | None:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def station_preprocessed_inputs_ready(
     output_dir: Path,
     task: dict[str, Any],
@@ -115,11 +130,29 @@ def station_preprocessed_inputs_ready(
 ) -> tuple[bool, str]:
     """Return whether a station-involved task can reuse preprocessing outputs.
 
-    A resumable station task must have the same station list the evaluator will
-    consume and, for every station row, both reference and simulation artifacts
+    A resumable station task must have a completion marker matching the current
+    preprocessing signature, the same station list the evaluator will consume
+    and, for every station row, both reference and simulation artifacts
     must be present. Expected data gaps are represented by durable .skip.txt
     markers and count as complete preprocessing.
     """
+    var_name = str(task["var_name"])
+    ref_source = str(task["ref_source"])
+    sim_source = str(task["sim_source"])
+
+    # Artifacts are only trusted when the marker written at the end of a
+    # successful preprocessing run carries the current inputs/config digest;
+    # file presence alone cannot tell a finished run from stale leftovers.
+    signature = task.get("preprocess_signature")
+    if not signature:
+        return False, "preprocessing signature is unavailable"
+    marker_path = station_preprocess_marker_path(output_dir, var_name, ref_source, sim_source)
+    marker = read_station_preprocess_marker(marker_path)
+    if marker is None:
+        return False, f"no completed-preprocessing marker: {marker_path}"
+    if marker.get("signature") != signature:
+        return False, "preprocessing inputs/config changed since the marker was written"
+
     ref_dtype, sim_dtype = task_output_data_types(task, build_runtime_info_fn=build_runtime_info_fn)
     if ref_dtype != "stn" and sim_dtype != "stn":
         return False, "resume currently reuses station-involved preprocessing only"
@@ -130,10 +163,6 @@ def station_preprocessed_inputs_ready(
         info = build_runtime_info_fn(task)
     except Exception as exc:
         return False, f"could not resolve runtime info: {exc}"
-
-    var_name = str(task["var_name"])
-    ref_source = str(task["ref_source"])
-    sim_source = str(task["sim_source"])
 
     explicit_ref_list = str(info.get("ref_fulllist") or "").strip()
     if explicit_ref_list and Path(explicit_ref_list).is_file():

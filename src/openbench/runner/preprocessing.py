@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
 from typing import Any
 
+from openbench.runner.preflight import station_preprocess_marker_path
 from openbench.runner.progress_events import emit_gui_preprocessing_completion, emit_gui_preprocessing_started
 from openbench.util.netcdf import write_file_atomic
 
@@ -188,6 +190,13 @@ def preprocess_variable(
                         sims_with_grid_tasks.add(sim_source)
                         first_grid_task_per_sim.setdefault(sim_source, task)
 
+                marker_path = None
+                if is_stn_path:
+                    # Invalidate before touching artifacts so an interrupted run can
+                    # never leave a marker describing partially rewritten outputs.
+                    marker_path = station_preprocess_marker_path(info["casedir"], var_name, ref_source, sim_source)
+                    marker_path.unlink(missing_ok=True)
+
                 processor = DatasetProcessing(info)
 
                 # Ref: dedupe by (ref_source, signature). Mixed-type configs
@@ -307,6 +316,14 @@ def preprocess_variable(
                             defer_completion = True
 
                 task["ref_preprocessed"] = True
+                signature = task.get("preprocess_signature")
+                if marker_path is not None and signature:
+                    marker = {"signature": signature, "variable": var_name, "ref": ref_source, "sim": sim_source}
+                    write_file_atomic(
+                        marker_path,
+                        lambda tmp_path: tmp_path.write_text(json.dumps(marker), encoding="utf-8"),
+                        suffix=".tmp.json",
+                    )
 
             except Exception as exc:
                 if (
