@@ -55,8 +55,10 @@ def test_cama_total_runoff_compute_converts_volume_flux_to_depth_rate(tmp_path):
         converted, base_unit = UnitProcessing.convert_unit(result, mapping.varunit)
 
         dlon_rad = np.deg2rad(resolution)
-        area_m2 = radius_m**2 * dlon_rad * (
-            np.sin(np.deg2rad(lat + resolution / 2.0)) - np.sin(np.deg2rad(lat - resolution / 2.0))
+        area_m2 = (
+            radius_m**2
+            * dlon_rad
+            * (np.sin(np.deg2rad(lat + resolution / 2.0)) - np.sin(np.deg2rad(lat - resolution / 2.0)))
         )
         expected_mm_day = 86_400_000.0 / area_m2
 
