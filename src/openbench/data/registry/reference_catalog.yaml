@@ -2813,13 +2813,12 @@ SWAMPS_v3.2_LowRes:
   tim_res: Month
   data_groupby: Single
   timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes/Water/Inundation_Fraction/SWAMPS_v3.2
   grid_res: 0.5
   variables:
     Inundation_Fraction:
       varname: fw
-      varunit: n/a
-      sub_dir: Water/Inundation_Fraction/SWAMPS_v3.2
+      varunit: percent
       prefix: SWAMPS_v3.2_regridded_0.25deg_zip1
   _provenance:
     data_groupby: scan
@@ -2830,20 +2829,22 @@ SWAMPS_v3.2_MidRes:
   description: SWAMPS_v3.2 reference dataset (MidRes)
   category: Water
   data_type: grid
-  tim_res: Month
+  tim_res: Day
   data_groupby: Single
   timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes/Water/Inundation_Fraction/SWAMPS_v3.2
+  years:
+  - 1992
+  - 2020
   grid_res: 0.25
   variables:
     Inundation_Fraction:
       varname: fw
-      varunit: n/a
-      sub_dir: Water/Inundation_Fraction/SWAMPS_v3.2
+      varunit: percent
       prefix: SWAMPS_v3.2_regridded_0.25deg_zip1
   _provenance:
     data_groupby: scan
-    tim_res: default
+    tim_res: nc
     grid_res: scan
 TEMP_Zhang_etal_2022_LowRes:
   name: TEMP_Zhang_etal_2022_LowRes
