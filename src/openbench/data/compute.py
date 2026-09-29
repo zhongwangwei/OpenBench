@@ -104,8 +104,12 @@ _SAFE_NODES = {
 # Anything else (especially names starting with `_`) is rejected — this
 # prevents `__import__(...)` style escapes even though __builtins__ is empty.
 _SAFE_ROOT_NAMES = frozenset({"ds", "np", "xr"})
-_SAFE_NUMPY_FUNCTIONS = frozenset({"sqrt"})
-_SAFE_DATA_METHODS = frozenset({"fillna", "get", "isel", "lower", "mean", "squeeze", "sum", "where"})
+# Keep this deliberately small: catalog expressions occasionally need
+# trigonometry for spherical grid-cell geometry (for example, converting a
+# volume flux to an areal runoff depth), while the evaluator must remain free
+# of arbitrary NumPy execution.
+_SAFE_NUMPY_FUNCTIONS = frozenset({"sin", "sqrt"})
+_SAFE_DATA_METHODS = frozenset({"diff", "fillna", "get", "isel", "lower", "mean", "squeeze", "sum", "where"})
 
 
 def _root_name(node: ast.AST) -> str | None:
