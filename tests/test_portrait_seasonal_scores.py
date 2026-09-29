@@ -61,9 +61,7 @@ def test_grid_portrait_keeps_annual_cycle_scores_as_nan_for_seasonal_slices(tmp_
         sep="\t",
     )
     seasonal_columns = [
-        f"{score}_{season}"
-        for score in ("nPhaseScore", "nSeasonalityScore")
-        for season in ("DJF", "MAM", "JJA", "SON")
+        f"{score}_{season}" for score in ("nPhaseScore", "nSeasonalityScore") for season in ("DJF", "MAM", "JJA", "SON")
     ]
     assert result.loc[0, seasonal_columns].isna().all()
     assert len(plot_calls) == 1
