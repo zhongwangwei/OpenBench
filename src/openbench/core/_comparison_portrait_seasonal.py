@@ -27,6 +27,9 @@ from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
 
 
+_ANNUAL_CYCLE_SCORES = {"nPhaseScore", "nSeasonalityScore"}
+
+
 def _has_finite_pair(s, o) -> bool:
     return bool(np.isfinite(np.asarray(s)).any() and np.isfinite(np.asarray(o)).any())
 
@@ -74,6 +77,14 @@ class PortraitSeasonalComparisonMixin:
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
         try:
+            annual_cycle_scores = [score for score in scores if score in _ANNUAL_CYCLE_SCORES]
+            if annual_cycle_scores:
+                logging.warning(
+                    "Portrait Plot seasonal: annual-cycle score(s) %s require all 12 months and are undefined "
+                    "for three-month DJF/MAM/JJA/SON subsets; affected cells are written as N/A and shown in "
+                    "grey, not as zero scores.",
+                    ", ".join(annual_cycle_scores),
+                )
             dir_path = os.path.join(basedir, "comparisons", "Portrait_Plot_seasonal")
             os.makedirs(dir_path, exist_ok=True)
 
@@ -389,6 +400,7 @@ class PortraitSeasonalComparisonMixin:
                                                                 s_DJF,
                                                                 o_DJF,
                                                                 vkey="_DJF",
+                                                                allow_empty=True,
                                                             )
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
@@ -403,6 +415,7 @@ class PortraitSeasonalComparisonMixin:
                                                                 s_MAM,
                                                                 o_MAM,
                                                                 vkey="_MAM",
+                                                                allow_empty=True,
                                                             )
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
@@ -417,6 +430,7 @@ class PortraitSeasonalComparisonMixin:
                                                                 s_JJA,
                                                                 o_JJA,
                                                                 vkey="_JJA",
+                                                                allow_empty=True,
                                                             )
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
@@ -431,6 +445,7 @@ class PortraitSeasonalComparisonMixin:
                                                                 s_SON,
                                                                 o_SON,
                                                                 vkey="_SON",
+                                                                allow_empty=True,
                                                             )
                                                             kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
                                                             output_file.write(f"{kk_str}\t")
