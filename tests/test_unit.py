@@ -31,6 +31,39 @@ def test_hydrology_unit_conversions_are_input_to_base():
         assert converted == expected
 
 
+def test_cama_total_runoff_compute_converts_volume_flux_to_depth_rate(tmp_path):
+    """CaMa's volume flux uses the spacing of its input grid, not a fixed 0.25° grid."""
+    import xarray as xr
+
+    from openbench.data.compute import execute_compute
+    from openbench.data.registry.manager import RegistryManager
+
+    mapping = RegistryManager(user_dir=tmp_path).get_model("CaMa").variables["Total_Runoff"]
+    assert mapping.varname == "runoff"
+    radius_m = 6_371_000.0
+    for resolution, lat, coord_names in (
+        (0.25, np.array([0.125, 0.375]), ("lat", "lon")),
+        (1.0, np.array([60.5, 61.5]), ("lat_cama", "lon_cama")),
+    ):
+        lat_name, lon_name = coord_names
+        ds = xr.Dataset(
+            {"runoff": (("time", lat_name, lon_name), np.ones((1, 2, 2)))},
+            coords={"time": [0], lat_name: lat, lon_name: [resolution / 2.0, resolution * 1.5]},
+        )
+
+        result = execute_compute(ds, mapping.compute, "Total_Runoff")
+        converted, base_unit = UnitProcessing.convert_unit(result, mapping.varunit)
+
+        dlon_rad = np.deg2rad(resolution)
+        area_m2 = radius_m**2 * dlon_rad * (
+            np.sin(np.deg2rad(lat + resolution / 2.0)) - np.sin(np.deg2rad(lat - resolution / 2.0))
+        )
+        expected_mm_day = 86_400_000.0 / area_m2
+
+        np.testing.assert_allclose(converted.squeeze().values, np.repeat(expected_mm_day[:, None], 2, axis=1))
+        assert base_unit == "mm day-1"
+
+
 def test_convert_nc_does_not_mutate_input_dataset():
     import xarray as xr
 
