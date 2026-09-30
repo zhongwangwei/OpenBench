@@ -16,6 +16,7 @@ from openbench.core._comparison_helpers import (
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
+from openbench.data.time_utils import comparison_time_freq
 from openbench.util.converttype import Convert_Type
 from openbench.util.filenames import (
     diff_grid_anomaly_filename,
@@ -671,20 +672,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 f"ComparisonProcessing_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
             )
         else:
-            match = re.match(r"(\d*)\s*([a-zA-Z]+)", self.compare_tim_res)
-            if not match:
-                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
-                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-
-            value, unit = match.groups()
-            if not value:
-                value = 1
-            else:
-                value = int(value)  # Convert the numerical value to an integer
-            freq = self.freq_map.get(unit.lower())
-            if not freq:
-                raise ValueError(f"Unsupported time unit: {unit}")
-            self.compare_tim_res = f"{value}{freq}E"
+            self.compare_tim_res = comparison_time_freq(self.compare_tim_res)
 
         self.metrics = metrics
         self.scores = scores
@@ -1438,26 +1426,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     from openbench.data.coordinates import COORDINATE_MAP_WITH_VERTICAL
 
     coordinate_map = dict(COORDINATE_MAP_WITH_VERTICAL)
-
-    freq_map = {
-        "month": "M",
-        "mon": "M",
-        "monthly": "M",
-        "day": "D",
-        "daily": "D",
-        "hour": "H",
-        "Hour": "H",
-        "hr": "H",
-        "Hr": "H",
-        "h": "H",
-        "hourly": "H",
-        "year": "Y",
-        "yr": "Y",
-        "yearly": "Y",
-        "week": "W",
-        "wk": "W",
-        "weekly": "W",
-    }
 
     def scenarios_Diff_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         """

@@ -46,6 +46,15 @@ def adaptive_degree_ticks(minimum: float, maximum: float, *, target_count: int =
     return ticks
 
 
+def _ticks_or_empty(minimum: float, maximum: float) -> np.ndarray:
+    # Single-point or dateline-crossing extents (min >= max) still render;
+    # they just get no ticks, as before the adaptive ticks were introduced.
+    try:
+        return adaptive_degree_ticks(minimum, maximum)
+    except ValueError:
+        return np.array([], dtype=float)
+
+
 def configure_geo_axis(
     ax,
     option: Mapping,
@@ -65,8 +74,8 @@ def configure_geo_axis(
         extent = tuple(float(value) for value in default_extent)
 
     min_lon, max_lon, min_lat, max_lat = extent
-    lon_ticks = adaptive_degree_ticks(min_lon, max_lon)
-    lat_ticks = adaptive_degree_ticks(min_lat, max_lat)
+    lon_ticks = _ticks_or_empty(min_lon, max_lon)
+    lat_ticks = _ticks_or_empty(min_lat, max_lat)
     projection = ccrs.PlateCarree()
 
     ax.set_extent(extent, crs=projection)

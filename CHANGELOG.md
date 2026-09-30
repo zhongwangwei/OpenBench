@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.0.5] - 2026-09-30
+
+Compatibility and fix release for xarray 2026.9 and station comparisons.
+
+### Changed
+- Map ticks and gridlines follow the plotted extent (global, regional or a
+  user-set `min_lon`/`max_lon`/`min_lat`/`max_lat`) instead of fixed global
+  intervals, through one shared helper used by all map figures (#210).
+  Single-point or dateline-crossing extents (min >= max) still render,
+  without ticks.
+
+### Fixed
+- Map figures failed with xarray 2026.9.0 when large grids were downsampled
+  for plotting (`DataArrayCoarsen` reductions no longer accept `skipna`).
+- The comparison phase converted `compare_tim_res` to invalid pandas aliases
+  (`1DE`, `1HE`, `1WE`), so station comparisons could only align differently
+  stamped sim/ref series through a growing list of special cases, and
+  multi-step resolutions such as `3month` skipped that fallback entirely. It
+  now uses valid pandas frequencies (`1D`, `6h`, `3ME`, `1YE`, `1W`), shared by
+  normal and drawing-only runs, and station time alignment parses the step and
+  unit.
+- `conda/meta.yaml` now carries the checksum of the sdist published with the
+  GitHub release.
+
 ## [3.0.4] - 2026-09-30
 
 Interactive `openbench init` now asks for the evaluation settings it used to

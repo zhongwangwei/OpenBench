@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import re
 
 from joblib import Parallel
 
@@ -20,6 +19,7 @@ from openbench.core._visualization_bridge import visualization_callable
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
+from openbench.data.time_utils import comparison_time_freq
 
 # Kept as a module-level symbol for tests/downstream code that monkeypatches
 # openbench.core.comparison.Parallel.  The split mixins resolve it lazily.
@@ -82,24 +82,6 @@ class ComparisonProcessing(
         self.weight = self.main_nml["general"].get("weight", "none")  # Default to 'none' if not specified
         self.time_alignment = self.main_nml["general"].get("time_alignment", "intersection")
 
-        # Frequency mapping for time resolution parsing
-        self.freq_map = {
-            "year": "Y",
-            "yr": "Y",
-            "y": "Y",
-            "month": "M",
-            "mon": "M",
-            "m": "M",
-            "week": "W",
-            "wk": "W",
-            "w": "W",
-            "day": "D",
-            "d": "D",
-            "hour": "H",
-            "hr": "H",
-            "h": "H",
-        }
-
         self.compare_grid_res = self.main_nml["general"]["compare_grid_res"]
         self.compare_tim_res = self.main_nml["general"].get("compare_tim_res", "1").lower()
         self.casedir = os.path.join(self.main_nml["general"]["basedir"], self.main_nml["general"]["basename"])
@@ -109,20 +91,7 @@ class ComparisonProcessing(
                 f"ComparisonProcessing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
             )
         else:
-            match = re.match(r"(\d*)\s*([a-zA-Z]+)", self.compare_tim_res)
-            if not match:
-                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
-                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-
-            value, unit = match.groups()
-            if not value:
-                value = 1
-            else:
-                value = int(value)  # Convert the numerical value to an integer
-            freq = self.freq_map.get(unit.lower())
-            if not freq:
-                raise ValueError(f"Unsupported time unit: {unit}")
-            self.compare_tim_res = f"{value}{freq}E"
+            self.compare_tim_res = comparison_time_freq(self.compare_tim_res)
 
         self.metrics = metrics
         self.scores = scores
@@ -134,9 +103,3 @@ class ComparisonProcessing(
     from openbench.data.coordinates import COORDINATE_MAP_WITH_VERTICAL
 
     coordinate_map = dict(COORDINATE_MAP_WITH_VERTICAL)
-
-    # NOTE: freq_map is defined as an INSTANCE attribute in __init__
-    # (line ~66). The class-body version that previously lived here was
-    # incomplete (missing year/yr/y keys etc.) and would only ever be
-    # consulted if a subclass bypassed __init__. Removed to eliminate
-    # the silent two-source inconsistency.

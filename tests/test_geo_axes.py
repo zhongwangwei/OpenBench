@@ -84,3 +84,17 @@ def test_map_renderers_do_not_reintroduce_hard_coded_geographic_ticks():
     for path in _VISUALIZATION_DIR.glob("Fig_*.py"):
         source = path.read_text(encoding="utf-8")
         assert not any(pattern in source for pattern in forbidden), path.name
+
+
+def test_configure_geo_axis_keeps_rendering_degenerate_or_dateline_extents():
+    for extent in ((100, 100, 20, 40), (100, 120, 30, 30), (170, -170, -10, 10)):
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+
+        _, lon_ticks, lat_ticks = configure_geo_axis(
+            ax, {"set_lat_lon": False}, extent, gridline_kwargs={"linestyle": ":"}
+        )
+        fig.canvas.draw()
+
+        assert lon_ticks.size == 0 or lat_ticks.size == 0
+        plt.close(fig)

@@ -99,3 +99,79 @@ def test_station_alignment_reports_nonoverlapping_cftime_as_data_gap():
     ref = xr.DataArray([1.0], dims="time", coords={"time": [date(2000, 1, 2)]})
     with pytest.raises(StationDataUnavailable, match="no overlapping time"):
         align_station_times(sim, ref, "A", "day")
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("Month", "1ME"),
+        ("3month", "3ME"),
+        ("Day", "1D"),
+        ("6hr", "6h"),
+        ("Hour", "1h"),
+        ("Year", "1YE"),
+        ("week", "1W"),
+    ],
+)
+def test_comparison_time_freq_returns_valid_pandas_frequency(configured, expected):
+    import pandas as pd
+
+    from openbench.data.time_utils import comparison_time_freq
+
+    assert comparison_time_freq(configured) == expected
+    pd.tseries.frequencies.to_offset(expected)
+
+
+@pytest.mark.parametrize("configured", ["fortnight", "3-month", ""])
+def test_comparison_time_freq_rejects_unsupported_resolution(configured):
+    from openbench.data.time_utils import comparison_time_freq
+
+    with pytest.raises(ValueError, match="Unsupported time resolution"):
+        comparison_time_freq(configured)
+
+
+@pytest.mark.parametrize(
+    ("compare_tim_res", "sim_times", "ref_times"),
+    [
+        ("1D", ["2000-01-01T00", "2000-01-02T00"], ["2000-01-01T12", "2000-01-02T12"]),
+        ("1h", ["2000-01-01T00:00", "2000-01-01T01:00"], ["2000-01-01T00:30", "2000-01-01T01:30"]),
+        ("1ME", ["2000-01-31", "2000-02-29"], ["2000-01-15", "2000-02-15"]),
+        ("3ME", ["2000-03-31", "2000-06-30"], ["2000-03-01", "2000-06-01"]),
+        ("1YE", ["2000-12-31", "2001-12-31"], ["2000-01-01", "2001-01-01"]),
+        ("Day", ["2000-01-01T00", "2000-01-02T00"], ["2000-01-01T12", "2000-01-02T12"]),
+    ],
+)
+def test_station_alignment_normalizes_comparison_frequencies(compare_tim_res, sim_times, ref_times):
+    import pandas as pd
+
+    from openbench.data.time_utils import align_station_times
+
+    sim = xr.DataArray([1.0, 2.0], dims="time", coords={"time": pd.to_datetime(sim_times)})
+    ref = xr.DataArray([3.0, 4.0], dims="time", coords={"time": pd.to_datetime(ref_times)})
+
+    aligned_sim, aligned_ref = align_station_times(sim, ref, "A", compare_tim_res)
+
+    assert aligned_sim.sizes["time"] == aligned_ref.sizes["time"] == 2
+    np.testing.assert_array_equal(aligned_sim.values, [1.0, 2.0])
+    np.testing.assert_array_equal(aligned_ref.values, [3.0, 4.0])
+
+
+@pytest.mark.parametrize("module_name", ["openbench.core.comparison", "openbench.visualization.only_drawing"])
+@pytest.mark.parametrize(
+    ("configured", "expected"), [("Day", "1D"), ("3month", "3ME"), ("climatology-month", "climatology-month")]
+)
+def test_comparison_processing_stores_pandas_frequency(tmp_path, module_name, configured, expected):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    cls = getattr(module, "ComparisonProcessing", None) or module.ComparisonProcessing_only_drawing
+    general = {
+        "basename": "case",
+        "basedir": str(tmp_path),
+        "compare_grid_res": 0.5,
+        "compare_tim_res": configured,
+        "weight": "none",
+        "num_cores": 1,
+    }
+
+    assert cls({"general": general}, [], []).compare_tim_res == expected

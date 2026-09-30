@@ -386,6 +386,40 @@ def _decode_numeric_time(offsets: np.ndarray) -> np.ndarray | None:
     return None
 
 
+# Config/pandas spellings of each comparison time unit, keyed by the pandas
+# alias comparison_time_freq() emits. Pandas aliases (ME/MS/YE/YS) are accepted
+# because statistics and preprocessing pass their normalized frequencies here.
+_TIME_UNIT_ALIASES = {
+    "h": {"h", "hr", "hour", "hourly"},
+    "D": {"d", "day", "daily"},
+    "W": {"w", "wk", "week", "weekly"},
+    "ME": {"m", "mon", "month", "monthly", "me", "ms"},
+    "YE": {"y", "yr", "year", "yearly", "annual", "ye", "ys"},
+}
+_TIME_RES_PATTERN = re.compile(r"^(\d*)\s*([a-z]+)$")
+
+
+def _parse_time_res(compare_tim_res) -> tuple[int, str] | None:
+    """Return ``(multiple, pandas unit)`` for a time resolution, or None if unrecognised."""
+    match = _TIME_RES_PATTERN.match(str(compare_tim_res or "").strip().lower())
+    if not match:
+        return None
+    value, unit = match.groups()
+    for alias, spellings in _TIME_UNIT_ALIASES.items():
+        if unit in spellings:
+            return int(value) if value else 1, alias
+    return None
+
+
+def comparison_time_freq(compare_tim_res) -> str:
+    """Convert a configured ``compare_tim_res`` (``Month``, ``3month``, ``6hr``) to a pandas frequency."""
+    parsed = _parse_time_res(compare_tim_res)
+    if parsed is None:
+        raise ValueError(f"Unsupported time resolution {compare_tim_res!r}. Use '3month', '6hr', etc.")
+    value, unit = parsed
+    return f"{value}{unit}"
+
+
 def normalize_station_time(data_array, compare_tim_res):
     """
     Normalize time coordinates to the configured comparison resolution.
@@ -396,9 +430,10 @@ def normalize_station_time(data_array, compare_tim_res):
     if not hasattr(data_array, "coords") or "time" not in data_array.coords:
         return data_array
 
-    compare_res = str(compare_tim_res or "").strip().lower()
-    if not compare_res:
+    parsed = _parse_time_res(compare_tim_res)
+    if parsed is None:
         return data_array
+    unit = parsed[1]
 
     try:
         times = pd.to_datetime(data_array["time"].values)
@@ -410,13 +445,13 @@ def normalize_station_time(data_array, compare_tim_res):
         return data_array
 
     normalized = None
-    if compare_res in {"day", "d", "1d", "1de", "daily"}:
+    if unit == "D":
         normalized = (times.floor("D") + pd.Timedelta(hours=12)).values
-    elif compare_res in {"hour", "h", "1h", "1he", "hourly"}:
+    elif unit == "h":
         normalized = (times.floor("h") + pd.Timedelta(minutes=30)).values
-    elif compare_res in {"month", "mon", "m", "1m", "1me", "1ms", "monthly"}:
+    elif unit == "ME":
         normalized = (times.to_period("M").to_timestamp(how="start") + pd.Timedelta(days=14, hours=12)).values
-    elif compare_res in {"year", "yr", "y", "1y", "1ye", "annual", "yearly"}:
+    elif unit == "YE":
         normalized = (times.to_period("Y").to_timestamp(how="start") + pd.Timedelta(days=182, hours=12)).values
     else:
         return data_array
