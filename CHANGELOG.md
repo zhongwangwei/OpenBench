@@ -1,9 +1,10 @@
 # Changelog
 
-## [3.0.4] - 2026-09-25
+## [3.0.4] - 2026-09-30
 
 Interactive `openbench init` now asks for the evaluation settings it used to
-fill in silently.
+fill in silently, and `openbench run --resume` continues long grid-to-station
+runs without redoing station preprocessing.
 
 ### Added
 - New wizard step "Domain, Resolution & Runtime": latitude/longitude range,
@@ -19,6 +20,16 @@ fill in silently.
   lists, with defaults marked `*`.
 - `openbench init` asks to confirm scanned simulation cases before station
   lists are materialized; answering no returns to the simulation roots prompt.
+- `openbench run --resume` reuses a task's station preprocessing when its
+  completion marker matches the current inputs and configuration and every
+  expected station artifact exists (a non-empty `.nc` or a `.skip.txt`
+  data-gap marker). Metrics and scores are always recomputed; tasks that do
+  not qualify are preprocessed normally, and the run manifest records which
+  tasks were resumed. `--resume` cannot be combined with `--force`,
+  `--comparison-only` or `project.only_drawing`.
+- CaMa `Total_Runoff` is converted from a per-cell volume flux (`m3 s-1`) to
+  `mm day-1` using the grid-cell area of the input grid. Catalog `compute`
+  expressions may now use `np.sin` and `.diff()`.
 
 ### Changed
 - Every init prompt explains the setting and shows its default; Enter keeps
@@ -29,6 +40,16 @@ fill in silently.
 - Going back skips comparison/statistics item prompts for disabled phases.
 - `--refresh-ref` help now states that init never rescans without it, and init
   prints a hint when the reference catalog was not rescanned.
+- Faster grid preprocessing, conservative regridding and station-grid
+  extraction. Station matching reads only candidate time windows, and
+  `openbench check` scans simulation time coverage in parallel using
+  `num_cores`.
+- Preprocessing outputs (yearly scratch files and flat sim/ref NetCDF) follow
+  `OPENBENCH_NETCDF_COMPRESSION` instead of always being written uncompressed.
+- Stations without overlapping finite sim/ref values are no longer filtered
+  when the station list is loaded; evaluation still skips them. The old filter
+  was bypassed whenever any station had a `.skip.txt` marker and reopened
+  every station file.
 
 ### Fixed
 - Keep station IDs as text when reading station lists and station metadata,
@@ -39,6 +60,21 @@ fill in silently.
   when merging simulation and reference station lists, selecting stations
   from merged NetCDF files, and looking up sidecar metadata. HydroWeb also
   finds station files named by the unpadded ID.
+- Grid evaluation found no overlapping timestamps when a monthly reference kept
+  mid-month labels while a daily simulation was resampled to month-end. Data
+  already at the target frequency is now resampled to the shared time labels.
+- Station IDs duplicated across sources get a filename-safe qualifier (the
+  previous `::` separator is invalid in Windows filenames). Only duplicated
+  IDs are qualified.
+- Seasonal portrait plots: annual-cycle scores need all 12 months, so they are
+  reported as N/A for three-month seasons with a warning, and the remaining
+  outputs still render. Constant metric ranges no longer break the colorbar.
+- Parallel-coordinate plots apply the 5–95% outlier trim only when a metric
+  has more than two finite values.
+- SWAMPS_v3.2 catalog entries: corrected root directories, unit `percent`,
+  daily LowRes data and 1992–2020 MidRes years. A user catalog under
+  `~/.openbench/references/` overrides the bundled one, so update the entry
+  there too.
 
 ## [3.0.3] - 2026-09-18
 
