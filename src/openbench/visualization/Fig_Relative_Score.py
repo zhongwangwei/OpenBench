@@ -164,7 +164,6 @@ def make_stn_plot_index(file, method_name, metric, stn_lat, stn_lon, main_nml, o
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
 
-
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
     title = option["title"]

@@ -95,7 +95,6 @@ def make_Standard_Deviation(file, method_name, data_sources, main_nml, option):
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
 
-
     if option["title"] is None:
         option["title"] = "Correlation Results"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)

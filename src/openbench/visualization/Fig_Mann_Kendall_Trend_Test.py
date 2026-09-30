@@ -89,7 +89,6 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, p_value, signi
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
 
-
     if not option["title"]:
         option["title"] = f"Mann-Kendall Test Results ({title}) on significant level: {significant:.3f}"
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
