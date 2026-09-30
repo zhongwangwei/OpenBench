@@ -63,6 +63,13 @@ runs without redoing station preprocessing.
 - Grid evaluation found no overlapping timestamps when a monthly reference kept
   mid-month labels while a daily simulation was resampled to month-end. Data
   already at the target frequency is now resampled to the shared time labels.
+- Station comparisons (Taylor and Target diagrams, SMPI, seasonal portraits,
+  scenario correlation, ...) at daily, hourly or yearly `compare_tim_res`
+  reported stations as having no overlapping time steps when sim and ref used
+  different timestamp conventions (e.g. 00 UTC vs 12 UTC daily values). The
+  comparison phase stores the resolution as `1DE`/`1HE`/`1YE`, which the
+  timestamp normalization fallback did not recognise; monthly (`1ME`) was
+  already handled in 3.0.3.
 - Station IDs duplicated across sources get a filename-safe qualifier (the
   previous `::` separator is invalid in Windows filenames). Only duplicated
   IDs are qualified.
