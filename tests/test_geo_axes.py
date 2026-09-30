@@ -6,7 +6,6 @@ import numpy as np
 
 from openbench.visualization._geo_axes import adaptive_degree_ticks, configure_geo_axis
 
-
 _VISUALIZATION_DIR = Path(__file__).resolve().parents[1] / "src" / "openbench" / "visualization"
 
 

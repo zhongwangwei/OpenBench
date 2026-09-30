@@ -186,7 +186,6 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    import numpy as np
     import xarray as xr
     from matplotlib import rcParams
 
@@ -705,7 +704,6 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    import numpy as np
     import xarray as xr
     from matplotlib import rcParams
 
