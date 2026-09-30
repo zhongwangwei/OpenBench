@@ -82,10 +82,10 @@ def downsample_for_plot(
     if method in {"nearest", "stride"}:
         out = data.isel({lat_dim: slice(None, None, factor), lon_dim: slice(None, None, factor)})
     elif method == "coarsen_mean":
-        out = data.coarsen({lat_dim: factor, lon_dim: factor}, boundary="trim").mean(skipna=True)
+        out = data.coarsen({lat_dim: factor, lon_dim: factor}, boundary="trim").mean()
     else:
         logger.warning("Unknown plot downsample method %r; using coarsen_mean", method)
-        out = data.coarsen({lat_dim: factor, lon_dim: factor}, boundary="trim").mean(skipna=True)
+        out = data.coarsen({lat_dim: factor, lon_dim: factor}, boundary="trim").mean()
 
     logger.info(
         "Downsampled plot data from %sx%s to %sx%s using %s",
