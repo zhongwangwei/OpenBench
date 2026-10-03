@@ -256,11 +256,15 @@ class UnitProcessing:
                 if _UNIT_LOOKUP_CACHE is None:
                     temp_cache = {}
 
-                    for base_unit, conversions in conversion_factors.items():
-                        # Add base unit itself (None means no conversion needed)
-                        if base_unit not in temp_cache:
-                            temp_cache[base_unit] = (base_unit, None)
+                    # A base unit maps to itself even when another group also
+                    # lists it as an input unit: "w m-2" is listed under
+                    # "mm day-1" for water fluxes, which would otherwise turn
+                    # every energy flux into mm day-1. Water fluxes given as
+                    # heat use the explicit "w m-2 heat".
+                    for base_unit in conversion_factors:
+                        temp_cache[base_unit] = (base_unit, None)
 
+                    for base_unit, conversions in conversion_factors.items():
                         for conv_unit, conv_func in conversions.items():
                             # Only add if not already present (prefer first match)
                             if conv_unit not in temp_cache:

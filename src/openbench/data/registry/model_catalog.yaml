@@ -97,7 +97,7 @@ BCC_AVIM:
       varunit: m2 m-2
     Canopy_Evaporation_Canopy_Transpiration:
       varname: ''
-      varunit: w m-2
+      varunit: w m-2 heat
     Canopy_Evaporation:
       varname: ''
       varunit: mm s-1
@@ -1586,7 +1586,7 @@ GLDAS:
       varunit: mm 3hour-1
     Transpiration:
       varname: Tveg_tavg
-      varunit: W m-2
+      varunit: W m-2 heat
     Precipitation:
       varname: Rainf_f_tavg
       varunit: kg m-2 s-1
@@ -1607,13 +1607,13 @@ GLDAS:
       varunit: m s-1
     Bare_Soil_Evaporation:
       varname: ESoil_tavg
-      varunit: W m-2
+      varunit: W m-2 heat
     Canopy_Evaporation:
       varname: ECanop_tavg
-      varunit: W m-2
+      varunit: W m-2 heat
     Canopy_Transpiration:
       varname: Tveg_tavg
-      varunit: W m-2
+      varunit: W m-2 heat
     Root_Zone_Soil_Moisture:
       varname: Root_Zone_Soil_Moisture
       # ponytail: user-selected 1 m root zone; adjust depth below for other products.
@@ -1941,7 +1941,7 @@ LEM2:
       varunit: mm
     Ground_Evaporation:
       varname: FGEV
-      varunit: w m-2
+      varunit: w m-2 heat
     Ground_Heat:
       varname: FGR
       varunit: w m-2
@@ -1962,7 +1962,7 @@ LEM2:
       varunit: w m-2
     Snow_Evaporation:
       varname: FSM
-      varunit: w m-2
+      varunit: w m-2 heat
     Snow_Water_Equivalent:
       varname: H2OSNO
       varunit: mm
@@ -3455,13 +3455,13 @@ GLDAS2:
       varunit: ''
     Canopy_Evaporation:
       varname: ECanop
-      varunit: W m-2
+      varunit: W m-2 heat
     Ground_Evaporation:
       varname: ''
       varunit: ''
     Soil_Evaporation:
       varname: ESoil
-      varunit: W m-2
+      varunit: W m-2 heat
     Snow_Evaporation:
       varname: ''
       varunit: ''
