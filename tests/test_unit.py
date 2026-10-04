@@ -90,6 +90,35 @@ def test_latent_heat_flux_uses_documented_2p5e6_factor():
     assert converted == 86400.0 / 2.5e6
 
 
+def test_plain_w_m2_stays_an_energy_flux():
+    """'w m-2' is also listed as an input of 'mm day-1'; as a base unit it must
+    still map to itself, or every energy flux turns into mm day-1."""
+    unit._UNIT_LOOKUP_CACHE = None
+    for spelling in ["w m-2", "W m-2"]:
+        converted, base_unit = UnitProcessing.convert_unit(28.0, spelling)
+        assert base_unit == "w m-2"
+        assert converted == 28.0
+
+
+def test_water_flux_given_in_w_m2_converts_to_mm_day():
+    import xarray as xr
+
+    from openbench.data._processing_transforms import ProcessingTransformMixin
+
+    unit._UNIT_LOOKUP_CACHE = None
+    ds = xr.Dataset({"v": ("time", np.array([2.5e6 / 86400.0]))})
+    for item, base, value in [
+        ("Evapotranspiration", "mm day-1", 1.0),
+        ("Canopy_Transpiration", "mm day-1", 1.0),
+        ("Latent_Heat", "w m-2", 2.5e6 / 86400.0),
+    ]:
+        proc = ProcessingTransformMixin()
+        proc.item = item
+        out, new_unit = proc.process_units(ds, "W m-2")
+        assert new_unit == base
+        np.testing.assert_allclose(out["v"].values, [value])
+
+
 def test_metre_per_day_runoff_converts_to_mm_per_day():
     """ERA5-Land 'ro' is a daily runoff depth in metres (m/day); it must map to
     the mm day-1 base so it lines up with model runoff in mm s-1, not be left as
