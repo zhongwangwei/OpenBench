@@ -90,6 +90,65 @@ def test_latent_heat_flux_uses_documented_2p5e6_factor():
     assert converted == 86400.0 / 2.5e6
 
 
+def test_plain_w_m2_stays_an_energy_flux():
+    """'w m-2' is also listed as an input of 'mm day-1'; as a base unit it must
+    still map to itself, or every energy flux turns into mm day-1."""
+    unit._UNIT_LOOKUP_CACHE = None
+    for spelling in ["w m-2", "W m-2"]:
+        converted, base_unit = UnitProcessing.convert_unit(28.0, spelling)
+        assert base_unit == "w m-2"
+        assert converted == 28.0
+
+
+def test_water_flux_given_in_w_m2_converts_to_mm_day():
+    import xarray as xr
+
+    from openbench.data._processing_transforms import ProcessingTransformMixin
+
+    unit._UNIT_LOOKUP_CACHE = None
+    ds = xr.Dataset({"v": ("time", np.array([2.5e6 / 86400.0]))})
+    for item, base, value in [
+        ("Evapotranspiration", "mm day-1", 1.0),
+        ("Canopy_Transpiration", "mm day-1", 1.0),
+        ("Latent_Heat", "w m-2", 2.5e6 / 86400.0),
+    ]:
+        proc = ProcessingTransformMixin()
+        proc.item = item
+        out, new_unit = proc.process_units(ds, "W m-2")
+        assert new_unit == base
+        np.testing.assert_allclose(out["v"].values, [value])
+
+
+def test_display_unit_is_the_unit_after_conversion():
+    unit._UNIT_LOOKUP_CACHE = None
+    for declared, item, expected in [
+        ("W m-2", "Latent_Heat", "W m-2"),
+        ("K", "Surface_Air_Temperature", "K"),
+        ("kg m-2 s-1", "Total_Runoff", "mm day-1"),
+        ("degC", "Surface_Air_Temperature", "K"),
+        ("W m-2", "Evapotranspiration", "mm day-1"),
+        ("no such unit", "Latent_Heat", "no such unit"),
+    ]:
+        assert UnitProcessing.display_unit(declared, item) == expected
+
+
+def test_plot_label_follows_the_converted_data():
+    from types import SimpleNamespace
+
+    from openbench.visualization.Fig_Basic_Plot import determine_display_unit
+    from openbench.visualization.Fig_toolbox import convert_unit as label
+
+    unit._UNIT_LOOKUP_CACHE = None
+    for ref_unit, sim_unit, item, expected in [
+        ("kg m-2 s-1", "kg m-2 s-1", "Total_Runoff", "mm day-1"),
+        ("kg m-2 s-1", "mm s-1", "Total_Runoff", "mm day-1"),
+        ("W m-2", "W m-2", "Latent_Heat", "W m-2"),
+        ("degC", "K", "Surface_Air_Temperature", "K"),
+    ]:
+        ns = SimpleNamespace(ref_varunit=ref_unit, sim_varunit=sim_unit, item=item)
+        assert determine_display_unit(ns) == label(expected)
+
+
 def test_metre_per_day_runoff_converts_to_mm_per_day():
     """ERA5-Land 'ro' is a daily runoff depth in metres (m/day); it must map to
     the mm day-1 base so it lines up with model runoff in mm s-1, not be left as

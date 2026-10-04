@@ -238,7 +238,8 @@ class ProcessingTransformMixin:
                 data_array = ds
 
             # 进行单位转换
-            converted_data, new_unit = UnitProcessing.convert_unit(data_array, varunit.lower())
+            unit_key = UnitProcessing.lookup_key(varunit, getattr(self, "item", ""))
+            converted_data, new_unit = UnitProcessing.convert_unit(data_array, unit_key)
             # 创建新的数据集或更新现有数据集
             if isinstance(ds, xr.Dataset):
                 # Assign through xarray objects rather than mutating .values,
