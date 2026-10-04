@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Reports now also write `reports/<name>_standalone.html`, a single file with
+  every figure embedded, so the report keeps its figures when copied or sent.
+  Embedded figures are downscaled to 1200 px wide and stored as JPEG when that
+  is much smaller than PNG; `evaluation_report.html` still links the
+  full-resolution files under `reports/figures/`.
+- PDF reports are no longer generated. The `report` extra (xhtml2pdf) is now
+  empty and kept only so `pip install colm-openbench[report]` still resolves.
+
 ## [3.0.5] - 2026-09-30
 
 Compatibility and fix release for xarray 2026.9 and station comparisons.

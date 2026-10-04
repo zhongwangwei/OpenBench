@@ -11,7 +11,7 @@ OpenBench is a fully automated, cross-platform framework for benchmarking land
 surface models (LSMs) against curated reference datasets. From a single YAML
 config it preprocesses model output and references onto a common grid/time
 window, computes a consistent metric and score suite, renders publication-ready
-comparison figures, and assembles an HTML/PDF report — for any number of
+comparison figures, and assembles an HTML report — for any number of
 variables, models, and references at once.
 
 ```bash
@@ -116,9 +116,6 @@ pip install "colm-openbench[gui]"
 # Optional: remote SSH execution (paramiko)
 pip install "colm-openbench[remote]"
 
-# Optional: PDF reports (xhtml2pdf; builds pycairo, needs system cairo)
-pip install "colm-openbench[report]"
-
 # Optional: all of the above
 pip install "colm-openbench[all]"
 ```
@@ -177,7 +174,7 @@ conda run -n openbench-conda openbench smoke-test
 
 The recipe installs dependencies through Conda rather than downloading them
 inside pip, then checks imports, dependency consistency, the CLI and bundled
-sample data. GUI/SSH and PDF extras remain optional, as with the PyPI install.
+sample data. GUI/SSH extras remain optional, as with the PyPI install.
 
 Install from a GitHub checkout for development or local testing:
 
@@ -232,7 +229,7 @@ config.yaml
    ▼
 ┌─────────────┐   ┌──────────────┐   ┌───────────────┐   ┌────────────┐
 │ Preprocess  │ → │  Evaluate    │ → │  Compare      │ → │  Report    │
-│ regrid /    │   │  metrics &   │   │  cross-model  │   │  HTML/PDF  │
+│ regrid /    │   │  metrics &   │   │  cross-model  │   │  HTML      │
 │ time-align /│   │  scores per  │   │  figures &    │   │            │
 │ unified mask│   │  (var,sim,ref)│   │  statistics   │   │            │
 └─────────────┘   └──────────────┘   └───────────────┘   └────────────┘
@@ -247,8 +244,8 @@ config.yaml
    per-station CSV).
 3. **Compare** — when `comparison.enabled`, results across all pairs feed shared
    figures (Taylor, portrait, heat-map, …) and optional statistics.
-4. **Report** — everything is assembled into an HTML report (PDF with the
-   `[report]` extra).
+4. **Report** — everything is assembled into an HTML report, plus a
+   single-file copy with the figures embedded for sharing.
 
 ## Configuration
 
@@ -338,7 +335,7 @@ statistics:
 | `unified_mask` | `true` (default) | Cumulative NaN mask across sims for cross-model fairness |
 | `weight` | `area` (default when omitted) / `mass` / `none` | Spatial aggregation weighting |
 | `IGBP_groupby` / `PFT_groupby` / `climate_zone_groupby` | `false` | Per-class aggregation (see below) |
-| `generate_report` | `true` | Emit HTML/PDF report |
+| `generate_report` | `true` | Emit HTML report |
 
 ### Advanced config helpers
 
@@ -562,8 +559,9 @@ output/<project_name>/
 ├── comparisons/         # cross-model figures + group-by results (if enabled)
 ├── statistics/          # statistical analyses (if enabled)
 ├── reports/
-│   ├── report.html
-│   └── report.pdf       # only with the [report] extra
+│   ├── evaluation_report.html             # figures linked from reports/figures/
+│   ├── evaluation_report_standalone.html  # figures embedded; share this one file
+│   └── figures/
 └── .openbench_cache.json # incremental cache index
 ```
 
@@ -639,8 +637,7 @@ old and new result sets.
 - Python 3.10 or newer
 - Core dependencies: xarray, numpy, scipy, pandas, netCDF4, matplotlib,
   cartopy, dask, joblib, flox, PyYAML, Jinja2, click, tqdm, packaging
-- Optional extras: `gui` (PySide6, psutil, and remote SSH dependencies), `remote` (paramiko), `report` (xhtml2pdf),
-  `migration` (f90nml)
+- Optional extras: `gui` (PySide6, psutil, and remote SSH dependencies), `remote` (paramiko)
 - See [`pyproject.toml`](pyproject.toml) for the full pinned dependency list
 
 ## Citation
