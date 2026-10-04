@@ -356,9 +356,12 @@ class SelectionMixin:
         return list(dict.fromkeys(candidates))
 
     def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
-        expressions = [getattr(self, f"{datasource}_compute", "")]
+        source = getattr(self, f"{datasource}_source", "")
+        expressions = [
+            getattr(self, f"{datasource}_compute", ""),
+            getattr(self, f"{source}_compute", "") if source else "",
+        ]
         try:
-            source = getattr(self, f"{datasource}_source", "")
             model = getattr(self, f"{source}_model", source)
             from openbench.data.registry.manager import get_registry
 

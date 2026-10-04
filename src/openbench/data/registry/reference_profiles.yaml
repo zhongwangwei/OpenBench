@@ -1073,7 +1073,7 @@ ERA5LAND:
       varunit: W m-2
     Precipitation:
       varname: tp
-      varunit: mm
+      varunit: m hr-1
     Surface_Soil_Moisture:
       varname: swvl1
       varunit: m3 m-3
@@ -1106,7 +1106,7 @@ ERA5LAND:
       varunit: m s**-1
     Total_Runoff:
       varname: ro
-      varunit: mm
+      varunit: m day-1
 
 CLARA_3:
   description: CM SAF CLARA-A3 radiation dataset
@@ -1284,9 +1284,6 @@ CRU_TS_4.08:
     Cloud_Cover:
       varname: cld
       varunit: percent
-    Ground_Frost_Frequency:
-      varname: frs
-      varunit: days
     Precipitation:
       varname: pre
       varunit: mm day-1
@@ -1299,15 +1296,6 @@ ESACCI-BIOMASS-L4:
     Biomass:
       varname: agb
       varunit: Mg ha-1
-ESACCI-L4_FIRE-BA-MODIS:
-  description: ESACCI-L4_FIRE-BA-MODIS reference dataset (LowRes)
-  category: Carbon
-  tim_res: Month
-  data_groupby: Year
-  variables:
-    Burned_Area:
-      varname: burned_area
-      varunit: ha
 ETMonitor:
   description: ETMonitor reference dataset (LowRes)
   category: Urban
@@ -1400,7 +1388,7 @@ GRAiCE:
   variables:
     Terrestrial_Water_Storage_Change:
       varname: twsc
-      varunit: cm
+      varunit: cm of equivalent water thickness
 GRFR:
   description: GRFR reference dataset (LowRes)
   category: Water

@@ -894,6 +894,7 @@ def _build_reference(data: dict) -> ReferenceDataset:
                 min_uparea=var_data.get("min_uparea"),
                 fallbacks=fallbacks,
                 compute=var_data.get("compute"),
+                accumulated=var_data.get("accumulated"),
                 prefix_fallback=var_data.get("prefix_fallback"),
             ),
         )
@@ -971,6 +972,7 @@ def _build_model(data: dict) -> ModelProfile:
                 sub_dir=var_data.get("sub_dir"),
                 fallbacks=fallbacks,
                 compute=var_data.get("compute"),
+                accumulated=var_data.get("accumulated"),
                 prefix_fallback=var_data.get("prefix_fallback"),
             ),
         )
@@ -1012,6 +1014,7 @@ def _merge_variable_mapping(
         "sub_dir": merged.get("sub_dir"),
         "fallbacks": fallbacks,
         "compute": merged.get("compute"),
+        "accumulated": merged.get("accumulated"),
         "prefix_fallback": merged.get("prefix_fallback"),
     }
     if include_reference_fields:

@@ -38,6 +38,59 @@ def test_process_units_preserves_time_for_calendar_aware_month_conversion():
     assert "time" in converted["precip"].coords
 
 
+def test_process_units_keeps_data_array_name_for_calendar_aware_month_conversion():
+    from openbench.data._processing_transforms import ProcessingTransformMixin
+
+    class Processor(ProcessingTransformMixin):
+        pass
+
+    da = xr.DataArray(
+        [31.0, 29.0],
+        dims="time",
+        coords={"time": pd.DatetimeIndex(["2004-01-15", "2004-02-15"])},
+        name="E",
+        attrs={"units": "mm.month-1"},
+    )
+
+    converted, new_unit = Processor().process_units(da, "mm month-1")
+
+    assert new_unit == "mm day-1"
+    assert converted.name == "E"
+    assert converted.values == pytest.approx([1.0, 1.0])
+    assert da.attrs["units"] == "mm.month-1"
+
+
+def test_process_units_converts_w_m2_by_item_and_warns_on_file_unit_mismatch(caplog):
+    import logging
+
+    from openbench.data import unit
+    from openbench.data._processing_transforms import ProcessingTransformMixin
+
+    class Processor(ProcessingTransformMixin):
+        def __init__(self, item):
+            self.item = item
+            self.ref_source = "GLEAM"
+
+    unit._FILE_UNIT_WARNINGS.clear()
+
+    def dataset(units):
+        return xr.Dataset(
+            {"v": ("time", [100.0], {"units": units})},
+            coords={"time": pd.DatetimeIndex(["2004-01-15"])},
+        )
+
+    heat, heat_unit = Processor("Sensible_Heat").process_units(dataset("W/m2"), "W m-2", "ref")
+    evap, evap_unit = Processor("Transpiration").process_units(dataset("W m-2"), "W m-2", "ref")
+    assert (heat_unit, float(heat["v"][0])) == ("w m-2", 100.0)
+    assert evap_unit == "mm day-1"
+    assert float(evap["v"][0]) == pytest.approx(100.0 * 86400 / 2.5e6)
+    assert not caplog.records
+
+    with caplog.at_level(logging.WARNING):
+        Processor("Evapotranspiration").process_units(dataset("mm.month-1"), "mm day-1", "ref")
+    assert "GLEAM: the file says units 'mm.month-1' but varunit is 'mm day-1'" in caplog.text
+
+
 def test_model_catalog_resolution_time_offset_is_applied():
     from openbench.data._processing_time_adjustments import TimeAdjustmentMixin
 

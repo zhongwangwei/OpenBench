@@ -1020,6 +1020,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             section[f"{prefix}_varunit"] = ref_varunit
             if getattr(var_map, "compute", None):
                 section[f"{prefix}_compute"] = var_map.compute
+            if getattr(var_map, "accumulated", None):
+                section[f"{prefix}_accumulated"] = var_map.accumulated
             if ref_convert:
                 section[f"{prefix}_convert"] = ref_convert
                 setattr(r, "convert_expr", ref_convert)
@@ -1199,6 +1201,11 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 compute_expr = getattr(model_profile.variables[profile_key], "compute", None)
             if compute_expr:
                 var_section[f"{prefix}_compute"] = compute_expr
+            accumulated = inline_vars.get("accumulated")
+            if accumulated is None and model_profile and profile_key is not None:
+                accumulated = getattr(model_profile.variables[profile_key], "accumulated", None)
+            if accumulated:
+                var_section[f"{prefix}_accumulated"] = accumulated
 
             fallback_dicts = inline_vars.get("fallbacks")
             if fallback_dicts is None and model_profile and profile_key is not None:

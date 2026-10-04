@@ -384,11 +384,6 @@ CRU_TS_4.08_LowRes:
       varunit: degrees Celsius
       sub_dir: Meteo/Diurnal_Min_Temperature/CRU_TS_4.08
       prefix: tmn
-    Ground_Frost_Frequency:
-      varname: frs
-      varunit: days
-      sub_dir: Meteo/Ground_Frost_Frequency/CRU_TS_4.08
-      prefix: frs
     Surface_Air_Temperature:
       varname: tmp
       varunit: degrees Celsius
@@ -605,7 +600,7 @@ ERA5LAND_LowRes:
       suffix: _v10_1D_0p25
     Precipitation:
       varname: tp
-      varunit: mm
+      varunit: m hr-1
       sub_dir: Water/Precipitation/ERA5LAND
       prefix: ERA5Land_
       suffix: _tp_1D_0p1
@@ -2060,11 +2055,6 @@ HOMTS_MidRes:
   - 2017
   grid_res: 0.25
   variables:
-    Root_Zone_Soil_Temperature:
-      varname: Root_Zone_Soil_Temperature
-      varunit: TS
-      sub_dir: Meteo/Root_Zone_Soil_Temperature/HOMTS/
-      prefix: HOM_TS0cm_daily_025x025_1960_2017
     Surface_Soil_Temperature:
       varname: TS
       varunit: Degrees C
@@ -2073,26 +2063,6 @@ HOMTS_MidRes:
       suffix:
   _provenance:
     data_groupby: profile
-    tim_res: nc
-    grid_res: scan
-HSWUD_MidRes:
-  name: HSWUD_MidRes
-  description: HSWUD reference dataset (MidRes)
-  category: Urban
-  data_type: grid
-  tim_res: Month
-  data_groupby: Year
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
-  grid_res: 0.1
-  variables:
-    Water_Use:
-      varname: dom
-      varunit: 10^8 cubic meters
-      sub_dir: Anth/Water_Use/HSWUD
-      prefix: HSWUD_dom
-  _provenance:
-    data_groupby: scan
     tim_res: nc
     grid_res: scan
 Hubei_Hydro_Daily:
@@ -2943,26 +2913,6 @@ Transpiration_Li_etal2024_LowRes:
   _provenance:
     data_groupby: scan
     tim_res: default
-    grid_res: scan
-UpCH4_LowRes:
-  name: UpCH4_LowRes
-  description: UpCH4 reference dataset (LowRes)
-  category: Carbon
-  data_type: grid
-  tim_res: Month
-  data_groupby: Year
-  timezone: 0
-  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
-  grid_res: 0.25
-  variables:
-    Wetland_Methane_Emission:
-      varname: mean_ch4
-      varunit: Tg pixel-1 month-1
-      sub_dir: Bio/Wetland_Methane_Emission/UpCH4
-      prefix: upch4_v04_m1_TgCH4month_Aw
-  _provenance:
-    data_groupby: profile
-    tim_res: profile
     grid_res: scan
 Xu_et_al2025_stn:
   name: Xu_et_al2025_stn

@@ -23,7 +23,7 @@ from openbench.util.names import (
 
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _RESERVED_MODEL_NAMES = {"_defaults", "default", "general", "variables", "models", "aliases"}
-_VAR_ATTR_KEYS = {"varname", "varunit", "prefix", "suffix", "sub_dir", "compute", "prefix_fallback"}
+_VAR_ATTR_KEYS = {"varname", "varunit", "prefix", "suffix", "sub_dir", "compute", "accumulated", "prefix_fallback"}
 
 
 def _validate_model_name(name: str) -> str:

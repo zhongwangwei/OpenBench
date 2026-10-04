@@ -96,6 +96,11 @@ def evaluate_single(
             info["num_cores"] = task["num_cores_override"]
         evaluation_fig_nml = bindings.build_evaluation_fig_nml().to_fig_nml()
 
+        from openbench.data.unit import check_comparable_units
+
+        # Metrics of a pair whose sources end up in different units are meaningless.
+        check_comparable_units(var_name, info.get("ref_varunit"), info.get("sim_varunit"))
+
         if not only_drawing and not task.get("ref_preprocessed"):
             from openbench.data.processing import DatasetProcessing
 

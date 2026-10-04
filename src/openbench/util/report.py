@@ -2,12 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 Report Generation Module for OpenBench
-Generates comprehensive HTML and PDF evaluation reports with tables, figures, and detailed analysis
+Generates comprehensive HTML evaluation reports with tables, figures, and detailed analysis
 """
 
+import base64
 import glob
+import html
+import io
+import logging
 import os
+import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from itertools import product
 from typing import Any, Dict, List, Optional
@@ -37,6 +43,22 @@ _jinja_env.filters["url_path"] = _url_path
 # retained only when the complete result fits within the same bound.
 _MAX_REPORT_STAT_POINTS = 1_000_000
 _REPORT_FIGURE_SUFFIXES = (".jpg", ".jpeg", ".png", ".svg", ".webp")
+_REPORT_FIGURE_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
+# The standalone report embeds every figure as a data URI. Figures are saved at
+# 300 dpi, so they are downscaled to the report's 1200px page width and
+# re-encoded to keep a report with hundreds of figures openable in a browser.
+_REPORT_FIGURE_SRC = re.compile(r'src="(figures/[^"]+)"')
+_STANDALONE_FIGURE_MAX_WIDTH = 1200
+_STANDALONE_JPEG_QUALITY = 85
+# Keep lossless PNG unless JPEG saves at least this fraction of its size.
+_STANDALONE_JPEG_MIN_SAVING = 0.3
+_STANDALONE_SIZE_WARNING_BYTES = 50 * 1024 * 1024
 
 
 def _is_report_figure(path: str) -> bool:
@@ -65,16 +87,6 @@ def _remove_appledouble_files(path: str) -> None:
                     logging.getLogger(__name__).warning("Could not remove report metadata sidecar %s: %s", name, exc)
 
 
-# Import PDF generation libraries
-try:
-    from xhtml2pdf import pisa
-
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-
-import logging
-
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -95,8 +107,54 @@ def _decode_filename_component(value: str) -> str:
     return unquote(value)
 
 
+def _shrink_raster_figure(raw: bytes, mime: str) -> tuple[bytes, str]:
+    """Downscale a raster figure for embedding and pick the smaller of PNG and JPEG."""
+    from PIL import Image
+
+    with Image.open(io.BytesIO(raw)) as image:
+        image.load()
+        # Matplotlib writes RGBA PNGs whose alpha is fully opaque; only real
+        # transparency has to stay PNG.
+        if image.mode == "P" and "transparency" in image.info:
+            image = image.convert("RGBA")
+        if image.mode in ("RGBA", "LA") and image.getchannel("A").getextrema()[0] == 255:
+            image = image.convert("RGB")
+        transparent = image.mode in ("RGBA", "LA")
+
+        if image.width > _STANDALONE_FIGURE_MAX_WIDTH:
+            height = max(1, round(image.height * _STANDALONE_FIGURE_MAX_WIDTH / image.width))
+            image = image.convert("RGBA" if transparent else "RGB")
+            image = image.resize((_STANDALONE_FIGURE_MAX_WIDTH, height), Image.Resampling.LANCZOS)
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG", optimize=True)
+            best, best_mime = buffer.getvalue(), "image/png"
+        else:
+            best, best_mime = raw, mime
+
+        if not transparent and best_mime != "image/jpeg":
+            buffer = io.BytesIO()
+            image.convert("RGB").save(buffer, format="JPEG", quality=_STANDALONE_JPEG_QUALITY, optimize=True)
+            if len(buffer.getvalue()) <= len(best) * (1 - _STANDALONE_JPEG_MIN_SAVING):
+                best, best_mime = buffer.getvalue(), "image/jpeg"
+
+    return best, best_mime
+
+
+def _figure_data_uri(path: str) -> str:
+    """Return *path* as a data URI, downscaled for raster figures when possible."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    mime = _REPORT_FIGURE_MIME_TYPES[os.path.splitext(path)[1].lower()]
+    if mime != "image/svg+xml":
+        try:
+            raw, mime = _shrink_raster_figure(raw, mime)
+        except Exception as exc:
+            logger.warning("Embedding figure %s without resizing: %s", path, exc)
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
 class ReportGenerator:
-    """Generate comprehensive evaluation reports in HTML and PDF formats"""
+    """Generate comprehensive evaluation reports in HTML format"""
 
     def __init__(self, config: Dict[str, Any], output_dir: str):
         """
@@ -139,7 +197,7 @@ class ReportGenerator:
 
     def generate_report(self, report_name: str = "evaluation_report") -> Dict[str, str]:
         """
-        Generate both HTML and PDF reports
+        Generate the HTML report and its self-contained single-file copy
 
         Args:
             report_name: Base name for the report files
@@ -161,20 +219,15 @@ class ReportGenerator:
         # Generate HTML report
         html_path = self._generate_html_report(report_data, report_name)
 
-        # Generate PDF report (after figures are copied)
-        pdf_path = self._generate_pdf_report(html_path, report_name)
+        # Generate the shareable single-file report (after figures are copied)
+        standalone_path = self._generate_standalone_html_report(html_path, report_name)
         _remove_appledouble_files(self.report_dir)
 
         logger.info("Report generation completed successfully")
         logger.info(f"HTML report: {html_path}")
-        if pdf_path:
-            logger.info(f"PDF report: {pdf_path}")
+        logger.info(f"Standalone HTML report: {standalone_path}")
 
-        result = {"html": html_path}
-        if pdf_path:
-            result["pdf"] = pdf_path
-
-        return result
+        return {"html": html_path, "standalone_html": standalone_path}
 
     def _collect_report_data(self) -> Dict[str, Any]:
         """Collect all data needed for the report"""
@@ -2171,169 +2224,43 @@ class ReportGenerator:
 
         return html_path
 
-    def _generate_pdf_report(self, html_path: str, report_name: str) -> Optional[str]:
+    def _generate_standalone_html_report(self, html_path: str, report_name: str) -> str:
+        """Write a copy of the HTML report with every figure embedded as a data URI.
+
+        The regular report references figures under reports/figures/, so the
+        .html file alone loses them when copied or sent. This copy is one file.
         """
-        Generate PDF report from HTML file using xhtml2pdf
+        logger.info("Generating standalone HTML report...")
 
-        Args:
-            html_path: Path to the HTML file
-            report_name: Base name for the PDF file
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
 
-        Returns:
-            Path to generated PDF file, or None if generation failed
-        """
-        if not PDF_AVAILABLE:
-            logger.warning("PDF generation not available. Please install the report extra.")
-            logger.warning("Run: pip install 'colm-openbench[report]' (or install xhtml2pdf in your conda env)")
-            return None
-
-        try:
-            logger.info("Generating PDF report using xhtml2pdf...")
-            pdf_path = os.path.join(self.report_dir, f"{report_name}.pdf")
-
-            with open(html_path, "r", encoding="utf-8") as f:
-                html_content = f.read()
-
-            # Modify HTML content for better PDF generation
-            import re
-
-            # Replace relative image paths with absolute paths
-            def replace_img_src(match):
-                src = match.group(1)
-
-                if src.startswith(("http://", "https://", "file://", "/")):
-                    return match.group(0)
-
-                # Handle paths that start with 'figures/'
-                if src.startswith("figures/"):
-                    abs_path = os.path.join(self.report_dir, src)
-                    abs_path = os.path.abspath(abs_path)  # Normalize the path
-                    if os.path.exists(abs_path):
-                        logger.debug(f"Converting image path: {src} -> {abs_path}")
-                        return f'src="file://{abs_path}"'
-                    else:
-                        logger.warning(f"Image file not found: {abs_path}")
-                        return f'src="file://{abs_path}"'  # Keep file:// prefix even if not found
-
-                # Handle other relative paths
-                elif not src.startswith("./"):
-                    # If it's a relative path without ./, try to resolve it relative to report dir
-                    potential_path = os.path.join(self.report_dir, src)
-                    potential_path = os.path.abspath(potential_path)
-                    if os.path.exists(potential_path):
-                        logger.debug(f"Converting relative path: {src} -> {potential_path}")
-                        return f'src="file://{potential_path}"'
-
-                return match.group(0)
-
-            html_content = re.sub(r'src="([^"]+)"', replace_img_src, html_content)
-
-            # Debug: log some sample conversions
-            sample_matches = re.findall(r'src="([^"]*figures[^"]*)"', html_content)
-            if sample_matches:
-                logger.debug(f"Sample converted image paths: {sample_matches[:5]}")  # Show first 5
-
-            pdf_css = """
-            <style type="text/css" media="print">
-                @page {
-                    margin: 2cm;
-                    size: A4;
-                }
-                body {
-                    font-size: 10pt;
-                    line-height: 1.3;
-                }
-                .header {
-                    page-break-inside: avoid;
-                }
-                .section {
-                    page-break-inside: avoid;
-                    margin-bottom: 1em;
-                }
-                .figure-container {
-                    page-break-inside: avoid;
-                    text-align: center;
-                    margin: 1em 0;
-                }
-                table {
-                    font-size: 8pt;
-                    width: 100%;
-                }
-                th, td {
-                    padding: 4px;
-                    font-size: 8pt;
-                }
-                h2 {
-                    page-break-after: avoid;
-                    font-size: 14pt;
-                }
-                h3 {
-                    page-break-after: avoid;
-                    font-size: 12pt;
-                }
-                h4 {
-                    page-break-after: avoid;
-                    font-size: 11pt;
-                }
-            </style>
-            """
-
-            # Insert PDF CSS into HTML head
-            html_content = html_content.replace("</head>", pdf_css + "</head>")
-
-            # Generate PDF
-            with open(pdf_path, "wb") as pdf_file:
-                result = pisa.CreatePDF(
-                    html_content, dest=pdf_file, encoding="utf-8", link_callback=self._link_callback
-                )
-
-                if result.err:
-                    logger.error(f"PDF generation had errors: {result.err}")
-                    return None
-
-            logger.info(f"PDF report generated successfully: {pdf_path}")
-            return pdf_path
-
-        except Exception as e:
-            logger.error(f"Error generating PDF report: {e}")
-            return None
-
-    def _link_callback(self, uri, rel):
-        """
-        Callback function to handle local file links in PDF generation
-        """
-        # Handle file:// URLs
-        if uri.startswith("file://"):
-            path = uri[7:]  # Remove 'file://' prefix
-            if os.path.exists(path):
-                logger.debug(f"Link callback found file: {path}")
-                return path
+        figure_refs = _dedupe_paths(_REPORT_FIGURE_SRC.findall(html_content))
+        figure_paths = {}
+        for ref in figure_refs:
+            # The template URL-encodes each path segment (see _url_path).
+            segments = [unquote(segment) for segment in html.unescape(ref).split("/")]
+            path = os.path.join(self.report_dir, *segments)
+            if os.path.isfile(path):
+                figure_paths[ref] = path
             else:
-                logger.warning(f"Link callback file not found: {path}")
-                return path  # Return path anyway, let PDF generator handle it
+                logger.warning(f"Standalone report keeps a link to missing figure: {path}")
 
-        # Handle relative paths directly
-        elif uri.startswith("figures/"):
-            abs_path = os.path.join(self.report_dir, uri)
-            abs_path = os.path.abspath(abs_path)
-            if os.path.exists(abs_path):
-                logger.debug(f"Link callback resolved relative path: {uri} -> {abs_path}")
-                return abs_path
-            else:
-                logger.warning(f"Link callback could not find relative path: {uri} -> {abs_path}")
-                return abs_path
+        with ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 1)) as pool:
+            data_uris = dict(zip(figure_paths, pool.map(_figure_data_uri, figure_paths.values())))
 
-        # Handle other relative paths (like ./output/...)
-        elif uri.startswith("./") and "figures" in uri:
-            if "reports/figures" in uri:
-                figures_part = uri.split("reports/figures/")[-1]
-                abs_path = os.path.join(self.report_dir, "figures", figures_part)
-                abs_path = os.path.abspath(abs_path)
-                if os.path.exists(abs_path):
-                    logger.debug(f"Link callback resolved complex relative path: {uri} -> {abs_path}")
-                    return abs_path
-                else:
-                    logger.warning(f"Link callback could not find complex relative path: {uri} -> {abs_path}")
-                    return abs_path
+        standalone_content = _REPORT_FIGURE_SRC.sub(
+            lambda match: f'src="{data_uris.get(match.group(1), match.group(1))}"', html_content
+        )
+        standalone_path = os.path.join(self.report_dir, f"{report_name}_standalone.html")
+        with open(standalone_path, "w", encoding="utf-8") as f:
+            f.write(standalone_content)
 
-        return uri
+        size = os.path.getsize(standalone_path)
+        logger.info(f"Embedded {len(data_uris)} figures in standalone report ({size / 1024 / 1024:.1f} MB)")
+        if size > _STANDALONE_SIZE_WARNING_BYTES:
+            logger.warning(
+                f"Standalone report is {size / 1024 / 1024:.0f} MB and may open slowly in a browser; "
+                f"share the whole {self.report_dir} directory for the full-resolution report"
+            )
+        return standalone_path

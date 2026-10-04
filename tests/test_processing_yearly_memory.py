@@ -113,7 +113,7 @@ def test_single_file_preprocessing_stays_lazy_and_closes_source(tmp_path):
     processor.check_coordinate = lambda ds: ds
     processor.check_dataset_time_integrity = lambda ds, *args: ds
     processor.select_timerange = lambda ds, *args: ds
-    processor.process_units = lambda ds, unit: (ds, unit)
+    processor.process_units = lambda ds, unit, datasource=None: (ds, unit)
     processor.split_year = lambda *args: None
 
     processor.preprocess_single_file(

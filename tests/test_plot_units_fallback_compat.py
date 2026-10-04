@@ -37,10 +37,13 @@ class _StationProcessor:
         def check_coordinate(self, ds):
             return ds
 
+        def _deaccumulate_if_configured(self, ds, datasource):
+            return ds
+
         def check_dataset_time_integrity(self, ds, *args, **kwargs):
             return ds
 
-        def process_units(self, ds, unit_name):
+        def process_units(self, ds, unit_name, datasource=None):
             self.units_seen.append(unit_name)
             return ds, unit_name
 

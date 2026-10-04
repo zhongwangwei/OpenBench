@@ -6269,12 +6269,10 @@ def test_run_log_suppresses_matplotlib_backend_probe_noise(tmp_path):
 
     with _run_file_logging(cfg):
         logger.debug("backend probe traceback: No module named '_macosx'")
-        logging.getLogger("xhtml2pdf.files").debug("noisy PDF internals")
         logging.getLogger("openbench.tests").debug("openbench debug remains visible")
 
     text = (tmp_path / "quiet_plot_log" / "run.log").read_text(encoding="utf-8")
     assert "_macosx" not in text
-    assert "noisy PDF internals" not in text
     assert "openbench debug remains visible" in text
 
 

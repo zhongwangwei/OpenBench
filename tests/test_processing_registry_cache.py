@@ -487,7 +487,7 @@ def test_try_compute_from_inline_namelist_wins_over_catalog(monkeypatch):
     import openbench.data.registry.manager as registry_manager
 
     processor = _make_processor(processing)
-    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_compute = "ds['rain'] + ds['snow']"
     processor.sim_varunit = "mm d-1"
     ds = xr.Dataset({"rain": ("time", [1.0]), "snow": ("time", [2.0])})
     monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(ModelProfile("Nope", "", {})))
@@ -506,7 +506,7 @@ def test_find_data_files_falls_back_to_compute_dependency_files(tmp_path):
     xr.Dataset({"snow": xr.DataArray([2.0], coords={"time": times})}).to_netcdf(tmp_path / "case_h0.SNOW.2000.nc")
 
     processor = _make_processor(processing)
-    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_compute = "ds['rain'] + ds['snow']"
     processor.SimA_prefix_fallback = None
 
     result = processing.BaseDatasetProcessing._find_data_files(
@@ -532,7 +532,7 @@ def test_select_var_computes_from_dependency_files_found_by_lookup(tmp_path):
     xr.Dataset({"snow": xr.DataArray([2.0], coords={"time": times})}).to_netcdf(snow)
 
     processor = _make_processor(processing)
-    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_compute = "ds['rain'] + ds['snow']"
     processor.sim_data_type = "grid"
     processor.ref_data_type = "grid"
     processor.sim_tim_res = "Day"
@@ -551,7 +551,7 @@ def test_find_single_file_returns_all_undated_compute_dependencies(tmp_path):
     xr.Dataset({"rain": ("time", [1.0])}).to_netcdf(tmp_path / "RAIN.nc")
     xr.Dataset({"snow": ("time", [2.0])}).to_netcdf(tmp_path / "SNOW.nc")
     processor = _make_processor(processing)
-    processor.sim_compute = "ds['rain'] + ds['snow']"
+    processor.SimA_compute = "ds['rain'] + ds['snow']"
     processor.SimA_prefix_fallback = None
 
     result = processing.BaseDatasetProcessing._find_single_file(
@@ -657,7 +657,8 @@ def test_reference_compute_from_namelist_finds_split_dependency_files(tmp_path, 
 
     processor = _make_processor(processing)
     processor.ref_source = "SplitRef"
-    processor.ref_compute = section["SplitRef_compute"]
+    # Runtime info copies namelist keys under the source name, as for SplitRef_compute.
+    setattr(processor, "SplitRef_compute", section["SplitRef_compute"])
     processor.ref_data_type = "grid"
     processor.ref_tim_res = "Day"
     processor.compare_tim_res = "Day"

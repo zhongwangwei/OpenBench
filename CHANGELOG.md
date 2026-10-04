@@ -1,5 +1,112 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Reports now also write `reports/<name>_standalone.html`, a single file with
+  every figure embedded, so the report keeps its figures when copied or sent.
+  Embedded figures are downscaled to 1200 px wide and stored as JPEG when that
+  is much smaller than PNG; `evaluation_report.html` still links the
+  full-resolution files under `reports/figures/`.
+- PDF reports are no longer generated. The `report` extra (xhtml2pdf) is now
+  empty and kept only so `pip install colm-openbench[report]` still resolves.
+- An evaluation pair now fails with a clear error when its reference and
+  simulation units convert to different base units (for example `W m-2`
+  against `mm day-1`), instead of computing metrics from incomparable values.
+  Units the converter does not recognize are still compared as declared.
+- Catalog and config variables accept `accumulated: year` or
+  `accumulated: run` for running totals. `year` is for totals that restart on
+  1 January, and `run` for totals counted from the start of the simulation.
+  After the data are assembled per year, and before resampling or unit
+  conversion, the totals are turned into the amount added in each time step.
+  A step that cannot be recovered (a year that starts after January, the first
+  step of a run, or a restart) is left missing.
+- Preprocessing warns once per source when a file's `units` attribute names a
+  different unit than the declared `varunit` (for example `mm.month-1` against
+  `mm day-1`).
+
+### Fixed
+- Since 3.0.0, every variable declared as `W m-2` or `w m-2` was converted to
+  `mm day-1` as if it were evaporation, while `W/m2` and `watt/m2` stayed in
+  W m-2. Sensible heat and radiation were therefore reported in mm day-1, and a
+  CoLM simulation (`w m-2`) evaluated against the OpenBench_FLUX station
+  references (`W/m2`) was about 29 times too small for latent heat, sensible
+  heat, net radiation, ground heat and the radiation components. W m-2 now
+  stays W m-2 in every spelling; evaporation and transpiration items declared
+  in W m-2 are still converted to mm day-1, and figures are labelled with the
+  unit the data were converted to (#211). Cached results from earlier versions
+  are invalidated.
+- Bundled registry units that did not match the data:
+  - ERA5LAND precipitation (stored in m hr-1) was declared `mm`, and its
+    runoff (daily totals in m) `mm`.
+  - ERA5-Land model output (monthly means of daily totals) was declared `m`
+    and `J m-2`. It now uses `m day-1` and `J m-2 day-1`. Evaporation, latent
+    heat and sensible heat are negated, because ECMWF fluxes are positive
+    downward.
+  - GLDAS runoff, a 3-hour accumulation, was declared `kg m-2`.
+  - WRF evapotranspiration, computed in mm day-1, was declared `mm`.
+  - GRAiCE water storage change was declared `cm` instead of
+    `cm of equivalent water thickness`.
+  - Several spellings were not recognised, so the data passed through
+    unconverted. These include `mm/s` (NoahMP5 runoff; CLM5, E3SM and ELM
+    irrigation), `degrees Celsius` (CRU temperatures), `mm d-1` (MSWEP),
+    `m of water equivalent`, `m3/m3`, `g C m-2 yr-1`, `kPa` and `Mg ha-1`.
+  - JULES7 GPP and respiration are carbon fluxes (`kg c m-2 s-1`).
+  - ecLand GPP, respiration and NEE are CO2 mass fluxes, positive downward.
+    They now use the new `kg co2 m-2 s-1`, and respiration and NEE are
+    negated.
+  - NoahMP5:
+    - `SnowDepth` is in m, not mm.
+    - `EvapSoilSfcLiq` is in m s-1.
+    - `NetEcoExchange` is in g CO2 m-2 s-1.
+    - Latent heat used only the vegetated-ground flux and is now the total.
+    - Transpiration pointed at ground evaporation.
+    - Downward shortwave and longwave radiation were swapped.
+  - TE snow water equivalent unit `kg m2-1` is now `kg m-2`.
+  - VIC5 fluxes declared `mm step-1` are `mm day-1` for the catalog's daily
+    output. The CLM5/ELM/E3SM snow cover fraction `FSNO_EFF` was declared
+    `m s-1 wind` and is now `unitless`.
+  - Removed entries whose values cannot be converted to what they are compared
+    with:
+    - CLM5/ELM/E3SM burned area (fraction per second).
+    - NoahMP5 ecosystem respiration (`RespirationSoil` has no documented unit
+      and may include root respiration).
+    - CRU frost-day frequency and the HOMTS root-zone soil temperature (unit
+      `TS`).
+    - The HSWUD water use, UpCH4 wetland methane and ESA CCI burned area
+      datasets.
+  - BCC_AVIM snow depth pointed at the snow water equivalent `H2OSNO` and now
+    uses `SNOWDP` in m.
+  - VIC5 soil moisture pointed at `OUT_SOIL_MOIST_FRAC`, which VIC 5 does not
+    write. Surface soil moisture now uses layer 0 of
+    `OUT_SOIL_LIQ_FRAC + OUT_SOIL_ICE_FRAC`; root-zone soil moisture is left
+    unmapped.
+  - CoLM `f_sum_irrig` is a year-to-date total (`accumulated: year`, monthly
+    amounts in `mm month-1`).
+  - WRF precipitation is now `RAINNC + RAINC`. Both accumulate from the start
+    of the run (`accumulated: run`, `mm hr-1`).
+  - JULES7 `rflow` is a flow per unit grid-box area and is multiplied by the
+    cell area to give m3 s-1.
+  - CLM5/ELM/E3SM rice yield pointed at `GRAINC_TO_FOOD`, the grain carbon
+    flux of all crops in a grid cell, and is no longer mapped.
+  - TE water storage change, a volume difference of `STORGE` in m3, is no
+    longer mapped.
+- A `compute` expression written inline in a config's simulation variables
+  was ignored. Only catalog expressions took effect, because the processor
+  read `sim_compute`/`ref_compute` while the config passes the expression
+  keyed by source name. Expressions from either place are now applied.
+- `openbench smoke-test --run` reported Evapotranspiration against GLEAM 4.2a
+  about 30 times too high: the bundled fixture stores monthly totals
+  (`mm.month-1`) but the smoke catalog declared `mm day-1`, so no conversion
+  was applied. The full GLEAM 4.2a reference set is stored in `mm day-1` and
+  was not affected.
+- Calendar-aware unit conversions (`mm month-1` → `mm day-1`,
+  `mm day-1` → `mm year-1`) dropped the variable name of a DataArray, so the
+  preprocessed file stored it as `__xarray_dataarray_variable__` and station
+  evaluations against such a grid reference failed with
+  `Variable '<name>' not found in ref dataset`. Bundled references declared in
+  `mm month-1` include GGMSEUD and GIWUED (`Total_Irrigation_Amount`).
+
 ## [3.0.5] - 2026-09-30
 
 Compatibility and fix release for xarray 2026.9 and station comparisons.
