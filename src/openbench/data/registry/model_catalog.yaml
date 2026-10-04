@@ -123,8 +123,8 @@ BCC_AVIM:
       varname: ''
       varunit: mm s-1
     Snow_Depth:
-      varname: H2OSNO
-      varunit: mm
+      varname: SNOWDP
+      varunit: m
     Surface_Snow_Cover_In_Fraction:
       varname: FSNO
       varunit: m2 m-2
@@ -523,8 +523,10 @@ CLM5:
       varname: CPHASE
       varunit: unitless
     Crop_Yield_Rice:
-      varname: GRAINC_TO_FOOD
-      varunit: g m-2 s-1
+      # GRAINC_TO_FOOD is the grid-cell grain carbon flux of all crops, not rice yield. Rice yield needs
+      # rice-PFT output summed per year: t ha-1 = gC m-2 yr-1 * 0.01 / 0.45.
+      varname: ''
+      varunit: t ha-1
     Total_Irrigation_Amount:
       varname: qirrig_drip + qirrig_sprinkler
       varunit: mm/s
@@ -574,9 +576,6 @@ CLM5:
     Net_Primary_Production:
       varname: NPP
       varunit: gC m-2 s-1
-    Burned_Area:
-      varname: FAREA_BURNED
-      varunit: s-1
     Transpiration:
       varname: QVEGT
       varunit: mm s-1
@@ -607,7 +606,7 @@ CLM5:
       varunit: mm s-1
     Snow_Cover_Extent:
       varname: FSNO_EFF
-      varunit: m s-1 wind
+      varunit: unitless
 ELM:
   data_type: grid
   description: E3SM Land Model history output
@@ -688,8 +687,10 @@ ECLand:
       varname: TVeg
       varunit: kg m-2 s-1
     Ecosystem_Respiration:
-      varname: Reco
-      varunit: kg m-2 s-1
+      # ecLand writes Reco as a negative (downward-positive) CO2 flux.
+      compute: -ds['Reco']
+      varname: Ecosystem_Respiration
+      varunit: kg co2 m-2 s-1
     Evapotranspiration:
       varname: Evap
       varunit: kg m-2 s-1
@@ -699,7 +700,7 @@ ECLand:
           convert: value / 2.5e6
     Gross_Primary_Productivity:
       varname: Ag
-      varunit: kg m-2 s-1
+      varunit: kg co2 m-2 s-1
     Ground_Evaporation:
       varname: ESoil
       varunit: kg m-2 s-1
@@ -718,8 +719,10 @@ ECLand:
       varname: lai
       varunit: m2 m-2
     Net_Ecosystem_Exchange:
-      varname: CO2flux
-      varunit: kg m-2 s-1
+      # ecLand CO2flux is net uptake, positive downward; NEE is positive upward.
+      compute: -ds['CO2flux']
+      varname: Net_Ecosystem_Exchange
+      varunit: kg co2 m-2 s-1
     Net_Ecosystem Exchange:
       varname: CO2flux
       varunit: kg m-2 s-1
@@ -1458,8 +1461,10 @@ CoLM2024:
       varname: Net_Primary_Production
       varunit: gC m-2 s-1
     Total_Irrigation_Amount:
+      # f_sum_irrig accumulates from 1 Jan (MOD_Irrigation.F90); accumulated: year turns it into monthly amounts.
       varname: f_sum_irrig
-      varunit: kg m-2
+      varunit: mm month-1
+      accumulated: year
     Urban_Air_Temperature_Max:
       varname: f_tmax
       varunit: K
@@ -1481,17 +1486,23 @@ ERA5-Land:
   tim_res: Month
   variables:
     Evapotranspiration:
-      varname: e
-      varunit: m
+      # ERA5 vertical fluxes are positive downward, so evaporation is negative.
+      compute: -ds['e']
+      varname: Evapotranspiration
+      varunit: m day-1
     Latent_Heat:
-      varname: slhf
-      varunit: J m-2
+      # Monthly means of daily accumulations, positive downward.
+      compute: -ds['slhf']
+      varname: Latent_Heat
+      varunit: J m-2 day-1
     Precipitation:
       varname: tp
-      varunit: m
+      varunit: m day-1
     Sensible_Heat:
-      varname: sshf
-      varunit: J m-2
+      # Monthly means of daily accumulations, positive downward.
+      compute: -ds['sshf']
+      varname: Sensible_Heat
+      varunit: J m-2 day-1
     Snow_Depth:
       varname: sde
       varunit: m
@@ -1503,10 +1514,10 @@ ERA5-Land:
       varunit: K
     Surface_Net_LW_Radiation:
       varname: str
-      varunit: J m-2
+      varunit: J m-2 day-1
     Surface_Net_SW_Radiation:
       varname: ssr
-      varunit: J m-2
+      varunit: J m-2 day-1
     Surface_Soil_Moisture:
       varname: swvl1
       varunit: m3 m-3
@@ -1515,7 +1526,7 @@ ERA5-Land:
       varunit: K
     Total_Runoff:
       varname: ro
-      varunit: m
+      varunit: m day-1
 FLUXCOM:
   data_type: grid
   description: FLUXCOM Carbon and Energy Fluxes
@@ -1648,7 +1659,7 @@ GLDAS:
     Runoff:
       compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
       varname: Runoff
-      varunit: kg m-2
+      varunit: mm 3h-1
 InteractiveModel:
   data_type: grid
   description: InteractiveModel model profile
@@ -1725,13 +1736,13 @@ JULES7:
     Ecosystem_Respiration:
       compute: ds['resp_s_gb'] + ds['resp_p_gb']
       varname: Ecosystem_Respiration
-      varunit: kg m-2 s-1
+      varunit: kg c m-2 s-1
     Evapotranspiration:
       varname: fqw_gb
       varunit: kg m-2 s-1
     Gross_Primary_Productivity:
       varname: gpp_gb
-      varunit: kg m-2 s-1
+      varunit: kg c m-2 s-1
     Inundation_Fraction:
       varname: frac_fplain_lp
       varunit: percentage
@@ -1760,8 +1771,10 @@ JULES7:
       varname: esoil_gb
       varunit: kg m-2 s-1
     Streamflow:
-      varname: rflow
-      varunit: kg m-2 s-1
+      # rflow is river outflow per unit grid-box area; times the cell area and over 1000 kg m-3 gives m3 s-1.
+      compute: "lat = ds['lat'] if 'lat' in ds else ds['latitude']; lon = ds['lon'] if 'lon' in ds else ds['longitude']; lat_step = lat.diff(lat.dims[0]).mean(); lon_step = lon.diff(lon.dims[-1]).mean(); lat_step = lat_step if lat_step > 0 else -lat_step; lon_step = lon_step if lon_step > 0 else -lon_step; ds['rflow'] / 1000.0 * 6371000.0 ** 2 * lon_step * np.pi / 180.0 * (np.sin((lat + lat_step / 2.0) * np.pi / 180.0) - np.sin((lat - lat_step / 2.0) * np.pi / 180.0))"
+      varname: Streamflow
+      varunit: m3 s-1
     Subsurface_Runoff:
       varname: sub_surf_roff
       varunit: kg m-2 s-1
@@ -2369,7 +2382,7 @@ NoahMP5:
       varname: AlbedoSfc
       varunit: unitless
     Canopy_Evaporation_Canopy_Transpiration:
-      compute: ds['EvapGroundNet'] + ds['EvapCanopyNet']
+      compute: ds['EvapCanopyNet'] + ds['Transpiration']
       varname: Canopy_Evaporation_Canopy_Transpiration
       varunit: mm s-1
     Canopy_Evaporation:
@@ -2379,15 +2392,11 @@ NoahMP5:
       varname: HeatSensibleCanopy
       varunit: w m-2
     Canopy_Transpiration:
-      varname: EvapGroundNet
+      varname: Transpiration
       varunit: mm s-1
     Depth_Of_Surface_Water:
       varname: WaterHeadSfc
       varunit: mm
-    Ecosystem_Respiration:
-      compute: ds['RespirationPlantTot'] + ds['RespirationSoil']
-      varname: Ecosystem_Respiration
-      varunit: g m-2 s-1
     Evapotranspiration:
       varname: WaterToAtmosTotal
       varunit: mm s-1
@@ -2404,14 +2413,16 @@ NoahMP5:
       varname: HeatLatentGrd
       varunit: w m-2
     Latent_Heat:
-      varname: HeatLatentVegGrd
+      # Total latent heat as the HRLDAS driver writes LH (EnergyVarOutTransferMod.F90).
+      compute: ds['HeatLatentGrd'] + ds['HeatLatentCanopy'] + ds['HeatLatentTransp'] + (ds['HeatLatentIrriEvap'] if 'HeatLatentIrriEvap' in ds else 0)
+      varname: Latent_Heat
       varunit: w m-2
     Leaf_Area_Index:
       varname: LeafAreaIndex
       varunit: unitless
     Net_Ecosystem_Exchange:
       varname: NetEcoExchange
-      varunit: g m-2 s-1
+      varunit: g co2 m-2 s-1
     Precipitation:
       compute: ds['PrecipConvRefHeight'] + ds['PrecipNonConvRefHeight']
       varname: Precipitation
@@ -2424,12 +2435,14 @@ NoahMP5:
       varunit: w m-2
     Snow_Depth:
       varname: SnowDepth
-      varunit: mm
+      varunit: m
     Snow_Water_Equivalent:
       varname: SnowWaterEquiv
       varunit: mm
     Soil_Evaporation:
-      varname: EvapSoilSfcLiq
+      # EvapSoilSfcLiq is declared in m/s (WaterVarType.F90).
+      compute: ds['EvapSoilSfcLiq'] * 1000
+      varname: Soil_Evaporation
       varunit: mm s-1
     Stem_Area_Index:
       varname: StemAreaIndex
@@ -2441,10 +2454,10 @@ NoahMP5:
       varname: TemperatureAirRefHeight
       varunit: K
     Surface_Downward_LW_Radiation:
-      varname: RadSwDownRefHeight
+      varname: RadLwDownRefHeight
       varunit: w m-2
     Surface_Downward_SW_Radiation:
-      varname: RadLwDownRefHeight
+      varname: RadSwDownRefHeight
       varunit: w m-2
     Surface_Net_LW_Radiation:
       varname: RadLwNetSfc
@@ -2488,7 +2501,7 @@ NoahMP5:
       varunit: ''
     Net_Ecosystem Exchange:
       varname: NetEcoExchange
-      varunit: g m-2 s-1
+      varunit: g co2 m-2 s-1
     Leaf_Greenness:
       varname: ''
       varunit: ''
@@ -2637,7 +2650,7 @@ TE:
       varunit: W m-2
     Snow_Water_Equivalent:
       varname: GLSNW
-      varunit: kg m2-1
+      varunit: kg m-2
     Streamflow:
       fallbacks:
         - varname: Streamflow
@@ -2845,10 +2858,6 @@ TE:
       compute: (ds['u10']**2 + ds['v10']**2)**0.5
       varname: Surface_Wind_Speed
       varunit: m s-1
-    Terrestrial_Water_Storage_Change:
-      compute: ds['STORGE'].diff('time')
-      varname: Terrestrial_Water_Storage_Change
-      varunit: m3
     Water_Surface_Elevation:
       varname: sfcelv
       varunit: m
@@ -2857,6 +2866,7 @@ VIC5:
   description: Variable Infiltration Capacity Model v5
   name: VIC5
   tim_res: Day
+  # VIC sums fluxes over each output step, so with daily output mm per step is mm day-1.
   variables:
     Albedo:
       varname: OUT_ALBEDO
@@ -2864,16 +2874,16 @@ VIC5:
     Canopy_Evaporation_Canopy_Transpiration:
       compute: ds['OUT_EVAP_CANOP'] + ds['OUT_TRANSP_VEG']
       varname: Canopy_Evaporation_Canopy_Transpiration
-      varunit: mm step-1
+      varunit: mm day-1
     Canopy_Evaporation:
       varname: OUT_EVAP_CANOP
-      varunit: mm step-1
+      varunit: mm day-1
     Canopy_Transpiration:
       varname: OUT_TRANSP_VEG
-      varunit: mm step-1
+      varunit: mm day-1
     Evapotranspiration:
       varname: OUT_EVAP
-      varunit: mm step-1
+      varunit: mm day-1
     Ground_Heat:
       varname: OUT_GRND_FLUX
       varunit: w m-2
@@ -2894,10 +2904,12 @@ VIC5:
       varunit: w m-2
     Precipitation:
       varname: OUT_PREC
-      varunit: mm step-1
+      varunit: mm day-1
     Root_Zone_Soil_Moisture:
-      varname: OUT_SOIL_MOIST_FRAC
-      varunit: mm
+      # VIC 5 has no root-zone volumetric output (OUT_SOIL_MOIST_FRAC does not exist);
+      # it needs a depth-weighted mean of OUT_SOIL_LIQ_FRAC + OUT_SOIL_ICE_FRAC over root layers.
+      varname: ''
+      varunit: m3 m-3
     Sensible_Heat:
       varname: OUT_SENSIBLE
       varunit: w m-2
@@ -2909,10 +2921,10 @@ VIC5:
       varunit: mm
     Soil_Evaporation:
       varname: OUT_EVAP_BARE
-      varunit: mm step-1
+      varunit: mm day-1
     Subsurface_Runoff:
       varname: OUT_BASEFLOW
-      varunit: mm step-1
+      varunit: mm day-1
     Surface_Air_Temperature:
       varname: OUT_AIR_TEMP
       varunit: C
@@ -2936,14 +2948,16 @@ VIC5:
       varname: OUT_SNOW_COVER
       varunit: unitless
     Surface_Soil_Moisture:
-      varname: OUT_SOIL_MOIST_FRAC
-      varunit: mm
+      # VIC 5 writes per-layer volumetric fractions; OUT_SOIL_MOIST_FRAC does not exist.
+      compute: ds['OUT_SOIL_LIQ_FRAC'].isel(nlayer=0) + ds['OUT_SOIL_ICE_FRAC'].isel(nlayer=0)
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
     Surface_Vapor_Pressure:
       varname: VP
       varunit: kPa
     Total_Runoff:
       varname: OUT_RUNOFF
-      varunit: mm step-1
+      varunit: mm day-1
     Veg_Cover_In_Fraction:
       varname: FCANOPY
       varunit: unitless
@@ -3079,7 +3093,7 @@ WRF:
     Evapotranspiration:
       compute: ds['LH'] / 2.501e6 * 86400
       varname: Evapotranspiration
-      varunit: mm
+      varunit: mm day-1
     Ground_Heat:
       varname: GRDFLX
       varunit: W m-2
@@ -3094,8 +3108,11 @@ WRF:
       varname: Net_Radiation
       varunit: W m-2
     Precipitation:
-      varname: RAINNC
-      varunit: mm
+      # RAINNC/RAINC accumulate since the run started; accumulated: run takes the amount per output step.
+      compute: ds['RAINNC'] + (ds['RAINC'] if 'RAINC' in ds else 0)
+      varname: Precipitation
+      varunit: mm hr-1
+      accumulated: run
     Sensible_Heat:
       varname: HFX
       varunit: W m-2
@@ -3361,8 +3378,10 @@ CoLM:
       varname: f_grainc_to_cropprodc
       varunit: g m-2 s-1
     Total_Irrigation_Amount:
+      # f_sum_irrig accumulates from 1 Jan (MOD_Irrigation.F90); accumulated: year turns it into monthly amounts.
       varname: f_sum_irrig
-      varunit: kg m-2
+      varunit: mm month-1
+      accumulated: year
     Dam_Inflow:
       varname: daminf
       varunit: m3 s-1

@@ -36,6 +36,61 @@
   in W m-2 are still converted to mm day-1, and figures are labelled with the
   unit the data were converted to (#211). Cached results from earlier versions
   are invalidated.
+- Bundled registry units that did not match the data:
+  - ERA5LAND precipitation (stored in m hr-1) was declared `mm`, and its
+    runoff (daily totals in m) `mm`.
+  - ERA5-Land model output (monthly means of daily totals) was declared `m`
+    and `J m-2`. It now uses `m day-1` and `J m-2 day-1`. Evaporation, latent
+    heat and sensible heat are negated, because ECMWF fluxes are positive
+    downward.
+  - GLDAS runoff, a 3-hour accumulation, was declared `kg m-2`.
+  - WRF evapotranspiration, computed in mm day-1, was declared `mm`.
+  - GRAiCE water storage change was declared `cm` instead of
+    `cm of equivalent water thickness`.
+  - Several spellings were not recognised, so the data passed through
+    unconverted. These include `mm/s` (NoahMP5 runoff; CLM5, E3SM and ELM
+    irrigation), `degrees Celsius` (CRU temperatures), `mm d-1` (MSWEP),
+    `m of water equivalent`, `m3/m3`, `g C m-2 yr-1`, `kPa` and `Mg ha-1`.
+  - JULES7 GPP and respiration are carbon fluxes (`kg c m-2 s-1`).
+  - ecLand GPP, respiration and NEE are CO2 mass fluxes, positive downward.
+    They now use the new `kg co2 m-2 s-1`, and respiration and NEE are
+    negated.
+  - NoahMP5:
+    - `SnowDepth` is in m, not mm.
+    - `EvapSoilSfcLiq` is in m s-1.
+    - `NetEcoExchange` is in g CO2 m-2 s-1.
+    - Latent heat used only the vegetated-ground flux and is now the total.
+    - Transpiration pointed at ground evaporation.
+    - Downward shortwave and longwave radiation were swapped.
+  - TE snow water equivalent unit `kg m2-1` is now `kg m-2`.
+  - VIC5 fluxes declared `mm step-1` are `mm day-1` for the catalog's daily
+    output. The CLM5/ELM/E3SM snow cover fraction `FSNO_EFF` was declared
+    `m s-1 wind` and is now `unitless`.
+  - Removed entries whose values cannot be converted to what they are compared
+    with:
+    - CLM5/ELM/E3SM burned area (fraction per second).
+    - NoahMP5 ecosystem respiration (`RespirationSoil` has no documented unit
+      and may include root respiration).
+    - CRU frost-day frequency and the HOMTS root-zone soil temperature (unit
+      `TS`).
+    - The HSWUD water use, UpCH4 wetland methane and ESA CCI burned area
+      datasets.
+  - BCC_AVIM snow depth pointed at the snow water equivalent `H2OSNO` and now
+    uses `SNOWDP` in m.
+  - VIC5 soil moisture pointed at `OUT_SOIL_MOIST_FRAC`, which VIC 5 does not
+    write. Surface soil moisture now uses layer 0 of
+    `OUT_SOIL_LIQ_FRAC + OUT_SOIL_ICE_FRAC`; root-zone soil moisture is left
+    unmapped.
+  - CoLM `f_sum_irrig` is a year-to-date total (`accumulated: year`, monthly
+    amounts in `mm month-1`).
+  - WRF precipitation is now `RAINNC + RAINC`. Both accumulate from the start
+    of the run (`accumulated: run`, `mm hr-1`).
+  - JULES7 `rflow` is a flow per unit grid-box area and is multiplied by the
+    cell area to give m3 s-1.
+  - CLM5/ELM/E3SM rice yield pointed at `GRAINC_TO_FOOD`, the grain carbon
+    flux of all crops in a grid cell, and is no longer mapped.
+  - TE water storage change, a volume difference of `STORGE` in m3, is no
+    longer mapped.
 - A `compute` expression written inline in a config's simulation variables
   was ignored. Only catalog expressions took effect, because the processor
   read `sim_compute`/`ref_compute` while the config passes the expression

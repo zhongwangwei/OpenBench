@@ -9,6 +9,7 @@ import xarray as xr
 
 from openbench.config.loader import ConfigError, _validated_variables_mapping
 from openbench.data._processing_transforms import ProcessingTransformMixin, deaccumulate
+from openbench.data.registry.manager import RegistryManager
 
 
 def _year_to_date(monthly: np.ndarray, start: str = "2004-01-31") -> xr.DataArray:
@@ -68,3 +69,13 @@ def test_processor_reads_accumulated_by_source_name_before_unit_conversion():
     np.testing.assert_allclose(amounts.values, [5.0, 0.0, 10.0])
     assert untouched is totals
 
+
+def test_bundled_catalog_declares_running_totals(tmp_path):
+    mgr = RegistryManager(user_dir=tmp_path)
+
+    irrigation = mgr.get_model("CoLM2024").variables["Total_Irrigation_Amount"]
+    rain = mgr.get_model("WRF").variables["Precipitation"]
+
+    assert (irrigation.accumulated, irrigation.varunit) == ("year", "mm month-1")
+    assert (rain.accumulated, rain.varunit) == ("run", "mm hr-1")
+    assert irrigation.to_dict()["accumulated"] == "year"
