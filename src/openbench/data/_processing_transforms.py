@@ -15,15 +15,6 @@ from openbench.data._processing_utils import performance_monitor
 from openbench.data.unit import UnitProcessing
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
 
-# Spellings of W m-2 that the unit table resolves to the "w m-2" base.
-ENERGY_FLUX_UNITS = {"w m-2", "w/m2", "watt/m2", "watt m-2", "w m**-2"}
-
-
-def _is_water_flux(item) -> bool:
-    """Evaporation and transpiration variables, compared in mm day-1."""
-    name = str(item or "").lower()
-    return "evapo" in name or "transpiration" in name
-
 
 class ProcessingTransformMixin:
     def _reduce_patch_dimension(self, data, source_ds=None):
@@ -247,11 +238,7 @@ class ProcessingTransformMixin:
                 data_array = ds
 
             # 进行单位转换
-            unit_key = varunit.lower().strip()
-            if unit_key in ENERGY_FLUX_UNITS and _is_water_flux(getattr(self, "item", "")):
-                # a water flux given as its latent heat is compared in mm day-1;
-                # energy fluxes such as Latent_Heat keep W m-2
-                unit_key = "w m-2 heat"
+            unit_key = UnitProcessing.lookup_key(varunit, getattr(self, "item", ""))
             converted_data, new_unit = UnitProcessing.convert_unit(data_array, unit_key)
             # 创建新的数据集或更新现有数据集
             if isinstance(ds, xr.Dataset):

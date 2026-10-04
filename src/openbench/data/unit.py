@@ -11,6 +11,17 @@ _UNIT_CACHE_LOCK = threading.Lock()
 SECONDS_PER_DAY = 86400.0
 LATENT_HEAT_VAPORIZATION_J_KG = 2.5e6
 
+# Spellings of W m-2 that the unit table resolves to the "w m-2" base.
+ENERGY_FLUX_UNITS = {"w m-2", "w/m2", "watt/m2", "watt m-2", "w m**-2"}
+
+# Label form of base units whose lowercase key reads wrongly on a figure.
+BASE_UNIT_LABELS = {
+    "k": "K",
+    "gc m-2 day-1": "gC m-2 day-1",
+    "kg c m-2": "kgC m-2",
+    "kgc m-2": "kgC m-2",
+}
+
 
 def _time_coord(x):
     if hasattr(x, "coords") and "time" in x.coords:
@@ -301,6 +312,29 @@ class UnitProcessing:
             f"No conversion found for {input_unit} (case-insensitive search). Using original data and unit."
         )
         return data, input_unit
+
+    @staticmethod
+    def lookup_key(unit, item=""):
+        """Table key of a declared unit; a water flux given in W m-2 is read as its latent heat."""
+        key = str(unit or "").lower().strip()
+        name = str(item or "").lower()
+        if key in ENERGY_FLUX_UNITS and ("evapo" in name or "transpiration" in name):
+            key = "w m-2 heat"
+        return key
+
+    @staticmethod
+    def display_unit(unit, item=""):
+        """Unit of the data after conversion, for labels.
+
+        A unit that is already a base unit, or that the table does not know,
+        is returned as declared; a converted unit gives its base unit.
+        """
+        if _UNIT_LOOKUP_CACHE is None:
+            UnitProcessing.convert_unit(None, "unitless")  # builds the lookup table
+        base_unit, conv_func = _UNIT_LOOKUP_CACHE.get(UnitProcessing.lookup_key(unit, item), (None, None))
+        if conv_func is None:
+            return unit
+        return BASE_UNIT_LABELS.get(base_unit, base_unit)
 
     def process_unit(self, data, unit):
         """

@@ -85,24 +85,13 @@ def determine_display_unit(self):
         if "evapotranspiration" in self.item.lower():
             display_unit = convert_unit("mm day-1")
             logging.info("Using standardized unit for evapotranspiration: mm day-1")
-        elif ref_unit == sim_unit or not sim_unit:
-            # If units are the same or sim unit is missing, use ref unit
-            display_unit = convert_unit(ref_unit)
         else:
-            # If units differ, try to convert to a common base unit
-            try:
-                ref_data, ref_base = UnitProcessing.convert_unit(None, ref_unit.lower())
-                sim_data, sim_base = UnitProcessing.convert_unit(None, sim_unit.lower())
-                if ref_base == sim_base:
-                    display_unit = convert_unit(ref_base)
-                    logging.info(f"Converted both units to common base: {ref_base}")
-                else:
-                    # Fallback: use reference unit
-                    display_unit = convert_unit(ref_unit)
-                    logging.warning(f"Unit mismatch: ref={ref_unit}, sim={sim_unit}. Using ref unit.")
-            except Exception:
-                display_unit = convert_unit(ref_unit)
-                logging.warning(f"Failed to convert units. Using ref unit: {ref_unit}")
+            # Label the unit the data were converted to, not the declared one
+            ref_display = UnitProcessing.display_unit(ref_unit, self.item)
+            sim_display = UnitProcessing.display_unit(sim_unit, self.item) if sim_unit else ref_display
+            if sim_display.lower() != ref_display.lower():
+                logging.warning(f"Unit mismatch: ref={ref_unit}, sim={sim_unit}. Using ref unit.")
+            display_unit = convert_unit(ref_display)
 
     return display_unit
 

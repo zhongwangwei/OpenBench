@@ -14,6 +14,7 @@ import pandas as pd
 import xarray as xr
 from matplotlib import rcParams
 
+from openbench.data.unit import UnitProcessing
 from openbench.util.converttype import Convert_Type
 from openbench.util.filenames import (
     diff_grid_anomaly_filename,
@@ -415,12 +416,12 @@ def plot_diff_results(
     if data_type == "anomaly":
         plot_option["title"] = f"{evaluation_item} {item_type} anomaly for {sim_source}"
         # if not plot_option['colorbar_label']:
-        unit = sim_nml[f"{evaluation_item}"][f"{sim_source}_varunit"]
+        unit = UnitProcessing.display_unit(sim_nml[f"{evaluation_item}"][f"{sim_source}_varunit"], evaluation_item)
         plot_option["colorbar_label"] = process_unit(unit, "", item_type)
     else:
         plot_option["title"] = f"{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}"
         # if not plot_option['colorbar_label']:
-        unit = sim_nml[f"{evaluation_item}"][f"{sim_source[0]}_varunit"]
+        unit = UnitProcessing.display_unit(sim_nml[f"{evaluation_item}"][f"{sim_source[0]}_varunit"], evaluation_item)
         plot_option["colorbar_label"] = process_unit(unit, "", item_type)
 
     if not plot_option["cmap"]:
