@@ -10,6 +10,47 @@
   full-resolution files under `reports/figures/`.
 - PDF reports are no longer generated. The `report` extra (xhtml2pdf) is now
   empty and kept only so `pip install colm-openbench[report]` still resolves.
+- An evaluation pair now fails with a clear error when its reference and
+  simulation units convert to different base units (for example `W m-2`
+  against `mm day-1`), instead of computing metrics from incomparable values.
+  Units the converter does not recognize are still compared as declared.
+- Catalog and config variables accept `accumulated: year` or
+  `accumulated: run` for running totals. `year` is for totals that restart on
+  1 January, and `run` for totals counted from the start of the simulation.
+  After the data are assembled per year, and before resampling or unit
+  conversion, the totals are turned into the amount added in each time step.
+  A step that cannot be recovered (a year that starts after January, the first
+  step of a run, or a restart) is left missing.
+- Preprocessing warns once per source when a file's `units` attribute names a
+  different unit than the declared `varunit` (for example `mm.month-1` against
+  `mm day-1`).
+
+### Fixed
+- Since 3.0.0, every variable declared as `W m-2` or `w m-2` was converted to
+  `mm day-1` as if it were evaporation, while `W/m2` and `watt/m2` stayed in
+  W m-2. Sensible heat and radiation were therefore reported in mm day-1, and a
+  CoLM simulation (`w m-2`) evaluated against the OpenBench_FLUX station
+  references (`W/m2`) was about 29 times too small for latent heat, sensible
+  heat, net radiation, ground heat and the radiation components. W m-2 now
+  stays W m-2 in every spelling; evaporation and transpiration items declared
+  in W m-2 are still converted to mm day-1, and figures are labelled with the
+  unit the data were converted to (#211). Cached results from earlier versions
+  are invalidated.
+- A `compute` expression written inline in a config's simulation variables
+  was ignored. Only catalog expressions took effect, because the processor
+  read `sim_compute`/`ref_compute` while the config passes the expression
+  keyed by source name. Expressions from either place are now applied.
+- `openbench smoke-test --run` reported Evapotranspiration against GLEAM 4.2a
+  about 30 times too high: the bundled fixture stores monthly totals
+  (`mm.month-1`) but the smoke catalog declared `mm day-1`, so no conversion
+  was applied. The full GLEAM 4.2a reference set is stored in `mm day-1` and
+  was not affected.
+- Calendar-aware unit conversions (`mm month-1` → `mm day-1`,
+  `mm day-1` → `mm year-1`) dropped the variable name of a DataArray, so the
+  preprocessed file stored it as `__xarray_dataarray_variable__` and station
+  evaluations against such a grid reference failed with
+  `Variable '<name>' not found in ref dataset`. Bundled references declared in
+  `mm month-1` include GGMSEUD and GIWUED (`Total_Irrigation_Amount`).
 
 ## [3.0.5] - 2026-09-30
 

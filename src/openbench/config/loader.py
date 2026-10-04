@@ -131,6 +131,7 @@ _VARIABLE_OVERRIDE_KEYS = {
     "sub_dir",
     "fallbacks",
     "compute",
+    "accumulated",
     "prefix_fallback",
 }
 
@@ -548,6 +549,9 @@ def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any
         if not isinstance(override, dict):
             raise ConfigError(f"{path}.{var_name} must be a mapping")
         _reject_unknown_keys(override, _VARIABLE_OVERRIDE_KEYS, f"{path}.{var_name}")
+        accumulated = override.get("accumulated")
+        if accumulated is not None and str(accumulated).strip().lower() not in ("year", "run"):
+            raise ConfigError(f"{path}.{var_name}.accumulated must be 'year' or 'run', got {accumulated!r}")
         fallbacks = override.get("fallbacks")
         if fallbacks is not None:
             if not isinstance(fallbacks, list):

@@ -162,7 +162,8 @@ class YearlyPreprocessingMixin:
             ds = self.select_timerange(ds, self.minyear, self.maxyear)
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
-            ds, varunit = self.process_units(ds, current_varunit)
+            ds = self._deaccumulate_if_configured(ds, datasource)
+            ds, varunit = self.process_units(ds, current_varunit, datasource)
             self.split_year(ds, casedir, suffix, prefix, self.minyear, self.maxyear, datasource)
         finally:
             if source_ds is not None:
@@ -188,7 +189,8 @@ class YearlyPreprocessingMixin:
         ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
         # Use updated varunit from filter if available (filter may have modified it)
         current_varunit = getattr(self, f"{datasource}_varunit", varunit)
-        ds, varunit = self.process_units(ds, current_varunit)
+        ds = self._deaccumulate_if_configured(ds, datasource)
+        ds, varunit = self.process_units(ds, current_varunit, datasource)
         ds = self.select_timerange(ds, syear, eyear)
         _write_netcdf_atomic(
             ds,
@@ -236,7 +238,8 @@ class YearlyPreprocessingMixin:
             ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
-            ds, varunit = self.process_units(ds, current_varunit)
+            ds = self._deaccumulate_if_configured(ds, datasource)
+            ds, varunit = self.process_units(ds, current_varunit, datasource)
             ds = self.select_timerange(ds, syear, eyear)
             read_seconds = time.perf_counter() - total_start
             resample_start = time.perf_counter()

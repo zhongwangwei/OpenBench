@@ -1061,6 +1061,7 @@ def test_build_namelists_preserves_inline_sim_variable_runtime_fields():
                         "varname": "q",
                         "sub_dir": "hydro",
                         "compute": "ds['rain'] + ds['snow']",
+                        "accumulated": "run",
                         "fallbacks": [{"varname": "q_alt", "varunit": "mm"}],
                         "prefix_fallback": ["_hydro_"],
                     }
@@ -1074,5 +1075,6 @@ def test_build_namelists_preserves_inline_sim_variable_runtime_fields():
 
     assert section["CaseA_dir"].replace("\\", "/") == "/sim/hydro"
     assert section["CaseA_compute"] == "ds['rain'] + ds['snow']"
+    assert section["CaseA_accumulated"] == "run"
     assert section["CaseA_fallbacks"] == [{"varname": "q_alt", "varunit": "mm"}]
     assert section["CaseA_prefix_fallback"] == ["_hydro_"]

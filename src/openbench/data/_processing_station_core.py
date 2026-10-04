@@ -273,6 +273,8 @@ class StationProcessingCoreMixin:
             if len(ds.time) == 0:
                 raise StationDataUnavailable(f"No data found for the specified time range {start_year}-{end_year}")
 
+            ds = self._deaccumulate_if_configured(ds, datasource)
+
             # Resample to compare_tim_res (skip for climatology — handled by Mod_Climatology)
             if not self._is_climatology_mode():
                 ds = self._resample_to_compare_resolution(ds, f"{datasource} station data")
@@ -282,7 +284,7 @@ class StationProcessingCoreMixin:
 
             current_varunit = getattr(self, f"{datasource}_varunit")
             if current_varunit:
-                ds, converted_unit = self.process_units(ds, current_varunit)
+                ds, converted_unit = self.process_units(ds, current_varunit, datasource)
                 logging.info(
                     f"Applied unit conversion for {datasource} station data: {current_varunit} -> {converted_unit}"
                 )

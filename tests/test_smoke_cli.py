@@ -154,3 +154,21 @@ def test_smoke_run_reports_required_total_score_artifacts(tmp_path, monkeypatch)
     assert "Overall score spatial maps:" in result.output
     assert "Evapotranspiration__ref__Ref__sim__Sim__Overall_Score.jpg" in result.output
     assert "Evapotranspiration__stn__Ref__Sim__Overall_Score.jpg" in result.output
+
+
+def test_smoke_catalog_declares_the_gleam_fixture_units(tmp_path):
+    import xarray as xr
+
+    from openbench.cli.smoke import SMOKE_REFERENCE_NAME, _prepare_work_dir
+    from openbench.config.user_settings import USER_CONFIG_DIR_NAME
+    from openbench.data.registry.manager import user_reference_catalog_path
+
+    sample_root, home, _config_path = _prepare_work_dir(tmp_path)
+
+    catalog = yaml.safe_load(user_reference_catalog_path(home / USER_CONFIG_DIR_NAME).read_text(encoding="utf-8"))
+    gleam_file = sample_root / "Reference" / "Initial_test" / "GLEAM4.2a_monthly" / "E_2004_GLEAM_v4.2a_MO.nc"
+    with xr.open_dataset(gleam_file) as ds:
+        file_unit = ds["E"].attrs["units"]
+
+    assert file_unit == "mm.month-1"
+    assert catalog[SMOKE_REFERENCE_NAME]["variables"]["Evapotranspiration"]["varunit"] == "mm month-1"

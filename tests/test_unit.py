@@ -373,3 +373,55 @@ def test_declared_calendar_requires_cftime(monkeypatch):
         assert "missing cftime" in str(exc)
     else:
         raise AssertionError("declared calendar without cftime was silently downgraded")
+
+
+def test_check_comparable_units_rejects_pairs_converted_to_different_units():
+    import pytest
+
+    unit._UNIT_LOOKUP_CACHE = None
+    unit.check_comparable_units("Latent_Heat", "W/m2", "w m-2")
+    unit.check_comparable_units("Evapotranspiration", "W m-2", "mm s-1")
+    unit.check_comparable_units("Surface_Albedo", "-", "some_unknown_unit")
+
+    with pytest.raises(ValueError, match="'w m-2'.*'mm day-1'"):
+        unit.check_comparable_units("Latent_Heat", "W/m2", "mm day-1")
+
+
+def test_file_unit_warning_only_fires_for_a_different_recognized_unit(caplog):
+    import logging
+
+    unit._UNIT_LOOKUP_CACHE = None
+    unit._FILE_UNIT_WARNINGS.clear()
+
+    with caplog.at_level(logging.WARNING):
+        unit.warn_if_file_unit_differs("W/m2", "W m-2", "Latent_Heat", "PLUMBER2")
+        unit.warn_if_file_unit_differs("mm.day-1", "mm day-1", "Evapotranspiration", "GLEAM")
+        unit.warn_if_file_unit_differs("not a unit", "mm day-1", "Evapotranspiration", "GLEAM")
+        assert not caplog.records
+
+        unit.warn_if_file_unit_differs("mm.month-1", "mm day-1", "Evapotranspiration", "GLEAM")
+        unit.warn_if_file_unit_differs("mm.month-1", "mm day-1", "Evapotranspiration", "GLEAM")
+
+    assert len(caplog.records) == 1
+    assert "GLEAM" in caplog.text and "'mm.month-1'" in caplog.text and "'mm day-1'" in caplog.text
+
+
+def test_registry_unit_spellings_convert_instead_of_passing_through():
+    unit._UNIT_LOOKUP_CACHE = None
+    cases = [
+        ("mm/s", 1.0, "mm day-1", 86400.0),
+        ("degrees Celsius", 15.0, "k", 288.15),
+        ("J m-2 day-1", 86400.0, "w m-2", 1.0),
+        ("m of water equivalent", 0.05, "mm", 50.0),
+        ("kg co2 m-2 s-1", 44.01e-3 / 86400, "gc m-2 day-1", 12.011),
+        ("g co2 m-2 s-1", 44.01 / 86400, "gc m-2 day-1", 12.011),
+        ("g C m-2 yr-1", 365.25, "gc m-2 day-1", 1.0),
+        ("mm d-1", 2.0, "mm day-1", 2.0),
+        ("m3/m3", 0.3, "unitless", 0.3),
+        ("kPa", 1.0, "pa", 1000.0),
+        ("Mg ha-1", 5.0, "t ha-1", 5.0),
+    ]
+    for declared, value, expected_base, expected in cases:
+        converted, base_unit = UnitProcessing.convert_unit(value, declared)
+        assert base_unit == expected_base, declared
+        np.testing.assert_allclose(converted, expected, err_msg=declared)

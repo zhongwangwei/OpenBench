@@ -50,7 +50,7 @@ def _processor(monkeypatch, compute):
     proc._resample_to_compare_resolution = lambda ds, *args: ds
     proc.check_coordinate = lambda ds: ds
     proc.check_dataset_time_integrity = lambda ds, *args: ds
-    proc.process_units = lambda ds, unit: (ds, unit)
+    proc.process_units = lambda ds, unit, datasource=None: (ds, unit)
     proc.select_timerange = lambda ds, *args: ds
     return proc
 

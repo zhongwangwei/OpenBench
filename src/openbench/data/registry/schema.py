@@ -52,6 +52,7 @@ class VariableMapping:
     min_uparea: Optional[float] = None
     fallbacks: Optional[list[FallbackVar]] = None  # Fallback variables with unit conversion
     compute: Optional[str] = None  # Python expression to compute variable from dataset
+    accumulated: Optional[str] = None  # "year" or "run": values are running totals to difference per step
     prefix_fallback: Optional[list[str]] = None  # Alternative file prefix suffixes, e.g., ["_cama_", "_unitcat_"]
 
     def to_dict(self) -> dict:
@@ -72,6 +73,8 @@ class VariableMapping:
             d["fallbacks"] = [fb.to_dict() for fb in self.fallbacks]
         if self.compute:
             d["compute"] = self.compute
+        if self.accumulated:
+            d["accumulated"] = self.accumulated
         if self.prefix_fallback:
             d["prefix_fallback"] = self.prefix_fallback
         return d

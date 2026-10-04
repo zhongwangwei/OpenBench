@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 
 
@@ -6,6 +7,7 @@ import threading
 # Format: normalized_unit_lowercase -> (base_unit, conversion_func or None)
 _UNIT_LOOKUP_CACHE = None
 _UNIT_CACHE_LOCK = threading.Lock()
+_FILE_UNIT_WARNINGS = set()
 
 
 SECONDS_PER_DAY = 86400.0
@@ -122,6 +124,11 @@ class UnitProcessing:
                 "g c m-2 day-1": lambda x: x,  # Carbon-specific with day
                 "gc m-2 d-1": lambda x: x,  # Carbon-specific day alias
                 "kg c m-2 s-1": lambda x: x * 1000 * 86400,
+                "g co2 m-2 s-1": lambda x: x * 86400 * 12.011 / 44.01,
+                "g c m-2 d-1": lambda x: x,
+                "g c m-2 yr-1": lambda x: x / 365.25,
+                # CO2 mass flux (e.g. ecLand/CTESSEL); carbon is 12.011/44.01 of CO2 mass.
+                "kg co2 m-2 s-1": lambda x: x * 1000 * 86400 * 12.011 / 44.01,
                 "kgc m-2 s-1": lambda x: x * 1000 * 86400,
                 "g m-2 s-1": lambda x: x * 86400,  # Carbon-implicit (common in models)
                 "mol m-2 s-1": lambda x: x * (86400 * 12.01),  # Molar carbon
@@ -149,11 +156,14 @@ class UnitProcessing:
                 "cm of equivalent water thickness": lambda x: x * 10,
                 "cm of water": lambda x: x * 10,
                 "cm water equivalent": lambda x: x * 10,
+                "m of water equivalent": lambda x: x * 1000,
             },
             "mm day-1": {
+                "mm d-1": lambda x: x,
                 "kg m-2 s-1": lambda x: x * 86400,
                 "kg/m2/s": lambda x: x * 86400,
                 "mm s-1": lambda x: x * 86400,
+                "mm/s": lambda x: x * 86400,
                 "mm h2o/s": lambda x: x * 86400,
                 "mm h2o s-1": lambda x: x * 86400,
                 "mm hr-1": lambda x: x * 24,
@@ -178,6 +188,8 @@ class UnitProcessing:
                 "w m**-2": lambda x: x,
                 "mj m-2 day-1": lambda x: x * 11.574074074074074,  # 1 / 0.0864
                 "mj m-2 d-1": lambda x: x * 11.574074074074074,  # 1 / 0.0864
+                # Daily accumulated energy, e.g. ERA5-Land monthly means of daily totals.
+                "j m-2 day-1": lambda x: x / 86400,
             },
             "unitless": {
                 "percent": lambda x: x / 100,
@@ -188,6 +200,10 @@ class UnitProcessing:
                 "kg/kg": lambda x: x,
                 "fraction": lambda x: x,
                 "m3 m-3": lambda x: x,
+                "m3/m3": lambda x: x,
+                "m**3 m**-3": lambda x: x,
+                "cm**3/cm**3": lambda x: x,
+                "mm3 mm-3": lambda x: x,
                 "m2 m-2": lambda x: x,
                 "g g-1": lambda x: x,
                 "1": lambda x: x,  # Dimensionless (numeric representation)
@@ -203,6 +219,7 @@ class UnitProcessing:
                 "degrees c": lambda x: x + 273.15,
                 "degree_celsius": lambda x: x + 273.15,
                 "celsius": lambda x: x + 273.15,
+                "degrees celsius": lambda x: x + 273.15,
                 "kelvin": lambda x: x,
                 "f": lambda x: (x - 32) * 5 / 9 + 273.15,
                 "degf": lambda x: (x - 32) * 5 / 9 + 273.15,
@@ -236,6 +253,7 @@ class UnitProcessing:
             },
             "pa": {
                 "hpa": lambda x: x * 100,
+                "kpa": lambda x: x * 1000,
                 "mbar": lambda x: x * 100,
                 "mb": lambda x: x * 100,
             },
@@ -245,9 +263,13 @@ class UnitProcessing:
             "m s-1": {
                 "km h-1": lambda x: x / 3.6,
                 "m s**-1": lambda x: x,
+                "m/s": lambda x: x,
             },
             "t ha-1": {
                 "kg ha-1": lambda x: x / 1000,
+                # Mg (megagram) = t; lookup is lowercase, and milligram per ha is never used here.
+                "mg ha-1": lambda x: x,
+                "mg/ha": lambda x: x,
             },
             "kg c m-2": {
                 "g c m-2": lambda x: x / 1000,
@@ -323,6 +345,14 @@ class UnitProcessing:
         return key
 
     @staticmethod
+    def base_unit(unit, item=""):
+        """Base unit the data of a declared unit end up in, or None if the table does not know it."""
+        if _UNIT_LOOKUP_CACHE is None:
+            UnitProcessing.convert_unit(None, "unitless")  # builds the lookup table
+        entry = _UNIT_LOOKUP_CACHE.get(UnitProcessing.lookup_key(unit, item))
+        return entry[0] if entry else None
+
+    @staticmethod
     def display_unit(unit, item=""):
         """Unit of the data after conversion, for labels.
 
@@ -357,3 +387,62 @@ class UnitProcessing:
         Check if input units match target units.
         """
         return sorted(input_units.lower().split()) == sorted(target_units.lower().split())
+
+
+def check_comparable_units(item, ref_unit, sim_unit):
+    """Raise ValueError when reference and simulation units convert to different base units.
+
+    Units the converter does not recognize are compared as declared, so they
+    are left alone here.
+    """
+    ref_base = UnitProcessing.base_unit(ref_unit, item)
+    sim_base = UnitProcessing.base_unit(sim_unit, item)
+    if ref_base and sim_base and ref_base != sim_base:
+        raise ValueError(
+            f"{item}: reference unit '{ref_unit}' converts to '{ref_base}' but simulation unit "
+            f"'{sim_unit}' converts to '{sim_base}'; correct the varunit of one source"
+        )
+
+
+def _normalize_unit_attribute(unit):
+    """Normalize a NetCDF units attribute such as 'mm.month-1' to the catalog spelling 'mm month-1'."""
+    return " ".join(re.sub(r"(?<=[\w-])\.(?=[a-zA-Z])", " ", str(unit)).lower().split())
+
+
+def _converts_alike(unit_a, unit_b, item):
+    """Whether two recognized units apply the same conversion to a sample January value."""
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    sample = xr.DataArray([1.0], dims="time", coords={"time": pd.DatetimeIndex(["2001-01-15"])})
+    converted_a, _ = UnitProcessing.convert_unit(sample, UnitProcessing.lookup_key(unit_a, item))
+    converted_b, _ = UnitProcessing.convert_unit(sample, UnitProcessing.lookup_key(unit_b, item))
+    return bool(np.allclose(np.asarray(converted_a), np.asarray(converted_b)))
+
+
+def warn_if_file_unit_differs(file_unit, declared_unit, item=None, source=""):
+    """Warn once when a file's units attribute names a different unit than the declared varunit.
+
+    Only units the converter recognizes are compared, so unknown spellings stay quiet.
+    """
+    if not file_unit or not declared_unit:
+        return
+    file_key = _normalize_unit_attribute(file_unit)
+    declared_key = str(declared_unit).lower().strip()
+    if file_key == declared_key:
+        return
+    file_base = UnitProcessing.base_unit(file_key, item)
+    declared_base = UnitProcessing.base_unit(declared_key, item)
+    if file_base is None or declared_base is None:
+        return
+    if file_base == declared_base and _converts_alike(file_key, declared_key, item):
+        return
+    key = (source, str(file_unit), declared_key)
+    if key in _FILE_UNIT_WARNINGS:
+        return
+    _FILE_UNIT_WARNINGS.add(key)
+    logging.warning(
+        f"{source}: the file says units '{file_unit}' but varunit is '{declared_unit}'; "
+        f"the data are converted as '{declared_unit}'. Check the varunit in the catalog or config."
+    )
