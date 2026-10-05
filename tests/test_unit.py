@@ -387,6 +387,20 @@ def test_check_comparable_units_rejects_pairs_converted_to_different_units():
         unit.check_comparable_units("Latent_Heat", "W/m2", "mm day-1")
 
 
+def test_carbon_stock_spellings_share_one_base_unit():
+    unit._UNIT_LOOKUP_CACHE = None
+    for spelling in ["kgC m-2", "kg C m-2", "gC m-2", "g C m-2"]:
+        assert UnitProcessing.base_unit(spelling) == "kg c m-2"
+    unit.check_comparable_units("Soil_Carbon", "kgC m-2", "kg C m-2")
+    unit.check_comparable_units("Soil_Carbon", "kgC m-2", "g C m-2")
+
+    converted, _ = UnitProcessing.convert_unit(np.array([1500.0]), "gC m-2")
+    np.testing.assert_allclose(converted, [1.5])
+    converted, _ = UnitProcessing.convert_unit(np.array([1.5]), "kgC m-2")
+    np.testing.assert_allclose(converted, [1.5])
+    assert UnitProcessing.display_unit("g C m-2", "Soil_Carbon") == "kgC m-2"
+
+
 def test_file_unit_warning_only_fires_for_a_different_recognized_unit(caplog):
     import logging
 
