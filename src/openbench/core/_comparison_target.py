@@ -29,9 +29,24 @@ def _to_float(value):
     return float(arr.item()) if arr.size == 1 else np.nan
 
 
-def _mean_or_nan(values):
-    values = np.asarray(values, dtype=float)
-    return float(np.nanmean(values)) if np.isfinite(values).any() else np.nan
+def _target_point(bias, rmse):
+    """Target-diagram point (bias, RMSD, centred RMSD) of several stations or cells taken together.
+
+    The means of bias, RMSE and centred RMSD do not satisfy RMSD^2 = bias^2 +
+    uRMSD^2, so their point sits closer to the origin than the errors are.
+    Pooling the samples with equal weight keeps the identity: the bias is the
+    mean bias, RMSD^2 is the mean of RMSE^2 (the mean squared error), and the
+    centred part is the rest, which includes the spread of the biases.
+    """
+    bias = np.asarray(bias, dtype=float).ravel()
+    rmse = np.asarray(rmse, dtype=float).ravel()
+    valid = np.isfinite(bias) & np.isfinite(rmse)
+    if not valid.any():
+        return np.nan, np.nan, np.nan
+    mean_bias = float(bias[valid].mean())
+    rmsd = float(np.sqrt(np.mean(rmse[valid] ** 2)))
+    crmsd = float(np.sqrt(max(rmsd**2 - mean_bias**2, 0.0)))
+    return mean_bias, rmsd, crmsd
 
 
 def _station_metadata_for_results(station_list: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
@@ -191,16 +206,14 @@ class TargetDiagramComparisonMixin:
                                             )
                                             _write_csv_atomic(station_list, output_stn_path, index=False)
 
-                                            bias_sim = _mean_or_nan(station_list["bias"])
-                                            output_file.write(f"{bias_sim}	")
+                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                                station_list["bias"], station_list["rmse"]
+                                            )
+                                            output_file.write(f"{bias_sim}\t")
                                             biases[i] = bias_sim
-
-                                            rmse_sim = _mean_or_nan(station_list["rmse"])
-                                            output_file.write(f"{rmse_sim}	")
+                                            output_file.write(f"{rmse_sim}\t")
                                             rmses[i] = rmse_sim
-
-                                            crmsd_sim = _mean_or_nan(station_list["CRMSD"])
-                                            output_file.write(f"{crmsd_sim}	")
+                                            output_file.write(f"{crmsd_sim}\t")
                                             crmsds[i] = crmsd_sim
                                         else:
                                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
@@ -224,13 +237,14 @@ class TargetDiagramComparisonMixin:
                                             reffile = Convert_Type.convert_nc(reffile)
                                             simfile = Convert_Type.convert_nc(simfile)
 
-                                            bias_sim = self.bias(simfile, reffile).mean(skipna=True).values
+                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                                self.bias(simfile, reffile).values,
+                                                self.RMSE(simfile, reffile).values,
+                                            )
                                             output_file.write(f"{bias_sim}\t")
                                             biases[i] = bias_sim
-                                            rmse_sim = self.RMSE(simfile, reffile).mean(skipna=True).values
                                             output_file.write(f"{rmse_sim}\t")
                                             rmses[i] = rmse_sim
-                                            crmsd_sim = self.CRMSD(simfile, reffile).mean(skipna=True).values
                                             output_file.write(f"{crmsd_sim}\t")
                                             crmsds[i] = crmsd_sim
                                     finally:
