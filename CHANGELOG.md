@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.0.6] - 2026-10-05
+
 ### Changed
 - Reports now also write `reports/<name>_standalone.html`, a single file with
   every figure embedded, so the report keeps its figures when copied or sent.
@@ -26,6 +28,11 @@
   `mm day-1`).
 
 ### Fixed
+- Carbon stock spellings `kgC m-2`, `kg C m-2`, `gC m-2` and `g C m-2`
+  now resolve to one base unit, avoiding false incompatible-unit errors.
+- Target diagrams pool equally weighted station/cell errors using centred
+  variance and the spread of station/cell biases. This preserves the RMSD
+  identity without losing small centred errors when bias dominates.
 - Since 3.0.0, every variable declared as `W m-2` or `w m-2` was converted to
   `mm day-1` as if it were evaporation, while `W/m2` and `watt/m2` stayed in
   W m-2. Sensible heat and radiation were therefore reported in mm day-1, and a

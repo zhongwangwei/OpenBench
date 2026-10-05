@@ -29,9 +29,22 @@ def _to_float(value):
     return float(arr.item()) if arr.size == 1 else np.nan
 
 
-def _mean_or_nan(values):
-    values = np.asarray(values, dtype=float)
-    return float(np.nanmean(values)) if np.isfinite(values).any() else np.nan
+def _target_point(bias, crmsd):
+    """Target point (bias, RMSD, centred RMSD) of equally weighted stations or cells.
+
+    Combine within-station centred variance with the variance of station biases
+    instead of subtracting nearly equal RMSD^2 and bias^2. Each station or cell
+    has equal weight, irrespective of its number of valid time samples.
+    """
+    bias = np.asarray(bias, dtype=float).ravel()
+    crmsd = np.asarray(crmsd, dtype=float).ravel()
+    valid = np.isfinite(bias) & np.isfinite(crmsd)
+    if not valid.any():
+        return np.nan, np.nan, np.nan
+    mean_bias = float(bias[valid].mean())
+    centred = float(np.sqrt(np.mean(crmsd[valid] ** 2 + (bias[valid] - mean_bias) ** 2)))
+    rmsd = float(np.hypot(mean_bias, centred))
+    return mean_bias, rmsd, centred
 
 
 def _station_metadata_for_results(station_list: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
@@ -138,8 +151,10 @@ class TargetDiagramComparisonMixin:
                                                         ref_varname,
                                                         sim_varname,
                                                     )
+                                                    s = s.astype("float64")
+                                                    o = o.astype("float64")
                                                     result = {
-                                                        "CRMSD": _to_float(self.CRMSD(s, o)),
+                                                        "CRMSD": _to_float(self.ubRMSE(s, o)),
                                                         "bias": _to_float(self.bias(s, o)),
                                                         "rmse": _to_float(self.RMSE(s, o)),
                                                     }
@@ -176,6 +191,9 @@ class TargetDiagramComparisonMixin:
                                             )
 
                                             result_frame = pd.DataFrame(results)
+                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                                result_frame["bias"], result_frame["CRMSD"]
+                                            )
                                             station_list = pd.concat(
                                                 [
                                                     _station_metadata_for_results(station_list, result_frame),
@@ -191,16 +209,11 @@ class TargetDiagramComparisonMixin:
                                             )
                                             _write_csv_atomic(station_list, output_stn_path, index=False)
 
-                                            bias_sim = _mean_or_nan(station_list["bias"])
-                                            output_file.write(f"{bias_sim}	")
+                                            output_file.write(f"{bias_sim}\t")
                                             biases[i] = bias_sim
-
-                                            rmse_sim = _mean_or_nan(station_list["rmse"])
-                                            output_file.write(f"{rmse_sim}	")
+                                            output_file.write(f"{rmse_sim}\t")
                                             rmses[i] = rmse_sim
-
-                                            crmsd_sim = _mean_or_nan(station_list["CRMSD"])
-                                            output_file.write(f"{crmsd_sim}	")
+                                            output_file.write(f"{crmsd_sim}\t")
                                             crmsds[i] = crmsd_sim
                                         else:
                                             ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
@@ -221,16 +234,17 @@ class TargetDiagramComparisonMixin:
                                                 reffile = select_data_array(ref_ds, ref_varname).load()
                                             with xr.open_dataset(sim_path) as sim_ds:
                                                 simfile = select_data_array(sim_ds, sim_varname).load()
-                                            reffile = Convert_Type.convert_nc(reffile)
-                                            simfile = Convert_Type.convert_nc(simfile)
+                                            reffile = Convert_Type.convert_nc(reffile).astype("float64")
+                                            simfile = Convert_Type.convert_nc(simfile).astype("float64")
 
-                                            bias_sim = self.bias(simfile, reffile).mean(skipna=True).values
+                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                                self.bias(simfile, reffile).values,
+                                                self.ubRMSE(simfile, reffile).values,
+                                            )
                                             output_file.write(f"{bias_sim}\t")
                                             biases[i] = bias_sim
-                                            rmse_sim = self.RMSE(simfile, reffile).mean(skipna=True).values
                                             output_file.write(f"{rmse_sim}\t")
                                             rmses[i] = rmse_sim
-                                            crmsd_sim = self.CRMSD(simfile, reffile).mean(skipna=True).values
                                             output_file.write(f"{crmsd_sim}\t")
                                             crmsds[i] = crmsd_sim
                                     finally:

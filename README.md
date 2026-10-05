@@ -100,8 +100,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 ```
 
-The GitHub source version is **3.0.2**. This update does not publish to PyPI;
-the PyPI installation examples below refer to **3.0.1**.
+The current release is **3.0.6**.
 
 Install from PyPI:
 
@@ -120,10 +119,10 @@ pip install "colm-openbench[remote]"
 pip install "colm-openbench[all]"
 ```
 
-Upgrade an existing installation to the Windows CLI compatibility fix:
+Upgrade an existing installation to the latest release:
 
 ```bash
-python -m pip install --upgrade "colm-openbench==3.0.1"
+python -m pip install --upgrade "colm-openbench==3.0.6"
 openbench --version
 openbench smoke-test
 ```
@@ -168,7 +167,7 @@ post-release compatibility patches:
 ```bash
 conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build
 conda run -n openbench-build conda build conda/ --python 3.12 --override-channels -c conda-forge --no-anaconda-upload --output-folder ./dist/conda
-conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.2
+conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.6
 conda run -n openbench-conda openbench smoke-test
 ```
 

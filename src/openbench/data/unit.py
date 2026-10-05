@@ -21,7 +21,6 @@ BASE_UNIT_LABELS = {
     "k": "K",
     "gc m-2 day-1": "gC m-2 day-1",
     "kg c m-2": "kgC m-2",
-    "kgc m-2": "kgC m-2",
 }
 
 
@@ -272,11 +271,10 @@ class UnitProcessing:
                 "mg/ha": lambda x: x,
             },
             "kg c m-2": {
+                # kgC m-2 is the same unit; one base keeps the spellings comparable
+                "kgc m-2": lambda x: x,
                 "g c m-2": lambda x: x / 1000,
-            },
-            "kgc m-2": {
                 "gc m-2": lambda x: x / 1000,
-                "g c m-2": lambda x: x / 1000,
             },
         }
 
