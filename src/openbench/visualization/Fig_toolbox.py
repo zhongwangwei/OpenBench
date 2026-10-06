@@ -49,6 +49,7 @@ def process_unit(ref_unit, sim_unit, metric):
         "gof": "Unitless",  # Numerical Goodness-of-fit measures
         "KGEkm": "Unitless",  # Kling-Gupta Efficiency with knowable-moments
         "KGElf": "Unitless",  # Kling-Gupta Efficiency for low values
+        "KGEln": "Unitless",  # Kling-Gupta Efficiency with log ratios
         "KGEnp": "Unitless",  # Non-parametric version of the Kling-Gupta Efficiency
         "md": "Unitless",  # Modified Index of Agreement
         "mNSE": "Unitless",  # Modified Nash-Sutcliffe efficiency
@@ -71,6 +72,13 @@ def process_unit(ref_unit, sim_unit, metric):
         "wsNSE": "Unitless",  # Weighted seasonal Nash-Sutcliffe Efficiency
         "index_agreement": "Unitless",  # Index of agreement
         "MFM": "Unitless",  # Model Fidelity Metric
+        "MFM_omega": "Unitless",  # MFM phase component
+        "MFM_varphi": "Unitless",  # MFM variability component
+        "MFM_eta": "Unitless",  # MFM distribution component
+        "APFB": "Unitless",  # Annual Peak Flow Bias (fraction of the observed peak)
+        "br2": "Unitless",  # R2 weighted by the regression slope
+        "cp": "Unitless",  # Coefficient of Persistence
+        "dr": "Unitless",  # Refined Index of Agreement
     }
 
     unit = all_metrics_units.get(metric)
@@ -243,9 +251,8 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
         "ubRMSE",
         "CRMSD",
         "smpi",
-        "APFB",
     ]
-    list4 = ["correlation_R2", "index_agreement", "L"]
+    list4 = ["correlation_R2", "index_agreement", "L", "MFM_omega", "MFM_varphi", "MFM_eta"]
     score_list = list(IMPLEMENTED_SCORE_NAMES)
     list5 = ["correlation", "ubcorrelation", "ubcorrelation_R2"]
 

@@ -100,6 +100,22 @@ def test_fig_toolbox_get_index_honors_requested_builtin_colormap():
     assert cmap.name == "viridis"
 
 
+def test_fig_toolbox_get_index_keeps_negative_apfb_ticks():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(-1.0, 1.0, colormap="viridis", varname="APFB")
+
+    assert min(mticks) < 0 < max(mticks)
+
+
+def test_fig_toolbox_get_index_caps_mfm_components_at_one():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(0.0, 1.4, colormap="viridis", varname="MFM_eta")
+
+    assert max(mticks) <= 1
+
+
 def test_special_stat_figures_do_not_use_removed_cm_get_cmap_api():
     files = [
         "Fig_ANOVA.py",
