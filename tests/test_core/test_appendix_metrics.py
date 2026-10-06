@@ -194,3 +194,20 @@ def test_wsNSE_requires_explicit_seasons_for_numeric_time_coords():
 
     with pytest.raises(ValueError, match="explicit seasons"):
         m.wsNSE(sim, obs, season_weights={"all": 1.0})
+
+
+def test_kgeln_uses_log_ratios_of_variability_and_mean():
+    m = metrics()
+    t = np.arange(12)
+    obs = da(2.0 + np.sin(t))
+    sim = da(3.0 * (2.0 + np.sin(t)) + 0.5 * np.cos(t))
+    r = np.corrcoef(sim.values, obs.values)[0, 1]
+    alpha = sim.values.std() / obs.values.std()
+    beta = sim.values.mean() / obs.values.mean()
+
+    assert_close(m.KGEln(sim, obs), 1 - np.sqrt((r - 1) ** 2 + np.log(alpha) ** 2 + np.log(beta) ** 2))
+
+
+def test_kgeln_is_undefined_for_a_non_positive_mean_ratio():
+    obs = da([1.0, 2.0, 3.0, 4.0])
+    assert np.isnan(float(metrics().KGEln(-obs, obs)))

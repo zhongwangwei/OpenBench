@@ -425,3 +425,20 @@ def test_registry_unit_spellings_convert_instead_of_passing_through():
         converted, base_unit = UnitProcessing.convert_unit(value, declared)
         assert base_unit == expected_base, declared
         np.testing.assert_allclose(converted, expected, err_msg=declared)
+
+
+def test_methane_fluxes_convert_to_carbon_flux():
+    unit._UNIT_LOOKUP_CACHE = None
+    carbon_per_ch4 = 12.011 / 16.043
+    cases = [
+        ("kg CH4 m-2 s-1", 1e-3 / 86400, carbon_per_ch4),
+        ("g CH4 m-2 d-1", 1.0, carbon_per_ch4),
+        ("mg CH4 m-2 d-1", 1000.0, carbon_per_ch4),
+        ("g CH4 m-2 yr-1", 365.25, carbon_per_ch4),
+        ("nmol CH4 m-2 s-1", 1e9 / 86400, 12.011),
+        ("nmol m-2 s-1", 1e9 / 86400, 12.011),
+    ]
+    for declared, value, expected in cases:
+        converted, base_unit = UnitProcessing.convert_unit(value, declared)
+        assert base_unit == "gc m-2 day-1", declared
+        np.testing.assert_allclose(converted, expected, err_msg=declared)

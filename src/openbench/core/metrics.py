@@ -722,6 +722,17 @@ class metrics:
         r, alpha, beta, gamma = self._kge_components(s, o, dim=dim)
         return 1 - ((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2 + (gamma - 1) ** 2) ** 0.5
 
+    def KGEln(self, s, o, dim="time"):
+        """KGE with log ratios: 1 - sqrt((r - 1)^2 + (ln alpha)^2 + (ln beta)^2).
+
+        alpha is the ratio of simulated to observed standard deviation and beta the
+        ratio of the means. On a log scale an over- and an underestimate by the same
+        factor weigh the same; the metric is undefined unless both ratios are positive.
+        """
+        r, alpha, beta, _gamma = self._kge_components(s, o, dim=dim)
+        valid = (alpha > 0) & (beta > 0)
+        return 1 - ((r - 1) ** 2 + np.log(alpha.where(valid)) ** 2 + np.log(beta.where(valid)) ** 2) ** 0.5
+
     def KGElf(self, s, o, quantile=0.30, dim="time"):
         """Low-flow KGE over samples where observed values are <= Q30 by default."""
         s, o = self._validate_inputs(s, o)
