@@ -645,6 +645,11 @@ class GeneralInfoReader:
             try:
                 custom_filter(self)
             except Exception as e:
+                # The built-in station matcher enforces fixed upstream-area and
+                # allocation-error limits; falling back would evaluate stations
+                # it rejected (or a station list it never vetted).
+                if getattr(custom_filter, "is_station_matcher", False):
+                    raise
                 logging.error(f"Custom filter failed: {e}")
                 self._apply_default_filter()
         else:
@@ -707,12 +712,11 @@ class GeneralInfoReader:
                             area_var=sm.area_var,
                             discharge_var=sm.discharge_var,
                             time_var=sm.time_var,
-                            area_error_threshold=sm.area_error_threshold,
-                            min_uparea=sm.min_uparea,
                             max_uparea=sm.max_uparea,
                             time_format=sm.time_format,
                         )
 
+                    _station_matcher_filter.is_station_matcher = True
                     return _station_matcher_filter
         except Exception as e:
             logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)

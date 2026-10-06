@@ -21,6 +21,21 @@
 - Molar carbon fluxes (mol m-2 s-1 and the umol m-2 s-1 spellings) now use
   12.011 g mol-1 for carbon, as the CO2 and CH4 entries already did. Results
   in umol units, such as tower GPP, rise by 0.09 %.
+- Streamflow station matching now drops gauges whose reported upstream area
+  is too small for the river to be resolved at the simulation resolution:
+  3000 km² at 15min, 500 km² at 06min, 350 km² at 05min, 150 km² at 03min and
+  100 km² at 01min. The minimum can no longer be set in the catalog;
+  `station_matching.min_uparea` is ignored with a warning. A gauge without a
+  reported area passes this check but must still pass the others. Station
+  matching, including the `direct` method, now fails with a clear error for
+  other simulation resolutions.
+- CaMA station matching (`cama_allocation`) now keeps only gauges whose
+  allocation error `cama_alloc_err_<res>` is known and at most 0.2 in absolute
+  value, compared at the precision it is stored in. Gauges with a missing
+  (NaN) error used to pass and are now dropped, and an error of exactly 0.2
+  stored as float32 is no longer dropped. The limit can no longer be set in
+  the catalog; `station_matching.area_error_threshold` is ignored with a
+  warning.
 
 ### Fixed
 - Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
@@ -32,6 +47,11 @@
   the other end now gets the arrow for the end that is passed. Before, it got
   no arrow, and with `show_method: interpolate` the areas beyond that end
   were left blank.
+- A failed Streamflow station match (missing dataset, unsupported resolution,
+  or no gauge passing the limits) now stops that evaluation with the original
+  error. It used to be logged and the evaluation continued with the default
+  filter, which could keep a previously loaded station list the matcher never
+  checked.
 
 ## [3.0.6] - 2026-10-05
 

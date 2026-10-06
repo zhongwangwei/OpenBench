@@ -923,20 +923,7 @@ def _build_reference(data: dict) -> ReferenceDataset:
     sm_data = data.get("station_matching")
     station_matching = None
     if sm_data and isinstance(sm_data, dict):
-        station_matching = StationMatchingConfig(
-            method=sm_data.get("method", "cama_allocation"),
-            dataset_file=sm_data.get("dataset_file", ""),
-            station_id_var=sm_data.get("station_id_var", "station"),
-            lon_var=sm_data.get("lon_var", "lon"),
-            lat_var=sm_data.get("lat_var", "lat"),
-            area_var=sm_data.get("area_var", "area"),
-            discharge_var=sm_data.get("discharge_var", "discharge"),
-            time_var=sm_data.get("time_var", "time"),
-            area_error_threshold=float(sm_data.get("area_error_threshold", 0.2)),
-            min_uparea=float(sm_data.get("min_uparea", 1000.0)),
-            max_uparea=float(sm_data.get("max_uparea", float("inf"))),
-            time_format=sm_data.get("time_format"),
-        )
+        station_matching = _parse_station_matching(sm_data, name)
 
     return ReferenceDataset(
         name=name,
@@ -1083,6 +1070,41 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
     )
 
 
+# station_matching fields whose limits are now fixed in openbench.data.station_matcher.
+_FIXED_STATION_MATCHING_FIELDS = {
+    "min_uparea": "MIN_UPAREA_BY_RESOLUTION",
+    "area_error_threshold": "MAX_CAMA_ALLOC_ERR",
+}
+_IGNORED_STATION_MATCHING_WARNED: set[tuple[str, str]] = set()
+
+
+def _parse_station_matching(sm_data: dict, name: str) -> StationMatchingConfig:
+    """Build a StationMatchingConfig from a catalog ``station_matching`` block."""
+    for field, fixed_by in _FIXED_STATION_MATCHING_FIELDS.items():
+        if field in sm_data and (name, field) not in _IGNORED_STATION_MATCHING_WARNED:
+            _IGNORED_STATION_MATCHING_WARNED.add((name, field))
+            logger.warning(
+                "Reference '%s': station_matching.%s=%s is ignored. The limit is fixed "
+                "(openbench.data.station_matcher.%s); remove the field from the catalog.",
+                name,
+                field,
+                sm_data[field],
+                fixed_by,
+            )
+    return StationMatchingConfig(
+        method=sm_data.get("method", "cama_allocation"),
+        dataset_file=sm_data.get("dataset_file", ""),
+        station_id_var=sm_data.get("station_id_var", "station"),
+        lon_var=sm_data.get("lon_var", "lon"),
+        lat_var=sm_data.get("lat_var", "lat"),
+        area_var=sm_data.get("area_var", "area"),
+        discharge_var=sm_data.get("discharge_var", "discharge"),
+        time_var=sm_data.get("time_var", "time"),
+        max_uparea=float(sm_data.get("max_uparea", float("inf"))),
+        time_format=sm_data.get("time_format"),
+    )
+
+
 def _deep_merge_reference(existing: ReferenceDataset, overlay: dict) -> ReferenceDataset:
     """Deep-merge a user overlay dict into an existing ReferenceDataset.
 
@@ -1110,20 +1132,7 @@ def _deep_merge_reference(existing: ReferenceDataset, overlay: dict) -> Referenc
     # raw dict at this point and would need re-parsing).
     sm_overlay = overlay.get("station_matching")
     if isinstance(sm_overlay, dict):
-        station_matching = StationMatchingConfig(
-            method=sm_overlay.get("method", "cama_allocation"),
-            dataset_file=sm_overlay.get("dataset_file", ""),
-            station_id_var=sm_overlay.get("station_id_var", "station"),
-            lon_var=sm_overlay.get("lon_var", "lon"),
-            lat_var=sm_overlay.get("lat_var", "lat"),
-            area_var=sm_overlay.get("area_var", "area"),
-            discharge_var=sm_overlay.get("discharge_var", "discharge"),
-            time_var=sm_overlay.get("time_var", "time"),
-            area_error_threshold=float(sm_overlay.get("area_error_threshold", 0.2)),
-            min_uparea=float(sm_overlay.get("min_uparea", 1000.0)),
-            max_uparea=float(sm_overlay.get("max_uparea", float("inf"))),
-            time_format=sm_overlay.get("time_format"),
-        )
+        station_matching = _parse_station_matching(sm_overlay, name)
     else:
         station_matching = existing.station_matching
 
