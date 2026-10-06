@@ -28,6 +28,10 @@
   bar's end arrows. The MFM components keep their colour bar within 0 to 1.
 - KGEln, APFB, br2, cp, dr and the three MFM components no longer log
   "Unknown metric unit" for every plot.
+- A metric map whose values reach exactly one end of the colour bar and pass
+  the other end now gets the arrow for the end that is passed. Before, it got
+  no arrow, and with `show_method: interpolate` the areas beyond that end
+  were left blank.
 
 ## [3.0.6] - 2026-10-05
 

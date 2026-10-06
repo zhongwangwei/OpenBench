@@ -71,6 +71,23 @@ from .Fig_toolbox import get_index, process_unit
 logger = logging.getLogger(__name__)
 
 
+def colorbar_extend(min_value, max_value, vmin, vmax):
+    """Return the colour-bar extend for data spanning [min_value, max_value].
+
+    Each end is checked on its own: data equal to a bound lie inside the
+    range, so a minimum of exactly ``vmin`` must not hide values above ``vmax``.
+    """
+    below = min_value < vmin
+    above = max_value > vmax
+    if below and above:
+        return "both"
+    if below:
+        return "min"
+    if above:
+        return "max"
+    return "neither"
+
+
 def determine_display_unit(self):
     """
     Determine the consistent display unit for plotting.
@@ -217,14 +234,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     var = data.values
     min_value, max_value = finite_min_max(var, label=f"{xitem} grid map")
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = colorbar_extend(min_value, max_value, option["vmin"], option["vmax"])
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -468,14 +478,7 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = colorbar_extend(min_value, max_value, option["vmin"], option["vmax"])
 
     cs = ax.scatter(
         stn_lon,
