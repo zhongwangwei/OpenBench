@@ -12,8 +12,15 @@
   bundled. Of the new items only Methane can be selected in the GUI so far.
 - `KGEln`, the Kling-Gupta efficiency with log ratios of variability and
   mean, so that over- and underestimation by the same factor weigh the same.
+- A Streamflow station dataset registered as `<name>_full.nc` falls back to
+  its redistributable subset `<name>_dist.nc` in the same directory when the
+  full file is absent, so the OpenBench_Streamflow references run from either
+  file. `openbench init` accepts either file too.
 
 ### Changed
+- The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
+  now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
+  coverage of the 2026-10-06 release.
 - CH4 fluxes in kg CH4 m-2 s-1; g CH4 m-2 per second, day or year;
   mg CH4 m-2 d-1; and umol or nmol CH4 m-2 s-1 now convert to gC m-2 day-1.
   Before, they kept their declared unit. A bare nmol m-2 s-1 is read as a

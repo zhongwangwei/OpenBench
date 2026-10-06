@@ -600,9 +600,11 @@ def _validate_selected_reference_data(selected: dict[str, object]) -> None:
         station_matching = getattr(ref, "station_matching", None)
         dataset_file = getattr(station_matching, "dataset_file", "") if station_matching else ""
         if dataset_file:
-            dataset_path = root / dataset_file
-            if not dataset_path.is_file():
-                errors.append(f"{variable} / {name}: dataset file does not exist: {dataset_path}")
+            from openbench.data.station_matcher import resolve_station_dataset, station_dataset_candidates
+
+            if resolve_station_dataset(root, dataset_file) is None:
+                tried = " or ".join(str(p) for p in station_dataset_candidates(root, dataset_file))
+                errors.append(f"{variable} / {name}: dataset file does not exist: {tried}")
             continue
 
         var_map = (getattr(ref, "variables", None) or {}).get(variable)

@@ -599,3 +599,23 @@ def test_cama_station_matching_compares_float32_alloc_err_at_stored_precision(tm
     run_station_matching(info, str(dataset_path), method="cama_allocation", n_jobs=1)
 
     assert info.stn_list["ID"].tolist() == ["0", "1"]
+
+
+def test_resolve_station_dataset_prefers_full_then_dist(tmp_path):
+    from openbench.data.station_matcher import resolve_station_dataset
+
+    full = tmp_path / "Flow_Daily_full.nc"
+    dist = tmp_path / "Flow_Daily_dist.nc"
+    assert resolve_station_dataset(tmp_path, full.name) is None
+    dist.touch()
+    assert resolve_station_dataset(tmp_path, full.name) == dist
+    full.touch()
+    assert resolve_station_dataset(tmp_path, full.name) == full
+
+
+def test_resolve_station_dataset_only_falls_back_for_full_files(tmp_path):
+    from openbench.data.station_matcher import resolve_station_dataset
+
+    (tmp_path / "GRDC_daily_dist.nc").touch()
+
+    assert resolve_station_dataset(tmp_path, "GRDC_daily.nc") is None

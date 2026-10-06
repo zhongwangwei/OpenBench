@@ -697,14 +697,19 @@ class GeneralInfoReader:
                     sm = ref.station_matching
 
                     def _station_matcher_filter(info):
-                        from pathlib import Path
+                        from openbench.data.station_matcher import (
+                            resolve_station_dataset,
+                            run_station_matching,
+                            station_dataset_candidates,
+                        )
 
-                        from openbench.data.station_matcher import run_station_matching
-
-                        dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
+                        dataset_path = resolve_station_dataset(info.ref_dir, sm.dataset_file)
+                        if dataset_path is None:
+                            tried = ", ".join(str(p) for p in station_dataset_candidates(info.ref_dir, sm.dataset_file))
+                            raise FileNotFoundError(f"Station dataset not found; tried {tried}")
                         run_station_matching(
                             info,
-                            dataset_path,
+                            str(dataset_path),
                             method=sm.method,
                             station_id_var=sm.station_id_var,
                             lon_var=sm.lon_var,

@@ -42,23 +42,10 @@ def test_non_streamflow_reference_ignores_stale_station_matching(monkeypatch, ca
     assert "Ignoring station_matching for non-Streamflow reference OpenBench_FLUX_Daily" in caplog.text
 
 
-@pytest.mark.parametrize(
-    ("sim_grid_res", "areas", "error"),
-    [
-        (0.5, [5000.0], "no minimum upstream area"),
-        (0.25, [1000.0], "No stations passed"),
-    ],
-)
-def test_station_matching_failure_propagates_instead_of_using_loaded_station_list(
-    monkeypatch, tmp_path, sim_grid_res, areas, error
-):
-    """A failed built-in match must not fall back to stations it did not vet."""
+def _write_streamflow_stations(path, areas):
     import numpy as np
     import pandas as pd
     import xarray as xr
-
-    import openbench.data.registry.manager as registry_manager_module
-    from openbench.data.registry.schema import StationMatchingConfig
 
     n = len(areas)
     xr.Dataset(
@@ -73,10 +60,15 @@ def test_station_matching_failure_propagates_instead_of_using_loaded_station_lis
             "discharge": (("station", "time"), np.ones((n, 2))),
         },
         coords={"time": pd.date_range("2000-01-01", periods=2, freq="D")},
-    ).to_netcdf(tmp_path / "stations.nc")
+    ).to_netcdf(path)
+
+
+def _streamflow_matching_reader(monkeypatch, tmp_path, dataset_file, sim_grid_res):
+    import openbench.data.registry.manager as registry_manager_module
+    from openbench.data.registry.schema import StationMatchingConfig
 
     reference = SimpleNamespace(
-        station_matching=StationMatchingConfig(dataset_file="stations.nc"),
+        station_matching=StationMatchingConfig(dataset_file=dataset_file),
         variables={"Streamflow": SimpleNamespace()},
     )
     registry = SimpleNamespace(get_reference=lambda _name: reference)
@@ -103,12 +95,52 @@ def test_station_matching_failure_propagates_instead_of_using_loaded_station_lis
         max_lat=90,
         _custom_filter_warnings_shown=set(),
     )
+    return reader
+
+
+@pytest.mark.parametrize(
+    ("sim_grid_res", "areas", "error"),
+    [
+        (0.5, [5000.0], "no minimum upstream area"),
+        (0.25, [1000.0], "No stations passed"),
+    ],
+)
+def test_station_matching_failure_propagates_instead_of_using_loaded_station_list(
+    monkeypatch, tmp_path, sim_grid_res, areas, error
+):
+    """A failed built-in match must not fall back to stations it did not vet."""
+    import pandas as pd
+
+    _write_streamflow_stations(tmp_path / "stations.nc", areas)
+    reader = _streamflow_matching_reader(monkeypatch, tmp_path, "stations.nc", sim_grid_res)
     # A station list already read from a fulllist that the matcher never vetted.
     reader.stn_list = pd.DataFrame(
         {"ID": ["OLD"], "lon": [10.0], "lat": [20.0], "ref_syear": [2000], "ref_eyear": [2000]}
     )
 
     with pytest.raises(ValueError, match=error):
+        reader._filter_stations()
+
+
+def test_station_matching_uses_dist_subset_when_full_dataset_is_missing(monkeypatch, tmp_path):
+    import pandas as pd
+
+    _write_streamflow_stations(tmp_path / "Flow_Daily_dist.nc", [5000.0])
+    reader = _streamflow_matching_reader(monkeypatch, tmp_path, "Flow_Daily_full.nc", 0.25)
+    reader.stn_list = pd.DataFrame()
+
+    reader._filter_stations()
+
+    assert reader.stn_list["ID"].tolist() == ["0"]
+
+
+def test_station_matching_names_both_dataset_files_when_neither_exists(monkeypatch, tmp_path):
+    import pandas as pd
+
+    reader = _streamflow_matching_reader(monkeypatch, tmp_path, "Flow_Daily_full.nc", 0.25)
+    reader.stn_list = pd.DataFrame()
+
+    with pytest.raises(FileNotFoundError, match="Flow_Daily_full.nc.*Flow_Daily_dist.nc"):
         reader._filter_stations()
 
 

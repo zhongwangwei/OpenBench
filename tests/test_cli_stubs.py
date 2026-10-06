@@ -4856,6 +4856,31 @@ def test_selected_station_reference_requires_registered_dataset_file(tmp_path):
     init_module._validate_selected_reference_data({"Streamflow": ref})
 
 
+def test_init_reference_validation_accepts_dist_subset_of_full_dataset(tmp_path):
+    import openbench.cli.init_cmd as init_module
+    from openbench.data.registry.schema import ReferenceDataset, StationMatchingConfig, VariableMapping
+
+    ref = ReferenceDataset(
+        name="OpenBench_Streamflow_Daily",
+        description="",
+        category="Water",
+        data_type="stn",
+        tim_res="Day",
+        data_groupby="single",
+        timezone=0,
+        years=[1900, 2020],
+        root_dir=str(tmp_path),
+        station_matching=StationMatchingConfig(dataset_file="OpenBench_Streamflow_Daily_full.nc"),
+        variables={"Streamflow": VariableMapping(varname="discharge", varunit="m3 s-1")},
+    )
+
+    with pytest.raises(click.ClickException, match="OpenBench_Streamflow_Daily_dist.nc"):
+        init_module._validate_selected_reference_data({"Streamflow": ref})
+
+    (tmp_path / "OpenBench_Streamflow_Daily_dist.nc").touch()
+    init_module._validate_selected_reference_data({"Streamflow": ref})
+
+
 def test_init_refresh_ref_registers_without_second_confirmation(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
 

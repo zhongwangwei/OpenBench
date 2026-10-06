@@ -108,6 +108,34 @@ def _alloc_err_within_limit(alloc_err) -> bool:
     return bool(np.isfinite(alloc_err) and np.abs(alloc_err) <= limit)
 
 
+FULL_DATASET_SUFFIX = "_full.nc"
+DIST_DATASET_SUFFIX = "_dist.nc"
+
+
+def station_dataset_candidates(root, dataset_file: str) -> list[Path]:
+    """Return the station dataset file, then its redistributable subset.
+
+    A ``<name>_full.nc`` dataset may be shipped only as its redistributable
+    ``<name>_dist.nc`` subset, which is used when the full file is absent.
+    """
+    primary = Path(root) / dataset_file
+    candidates = [primary]
+    if primary.name.endswith(FULL_DATASET_SUFFIX):
+        candidates.append(primary.with_name(primary.name[: -len(FULL_DATASET_SUFFIX)] + DIST_DATASET_SUFFIX))
+    return candidates
+
+
+def resolve_station_dataset(root, dataset_file: str) -> Optional[Path]:
+    """Return the first station dataset candidate that exists, or None."""
+    candidates = station_dataset_candidates(root, dataset_file)
+    for path in candidates:
+        if path.is_file():
+            if path != candidates[0]:
+                logging.info("Station dataset %s not found; using %s", candidates[0], path.name)
+            return path
+    return None
+
+
 def _station_id_to_string(value) -> str:
     """Return a stable station identifier without assuming it is numeric."""
     if isinstance(value, bytes):
