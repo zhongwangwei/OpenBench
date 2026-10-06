@@ -208,7 +208,7 @@ def test_umol_carbon_flux_alias_converts_to_daily_grams_carbon():
     converted, base_unit = UnitProcessing.convert_unit(np.array([1.0]), "umol/m2/s")
 
     assert base_unit == "gc m-2 day-1"
-    assert converted == pytest.approx(np.array([12e-6 * 86400]))
+    assert converted == pytest.approx(np.array([12.011e-6 * 86400]))
 
 
 def test_taylor_summary_uses_geometrically_consistent_crmsd_for_diagram():
