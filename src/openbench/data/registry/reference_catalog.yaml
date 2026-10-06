@@ -3557,3 +3557,739 @@ GRFR_HigRes:
     data_groupby: profile
     tim_res: profile
     grid_res: nc
+GCP-CLASSIC-CRU_LowRes:
+  name: GCP-CLASSIC-CRU_LowRes
+  description: GCP-CLASSIC-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-CLASSIC-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-CLASSIC-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-CLASSIC-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-CLASSIC-CRU_fw
+      suffix: ''
+GCP-CLASSIC-GSWP3_LowRes:
+  name: GCP-CLASSIC-GSWP3_LowRes
+  description: GCP-CLASSIC-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2016
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-CLASSIC-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-CLASSIC-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-CLASSIC-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-CLASSIC-GSWP3_fw
+      suffix: ''
+GCP-ELM-CRU_LowRes:
+  name: GCP-ELM-CRU_LowRes
+  description: GCP-ELM-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ELM-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ELM-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-ELM-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-ELM-CRU_fw
+      suffix: ''
+GCP-ELM-GSWP3_LowRes:
+  name: GCP-ELM-GSWP3_LowRes
+  description: GCP-ELM-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ELM-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ELM-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-ELM-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-ELM-GSWP3_fw
+      suffix: ''
+GCP-Ensemble_LowRes:
+  name: GCP-Ensemble_LowRes
+  description: GCP-Ensemble wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-Ensemble
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-Ensemble_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-Ensemble
+      varname: fw
+      varunit: fraction
+      prefix: GCP-Ensemble_fw
+      suffix: ''
+GCP-ISAM-CRU_LowRes:
+  name: GCP-ISAM-CRU_LowRes
+  description: GCP-ISAM-CRU wetland CH4 flux (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ISAM-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ISAM-CRU_FCH4
+      suffix: ''
+GCP-ISAM-GSWP3_LowRes:
+  name: GCP-ISAM-GSWP3_LowRes
+  description: GCP-ISAM-GSWP3 wetland CH4 flux (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ISAM-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ISAM-GSWP3_FCH4
+      suffix: ''
+GCP-JSBACH-CRU_LowRes:
+  name: GCP-JSBACH-CRU_LowRes
+  description: GCP-JSBACH-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-JSBACH-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-JSBACH-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-JSBACH-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-JSBACH-CRU_fw
+      suffix: ''
+GCP-JSBACH-GSWP3_LowRes:
+  name: GCP-JSBACH-GSWP3_LowRes
+  description: GCP-JSBACH-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-JSBACH-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-JSBACH-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-JSBACH-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-JSBACH-GSWP3_fw
+      suffix: ''
+GCP-JULES-CRU_LowRes:
+  name: GCP-JULES-CRU_LowRes
+  description: GCP-JULES-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-JULES-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-JULES-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-JULES-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-JULES-CRU_fw
+      suffix: ''
+GCP-JULES-GSWP3_LowRes:
+  name: GCP-JULES-GSWP3_LowRes
+  description: GCP-JULES-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-JULES-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-JULES-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-JULES-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-JULES-GSWP3_fw
+      suffix: ''
+GCP-LPJ-MPI-CRU_LowRes:
+  name: GCP-LPJ-MPI-CRU_LowRes
+  description: GCP-LPJ-MPI-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPJ-MPI-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPJ-MPI-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPJ-MPI-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPJ-MPI-CRU_fw
+      suffix: ''
+GCP-LPJ-MPI-GSWP3_LowRes:
+  name: GCP-LPJ-MPI-GSWP3_LowRes
+  description: GCP-LPJ-MPI-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPJ-MPI-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPJ-MPI-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPJ-MPI-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPJ-MPI-GSWP3_fw
+      suffix: ''
+GCP-LPJ-wsl-CRU_LowRes:
+  name: GCP-LPJ-wsl-CRU_LowRes
+  description: GCP-LPJ-wsl-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPJ-wsl-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPJ-wsl-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPJ-wsl-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPJ-wsl-CRU_fw
+      suffix: ''
+GCP-LPJ-wsl-GSWP3_LowRes:
+  name: GCP-LPJ-wsl-GSWP3_LowRes
+  description: GCP-LPJ-wsl-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPJ-wsl-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPJ-wsl-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPJ-wsl-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPJ-wsl-GSWP3_fw
+      suffix: ''
+GCP-LPX-Bern-CRU_LowRes:
+  name: GCP-LPX-Bern-CRU_LowRes
+  description: GCP-LPX-Bern-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPX-Bern-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPX-Bern-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPX-Bern-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPX-Bern-CRU_fw
+      suffix: ''
+GCP-LPX-Bern-GSWP3_LowRes:
+  name: GCP-LPX-Bern-GSWP3_LowRes
+  description: GCP-LPX-Bern-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-LPX-Bern-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-LPX-Bern-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-LPX-Bern-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-LPX-Bern-GSWP3_fw
+      suffix: ''
+GCP-ORCHIDEE-CRU_LowRes:
+  name: GCP-ORCHIDEE-CRU_LowRes
+  description: GCP-ORCHIDEE-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ORCHIDEE-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ORCHIDEE-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-ORCHIDEE-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-ORCHIDEE-CRU_fw
+      suffix: ''
+GCP-ORCHIDEE-GSWP3_LowRes:
+  name: GCP-ORCHIDEE-GSWP3_LowRes
+  description: GCP-ORCHIDEE-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-ORCHIDEE-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-ORCHIDEE-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-ORCHIDEE-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-ORCHIDEE-GSWP3_fw
+      suffix: ''
+GCP-SDGVM-CRU_LowRes:
+  name: GCP-SDGVM-CRU_LowRes
+  description: GCP-SDGVM-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-SDGVM-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-SDGVM-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-SDGVM-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-SDGVM-CRU_fw
+      suffix: ''
+GCP-SDGVM-GSWP3_LowRes:
+  name: GCP-SDGVM-GSWP3_LowRes
+  description: GCP-SDGVM-GSWP3 wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-SDGVM-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-SDGVM-GSWP3_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-SDGVM-GSWP3
+      varname: fw
+      varunit: fraction
+      prefix: GCP-SDGVM-GSWP3_fw
+      suffix: ''
+GCP-VISIT-CRU_LowRes:
+  name: GCP-VISIT-CRU_LowRes
+  description: GCP-VISIT-CRU wetland CH4 flux, wetland fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-VISIT-CRU
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-VISIT-CRU_FCH4
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GCP-VISIT-CRU
+      varname: fw
+      varunit: fraction
+      prefix: GCP-VISIT-CRU_fw
+      suffix: ''
+GCP-VISIT-GSWP3_LowRes:
+  name: GCP-VISIT-GSWP3_LowRes
+  description: GCP-VISIT-GSWP3 wetland CH4 flux (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2019
+  grid_res: 0.5
+  variables:
+    Wetland_Methane_Emission:
+      sub_dir: Bio/Wetland_Methane_Emission/GCP-VISIT-GSWP3
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GCP-VISIT-GSWP3_FCH4
+      suffix: ''
+GIEMS-MC_v1.1_LowRes:
+  name: GIEMS-MC_v1.1_LowRes
+  description: GIEMS-MC_v1.1 wetland fraction (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 1992
+  - 2020
+  grid_res: 0.25
+  variables:
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GIEMS-MC_v1.1
+      varname: fw
+      varunit: fraction
+      prefix: GIEMS-MC_v1.1_fw
+      suffix: ''
+GLWD_v2.0_LowRes:
+  name: GLWD_v2.0_LowRes
+  description: GLWD_v2.0 rice area fraction, lake fraction, wetland fraction (LowRes)
+  category: Anth
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.25
+  variables:
+    Rice_Area_Fraction:
+      sub_dir: Anth/Rice_Area_Fraction/GLWD_v2.0
+      varname: rice_frac
+      varunit: fraction
+      prefix: GLWD_v2.0_rice_fraction
+      suffix: ''
+    Lake_Fraction:
+      sub_dir: Water/Lake_Fraction/GLWD_v2.0
+      varname: lake_frac
+      varunit: fraction
+      prefix: GLWD_v2.0_lake_fraction
+      suffix: ''
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/GLWD_v2.0
+      varname: wetland_frac
+      varunit: fraction
+      prefix: GLWD_v2.0_wetland_fraction
+      suffix: ''
+GRPI_v1.0_LowRes:
+  name: GRPI_v1.0_LowRes
+  description: GRPI_v1.0 rice paddy CH4 flux (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2022
+  - 2022
+  grid_res: 0.1
+  variables:
+    Rice_Methane_Emission:
+      sub_dir: Bio/Rice_Methane_Emission/GRPI_v1.0
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: GRPI_v1.0_FCH4
+      suffix: ''
+Johnson_etal_2022_LowRes:
+  name: Johnson_etal_2022_LowRes
+  description: Johnson_etal_2022 lake CH4 flux, lake fraction (LowRes)
+  category: Carbon
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2003
+  - 2015
+  grid_res: 0.25
+  variables:
+    Lake_Methane_Emission:
+      sub_dir: Bio/Lake_Methane_Emission/Johnson_etal_2022
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
+      prefix: Johnson_etal_2022_FCH4
+      suffix: ''
+    Lake_Fraction:
+      sub_dir: Water/Lake_Fraction/Johnson_etal_2022
+      varname: lake_frac
+      varunit: fraction
+      prefix: Johnson_etal_2022_lake_fraction
+      suffix: ''
+MIRCA2000_v1.1_LowRes:
+  name: MIRCA2000_v1.1_LowRes
+  description: MIRCA2000_v1.1 rice area fraction (LowRes)
+  category: Anth
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 1998
+  - 2002
+  grid_res: 0.25
+  variables:
+    Rice_Area_Fraction:
+      sub_dir: Anth/Rice_Area_Fraction/MIRCA2000_v1.1
+      varname: rice_frac
+      varunit: fraction
+      prefix: MIRCA2000_v1.1_rice_fraction
+      suffix: ''
+WAD2M_v2.0_LowRes:
+  name: WAD2M_v2.0_LowRes
+  description: WAD2M_v2.0 wetland fraction (LowRes)
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  years:
+  - 2000
+  - 2020
+  grid_res: 0.25
+  variables:
+    Wetland_Fraction:
+      sub_dir: Water/Wetland_Fraction/WAD2M_v2.0
+      varname: fw
+      varunit: fraction
+      prefix: WAD2M_v2.0_fw
+      suffix: ''
+FLUXNET-CH4_Monthly:
+  name: FLUXNET-CH4_Monthly
+  description: FLUXNET-CH4 v1.0 monthly CH4 flux at 79 towers
+  category: Carbon
+  data_type: stn
+  tim_res: Month
+  data_groupby: Single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Methane/FLUXNET-CH4_Monthly
+  years:
+  - 2006
+  - 2018
+  fulllist: FLUXNET-CH4_Monthly.csv
+  variables:
+    Methane:
+      sub_dir: ''
+      varname: FCH4
+      varunit: mg CH4 m-2 d-1
