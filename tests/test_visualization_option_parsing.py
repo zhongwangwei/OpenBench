@@ -100,6 +100,38 @@ def test_fig_toolbox_get_index_honors_requested_builtin_colormap():
     assert cmap.name == "viridis"
 
 
+def test_fig_toolbox_get_index_keeps_negative_apfb_ticks():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(-1.0, 1.0, colormap="viridis", varname="APFB")
+
+    assert min(mticks) < 0 < max(mticks)
+
+
+def test_fig_toolbox_get_index_caps_mfm_components_at_one():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(0.0, 1.4, colormap="viridis", varname="MFM_eta")
+
+    assert max(mticks) <= 1
+
+
+@pytest.mark.parametrize(
+    ("data_range", "expected"),
+    [
+        ((-1.0, 2.0), "max"),
+        ((-2.0, 1.0), "min"),
+        ((-2.0, 2.0), "both"),
+        ((-1.0, 1.0), "neither"),
+        ((-0.5, 0.5), "neither"),
+    ],
+)
+def test_basic_plot_colorbar_extend_checks_each_end(data_range, expected):
+    from openbench.visualization.Fig_Basic_Plot import colorbar_extend
+
+    assert colorbar_extend(*data_range, -1.0, 1.0) == expected
+
+
 def test_special_stat_figures_do_not_use_removed_cm_get_cmap_api():
     files = [
         "Fig_ANOVA.py",

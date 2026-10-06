@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+- Thirty reference datasets for land-surface CH4 emission and the areas that
+  emit it: FLUXNET-CH4 monthly tower fluxes (Methane), the 22 GCP-CH4
+  wetland runs and their ensemble mean (Wetland_Methane_Emission,
+  Wetland_Fraction), WAD2M and GIEMS-MC wetland fraction, Johnson et al.
+  (2022) lake CH4 flux and lake fraction, MIRCA2000 rice area, GRPI rice CH4
+  flux and GLWD v2.0 lake, wetland and rice fraction. The data are not
+  bundled. Of the new items only Methane can be selected in the GUI so far.
+- `KGEln`, the Kling-Gupta efficiency with log ratios of variability and
+  mean, so that over- and underestimation by the same factor weigh the same.
+
+### Changed
+- CH4 fluxes in kg CH4 m-2 s-1; g CH4 m-2 per second, day or year;
+  mg CH4 m-2 d-1; and umol or nmol CH4 m-2 s-1 now convert to gC m-2 day-1.
+  Before, they kept their declared unit. A bare nmol m-2 s-1 is read as a
+  carbon flux, like umol m-2 s-1.
+- Molar carbon fluxes (mol m-2 s-1 and the umol m-2 s-1 spellings) now use
+  12.011 g mol-1 for carbon, as the CO2 and CH4 entries already did. Results
+  in umol units, such as tower GPP, rise by 0.09 %.
+
+### Fixed
+- Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
+  KGE they are now drawn on -1 to 1, with values beyond shown by the colour
+  bar's end arrows. The MFM components keep their colour bar within 0 to 1.
+- KGEln, APFB, br2, cp, dr and the three MFM components no longer log
+  "Unknown metric unit" for every plot.
+- A metric map whose values reach exactly one end of the colour bar and pass
+  the other end now gets the arrow for the end that is passed. Before, it got
+  no arrow, and with `show_method: interpolate` the areas beyond that end
+  were left blank.
+
 ## [3.0.6] - 2026-10-05
 
 ### Changed
