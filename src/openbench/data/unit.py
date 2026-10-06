@@ -128,6 +128,17 @@ class UnitProcessing:
                 "g c m-2 yr-1": lambda x: x / 365.25,
                 # CO2 mass flux (e.g. ecLand/CTESSEL); carbon is 12.011/44.01 of CO2 mass.
                 "kg co2 m-2 s-1": lambda x: x * 1000 * 86400 * 12.011 / 44.01,
+                # CH4 mass and molar fluxes; carbon is 12.011/16.043 of CH4 mass, one C per molecule.
+                "kg ch4 m-2 s-1": lambda x: x * 1000 * 86400 * 12.011 / 16.043,
+                "g ch4 m-2 s-1": lambda x: x * 86400 * 12.011 / 16.043,
+                "g ch4 m-2 d-1": lambda x: x * 12.011 / 16.043,
+                "g ch4 m-2 day-1": lambda x: x * 12.011 / 16.043,
+                "g ch4 m-2 yr-1": lambda x: x / 365.25 * 12.011 / 16.043,
+                "mg ch4 m-2 d-1": lambda x: x * 1e-3 * 12.011 / 16.043,
+                "mg ch4 m-2 day-1": lambda x: x * 1e-3 * 12.011 / 16.043,
+                "umol ch4 m-2 s-1": lambda x: x * 1e-6 * 86400 * 12.011,
+                "nmol ch4 m-2 s-1": lambda x: x * 1e-9 * 86400 * 12.011,
+                "nmol m-2 s-1": lambda x: x * 1e-9 * 86400 * 12.011,
                 "kgc m-2 s-1": lambda x: x * 1000 * 86400,
                 "g m-2 s-1": lambda x: x * 86400,  # Carbon-implicit (common in models)
                 "mol m-2 s-1": lambda x: x * (86400 * 12.01),  # Molar carbon
