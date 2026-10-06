@@ -246,6 +246,47 @@ def test_reference_loader_skips_reserved_overlay_files(tmp_path, caplog):
     assert "reference_profiles.yaml" not in caplog.text
 
 
+def test_reference_station_matching_fixed_limits_are_ignored_with_warning(tmp_path, caplog, monkeypatch):
+    """Upstream area and allocation error limits are fixed, so catalog values are dropped."""
+    import logging
+
+    import yaml
+
+    monkeypatch.setattr(registry_manager_module, "_IGNORED_STATION_MATCHING_WARNED", set())
+    references_dir = tmp_path / "references"
+    references_dir.mkdir()
+    (references_dir / "reference_catalog.yaml").write_text(
+        yaml.dump(
+            {
+                "RiverStn": {
+                    "name": "RiverStn",
+                    "category": "Water",
+                    "data_type": "stn",
+                    "tim_res": "Day",
+                    "root_dir": str(tmp_path),
+                    "station_matching": {
+                        "method": "cama_allocation",
+                        "dataset_file": "stations.nc",
+                        "area_error_threshold": 0.1,
+                        "min_uparea": 10.0,
+                        "max_uparea": 5000.0,
+                    },
+                    "variables": {"Streamflow": {"varname": "Q", "varunit": "m3 s-1"}},
+                }
+            }
+        )
+    )
+
+    with caplog.at_level(logging.WARNING):
+        sm = RegistryManager(user_dir=tmp_path).get_reference("RiverStn").station_matching
+
+    assert not hasattr(sm, "min_uparea")
+    assert not hasattr(sm, "area_error_threshold")
+    assert sm.max_uparea == 5000.0
+    assert "station_matching.min_uparea=10.0 is ignored" in caplog.text
+    assert "station_matching.area_error_threshold=0.1 is ignored" in caplog.text
+
+
 def test_user_reference_overlay_partial_variable_update_preserves_existing_fields(tmp_path):
     import yaml
 

@@ -84,7 +84,10 @@ class VariableMapping:
 class StationMatchingConfig:
     """Configuration for the built-in station matching engine.
 
-    Stored in reference_catalog.yaml under ``station_matching:``.
+    Stored in reference_catalog.yaml under ``station_matching:``. The minimum
+    upstream area and the CaMA allocation error limit are not configurable
+    here; see ``MIN_UPAREA_BY_RESOLUTION`` and ``MAX_CAMA_ALLOC_ERR`` in
+    ``openbench.data.station_matcher``.
 
     Attributes:
         method: Matching algorithm — ``cama_allocation`` or ``direct``
@@ -95,8 +98,6 @@ class StationMatchingConfig:
         area_var: Variable name for upstream areas (empty string if none)
         discharge_var: Variable name for discharge/streamflow data
         time_var: Variable name for time coordinate
-        area_error_threshold: Max fractional CaMA allocation error
-        min_uparea: Minimum upstream area (km²)
         max_uparea: Maximum upstream area (km²)
         time_format: Special time format (e.g. ``YYYYMM``) or None
     """
@@ -109,8 +110,6 @@ class StationMatchingConfig:
     area_var: str = "area"
     discharge_var: str = "discharge"
     time_var: str = "time"
-    area_error_threshold: float = 0.2
-    min_uparea: float = 1000.0
     max_uparea: float = float("inf")
     time_format: Optional[str] = None
 

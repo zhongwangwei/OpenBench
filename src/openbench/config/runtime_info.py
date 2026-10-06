@@ -645,6 +645,11 @@ class GeneralInfoReader:
             try:
                 custom_filter(self)
             except Exception as e:
+                # The built-in station matcher enforces fixed upstream-area and
+                # allocation-error limits; falling back would evaluate stations
+                # it rejected (or a station list it never vetted).
+                if getattr(custom_filter, "is_station_matcher", False):
+                    raise
                 logging.error(f"Custom filter failed: {e}")
                 self._apply_default_filter()
         else:
@@ -692,14 +697,19 @@ class GeneralInfoReader:
                     sm = ref.station_matching
 
                     def _station_matcher_filter(info):
-                        from pathlib import Path
+                        from openbench.data.station_matcher import (
+                            resolve_station_dataset,
+                            run_station_matching,
+                            station_dataset_candidates,
+                        )
 
-                        from openbench.data.station_matcher import run_station_matching
-
-                        dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
+                        dataset_path = resolve_station_dataset(info.ref_dir, sm.dataset_file)
+                        if dataset_path is None:
+                            tried = ", ".join(str(p) for p in station_dataset_candidates(info.ref_dir, sm.dataset_file))
+                            raise FileNotFoundError(f"Station dataset not found; tried {tried}")
                         run_station_matching(
                             info,
-                            dataset_path,
+                            str(dataset_path),
                             method=sm.method,
                             station_id_var=sm.station_id_var,
                             lon_var=sm.lon_var,
@@ -707,12 +717,11 @@ class GeneralInfoReader:
                             area_var=sm.area_var,
                             discharge_var=sm.discharge_var,
                             time_var=sm.time_var,
-                            area_error_threshold=sm.area_error_threshold,
-                            min_uparea=sm.min_uparea,
                             max_uparea=sm.max_uparea,
                             time_format=sm.time_format,
                         )
 
+                    _station_matcher_filter.is_station_matcher = True
                     return _station_matcher_filter
         except Exception as e:
             logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)

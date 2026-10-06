@@ -27,6 +27,7 @@ def test_station_matching_duplicate_station_ids_do_not_overwrite_scratch_files(t
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -39,7 +40,7 @@ def test_station_matching_duplicate_station_ids_do_not_overwrite_scratch_files(t
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct")
 
     paths = list(info.stn_list["ref_dir"])
     assert len(paths) == 2
@@ -68,6 +69,7 @@ def test_station_matching_uses_source_qualified_ids_for_consolidated_sources(tmp
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -80,7 +82,7 @@ def test_station_matching_uses_source_qualified_ids_for_consolidated_sources(tmp
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct")
 
     assert info.stn_list["ID"].tolist() == ["GRDC_0", "CAMELS_BR_0"]
     assert info.stn_list["ID"].is_unique
@@ -125,6 +127,7 @@ def test_station_matching_preserves_existing_station_list_when_csv_write_fails(t
     existing_list.write_text("ID,ref_lon,ref_lat,use_syear,use_eyear,ref_dir\nold,0,0,2000,2000,old.nc\n")
     info = SimpleNamespace(
         casedir=str(casedir),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -144,7 +147,7 @@ def test_station_matching_preserves_existing_station_list_when_csv_write_fails(t
     monkeypatch.setattr(pd.DataFrame, "to_csv", fail_to_csv)
 
     try:
-        run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+        run_station_matching(info, str(dataset_path), method="direct")
     except Exception as exc:
         assert "simulated station-list failure" in str(exc)
     else:
@@ -171,6 +174,7 @@ def test_station_matching_accepts_string_station_ids(tmp_path):
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -183,7 +187,7 @@ def test_station_matching_accepts_string_station_ids(tmp_path):
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct")
 
     assert info.stn_list["ID"].tolist() == ["AR_0000001"]
     assert Path(info.stn_list["ref_dir"].iloc[0]).exists()
@@ -206,6 +210,7 @@ def test_station_matching_counts_single_year_and_wraps_longitude(tmp_path):
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -218,7 +223,7 @@ def test_station_matching_counts_single_year_and_wraps_longitude(tmp_path):
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct")
 
     assert info.stn_list["ID"].tolist() == ["A"]
     assert info.stn_list["use_syear"].tolist() == [2000]
@@ -247,6 +252,7 @@ def test_station_matching_reads_only_candidate_stations_and_target_years(tmp_pat
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2001,
         sim_eyear=2002,
@@ -259,7 +265,7 @@ def test_station_matching_reads_only_candidate_stations_and_target_years(tmp_pat
         max_lat=12,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0, n_jobs=1)
+    run_station_matching(info, str(dataset_path), method="direct", n_jobs=1)
 
     assert info.stn_list["ID"].tolist() == ["A"]
     with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
@@ -300,7 +306,7 @@ def test_station_matching_reports_missing_cama_companion_fields(tmp_path):
     )
 
     try:
-        run_station_matching(info, str(dataset_path), method="cama_allocation", min_uparea=0.0)
+        run_station_matching(info, str(dataset_path), method="cama_allocation")
     except DataProcessingError as exc:
         assert "cama_lat_03min" in str(exc)
     else:
@@ -324,6 +330,7 @@ def test_station_matching_honors_station_dim_for_transposed_discharge(tmp_path):
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -336,7 +343,7 @@ def test_station_matching_honors_station_dim_for_transposed_discharge(tmp_path):
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", station_dim="station", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct", station_dim="station")
 
     with xr.open_dataset(info.stn_list.loc[info.stn_list["ID"] == "B", "ref_dir"].iloc[0]) as station_ds:
         np.testing.assert_allclose(station_ds["discharge"].values, [10.0, 20.0, 30.0])
@@ -411,7 +418,7 @@ def test_cama_station_matching_treats_negative_999_as_missing(tmp_path):
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="cama_allocation", min_uparea=0.0, n_jobs=1)
+    run_station_matching(info, str(dataset_path), method="cama_allocation", n_jobs=1)
 
     assert info.stn_list["use_syear"].tolist() == [2001]
     assert info.stn_list["use_eyear"].tolist() == [2001]
@@ -436,6 +443,7 @@ def test_direct_station_matching_writes_missing_sentinels_as_nan(tmp_path):
 
     info = SimpleNamespace(
         casedir=str(tmp_path / "case"),
+        sim_grid_res=0.25,
         sim_source="SimA",
         sim_syear=2000,
         sim_eyear=2000,
@@ -448,7 +456,7 @@ def test_direct_station_matching_writes_missing_sentinels_as_nan(tmp_path):
         max_lat=90,
     )
 
-    run_station_matching(info, str(dataset_path), method="direct", min_uparea=0.0)
+    run_station_matching(info, str(dataset_path), method="direct")
 
     with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
         np.testing.assert_allclose(station_ds["discharge"].values, [10.0, np.nan, 10.0], equal_nan=True)
@@ -470,3 +478,144 @@ def test_cama_resolution_rejects_unknown_resolution():
 
     with pytest.raises(ValueError, match="Unsupported CaMA"):
         get_resolution_suffix(0.07)
+
+
+@pytest.mark.parametrize(
+    ("sim_grid_res", "expected"),
+    [(0.25, 3000.0), (0.1, 500.0), (0.0833, 350.0), (0.05, 150.0), (0.0167, 100.0)],
+)
+def test_resolution_min_uparea_is_fixed_per_cama_resolution(sim_grid_res, expected):
+    from openbench.data.station_matcher import resolution_min_uparea
+
+    assert resolution_min_uparea(sim_grid_res) == expected
+
+
+@pytest.mark.parametrize("sim_grid_res", [0.5, None, ""])
+def test_resolution_min_uparea_rejects_unsupported_resolution(sim_grid_res):
+    from openbench.data.station_matcher import resolution_min_uparea
+
+    with pytest.raises(ValueError, match="no minimum upstream area"):
+        resolution_min_uparea(sim_grid_res)
+
+
+def _uparea_stations(tmp_path, areas, alloc_errs=None):
+    dataset_path = tmp_path / "stations.nc"
+    n = len(areas)
+    if alloc_errs is None:
+        alloc_errs = np.zeros(n)
+    xr.Dataset(
+        {
+            "station": ("station", np.arange(n)),
+            "lon": ("station", np.full(n, 10.0)),
+            "lat": ("station", np.full(n, 20.0)),
+            "area": ("station", np.asarray(areas, dtype=float)),
+            "cama_lon_03min": ("station", np.full(n, 10.0)),
+            "cama_lat_03min": ("station", np.full(n, 20.0)),
+            "cama_alloc_err_03min": ("station", np.asarray(alloc_errs)),
+            "discharge": (("station", "time"), np.ones((n, 2))),
+        },
+        coords={"time": pd.date_range("2000-01-01", periods=2, freq="D")},
+    ).to_netcdf(dataset_path)
+    return dataset_path
+
+
+def _uparea_info(tmp_path, sim_grid_res):
+    return SimpleNamespace(
+        casedir=str(tmp_path / "case"),
+        sim_grid_res=sim_grid_res,
+        sim_source="SimA",
+        sim_syear=2000,
+        sim_eyear=2000,
+        syear=2000,
+        eyear=2000,
+        min_year=0,
+        min_lon=-180,
+        max_lon=180,
+        min_lat=-90,
+        max_lat=90,
+    )
+
+
+@pytest.mark.parametrize(
+    ("sim_grid_res", "expected_ids"),
+    [(0.25, ["1", "2"]), (0.1, ["0", "1", "2"])],
+)
+def test_direct_station_matching_enforces_resolution_min_uparea(tmp_path, sim_grid_res, expected_ids):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = _uparea_stations(tmp_path, [2000.0, 5000.0, np.nan])
+    info = _uparea_info(tmp_path, sim_grid_res)
+
+    run_station_matching(info, str(dataset_path), method="direct", n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == expected_ids
+    assert info.min_uparea == {0.25: 3000.0, 0.1: 500.0}[sim_grid_res]
+
+
+def test_cama_station_matching_enforces_resolution_min_uparea(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = _uparea_stations(tmp_path, [100.0, 200.0])
+    info = _uparea_info(tmp_path, 0.05)
+
+    run_station_matching(info, str(dataset_path), method="cama_allocation", n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["1"]
+
+
+def test_direct_station_matching_rejects_unsupported_resolution(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = _uparea_stations(tmp_path, [5000.0])
+    info = _uparea_info(tmp_path, 0.5)
+
+    with pytest.raises(ValueError, match="no minimum upstream area"):
+        run_station_matching(info, str(dataset_path), method="direct", n_jobs=1)
+    assert not hasattr(info, "stn_list")
+
+
+def test_cama_station_matching_drops_missing_or_large_alloc_err(tmp_path):
+    from openbench.data.station_matcher import MAX_CAMA_ALLOC_ERR, run_station_matching
+
+    alloc_errs = [np.nan, 0.0, MAX_CAMA_ALLOC_ERR, 0.25, -0.1, -0.3]
+    dataset_path = _uparea_stations(tmp_path, [1000.0] * len(alloc_errs), alloc_errs)
+    info = _uparea_info(tmp_path, 0.05)
+
+    run_station_matching(info, str(dataset_path), method="cama_allocation", n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["1", "2", "4"]
+
+
+def test_cama_station_matching_compares_float32_alloc_err_at_stored_precision(tmp_path):
+    from openbench.data.station_matcher import MAX_CAMA_ALLOC_ERR, run_station_matching
+
+    limit = np.float32(MAX_CAMA_ALLOC_ERR)
+    alloc_errs = np.array([limit, -limit, np.nextafter(limit, np.float32(1)), np.nan], dtype=np.float32)
+    dataset_path = _uparea_stations(tmp_path, [1000.0] * len(alloc_errs), alloc_errs)
+    with xr.open_dataset(dataset_path) as ds:
+        assert ds["cama_alloc_err_03min"].dtype == np.float32
+    info = _uparea_info(tmp_path, 0.05)
+
+    run_station_matching(info, str(dataset_path), method="cama_allocation", n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["0", "1"]
+
+
+def test_resolve_station_dataset_prefers_full_then_dist(tmp_path):
+    from openbench.data.station_matcher import resolve_station_dataset
+
+    full = tmp_path / "Flow_Daily_full.nc"
+    dist = tmp_path / "Flow_Daily_dist.nc"
+    assert resolve_station_dataset(tmp_path, full.name) is None
+    dist.touch()
+    assert resolve_station_dataset(tmp_path, full.name) == dist
+    full.touch()
+    assert resolve_station_dataset(tmp_path, full.name) == full
+
+
+def test_resolve_station_dataset_only_falls_back_for_full_files(tmp_path):
+    from openbench.data.station_matcher import resolve_station_dataset
+
+    (tmp_path / "GRDC_daily_dist.nc").touch()
+
+    assert resolve_station_dataset(tmp_path, "GRDC_daily.nc") is None

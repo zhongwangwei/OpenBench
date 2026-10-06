@@ -8,6 +8,11 @@ Supported matching methods:
   data, filter by area error and upstream area bounds.
 - ``direct``: use raw station coordinates (no CaMA allocation), e.g. for
   coastal discharge datasets like Dai & Trenberth.
+
+Both methods drop stations whose upstream area is below the minimum a river
+needs to be resolved at the simulation resolution (``MIN_UPAREA_BY_RESOLUTION``).
+``cama_allocation`` also drops stations whose allocation error is missing or
+larger than ``MAX_CAMA_ALLOC_ERR``. Neither limit can be set in the catalog.
 """
 
 import logging
@@ -62,6 +67,73 @@ def get_resolution_suffix(sim_grid_res: float) -> str:
         if abs(float(sim_grid_res) - res) < 0.001:
             return suffix
     raise ValueError(f"Unsupported CaMA station matching resolution: {sim_grid_res}")
+
+
+# Smallest upstream area (km²) a gauged river needs before it is resolved at
+# each CaMA resolution. Stations with a smaller reported area are not evaluated.
+MIN_UPAREA_BY_RESOLUTION = {
+    "15min": 3000.0,
+    "06min": 500.0,
+    "05min": 350.0,
+    "03min": 150.0,
+    "01min": 100.0,
+}
+
+
+def resolution_min_uparea(sim_grid_res) -> float:
+    """Return the enforced minimum upstream area (km²) for a simulation grid resolution."""
+    try:
+        suffix = get_resolution_suffix(sim_grid_res)
+    except (TypeError, ValueError):
+        supported = ", ".join(f"{suffix} {area:g} km2" for suffix, area in MIN_UPAREA_BY_RESOLUTION.items())
+        raise ValueError(
+            f"Station matching has no minimum upstream area for simulation grid resolution "
+            f"{sim_grid_res!r}; supported resolutions: {supported}"
+        ) from None
+    return MIN_UPAREA_BY_RESOLUTION[suffix]
+
+
+# Largest fractional CaMA allocation error (``cama_alloc_err_<res>``) a station
+# may have. A missing (NaN) error cannot be checked, so that station is dropped.
+MAX_CAMA_ALLOC_ERR = 0.2
+
+
+def _alloc_err_within_limit(alloc_err) -> bool:
+    # Compare at the stored precision: a float32 0.2 widens to 0.20000000298 as a
+    # Python float and would otherwise fail its own limit.
+    alloc_err = np.asarray(alloc_err)
+    if not np.issubdtype(alloc_err.dtype, np.floating):
+        alloc_err = alloc_err.astype(float)
+    limit = np.asarray(MAX_CAMA_ALLOC_ERR, dtype=alloc_err.dtype)
+    return bool(np.isfinite(alloc_err) and np.abs(alloc_err) <= limit)
+
+
+FULL_DATASET_SUFFIX = "_full.nc"
+DIST_DATASET_SUFFIX = "_dist.nc"
+
+
+def station_dataset_candidates(root, dataset_file: str) -> list[Path]:
+    """Return the station dataset file, then its redistributable subset.
+
+    A ``<name>_full.nc`` dataset may be shipped only as its redistributable
+    ``<name>_dist.nc`` subset, which is used when the full file is absent.
+    """
+    primary = Path(root) / dataset_file
+    candidates = [primary]
+    if primary.name.endswith(FULL_DATASET_SUFFIX):
+        candidates.append(primary.with_name(primary.name[: -len(FULL_DATASET_SUFFIX)] + DIST_DATASET_SUFFIX))
+    return candidates
+
+
+def resolve_station_dataset(root, dataset_file: str) -> Optional[Path]:
+    """Return the first station dataset candidate that exists, or None."""
+    candidates = station_dataset_candidates(root, dataset_file)
+    for path in candidates:
+        if path.is_file():
+            if path != candidates[0]:
+                logging.info("Station dataset %s not found; using %s", candidates[0], path.name)
+            return path
+    return None
 
 
 def _station_id_to_string(value) -> str:
@@ -211,7 +283,6 @@ def _cama_candidate_station_indices(
     cama_lats: np.ndarray,
     alloc_errs: np.ndarray,
     info,
-    area_error_threshold: float,
     min_uparea: float,
     max_uparea: float,
 ) -> np.ndarray:
@@ -227,7 +298,7 @@ def _cama_candidate_station_indices(
             continue
         if cama_lat < -90 or cama_lat > 90:
             continue
-        if not np.isnan(alloc_err) and float(alloc_err) > area_error_threshold:
+        if not _alloc_err_within_limit(alloc_err):
             continue
         if lon_for_bounds < info.min_lon or lon_for_bounds > info.max_lon:
             continue
@@ -286,7 +357,6 @@ def _process_site_cama(
     times: np.ndarray,
     info,
     scratch_dir: Path,
-    area_err_threshold: float,
     min_uparea: float,
     max_uparea: float,
     output_station_ids: list[str],
@@ -304,7 +374,7 @@ def _process_site_cama(
 
     cama_lon = float(cama_lons[idx])
     cama_lat = float(cama_lats[idx])
-    alloc_err = float(alloc_errs[idx])
+    alloc_err = alloc_errs[idx]
     lon_for_bounds = _normalize_lon_to_range(lon, info.min_lon, info.max_lon)
     cama_lon = _normalize_lon_to_range(cama_lon, -180.0, 180.0)
 
@@ -312,7 +382,7 @@ def _process_site_cama(
         return None
 
     # Area error filter
-    if not np.isnan(alloc_err) and alloc_err > area_err_threshold:
+    if not _alloc_err_within_limit(alloc_err):
         return None
 
     # Streamflow time series
@@ -442,8 +512,6 @@ def run_station_matching(
     discharge_var: str = "discharge",
     time_var: str = "time",
     station_dim: str = "",
-    area_error_threshold: float = 0.2,
-    min_uparea: float = 1000.0,
     max_uparea: float = float("inf"),
     time_format: Optional[str] = None,
     scratch_subdir: Optional[str] = None,
@@ -455,12 +523,17 @@ def run_station_matching(
     - ``cama_allocation``: uses CaMA-Flood allocation data for grid matching
     - ``direct``: uses raw station coordinates
 
+    The minimum upstream area comes from ``info.sim_grid_res`` via
+    ``MIN_UPAREA_BY_RESOLUTION``; an unsupported resolution raises ValueError.
+    The allocation error limit is ``MAX_CAMA_ALLOC_ERR``.
+
     Modifies ``info`` in-place: sets ``stn_list``, ``ref_fulllist``,
     ``use_syear``, ``use_eyear``.
     """
     dataset_path = Path(dataset_path)
     if not dataset_path.exists():
         raise FileNotFoundError(f"Station dataset not found: {dataset_path}")
+    min_uparea = resolution_min_uparea(getattr(info, "sim_grid_res", None))
 
     ref_name = scratch_subdir or dataset_path.stem
     scratch_dir = Path(info.casedir) / "scratch" / f"{ref_name}_{info.sim_source}"
@@ -508,10 +581,11 @@ def run_station_matching(
         if method == "cama_allocation":
             res_suffix = get_resolution_suffix(info.sim_grid_res)
             logging.info(
-                "Station matching [cama]: %s (%d stations, CaMA %s)",
+                "Station matching [cama]: %s (%d stations, CaMA %s, min upstream area %g km2)",
                 dataset_path.name,
                 n_stations,
                 res_suffix,
+                min_uparea,
             )
 
             cama_lon_var = f"cama_lon_{res_suffix}"
@@ -533,7 +607,6 @@ def run_station_matching(
                 cama_lats,
                 alloc_errs,
                 info,
-                area_error_threshold,
                 min_uparea,
                 max_uparea,
             )
@@ -577,7 +650,6 @@ def run_station_matching(
                     target_times,
                     info,
                     scratch_dir,
-                    area_error_threshold,
                     min_uparea,
                     max_uparea,
                     output_station_ids_subset,
@@ -590,9 +662,10 @@ def run_station_matching(
 
         elif method == "direct":
             logging.info(
-                "Station matching [direct]: %s (%d stations)",
+                "Station matching [direct]: %s (%d stations, min upstream area %g km2)",
                 dataset_path.name,
                 n_stations,
+                min_uparea,
             )
             station_indices = _direct_candidate_station_indices(lons, lats, areas, info, min_uparea, max_uparea)
             if station_indices.size == 0:
