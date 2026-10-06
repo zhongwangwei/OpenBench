@@ -235,7 +235,7 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     # list5: [-1,1]
     # list6: uncertain
 
-    list2 = ["NSE", "KGE", "KGESS", "ubNSE", "dr", "br2", "cp"]
+    list2 = ["NSE", "KGE", "KGESS", "KGEln", "ubNSE", "dr", "br2", "cp"]
     list3 = [
         "absolute_percent_bias",
         "mean_absolute_error",

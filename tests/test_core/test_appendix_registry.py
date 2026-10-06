@@ -22,6 +22,7 @@ def test_appendix_scalar_metrics_are_selectable_and_labeled():
         "mKGE",
         "KGEkm",
         "KGElf",
+        "KGEln",
     }
     gui_metrics = {name for values in METRICS_ITEMS.values() for name in values}
 

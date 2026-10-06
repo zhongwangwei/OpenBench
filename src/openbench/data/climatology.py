@@ -117,6 +117,7 @@ class ClimatologyProcessor:
             "mKGE",  # Modified KGE
             "KGEkm",  # Known-moments KGE
             "KGElf",  # Low-flow KGE
+            "KGEln",  # Log-ratio KGE
             "KGEnp",  # Non-parametric KGE
             "rSD",  # standard-deviation ratio
             "RSR",  # RMSE / observed standard deviation

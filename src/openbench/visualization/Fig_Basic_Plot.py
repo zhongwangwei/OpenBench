@@ -128,7 +128,7 @@ def make_plot_index_grid(self):
                             option["vmax"] = 100
                         if option["vmin"] < -100:
                             option["vmin"] = -100
-                elif metric in ["NSE", "KGE", "KGESS", "correlation", "kappa_coeff", "rSpearman"]:
+                elif metric in ["NSE", "KGE", "KGESS", "KGEln", "correlation", "kappa_coeff", "rSpearman"]:
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
                     option["vmin"], option["vmax"] = math.floor(quantiles[0].values), 1
@@ -623,7 +623,7 @@ def make_plot_index_stn(self):
                         option["vmax"] = 100
                     if option["vmin"] < -100:
                         option["vmin"] = -100
-                elif metric in ["NSE", "KGE", "KGESS", "correlation", "kappa_coeff", "rSpearman"]:
+                elif metric in ["NSE", "KGE", "KGESS", "KGEln", "correlation", "kappa_coeff", "rSpearman"]:
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
                     option["vmin"], option["vmax"] = math.floor(vmin), 1
