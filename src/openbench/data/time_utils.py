@@ -476,10 +476,23 @@ def align_station_times(
     o_norm = normalize_station_time(o, compare_tim_res)
     common_times = np.intersect1d(s_norm["time"].values, o_norm["time"].values)
     if common_times.size:
-        logging.warning(
-            "Station %s time coordinates required normalization before alignment; using %d overlapping steps",
+        crowded = [
+            side
+            for side, data in (("simulation", s_norm), ("reference", o_norm))
+            if pd.Index(data["time"].values).has_duplicates
+        ]
+        if crowded:
+            raise StationDataUnavailable(
+                f"Station {station_id}: several {' and '.join(crowded)} values fall into one "
+                f"{compare_tim_res} period, so they cannot be aligned by period"
+            )
+        # The two paths stamp the same periods differently (e.g. month end
+        # against the 15th); one value per period aligns without loss.
+        logging.debug(
+            "Station %s: aligned %d %s periods stamped differently by simulation and reference",
             station_id,
             common_times.size,
+            compare_tim_res,
         )
         return s_norm.sel(time=common_times).sortby("time"), o_norm.sel(time=common_times).sortby("time")
     raise StationDataUnavailable(

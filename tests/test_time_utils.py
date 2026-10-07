@@ -156,6 +156,45 @@ def test_station_alignment_normalizes_comparison_frequencies(compare_tim_res, si
     np.testing.assert_array_equal(aligned_ref.values, [3.0, 4.0])
 
 
+@pytest.mark.parametrize(
+    ("compare_tim_res", "sim_times", "ref_times"),
+    [
+        ("Month", ["2000-01-31", "2000-02-29"], ["2000-01-15", "2000-02-15"]),
+        ("Day", ["2000-01-01T00", "2000-01-02T00"], ["2000-01-01T12", "2000-01-02T12"]),
+        ("Hour", ["2000-01-01T00:00", "2000-01-01T01:00"], ["2000-01-01T00:30", "2000-01-01T01:30"]),
+        ("Year", ["2000-12-31", "2001-12-31"], ["2000-01-01", "2001-01-01"]),
+    ],
+)
+def test_station_alignment_of_differently_stamped_periods_is_quiet(caplog, compare_tim_res, sim_times, ref_times):
+    import logging
+
+    import pandas as pd
+
+    from openbench.data.time_utils import align_station_times
+
+    sim = xr.DataArray([1.0, 2.0], dims="time", coords={"time": pd.to_datetime(sim_times)})
+    ref = xr.DataArray([3.0, 4.0], dims="time", coords={"time": pd.to_datetime(ref_times)})
+
+    with caplog.at_level(logging.WARNING):
+        aligned_sim, _ = align_station_times(sim, ref, "A", compare_tim_res)
+
+    assert aligned_sim.sizes["time"] == 2
+    assert caplog.records == []
+
+
+def test_station_alignment_skips_a_station_with_several_values_in_one_period():
+    import pandas as pd
+
+    from openbench.data.station_missing import StationDataUnavailable
+    from openbench.data.time_utils import align_station_times
+
+    sim = xr.DataArray([1.0, 2.0], dims="time", coords={"time": pd.to_datetime(["2000-01-10", "2000-01-20"])})
+    ref = xr.DataArray([3.0], dims="time", coords={"time": pd.to_datetime(["2000-01-15"])})
+
+    with pytest.raises(StationDataUnavailable, match="several simulation values fall into one Month period"):
+        align_station_times(sim, ref, "A", "Month")
+
+
 @pytest.mark.parametrize("module_name", ["openbench.core.comparison", "openbench.visualization.only_drawing"])
 @pytest.mark.parametrize(
     ("configured", "expected"), [("Day", "1D"), ("3month", "3ME"), ("climatology-month", "climatology-month")]
