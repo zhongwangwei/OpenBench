@@ -292,8 +292,15 @@ def _format_year_span(span: tuple[int, int]) -> str:
     return f"{span[0]}-{span[1]}"
 
 
+def _selected_reference_items(selected_refs: dict):
+    """Iterate variable/source pairs for both single and multi-reference choices."""
+    for variable, refs in selected_refs.items():
+        for ref in refs if isinstance(refs, list) else [refs]:
+            yield variable, ref
+
+
 def _warn_reference_year_coverage(selected_refs: dict, project_years: tuple[int, int]) -> None:
-    for variable, ref in selected_refs.items():
+    for variable, ref in _selected_reference_items(selected_refs):
         ref_years = _coerce_year_span(getattr(ref, "years", None))
         if ref_years is None or _year_spans_overlap(project_years, ref_years):
             continue
@@ -586,7 +593,7 @@ def _validate_selected_reference_data(selected: dict[str, object]) -> None:
     from openbench.config.adapter import _find_nc_dir
 
     errors = []
-    for variable, ref in selected.items():
+    for variable, ref in _selected_reference_items(selected):
         name = getattr(ref, "name", "<unknown>")
         raw_root = getattr(ref, "root_dir", None)
         if not raw_root:
@@ -842,11 +849,12 @@ def _simulation_entries_with_defaults(simulation: dict) -> list[dict]:
 
 
 def _infer_project_resolution_fields(selected_refs: dict, simulation: dict) -> dict:
+    refs = [ref for _, ref in _selected_reference_items(selected_refs)]
     sim_entries = _simulation_entries_with_defaults(simulation)
     sim_tim_res = _common_non_null_value(entry.get("tim_res") for entry in sim_entries)
     sim_grid_res = _common_non_null_value(entry.get("grid_res") for entry in sim_entries)
-    ref_tim_res = _common_non_null_value(getattr(ref, "tim_res", None) for ref in selected_refs.values())
-    ref_grid_res = _common_non_null_value(getattr(ref, "grid_res", None) for ref in selected_refs.values())
+    ref_tim_res = _common_non_null_value(getattr(ref, "tim_res", None) for ref in refs)
+    ref_grid_res = _common_non_null_value(getattr(ref, "grid_res", None) for ref in refs)
 
     fields = {}
     # Every source must be able to supply the target cadence, so use the
@@ -854,8 +862,7 @@ def _infer_project_resolution_fields(selected_refs: dict, simulation: dict) -> d
     from openbench.data.registry.scanner import _tim_res_rank
 
     tim_res_values = _unique_non_null_values(
-        [entry.get("tim_res") for entry in sim_entries]
-        + [getattr(ref, "tim_res", None) for ref in selected_refs.values()]
+        [entry.get("tim_res") for entry in sim_entries] + [getattr(ref, "tim_res", None) for ref in refs]
     )
     ranked_tim_res = [(_tim_res_rank(str(value)), value) for value in tim_res_values]
     ranked_tim_res = [item for item in ranked_tim_res if item[0] >= 0]
@@ -1419,29 +1426,33 @@ def _format_reference_choice(ref) -> str:
 
 
 def _parse_reference_selection(selection: str, available: list, variable: str):
-    item = selection.strip()
-    if not item:
-        item = "1"
-    if item == "0":
+    selection = selection.strip() or "1"
+    if selection == "0":
         return None
-    if item.isdigit():
-        choice = int(item)
-        if choice < 1 or choice > len(available):
+    selected = []
+    for token in selection.split(","):
+        item = token.strip()
+        if item == "0":
+            raise click.ClickException(f"Use 0 alone to skip {variable}; it cannot be combined with references.")
+        if item.isdigit():
+            choice = int(item)
+            if choice < 1 or choice > len(available):
+                raise click.ClickException(
+                    f"Reference choice out of range for {variable}: {choice} (expected 0-{len(available)})"
+                )
+            ref = available[choice - 1]
+        else:
+            ref = next((ref for ref in available if item == ref.name), None)
+            if ref is None:
+                ref = next((ref for ref in available if item.lower() == ref.name.lower()), None)
+        if ref is None:
             raise click.ClickException(
-                f"Reference choice out of range for {variable}: {choice} (expected 0-{len(available)})"
+                f"Invalid reference selection for {variable}: {item!r}. "
+                "Use comma-separated numbers or reference names, or 0 to skip."
             )
-        return available[choice - 1]
-
-    for ref in available:
-        if item == ref.name:
-            return ref
-    lowered = item.lower()
-    for ref in available:
-        if lowered == ref.name.lower():
-            return ref
-    raise click.ClickException(
-        f"Invalid reference selection for {variable}: {item}. Use 0, a number, or a reference name."
-    )
+        if ref not in selected:
+            selected.append(ref)
+    return selected
 
 
 def _unique_preserving_order(values) -> list:
@@ -1620,17 +1631,18 @@ def _render_reference_section(lines: list[str], reference: dict, all_refs: list,
 
     lines.append("reference:")
     lines.append("  # data_root: /path/to/reference/root")
-    lines.append("  # Variable -> reference dataset. Uncomment an alternative source to switch.")
+    lines.append("  # Variable -> reference dataset or list of datasets to evaluate separately.")
 
     variables = _unique_preserving_order([*reference.keys(), *all_vars])
     for variable in variables:
         active_source = reference.get(variable)
+        active_sources = active_source if isinstance(active_source, list) else [active_source]
         if active_source:
             _append_key_value(lines, variable, active_source, indent=2)
         elif not candidates.get(variable):
             lines.append(f"  # {_yaml_key(variable)}: <reference_dataset>")
         for ref in candidates.get(variable, []):
-            if ref.name == active_source:
+            if ref.name in active_sources:
                 continue
             details = ", ".join(
                 str(value)
@@ -1964,13 +1976,15 @@ def init_cmd(
                     def select_reference(var, available):
                         choice = _parse_reference_selection(
                             _wizard_prompt(
-                                f"  Select for {var}",
+                                f"  Select for {var} (comma-separated numbers or names; 0 to skip)",
                                 default=reference_defaults.get(var, "1"),
                             ),
                             available,
                             var,
                         )
-                        reference_defaults[var] = "0" if choice is None else str(available.index(choice) + 1)
+                        reference_defaults[var] = (
+                            "0" if choice is None else ",".join(str(available.index(ref) + 1) for ref in choice)
+                        )
                         return choice
 
                     for var in list(candidate_vars):
@@ -1996,7 +2010,7 @@ def init_cmd(
                     for var in list(candidate_vars):
                         available = available_by_var[var]
                         if len(available) == 1:
-                            chosen = available[0]
+                            chosen = [available[0]]
                         elif len(available) > 1:
                             chosen = choices[var]
                             if chosen is None:
@@ -2007,7 +2021,8 @@ def init_cmd(
                             click.secho(f"  {var} - no reference data available, skipping", fg="yellow")
                             candidate_vars.remove(var)
                             continue
-                        reference[var] = chosen.name
+                        names = [ref.name for ref in chosen]
+                        reference[var] = names[0] if len(names) == 1 else names
                         selected_reference_objects[var] = chosen
                     if not candidate_vars:
                         raise click.ClickException("No reference data selected for evaluation variables.")

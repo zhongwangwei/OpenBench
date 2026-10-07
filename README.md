@@ -218,6 +218,11 @@ openbench run openbench.yaml
 openbench run openbench.yaml --force
 ```
 
+In `openbench init`, select multiple reference datasets for a variable with
+comma-separated numbers or names (for example, `1,2`). Each selected reference
+is evaluated separately against each simulation. Enter keeps the default;
+`0` alone skips the variable.
+
 Results land in `output/<project_name>/`; start with `reports/report.html`.
 
 ## How It Works

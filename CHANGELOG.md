@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- `openbench init` accepts comma-separated reference numbers or names for each
+  variable. All selected references are checked and evaluated separately;
+  single selections and `0` to skip remain supported.
 - River sediment references OpenBench_Sediment_Daily,
   OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
   CC BY 4.0) with three evaluation items:

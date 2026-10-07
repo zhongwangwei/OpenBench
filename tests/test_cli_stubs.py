@@ -3654,7 +3654,11 @@ def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, mon
     assert "Returning to: Start year" in result.output
 
 
-def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("first_choice", "revised_choice", "expected"),
+    [("1", "2", "LatentB"), ("1,2", "", ["LatentA", "LatentB"])],
+)
+def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch, first_choice, revised_choice, expected):
     refs = [
         _InitFakeReference(name="LatentA"),
         _InitFakeReference(name="LatentB"),
@@ -3667,7 +3671,7 @@ def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
     )
     _install_single_reference_registry(monkeypatch, refs=refs)
     output = tmp_path / "openbench.yaml"
-    answers = ["", "", "2004", "2004", "", "1", "back", "2", "2", "", ""]
+    answers = ["", "", "2004", "2004", "", first_choice, "back", revised_choice, "2", "", ""]
 
     result = runner.invoke(
         cli,
@@ -3677,7 +3681,7 @@ def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert yaml.safe_load(output.read_text())["reference"] == {
-        "Latent_Heat": "LatentB",
+        "Latent_Heat": expected,
         "Runoff": "RunoffB",
     }
     assert "Returning to: Select for Latent_Heat" in result.output
@@ -4282,6 +4286,56 @@ def test_init_accepts_variable_and_reference_names(tmp_path, monkeypatch):
     assert config["reference"]["Latent_Heat"] == "ERA5LAND_LowRes"
     assert "/refs/era5land" in result.output
     assert "1981-2022" in result.output
+
+
+@pytest.mark.parametrize("selection", ["1,2", "FirstRef, secondref", "1,2,firstref"])
+def test_init_accepts_multiple_references_and_uses_all_source_metadata(tmp_path, monkeypatch, selection):
+    import openbench.cli.init_cmd as init_module
+    from openbench.config import load_config
+
+    refs = [
+        _InitFakeReference(name="FirstRef", variable="Evapotranspiration", tim_res="Day", years=[2000, 2010]),
+        _InitFakeReference(name="SecondRef", variable="Evapotranspiration", tim_res="Month", years=[2015, 2020]),
+    ]
+    output = tmp_path / "openbench.yaml"
+    monkeypatch.setattr(init_module, "ensure_user_registry_overlays", lambda: tmp_path / "user")
+    _install_single_reference_registry(monkeypatch, refs=refs)
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input=f"\n\n2004\n2004\nEvapotranspiration\n{selection}\n\n\n" + _init_options_input(),
+    )
+
+    assert result.exit_code == 0, result.output
+    config = load_config(output)
+    assert config.reference.sources["Evapotranspiration"] == ["FirstRef", "SecondRef"]
+    assert config.project.tim_res == "Month"
+    assert "SecondRef for Evapotranspiration covers 2015-2020, outside project years 2004-2004" in result.output
+    assert "# Evapotranspiration: FirstRef" not in output.read_text()
+    assert "# Evapotranspiration: SecondRef" not in output.read_text()
+
+
+@pytest.mark.parametrize("selection", ["0,1", "1,0", "1,99", "1,unknown", "1,", ","])
+def test_init_rejects_invalid_multi_reference_selections(selection):
+    from openbench.cli.init_cmd import _parse_reference_selection
+
+    with pytest.raises(click.ClickException):
+        _parse_reference_selection(selection, [_InitFakeReference()], "Evapotranspiration")
+
+
+def test_init_validates_every_selected_reference(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+
+    ready = tmp_path / "ready"
+    ready.mkdir()
+    (ready / "data.nc").touch()
+    refs = [
+        _InitFakeReference(name="Ready", root_dir=str(ready)),
+        _InitFakeReference(name="Missing", root_dir=str(tmp_path / "missing")),
+    ]
+    with pytest.raises(click.ClickException, match="Latent_Heat / Missing"):
+        _validate_selected_reference_data({"Latent_Heat": refs})
 
 
 def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
