@@ -1884,7 +1884,7 @@ def _register_to_dict(
     on_multi_var=None,
     station_list_dir: Optional[Path] = None,
 ) -> None:
-    """Build descriptor and add to catalog dict (no file I/O except fulllist).
+    """Build descriptor and add to catalog dict without writing the catalog file.
 
     Stages:
       1. _build_base_descriptor    — base fields + data_groupby from file counts
@@ -1976,6 +1976,92 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
         is_station_matched_item(name) for name in descriptor.get("variables", {})
     ):
         descriptor["station_matching"] = existing["station_matching"]
+        _warn_station_matching_fields(descriptor)
+
+
+def _warn_station_matching_fields(descriptor: dict) -> None:
+    """Check preserved variable names against file metadata without changing user settings.
+
+    A malformed block only produces a warning: this check must never stop a
+    rescan of the other datasets or the catalog write that follows.
+    """
+    name = descriptor.get("name", "<unknown>")
+    try:
+        _check_station_matching_fields(descriptor, name)
+    except Exception as exc:
+        logger.warning("Reference '%s': cannot check the preserved station_matching block: %s", name, exc)
+
+
+def _check_station_matching_fields(descriptor: dict, name: str) -> None:
+    import xarray as xr
+
+    from openbench.data.registry.manager import _expand_env_path
+    from openbench.data.registry.schema import StationMatchingConfig
+    from openbench.data.station_matcher import resolve_station_dataset
+    from openbench.util.names import get_xarray_key_case_insensitive
+
+    matching = descriptor["station_matching"]
+    if not isinstance(matching, dict):
+        logger.warning(
+            "Reference '%s': station_matching should be a mapping of field names, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(matching).__name__,
+            matching,
+        )
+        return
+    root = descriptor.get("root_dir")
+    filename = matching.get("dataset_file")
+    if not root or not filename:
+        return
+    if not isinstance(filename, str):
+        logger.warning(
+            "Reference '%s': station_matching.dataset_file should be a file name, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(filename).__name__,
+            filename,
+        )
+        return
+    root = os.path.expanduser(_expand_env_path(str(root), context=f"{name}.root_dir"))
+    path = resolve_station_dataset(root, filename)
+    if path is None:
+        logger.warning(
+            "Reference '%s': cannot check preserved station_matching variable names; dataset %s under %s "
+            "(including its _dist fallback) was not found. Check root_dir and station_matching.dataset_file "
+            "in your catalog.",
+            name,
+            filename,
+            root,
+        )
+        return
+    defaults = StationMatchingConfig()
+    with xr.open_dataset(path, decode_cf=False) as ds:
+        for field in ("station_id_var", "lon_var", "lat_var", "area_var", "discharge_var", "time_var"):
+            requested = matching.get(field, getattr(defaults, field))
+            if field == "area_var" and not requested:
+                continue  # Explicitly disabled optional area lookup.
+            if not isinstance(requested, str):
+                logger.warning(
+                    "Reference '%s': station_matching.%s should be a variable name, got %s %r; "
+                    "rescanning keeps it unchanged.",
+                    name,
+                    field,
+                    type(requested).__name__,
+                    requested,
+                )
+                continue
+            if get_xarray_key_case_insensitive(ds, requested) is None:
+                logger.warning(
+                    "Reference '%s': preserved station_matching.%s=%r was not found in %s. "
+                    "Available variables/coordinates: %s. Update this field in your reference catalog; "
+                    "rescanning keeps the existing setting unchanged.",
+                    name,
+                    field,
+                    requested,
+                    path,
+                    ", ".join(map(str, ds.variables)),
+                )
 
 
 # ---------------------------------------------------------------------------

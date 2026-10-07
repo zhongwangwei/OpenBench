@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- Rescanning checks preserved station-matching variable names against the
+  dataset, warning about missing fields with available names while keeping
+  user settings unchanged. A malformed block (not a mapping, or a file or
+  variable name that is not text) is reported the same way and never stops
+  the rescan of the other datasets.
+- `openbench init` accepts comma-separated reference numbers or names for each
+  variable. All selected references are checked and evaluated separately;
+  single selections and `0` to skip remain supported.
 - River sediment references OpenBench_Sediment_Daily,
   OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
   CC BY 4.0) with three evaluation items:
