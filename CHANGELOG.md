@@ -50,6 +50,13 @@
   warning.
 
 ### Fixed
+- Station evaluation no longer warns "time coordinates required
+  normalization" for every station. Simulations extracted from a grid are
+  stamped at the end of each period and station references in its middle;
+  when both hold one value per comparison period they are aligned by period
+  quietly. A series with several values in one period is now skipped as a
+  data gap with that reason; it used to stop the evaluation with a pandas
+  indexing error.
 - Station time-series plots draw every station with the same line width and
   marker size. Both used to be divided by the length of the station's record,
   so a 1-year monthly record was drawn 12 points wide and a 10-year daily
