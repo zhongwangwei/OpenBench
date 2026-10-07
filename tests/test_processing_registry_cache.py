@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
 from openbench.data.registry.schema import FallbackVar, ModelProfile, VariableMapping
@@ -670,3 +671,54 @@ def test_reference_compute_from_namelist_finds_split_dependency_files(tmp_path, 
     result = processing.BaseDatasetProcessing.select_var(processor, 2000, 2000, "Day", files, ["runoff"], "ref")
     assert result.name == "Runoff"
     assert float(result.values[0]) == 3.0
+
+
+def _sediment_lookup(tmp_path, monkeypatch, item, files):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as registry_manager
+    from openbench.data.registry.manager import RegistryManager
+
+    for name, variables in files.items():
+        xr.Dataset({var: xr.DataArray(np.array([value])) for var, value in variables.items()}).to_netcdf(
+            tmp_path / name
+        )
+    colm = RegistryManager(user_dir=tmp_path / "user").get_model("CoLM2024")
+    profile = ModelProfile(name="ModelA", description="CoLM2024 sediment", variables=dict(colm.variables))
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(profile))
+    processor = _make_processor(processing)
+    processor.item = item
+    processor.SimA_prefix_fallback = list(profile.variables[item].prefix_fallback)
+    return processing.BaseDatasetProcessing._find_data_files(
+        processor,
+        str(tmp_path),
+        prefix="case_hist_",
+        year=1985,
+        suffix="",
+        datasource="sim",
+        varname=[profile.variables[item].varname],
+    )
+
+
+@pytest.mark.parametrize(
+    ("item", "prefix"),
+    [("Suspended_Sediment_Concentration", "f_sedcon_"), ("Suspended_Sediment_Load", "f_sedout_")],
+)
+def test_sediment_size_classes_split_across_files_are_refused(tmp_path, monkeypatch, item, prefix):
+    files = {
+        "case_hist_unitcat_1985-01.nc": {"f_discharge": 1.0, f"{prefix}1": 1.0},
+        "case_hist_1985-01.nc": {f"{prefix}2": 2.0},
+    }
+
+    with pytest.raises(ValueError, match=f"{prefix}2 in case_hist_1985-01.nc"):
+        _sediment_lookup(tmp_path, monkeypatch, item, files)
+
+
+def test_sediment_size_classes_in_one_file_are_used(tmp_path, monkeypatch):
+    files = {
+        "case_hist_unitcat_1985-01.nc": {"f_discharge": 1.0, "f_sedcon_1": 1.0, "f_sedcon_2": 2.0},
+        "case_hist_1985-01.nc": {"f_rnof": 1.0},
+    }
+
+    result = _sediment_lookup(tmp_path, monkeypatch, "Suspended_Sediment_Concentration", files)
+
+    assert result == [str(tmp_path / "case_hist_unitcat_1985-01.nc")]

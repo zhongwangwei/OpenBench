@@ -19,7 +19,9 @@
   times CoLM's default grain density of 2650 kg m-3. A run with another
   density needs its own `compute` expression.
 - Compute expressions can add numbered outputs whose count depends on the run
-  with `ds.sum_prefix('f_sedcon_')`.
+  with `ds.sum_prefix('f_sedcon_')`. All parts of a time step must sit in one
+  file, as CoLM writes them; when some are found in another file the
+  evaluation stops naming them instead of summing only part of them.
 - Unit conversions for sediment concentration (mg L-1, g m-3, kg m-3, g L-1)
   and load (t d-1, kg s-1, kg d-1, t yr-1).
 - Thirty reference datasets for land-surface CH4 emission and the areas that
