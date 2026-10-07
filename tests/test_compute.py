@@ -164,3 +164,48 @@ def test_compute_membership_checks_are_case_insensitive():
     result = execute_compute(ds, "ds['RUNOFF'] if 'RUNOFF' in ds else 0", "Runoff")
 
     np.testing.assert_array_equal(result.values, [4.0, 5.0])
+
+
+def test_sum_prefix_adds_exactly_the_numbered_parts():
+    ds = xr.Dataset(
+        {
+            "f_sedcon_1": ("x", [1.0, 2.0]),
+            "F_SEDCON_2": ("x", [0.5, np.nan]),
+            "f_sedcon_total": ("x", [100.0, 100.0]),
+            "f_discharge": ("x", [3.0, 4.0]),
+        }
+    )
+    result = execute_compute(ds, "ds.sum_prefix('f_sedcon_', 2) * 2", "Suspended_Sediment_Concentration")
+    np.testing.assert_array_equal(result.values, [3.0, np.nan])
+
+
+def test_sum_prefix_with_a_missing_part_is_a_missing_variable():
+    from openbench.data.compute import MissingComputeVariable
+
+    ds = xr.Dataset({"f_sedcon_1": ("x", [1.0]), "f_sedcon_3": ("x", [1.0])})
+    with pytest.raises(MissingComputeVariable, match="f_sedcon_2"):
+        execute_compute(ds, "ds.sum_prefix('f_sedcon_', 3)", "Suspended_Sediment_Concentration")
+
+
+def test_sum_prefix_refuses_parts_beyond_the_count():
+    ds = xr.Dataset({f"f_sedcon_{i}": ("x", [1.0]) for i in (1, 2, 3, 4)})
+    with pytest.raises(ComputeError, match="f_sedcon_4 found beyond the 3 parts"):
+        execute_compute(ds, "ds.sum_prefix('f_sedcon_', 3)", "Suspended_Sediment_Concentration")
+
+
+@pytest.mark.parametrize("parts", ["0", "True", "'3'", "2.0"])
+def test_sum_prefix_needs_a_positive_whole_part_count(parts):
+    ds = xr.Dataset({"f_sedcon_1": ("x", [1.0])})
+    with pytest.raises(ComputeError, match="positive whole number"):
+        execute_compute(ds, f"ds.sum_prefix('f_sedcon_', {parts})", "Suspended_Sediment_Concentration")
+
+
+def test_compute_dependency_names_expand_summed_parts():
+    from openbench.data.compute import compute_dependency_names
+
+    assert compute_dependency_names("ds.sum_prefix('f_sedout_', 3) * 2650 + ds['f_x']") == [
+        "f_x",
+        "f_sedout_1",
+        "f_sedout_2",
+        "f_sedout_3",
+    ]

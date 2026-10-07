@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
 from openbench.data.registry.schema import FallbackVar, ModelProfile, VariableMapping
@@ -670,3 +671,88 @@ def test_reference_compute_from_namelist_finds_split_dependency_files(tmp_path, 
     result = processing.BaseDatasetProcessing.select_var(processor, 2000, 2000, "Day", files, ["runoff"], "ref")
     assert result.name == "Runoff"
     assert float(result.values[0]) == 3.0
+
+
+def _sediment_lookup(tmp_path, monkeypatch, item, files):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as registry_manager
+    from openbench.data.registry.manager import RegistryManager
+
+    for name, variables in files.items():
+        xr.Dataset({var: xr.DataArray(np.array([value])) for var, value in variables.items()}).to_netcdf(
+            tmp_path / name
+        )
+    colm = RegistryManager(user_dir=tmp_path / "user").get_model("CoLM2024")
+    profile = ModelProfile(name="ModelA", description="CoLM2024 sediment", variables=dict(colm.variables))
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(profile))
+    processor = _make_processor(processing)
+    processor.item = item
+    processor.SimA_prefix_fallback = list(profile.variables[item].prefix_fallback)
+    return processing.BaseDatasetProcessing._find_data_files(
+        processor,
+        str(tmp_path),
+        prefix="case_hist_",
+        year=1985,
+        suffix="",
+        datasource="sim",
+        varname=[profile.variables[item].varname],
+    )
+
+
+@pytest.mark.parametrize(
+    ("item", "prefix"),
+    [("Suspended_Sediment_Concentration", "f_sedcon_"), ("Suspended_Sediment_Load", "f_sedout_")],
+)
+def test_a_month_missing_size_classes_stops_instead_of_summing_part(tmp_path, monkeypatch, item, prefix):
+    """January keeps class 1 in the routing file and the rest elsewhere; February is whole."""
+    from openbench.data.compute import MissingComputeVariable, execute_compute
+    from openbench.data.registry.manager import RegistryManager
+
+    files = {
+        "case_hist_unitcat_1985-01.nc": {"f_discharge": 1.0, f"{prefix}1": 1.0},
+        "case_hist_1985-01.nc": {f"{prefix}2": 2.0, f"{prefix}3": 3.0},
+        "case_hist_unitcat_1985-02.nc": {"f_discharge": 1.0, f"{prefix}1": 1.0, f"{prefix}2": 2.0, f"{prefix}3": 3.0},
+    }
+    selected = _sediment_lookup(tmp_path, monkeypatch, item, files)
+    compute = RegistryManager(user_dir=tmp_path / "user").get_model("CoLM2024").variables[item].compute
+
+    # Files of a year are computed one at a time (combine_year), so each must be whole.
+    by_name = {Path(path).name: path for path in selected}
+    with xr.open_dataset(by_name["case_hist_unitcat_1985-02.nc"]) as february:
+        np.testing.assert_allclose(execute_compute(february, compute, item).values, [6.0 * 2650])
+    with xr.open_dataset(by_name["case_hist_unitcat_1985-01.nc"]) as january:
+        with pytest.raises(MissingComputeVariable, match=f"{prefix}2"):
+            execute_compute(january, compute, item)
+
+
+def test_sediment_lookup_ignores_files_of_other_cases(tmp_path, monkeypatch):
+    """Another case with more size classes in the same tree no longer matters."""
+    from openbench.data.compute import execute_compute
+    from openbench.data.registry.manager import RegistryManager
+
+    whole = {"f_discharge": 1.0, "f_sedcon_1": 1.0, "f_sedcon_2": 2.0, "f_sedcon_3": 3.0}
+    files = {
+        "case_hist_unitcat_1985-01.nc": whole,
+        "other_hist_unitcat_1985-01.nc": {**whole, "f_sedcon_4": 4.0},
+    }
+    selected = _sediment_lookup(tmp_path, monkeypatch, "Suspended_Sediment_Concentration", files)
+    item = "Suspended_Sediment_Concentration"
+    compute = RegistryManager(user_dir=tmp_path / "user").get_model("CoLM2024").variables[item].compute
+
+    assert selected == [str(tmp_path / "case_hist_unitcat_1985-01.nc")]
+    with xr.open_dataset(selected[0]) as ds:
+        np.testing.assert_allclose(execute_compute(ds, compute, item).values, [6.0 * 2650])
+
+
+def test_sediment_compute_dependencies_name_every_size_class(monkeypatch, tmp_path):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as registry_manager
+    from openbench.data.registry.manager import RegistryManager
+
+    colm = RegistryManager(user_dir=tmp_path).get_model("CoLM2024")
+    profile = ModelProfile(name="ModelA", description="CoLM2024 sediment", variables=dict(colm.variables))
+    monkeypatch.setattr(registry_manager, "get_registry", lambda: _FakeRegistry(profile))
+    processor = _make_processor(processing)
+    processor.item = "Suspended_Sediment_Load"
+
+    assert processor._compute_dependency_varnames_for_file_lookup("sim") == ["f_sedout_1", "f_sedout_2", "f_sedout_3"]

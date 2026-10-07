@@ -102,6 +102,7 @@ ZH_CN = {
     "Atmospheric": "大气",
     "Agriculture": "农业",
     "Water Bodies": "水体",
+    "Sediment": "泥沙",
     "Urban": "城市",
     "Metrics": "指标",
     "Select evaluation metrics": "选择评估指标",

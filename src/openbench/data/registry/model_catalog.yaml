@@ -1164,15 +1164,15 @@ CoLM2024:
   tim_res: Month
   time_offset:
     Day:
-      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 days
       default: '0'
     Hour:
-      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 hours
       default: '0'
     Month:
-      ? Streamflow,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 months
       default: '0'
   variables:
@@ -1249,6 +1249,11 @@ CoLM2024:
       prefix_fallback: *id013
       varname: damsto
       varunit: m3
+    Discharge_For_Sediment:
+      prefix_fallback:
+      - _unitcat_
+      varname: f_discharge
+      varunit: m3 s-1
     Ecosystem_Respiration:
       varname: f_respc
       varunit: mol m-2 s-1
@@ -1393,6 +1398,18 @@ CoLM2024:
       compute: (ds['f_us10m']**2 + ds['f_vs10m']**2)**0.5
       varname: Surface_Wind_Speed
       varunit: m s-1
+    Suspended_Sediment_Concentration:
+      compute: ds.sum_prefix('f_sedcon_', 3) * 2650
+      prefix_fallback:
+      - _unitcat_
+      varname: f_sedcon_1
+      varunit: kg m-3
+    Suspended_Sediment_Load:
+      compute: ds.sum_prefix('f_sedout_', 3) * 2650
+      prefix_fallback:
+      - _unitcat_
+      varname: f_sedout_1
+      varunit: kg s-1
     Terrestrial_Water_Storage_Change:
       compute: ds['f_wat'].fillna(0) + ds['f_wa'].fillna(0) + ds['f_wdsrf'].fillna(0) + ds['f_wetwat'].fillna(0)
       varname: Terrestrial_Water_Storage_Change

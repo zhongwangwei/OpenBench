@@ -15,6 +15,7 @@ from openbench.data.time_utils import decode_nonstandard_time
 from openbench.data.coordinates import NC_SUFFIXES, glob_nc_pattern
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
+from openbench.data.compute import compute_dependency_names
 
 try:
     from openbench.util.dataset_loader import (
@@ -349,13 +350,13 @@ class SelectionMixin:
                     if fallback.varname:
                         candidates.append(fallback.varname)
                 if mapping.compute:
-                    candidates.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", mapping.compute))
+                    candidates.extend(compute_dependency_names(mapping.compute))
         except Exception as exc:
             logging.debug("Variable-aware prefix fallback lookup skipped: %s", exc)
 
         return list(dict.fromkeys(candidates))
 
-    def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
+    def _compute_expressions_for_file_lookup(self, datasource: str) -> list[str]:
         source = getattr(self, f"{datasource}_source", "")
         expressions = [
             getattr(self, f"{datasource}_compute", ""),
@@ -372,10 +373,13 @@ class SelectionMixin:
                 expressions.append(profile.variables[profile_key].compute or "")
         except Exception as exc:
             logging.debug("Compute dependency lookup skipped: %s", exc)
+        return [str(expr) for expr in expressions if expr]
+
+    def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
         deps = []
-        for expr in expressions:
-            deps.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(expr)))
-        return list(dict.fromkeys(dep for dep in deps if dep))
+        for expr in self._compute_expressions_for_file_lookup(datasource):
+            deps.extend(compute_dependency_names(expr))
+        return list(dict.fromkeys(deps))
 
     def _find_compute_dependency_files(self, dirx: str, year: int | None, datasource: str) -> list[str]:
         deps = self._compute_dependency_varnames_for_file_lookup(datasource)

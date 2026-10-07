@@ -240,11 +240,13 @@ class GeneralInfoReader:
                         setattr(self, f"{source_type}_fulllist", str(nml["general"][f"{source}_fulllist"]))
                     except (KeyError, TypeError) as e2:
                         setattr(self, f"{source_type}_fulllist", "")
-                        item_is_streamflow = str(self.item).casefold() == "streamflow"
+                        from openbench.data.station_matcher import is_station_matched_item
+
+                        item_is_matched = is_station_matched_item(self.item)
                         ref_has_filter = (
-                            not item_is_streamflow and source_type == "ref" and self._get_custom_filter() is not None
+                            not item_is_matched and source_type == "ref" and self._get_custom_filter() is not None
                         )
-                        if not (item_is_streamflow or ref_has_filter):
+                        if not (item_is_matched or ref_has_filter):
                             logging.error("read %s_fulllist namelist error: %s", source_type, e2)
 
             # Handle uparea attributes for station data
@@ -687,14 +689,20 @@ class GeneralInfoReader:
             mgr = get_registry()
             ref = mgr.get_reference(self.ref_source)
             if ref and ref.station_matching:
-                if not any(str(name).casefold() == "streamflow" for name in ref.variables):
+                from openbench.data.station_matcher import is_station_matched_item
+
+                matched_items = [name for name in ref.variables if is_station_matched_item(name)]
+                if not matched_items:
                     logging.warning(
-                        "Ignoring station_matching for non-Streamflow reference %s; "
-                        "rescan the reference catalog to generate a station list.",
+                        "Ignoring station_matching for reference %s, which has no Streamflow or sediment "
+                        "variable; rescan the reference catalog to generate a station list.",
                         self.ref_source,
                     )
                 else:
                     sm = ref.station_matching
+                    # One dataset serving several items (discharge, SSC and SSL at
+                    # sediment gauges) gets per-item station files.
+                    per_item_scratch = len(matched_items) > 1
 
                     def _station_matcher_filter(info):
                         from openbench.data.station_matcher import (
@@ -707,6 +715,9 @@ class GeneralInfoReader:
                         if dataset_path is None:
                             tried = ", ".join(str(p) for p in station_dataset_candidates(info.ref_dir, sm.dataset_file))
                             raise FileNotFoundError(f"Station dataset not found; tried {tried}")
+                        varname = getattr(info, "ref_varname", None)
+                        if isinstance(varname, (list, tuple)):
+                            varname = varname[0] if varname else ""
                         run_station_matching(
                             info,
                             str(dataset_path),
@@ -719,6 +730,9 @@ class GeneralInfoReader:
                             time_var=sm.time_var,
                             max_uparea=sm.max_uparea,
                             time_format=sm.time_format,
+                            scratch_subdir=f"{dataset_path.stem}_{info.item}" if per_item_scratch else None,
+                            varname=varname or None,
+                            varname_falls_back=str(info.item).casefold() == "streamflow",
                         )
 
                     _station_matcher_filter.is_station_matcher = True

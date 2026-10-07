@@ -3,6 +3,30 @@
 ## [Unreleased]
 
 ### Added
+- River sediment references OpenBench_Sediment_Daily,
+  OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
+  CC BY 4.0) with three evaluation items:
+  `Discharge_For_Sediment` (river discharge at the sediment gauges, kept apart
+  from `Streamflow`), `Suspended_Sediment_Concentration` (mg L-1) and
+  `Suspended_Sediment_Load` (t d-1). They are matched to the river network
+  like Streamflow: CaMa allocation, the fixed minimum upstream area per
+  resolution, allocation error at most 0.2, and the `_dist` fallback. The data
+  are not bundled; they go under
+  `${OPENBENCH_REF_ROOT}/Station/Water/Sediment/<Daily|Monthly|Annual>`. The
+  GUI lists the items in a new Sediment group.
+- CoLM2024 maps the sediment items to Grid_RiverLake routing output:
+  `f_discharge`, and the three size classes of CoLM's standard sediment
+  parameters (`f_sedcon_1..3`, `f_sedout_1..3`) summed and multiplied by its
+  default grain density of 2650 kg m-3. A run with another number of classes
+  or another density needs its own `compute` expression.
+- Compute expressions can sum numbered parts with
+  `ds.sum_prefix('f_sedcon_', 3)`. Exactly parts 1..3 must be in the data
+  computed: a missing part (for example one kept in another file) or a
+  higher-numbered one stops the evaluation instead of giving a partial sum.
+  File lookup and simulation scanning treat the parts as dependencies, like
+  `ds['name']`.
+- Unit conversions for sediment concentration (mg L-1, g m-3, kg m-3, g L-1)
+  and load (t d-1, kg s-1, kg d-1, t yr-1).
 - Thirty reference datasets for land-surface CH4 emission and the areas that
   emit it: FLUXNET-CH4 monthly tower fluxes (Methane), the 22 GCP-CH4
   wetland runs and their ensemble mean (Wetland_Methane_Emission,
@@ -18,6 +42,15 @@
   file. `openbench init` accepts either file too.
 
 ### Changed
+- Station matching reads the evaluated item's `varname` from the dataset,
+  falling back to `station_matching.discharge_var`, and writes the station
+  files under that name, so one dataset can serve several items. The
+  Streamflow references now give their dataset variable as `varname` (for
+  example `Disch` for GRDC), which also names their output files
+  (`Streamflow_ref_GRDC_Daily_Disch.nc`). A user catalog that still says
+  `discharge` keeps working through the fallback, which only Streamflow has:
+  a sediment item whose variable is missing from the dataset stops with an
+  error instead of reading discharge in its place.
 - The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
   now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
   coverage of the 2026-10-06 release.

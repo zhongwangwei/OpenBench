@@ -654,3 +654,76 @@ def test_station_matching_warns_when_dataset_has_no_upstream_area(tmp_path, capl
 
     assert info.stn_list["ID"].tolist() == ["0"]
     assert "minimum upstream area of 150 km2 is not applied" in caplog.text
+
+
+def _sediment_stations(tmp_path):
+    dataset_path = tmp_path / "sediment.nc"
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["S1"], dtype=object)),
+            "lon": ("station", [10.0]),
+            "lat": ("station", [20.0]),
+            "upstream_area": ("station", [5000.0]),
+            "cama_lon_15min": ("station", [10.0]),
+            "cama_lat_15min": ("station", [20.0]),
+            "cama_alloc_err_15min": ("station", [0.0]),
+            "discharge": (("station", "time"), [[1.0, 2.0]]),
+            "ssc": (("station", "time"), [[30.0, 40.0]]),
+        },
+        coords={"time": pd.date_range("2000-01-01", periods=2, freq="D")},
+    ).to_netcdf(dataset_path)
+    return dataset_path
+
+
+def test_station_matching_reads_the_item_variable_and_names_station_files_after_it(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+
+    info = _uparea_info(tmp_path, 0.25)
+    run_station_matching(info, str(_sediment_stations(tmp_path)), area_var="upstream_area", varname="ssc", n_jobs=1)
+
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        assert list(station_ds.data_vars) == ["ssc"]
+        np.testing.assert_allclose(station_ds["ssc"].values, [30.0, 40.0])
+
+
+def test_station_matching_falls_back_to_discharge_var_and_keeps_the_item_name(tmp_path):
+    """An older catalog names the item variable "discharge" while the file says "Disch"."""
+    from openbench.data.station_matcher import run_station_matching
+
+    path = _sediment_stations(tmp_path)
+    with xr.open_dataset(path) as ds:
+        renamed = ds.rename({"discharge": "Disch"}).load()
+    renamed.to_netcdf(tmp_path / "grdc_like.nc")
+    info = _uparea_info(tmp_path, 0.25)
+
+    run_station_matching(
+        info,
+        str(tmp_path / "grdc_like.nc"),
+        area_var="upstream_area",
+        discharge_var="Disch",
+        varname="discharge",
+        varname_falls_back=True,
+        n_jobs=1,
+    )
+
+    with xr.open_dataset(info.stn_list["ref_dir"].iloc[0]) as station_ds:
+        assert list(station_ds.data_vars) == ["discharge"]
+        np.testing.assert_allclose(station_ds["discharge"].values, [1.0, 2.0])
+
+
+@pytest.mark.parametrize("varname", ["ssc", "ssl"])
+def test_station_matching_never_reads_discharge_for_a_missing_sediment_variable(tmp_path, varname):
+    from openbench.data.station_matcher import run_station_matching
+    from openbench.util.exceptions import DataProcessingError
+
+    path = _sediment_stations(tmp_path)
+    with xr.open_dataset(path) as ds:
+        discharge_only = ds.drop_vars("ssc").load()
+    discharge_only.to_netcdf(tmp_path / "discharge_only.nc")
+    info = _uparea_info(tmp_path, 0.25)
+
+    with pytest.raises(DataProcessingError, match=f"'{varname}'"):
+        run_station_matching(
+            info, str(tmp_path / "discharge_only.nc"), area_var="upstream_area", varname=varname, n_jobs=1
+        )
+    assert not hasattr(info, "stn_list")

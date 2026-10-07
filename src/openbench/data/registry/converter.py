@@ -112,6 +112,9 @@ def _guess_category(path: Path) -> str:
         "Inundation_Area",
         "Depth_Of_Surface_Water",
         "Open_Water_Evaporation",
+        "Discharge_For_Sediment",
+        "Suspended_Sediment_Concentration",
+        "Suspended_Sediment_Load",
     }
     carbon_vars = {
         "Gross_Primary_Productivity",

@@ -1968,9 +1968,13 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     if "timezone" in existing:
         descriptor["timezone"] = existing["timezone"]
 
-    # station_matching is a Streamflow-only runtime contract. Keep valid
+    # station_matching serves Streamflow and the sediment items only. Keep valid
     # user-defined matchers, but drop invalid blocks from other station data.
-    if existing.get("station_matching") and "Streamflow" in descriptor.get("variables", {}):
+    from openbench.data.station_matcher import is_station_matched_item
+
+    if existing.get("station_matching") and any(
+        is_station_matched_item(name) for name in descriptor.get("variables", {})
+    ):
         descriptor["station_matching"] = existing["station_matching"]
 
 
