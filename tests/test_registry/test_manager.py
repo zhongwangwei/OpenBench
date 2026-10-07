@@ -807,7 +807,8 @@ def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
     assert "OPENBENCH_REF_ROOT" not in caplog.text
 
 
-def test_profile_station_matching_dataset_files_match_catalog():
+def test_profile_station_matching_matches_catalog():
+    """A rescan copies the profile's station_matching into the user catalog."""
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
     mismatches = {}
@@ -817,13 +818,24 @@ def test_profile_station_matching_dataset_files_match_catalog():
             continue
         profile_matching = profile.get("station_matching")
         catalog_matching = catalog[name].get("station_matching")
-        if profile_matching and catalog_matching:
-            profile_file = profile_matching.get("dataset_file")
-            catalog_file = catalog_matching.get("dataset_file")
-            if profile_file != catalog_file:
-                mismatches[name] = (profile_file, catalog_file)
+        if profile_matching and catalog_matching and profile_matching != catalog_matching:
+            mismatches[name] = {
+                key: (profile_matching.get(key), catalog_matching.get(key))
+                for key in set(profile_matching) | set(catalog_matching)
+                if profile_matching.get(key) != catalog_matching.get(key)
+            }
 
     assert mismatches == {}
+
+
+def test_openbench_streamflow_profiles_find_full_or_dist_files():
+    import fnmatch
+
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    for res in ("Daily", "Hourly", "Monthly"):
+        file_glob = profiles[f"OpenBench_Streamflow_{res}"]["scan"]["file_glob"]
+        for kind in ("full", "dist"):
+            assert fnmatch.fnmatch(f"OpenBench_Streamflow_{res}_{kind}.nc", file_glob), (res, kind)
 
 
 def test_era5land_profile_covers_catalog_variables():
