@@ -5,7 +5,9 @@
 ### Added
 - Rescanning checks preserved station-matching variable names against the
   dataset, warning about missing fields with available names while keeping
-  user settings unchanged.
+  user settings unchanged. A malformed block (not a mapping, or a file or
+  variable name that is not text) is reported the same way and never stops
+  the rescan of the other datasets.
 - `openbench init` accepts comma-separated reference numbers or names for each
   variable. All selected references are checked and evaluated separately;
   single selections and `0` to skip remain supported.

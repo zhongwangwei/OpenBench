@@ -4522,3 +4522,69 @@ def test_resolve_station_nc_dir_shared_helper(tmp_path):
     nc_dir = resolve_station_nc_dir(str(tmp_path), {"Streamflow": "Q"})
 
     assert nc_dir == dataset
+
+
+@pytest.mark.parametrize(
+    ("station_matching", "message"),
+    [
+        ("stations.nc", "station_matching should be a mapping"),
+        ({"method": "direct", "dataset_file": 123}, "dataset_file should be a file name"),
+        ({"method": "direct", "dataset_file": ["stations.nc"]}, "dataset_file should be a file name"),
+        ({"method": "direct", "dataset_file": "stations.nc", "discharge_var": 5}, "discharge_var should be a variable"),
+    ],
+)
+def test_rescan_keeps_going_past_a_malformed_station_matching_block(tmp_path, caplog, station_matching, message):
+    import logging
+
+    import numpy as np
+    import xarray as xr
+
+    from openbench.data.registry.scanner import _register_to_dict
+
+    xr.Dataset(
+        {"discharge": (("station", "time"), np.ones((1, 2))), "lon": ("station", [10.0]), "lat": ("station", [20.0])},
+        coords={"station": [1], "time": np.array(["2000-01-01", "2000-01-02"], dtype="datetime64[ns]")},
+    ).to_netcdf(tmp_path / "stations.nc")
+    existing = {"station_matching": station_matching, "variables": {"Streamflow": {"varname": "discharge"}}}
+    scanned = ScannedDataset(
+        name="RiverStn",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Streamflow": "."},
+    )
+    catalog = {}
+    with caplog.at_level(logging.WARNING):
+        _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["RiverStn"]["station_matching"] == station_matching
+    assert message in caplog.text
+
+
+def test_rescan_keeps_going_when_the_station_matching_check_fails(tmp_path, caplog, monkeypatch):
+    import logging
+
+    import openbench.data.station_matcher as station_matcher
+    from openbench.data.registry.scanner import _register_to_dict
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk vanished")
+
+    monkeypatch.setattr(station_matcher, "resolve_station_dataset", broken)
+    matching = {"method": "direct", "dataset_file": "stations.nc"}
+    existing = {"station_matching": matching, "variables": {"Streamflow": {"varname": "discharge"}}}
+    scanned = ScannedDataset(
+        name="RiverStn",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Streamflow": "."},
+    )
+    catalog = {}
+    with caplog.at_level(logging.WARNING):
+        _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["RiverStn"]["station_matching"] == matching
+    assert "cannot check the preserved station_matching block: disk vanished" in caplog.text

@@ -1980,7 +1980,19 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
 
 
 def _warn_station_matching_fields(descriptor: dict) -> None:
-    """Check preserved variable names against file metadata without changing user settings."""
+    """Check preserved variable names against file metadata without changing user settings.
+
+    A malformed block only produces a warning: this check must never stop a
+    rescan of the other datasets or the catalog write that follows.
+    """
+    name = descriptor.get("name", "<unknown>")
+    try:
+        _check_station_matching_fields(descriptor, name)
+    except Exception as exc:
+        logger.warning("Reference '%s': cannot check the preserved station_matching block: %s", name, exc)
+
+
+def _check_station_matching_fields(descriptor: dict, name: str) -> None:
     import xarray as xr
 
     from openbench.data.registry.manager import _expand_env_path
@@ -1989,12 +2001,29 @@ def _warn_station_matching_fields(descriptor: dict) -> None:
     from openbench.util.names import get_xarray_key_case_insensitive
 
     matching = descriptor["station_matching"]
+    if not isinstance(matching, dict):
+        logger.warning(
+            "Reference '%s': station_matching should be a mapping of field names, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(matching).__name__,
+            matching,
+        )
+        return
     root = descriptor.get("root_dir")
     filename = matching.get("dataset_file")
     if not root or not filename:
         return
-    name = descriptor.get("name", "<unknown>")
-    root = os.path.expanduser(_expand_env_path(root, context=f"{name}.root_dir"))
+    if not isinstance(filename, str):
+        logger.warning(
+            "Reference '%s': station_matching.dataset_file should be a file name, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(filename).__name__,
+            filename,
+        )
+        return
+    root = os.path.expanduser(_expand_env_path(str(root), context=f"{name}.root_dir"))
     path = resolve_station_dataset(root, filename)
     if path is None:
         logger.warning(
@@ -2007,25 +2036,32 @@ def _warn_station_matching_fields(descriptor: dict) -> None:
         )
         return
     defaults = StationMatchingConfig()
-    try:
-        with xr.open_dataset(path, decode_cf=False) as ds:
-            for field in ("station_id_var", "lon_var", "lat_var", "area_var", "discharge_var", "time_var"):
-                requested = matching.get(field, getattr(defaults, field))
-                if field == "area_var" and not requested:
-                    continue  # Explicitly disabled optional area lookup.
-                if get_xarray_key_case_insensitive(ds, requested) is None:
-                    logger.warning(
-                        "Reference '%s': preserved station_matching.%s=%r was not found in %s. "
-                        "Available variables/coordinates: %s. Update this field in your reference catalog; "
-                        "rescanning keeps the existing setting unchanged.",
-                        name,
-                        field,
-                        requested,
-                        path,
-                        ", ".join(map(str, ds.variables)),
-                    )
-    except (OSError, ValueError) as exc:
-        logger.warning("Reference '%s': cannot check station_matching fields in %s: %s", name, path, exc)
+    with xr.open_dataset(path, decode_cf=False) as ds:
+        for field in ("station_id_var", "lon_var", "lat_var", "area_var", "discharge_var", "time_var"):
+            requested = matching.get(field, getattr(defaults, field))
+            if field == "area_var" and not requested:
+                continue  # Explicitly disabled optional area lookup.
+            if not isinstance(requested, str):
+                logger.warning(
+                    "Reference '%s': station_matching.%s should be a variable name, got %s %r; "
+                    "rescanning keeps it unchanged.",
+                    name,
+                    field,
+                    type(requested).__name__,
+                    requested,
+                )
+                continue
+            if get_xarray_key_case_insensitive(ds, requested) is None:
+                logger.warning(
+                    "Reference '%s': preserved station_matching.%s=%r was not found in %s. "
+                    "Available variables/coordinates: %s. Update this field in your reference catalog; "
+                    "rescanning keeps the existing setting unchanged.",
+                    name,
+                    field,
+                    requested,
+                    path,
+                    ", ".join(map(str, ds.variables)),
+                )
 
 
 # ---------------------------------------------------------------------------
