@@ -359,6 +359,7 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml["plot_stn"].copy()
     import matplotlib
     import matplotlib.pyplot as plt
+    from matplotlib.transforms import offset_copy
     from pylab import rcParams
 
     # font = {'family': 'Times-Roman'}
@@ -439,20 +440,30 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
 
     # ax.scatter([], [], color='black', marker='o', label=overall_label)
     ax.legend(loc="best", shadow=False, labelspacing=option["labelspacing"], fontsize=option["fontsize"])
-    # add RMSE,KGE,correlation in two digital to the legend in left top
+    # The metrics sit on their own row just above the axes, right-aligned, and
+    # the title on the row above them, so a long title cannot run into them.
+    metrics_size = option["fontsize"] - 4
+    metrics_gap = 4  # points between the axes and the metrics row
     ax.text(
-        0.6,
-        1.08,
+        1.0,
+        1.0,
         f"RMSE: {RMSE:.2f}   R: {correlation:.2f}   KGESS: {KGESS:.2f}",
-        transform=ax.transAxes,
-        fontsize=option["fontsize"] - 4,
-        verticalalignment="top",
+        transform=offset_copy(ax.transAxes, fig=fig, y=metrics_gap, units="points"),
+        fontsize=metrics_size,
+        horizontalalignment="right",
+        verticalalignment="bottom",
     )
     if not option["title"]:
         lat = f"{abs(lat_lon[0]):.2f}°{'N' if lat_lon[0] > 0 else ('S' if lat_lon[0] < 0 else '')}"
         lon = f"{abs(lat_lon[1]):.2f}°{'E' if lat_lon[1] > 0 else ('W' if lat_lon[1] < 0 else '')}"
-        option["title"] = f"ID: {str(ID).title()}  ({lat}, {lon})"
-    ax.set_title(option["title"], fontsize=option["title_size"], fontweight="bold", x=0, y=1.08, ha="left", va="top")
+        option["title"] = f"ID: {ID}  ({lat}, {lon})"
+    ax.set_title(
+        option["title"],
+        fontsize=option["title_size"],
+        fontweight="bold",
+        loc="left",
+        pad=metrics_gap + 1.6 * metrics_size,
+    )
     if option["grid"]:
         ax.grid(linestyle=option["grid_linestyle"], alpha=0.7, linewidth=option["grid_width"])
 

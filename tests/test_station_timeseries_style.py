@@ -16,7 +16,7 @@ def _plot_stn_option():
     return yaml.safe_load(text)["general"]
 
 
-def _drawn_lines(monkeypatch, tmp_path, n_points, freq):
+def _drawn_figure(monkeypatch, tmp_path, n_points, freq, station_id="A", lat_lon=(10.0, 20.0)):
     import openbench.visualization.Fig_Basic_Plot as fig_basic
 
     figures = []
@@ -34,9 +34,12 @@ def _drawn_lines(monkeypatch, tmp_path, n_points, freq):
         sim_varunit="m3 s-1",
     )
 
-    fig_basic.plot_stn(caller, sim, obs, "A", ["Streamflow"], 0.1, 0.5, 0.9, [10.0, 20.0])
+    fig_basic.plot_stn(caller, sim, obs, station_id, ["Streamflow"], 0.1, 0.5, 0.9, list(lat_lon))
+    return figures[0]
 
-    obs_line, sim_line = figures[0].axes[0].get_lines()[:2]
+
+def _drawn_lines(monkeypatch, tmp_path, n_points, freq):
+    obs_line, sim_line = _drawn_figure(monkeypatch, tmp_path, n_points, freq).axes[0].get_lines()[:2]
     return obs_line, sim_line
 
 
@@ -67,3 +70,22 @@ def test_station_timeseries_reads_legacy_total_widths_at_their_calibrated_length
 
     assert _stn_line_style(legacy, "obs", 12) == (1.0, "^", 3.0)
     assert _stn_line_style(legacy, "obs", 3650) == (1.0, None, 3.0)
+
+
+def test_station_timeseries_title_keeps_station_id_and_clears_the_metrics(monkeypatch, tmp_path):
+    from matplotlib.text import Text
+
+    station_id = "464114097260900_USGS_LONGID"  # 27 characters, the longest ids in the data
+    fig = _drawn_figure(monkeypatch, tmp_path, 36, "MS", station_id=station_id, lat_lon=(-46.7, -169.72))
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+
+    texts = [t for t in ax.get_children() if isinstance(t, Text) and t.get_text()]
+    title = next(t for t in texts if t.get_text().startswith("ID: "))
+    metrics = next(t for t in texts if t.get_text().startswith("RMSE: "))
+
+    assert station_id in title.get_text()
+    title_box, metrics_box = title.get_window_extent(renderer), metrics.get_window_extent(renderer)
+    assert not title_box.overlaps(metrics_box)
+    assert metrics_box.y0 >= ax.get_window_extent(renderer).y1

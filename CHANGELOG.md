@@ -58,6 +58,11 @@
   points (1 and 4); older totals such as 144 and 432 are read as they were
   meant for a 144-step record. Markers are left out of records longer than
   `marker_max_points` (200) steps, where they hid the line.
+- In station time-series plots the RMSE/R/KGESS line now sits on its own row
+  above the plot, right-aligned, under the title. It was placed at a fixed 60 %
+  of the width on the title's row, so a long station id or coordinate ran into
+  it. The title shows the station id as it is (`01010000_USGS`, not
+  `01010000_Usgs`).
 - Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
   KGE they are now drawn on -1 to 1, with values beyond shown by the colour
   bar's end arrows. The MFM components keep their colour bar within 0 to 1.
