@@ -73,13 +73,16 @@ def test_station_timeseries_reads_legacy_total_widths_at_their_calibrated_length
 
 
 def test_station_timeseries_title_keeps_station_id_and_clears_the_metrics(monkeypatch, tmp_path):
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.text import Text
 
     station_id = "464114097260900_USGS_LONGID"  # 27 characters, the longest ids in the data
     fig = _drawn_figure(monkeypatch, tmp_path, 36, "MS", station_id=station_id, lat_lon=(-46.7, -169.72))
     ax = fig.axes[0]
-    fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
+    # plot_stn closes the figure, and newer Matplotlib then detaches its canvas.
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    renderer = canvas.get_renderer()
 
     texts = [t for t in ax.get_children() if isinstance(t, Text) and t.get_text()]
     title = next(t for t in texts if t.get_text().startswith("ID: "))
