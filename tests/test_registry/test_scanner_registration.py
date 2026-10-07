@@ -1776,6 +1776,98 @@ def test_rescan_preserves_station_matching_config(tmp_path: Path):
     assert catalog["RiverStn"]["station_matching"] == existing["station_matching"]
 
 
+@pytest.mark.parametrize(
+    "bad_field", [None, "discharge_var", "area_var", "lon_var", "lat_var", "time_var", "station_id_var"]
+)
+def test_rescan_warns_about_preserved_station_variable_names(tmp_path, caplog, bad_field):
+    import logging
+
+    import numpy as np
+    import xarray as xr
+
+    from openbench.data.registry.scanner import _register_to_dict
+
+    path = tmp_path / "Flow_dist.nc"
+    xr.Dataset(
+        {
+            "discharge": (("station", "time"), np.ones((1, 2))),
+            "lon": ("station", [10.0]),
+            "lat": ("station", [20.0]),
+            "upstream_area": ("station", [5000.0]),
+        },
+        coords={"station": [1], "time": np.array(["2000-01-01", "2000-01-02"], dtype="datetime64[ns]")},
+    ).to_netcdf(path)
+    matching = {
+        "method": "direct",
+        "dataset_file": "Flow_full.nc",
+        "discharge_var": "DISCHARGE",
+        "area_var": "",  # A disabled optional area must not generate a warning.
+    }
+    if bad_field:
+        matching[bad_field] = "old_variable"
+    existing = {"station_matching": matching, "variables": {"Streamflow": {"varname": "discharge"}}}
+    scanned = ScannedDataset(
+        name="RiverStn",
+        resolution="Station",
+        category="Water",
+        data_type="stn",
+        root_dir=str(tmp_path),
+        variables={"Streamflow": "."},
+    )
+    catalog = {}
+    with caplog.at_level(logging.WARNING):
+        _register_to_dict(scanned, catalog, existing_descriptor=existing)
+
+    assert catalog["RiverStn"]["station_matching"] == matching
+    messages = [r.message for r in caplog.records if "preserved station_matching." in r.message]
+    if bad_field:
+        assert len(messages) == 1
+        assert f"station_matching.{bad_field}='old_variable'" in messages[0]
+        assert str(path) in messages[0]
+        assert "discharge" in messages[0] and "upstream_area" in messages[0]
+        assert "Update this field" in messages[0]
+    else:
+        assert messages == []
+
+
+@pytest.mark.parametrize("placeholder", ["${OPENBENCH_REF_ROOT}", "$OPENBENCH_REF_ROOT"])
+@pytest.mark.parametrize("use_env", [False, True])
+def test_station_matching_check_resolves_saved_root_and_env_override(
+    tmp_path, monkeypatch, caplog, placeholder, use_env
+):
+    import logging
+    import os
+
+    import xarray as xr
+
+    from openbench.data.registry.scanner import _warn_station_matching_fields
+
+    saved_root = tmp_path / "saved"
+    env_root = tmp_path / "env"
+    monkeypatch.setattr(registry_manager_module, "resolve_reference_root", lambda: str(saved_root))
+    monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
+    if use_env:
+        monkeypatch.setenv("OPENBENCH_REF_ROOT", str(env_root))
+    root = env_root if use_env else saved_root
+    dataset = root / "Monthly" / "Flow_dist.nc"
+    dataset.parent.mkdir(parents=True)
+    xr.Dataset({"discharge": ("station", [1.0])}).to_netcdf(dataset)
+    descriptor = {
+        "name": "RiverStn",
+        "root_dir": f"{placeholder}/Monthly",
+        "station_matching": {"dataset_file": "Flow_full.nc", "discharge_var": "streamflow"},
+    }
+
+    with caplog.at_level(logging.WARNING):
+        _warn_station_matching_fields(descriptor)
+
+    assert "preserved station_matching.discharge_var='streamflow'" in caplog.text
+    assert str(dataset) in caplog.text
+    assert "cannot check" not in caplog.text
+    assert descriptor["root_dir"] == f"{placeholder}/Monthly"
+    assert ("OPENBENCH_REF_ROOT" in os.environ) == use_env
+
+
 def test_rescan_preserves_existing_variable_extension_fields(tmp_path: Path):
     """Variable-level user metadata such as fallbacks and station filters should
     not be dropped while refreshing scanner-derived fields.

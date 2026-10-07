@@ -1884,7 +1884,7 @@ def _register_to_dict(
     on_multi_var=None,
     station_list_dir: Optional[Path] = None,
 ) -> None:
-    """Build descriptor and add to catalog dict (no file I/O except fulllist).
+    """Build descriptor and add to catalog dict without writing the catalog file.
 
     Stages:
       1. _build_base_descriptor    — base fields + data_groupby from file counts
@@ -1976,6 +1976,56 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
         is_station_matched_item(name) for name in descriptor.get("variables", {})
     ):
         descriptor["station_matching"] = existing["station_matching"]
+        _warn_station_matching_fields(descriptor)
+
+
+def _warn_station_matching_fields(descriptor: dict) -> None:
+    """Check preserved variable names against file metadata without changing user settings."""
+    import xarray as xr
+
+    from openbench.data.registry.manager import _expand_env_path
+    from openbench.data.registry.schema import StationMatchingConfig
+    from openbench.data.station_matcher import resolve_station_dataset
+    from openbench.util.names import get_xarray_key_case_insensitive
+
+    matching = descriptor["station_matching"]
+    root = descriptor.get("root_dir")
+    filename = matching.get("dataset_file")
+    if not root or not filename:
+        return
+    name = descriptor.get("name", "<unknown>")
+    root = os.path.expanduser(_expand_env_path(root, context=f"{name}.root_dir"))
+    path = resolve_station_dataset(root, filename)
+    if path is None:
+        logger.warning(
+            "Reference '%s': cannot check preserved station_matching variable names; dataset %s under %s "
+            "(including its _dist fallback) was not found. Check root_dir and station_matching.dataset_file "
+            "in your catalog.",
+            name,
+            filename,
+            root,
+        )
+        return
+    defaults = StationMatchingConfig()
+    try:
+        with xr.open_dataset(path, decode_cf=False) as ds:
+            for field in ("station_id_var", "lon_var", "lat_var", "area_var", "discharge_var", "time_var"):
+                requested = matching.get(field, getattr(defaults, field))
+                if field == "area_var" and not requested:
+                    continue  # Explicitly disabled optional area lookup.
+                if get_xarray_key_case_insensitive(ds, requested) is None:
+                    logger.warning(
+                        "Reference '%s': preserved station_matching.%s=%r was not found in %s. "
+                        "Available variables/coordinates: %s. Update this field in your reference catalog; "
+                        "rescanning keeps the existing setting unchanged.",
+                        name,
+                        field,
+                        requested,
+                        path,
+                        ", ".join(map(str, ds.variables)),
+                    )
+    except (OSError, ValueError) as exc:
+        logger.warning("Reference '%s': cannot check station_matching fields in %s: %s", name, path, exc)
 
 
 # ---------------------------------------------------------------------------
