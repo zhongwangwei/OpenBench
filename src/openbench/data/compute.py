@@ -54,6 +54,22 @@ class _CaseInsensitiveDatasetProxy:
             return False
         return get_xarray_key_case_insensitive(self._dataset, key) is not None
 
+    def sum_prefix(self, prefix: str) -> Any:
+        """Sum every data variable whose name starts with ``prefix`` (case-insensitive).
+
+        For outputs split into numbered parts whose count depends on the run,
+        such as CoLM's per-size-class sediment variables ``f_sedcon_1``,
+        ``f_sedcon_2``, ...
+        """
+        wanted = str(prefix).lower()
+        names = sorted(str(name) for name in self._dataset.data_vars if str(name).lower().startswith(wanted))
+        if not names:
+            raise MissingComputeVariable(f"No variable starting with {prefix!r} found in dataset")
+        total = self._dataset[names[0]]
+        for name in names[1:]:
+            total = total + self._dataset[name]
+        return total
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._dataset, name)
 
@@ -109,7 +125,9 @@ _SAFE_ROOT_NAMES = frozenset({"ds", "np", "xr"})
 # volume flux to an areal runoff depth), while the evaluator must remain free
 # of arbitrary NumPy execution.
 _SAFE_NUMPY_FUNCTIONS = frozenset({"sin", "sqrt"})
-_SAFE_DATA_METHODS = frozenset({"diff", "fillna", "get", "isel", "lower", "mean", "squeeze", "sum", "where"})
+_SAFE_DATA_METHODS = frozenset(
+    {"diff", "fillna", "get", "isel", "lower", "mean", "squeeze", "sum", "sum_prefix", "where"}
+)
 
 
 def _root_name(node: ast.AST) -> str | None:

@@ -21,6 +21,7 @@ BASE_UNIT_LABELS = {
     "k": "K",
     "gc m-2 day-1": "gC m-2 day-1",
     "kg c m-2": "kgC m-2",
+    "mg l-1": "mg L-1",
 }
 
 
@@ -286,6 +287,28 @@ class UnitProcessing:
                 "kgc m-2": lambda x: x,
                 "g c m-2": lambda x: x / 1000,
                 "gc m-2": lambda x: x / 1000,
+            },
+            # Suspended sediment concentration: mass of sediment per volume of water.
+            "mg l-1": {
+                "mg/l": lambda x: x,
+                "g m-3": lambda x: x,
+                "g/m3": lambda x: x,
+                "kg m-3": lambda x: x * 1000,
+                "kg/m3": lambda x: x * 1000,
+                "g l-1": lambda x: x * 1000,
+                "g/l": lambda x: x * 1000,
+            },
+            # Suspended sediment load: mass of sediment per time.
+            "t day-1": {
+                "t d-1": lambda x: x,
+                "t/d": lambda x: x,
+                "t/day": lambda x: x,
+                "kg s-1": lambda x: x * 86.4,
+                "kg/s": lambda x: x * 86.4,
+                "kg day-1": lambda x: x / 1000,
+                "kg d-1": lambda x: x / 1000,
+                "t yr-1": lambda x: x / 365.25,
+                "t year-1": lambda x: x / 365.25,
             },
         }
 

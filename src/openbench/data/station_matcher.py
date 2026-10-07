@@ -140,6 +140,17 @@ def resolve_station_dataset(root, dataset_file: str) -> Optional[Path]:
 # older OpenBench_Streamflow file that still calls it "area".
 AREA_VAR_FALLBACKS = ("upstream_area", "area")
 
+# Evaluation items whose station references are matched to the river network
+# (river discharge and the suspended sediment measured at sediment gauges).
+STATION_MATCHED_ITEMS = frozenset(
+    {"streamflow", "discharge_for_sediment", "suspended_sediment_concentration", "suspended_sediment_load"}
+)
+
+
+def is_station_matched_item(name) -> bool:
+    """Whether an evaluation item uses the built-in station matching."""
+    return str(name).casefold() in STATION_MATCHED_ITEMS
+
 
 def _station_area_key(ds: xr.Dataset, area_var: str, dataset_path: Path, min_uparea: float) -> Optional[str]:
     """Return the dataset's upstream-area variable, or None when it has none.
@@ -398,6 +409,7 @@ def _process_site_cama(
     original_indices: Optional[np.ndarray] = None,
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
+    output_var: str = "discharge",
 ):
     """Process one station for CaMA allocation matching.  Returns metadata row or None."""
     original_idx = int(original_indices[idx]) if original_indices is not None else idx
@@ -446,7 +458,7 @@ def _process_site_cama(
 
     file_path = station_file_path(scratch_dir, station_id, index=original_idx, duplicate_ids=duplicate_station_ids)
     clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
-    ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
+    ds_out = xr.Dataset({output_var: (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
     return [output_station_id, cama_lon, cama_lat, use_syear, use_eyear, str(file_path)]
@@ -474,6 +486,7 @@ def _process_site_direct(
     original_indices: Optional[np.ndarray] = None,
     duplicate_station_ids: set[str] | None = None,
     missing_sentinels: tuple[float, ...] = (),
+    output_var: str = "discharge",
 ):
     """Process one station with direct coordinate matching (no CaMA)."""
     original_idx = int(original_indices[idx]) if original_indices is not None else idx
@@ -522,10 +535,10 @@ def _process_site_direct(
     if time_format == "YYYYMM":
         time_dates = pd.to_datetime([str(int(t)) for t in times], format="%Y%m")
         clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
-        ds_out = xr.Dataset({"discharge": xr.DataArray(clean_flow, dims=["time"], coords={"time": time_dates})})
+        ds_out = xr.Dataset({output_var: xr.DataArray(clean_flow, dims=["time"], coords={"time": time_dates})})
     else:
         clean_flow = np.where(valid_mask, np.asarray(flow, dtype=float), np.nan)
-        ds_out = xr.Dataset({"discharge": (["time"], clean_flow)}, coords={"time": times})
+        ds_out = xr.Dataset({output_var: (["time"], clean_flow)}, coords={"time": times})
     write_netcdf_atomic(ds_out, file_path)
 
     return [output_station_id, lon, lat, use_syear, use_eyear, str(file_path)]
@@ -551,6 +564,7 @@ def run_station_matching(
     time_format: Optional[str] = None,
     scratch_subdir: Optional[str] = None,
     n_jobs: int | None = None,
+    varname: Optional[str] = None,
 ):
     """Run station matching on a consolidated reference NC file.
 
@@ -561,6 +575,10 @@ def run_station_matching(
     The minimum upstream area comes from ``info.sim_grid_res`` via
     ``MIN_UPAREA_BY_RESOLUTION``; an unsupported resolution raises ValueError.
     The allocation error limit is ``MAX_CAMA_ALLOC_ERR``.
+
+    ``varname`` is the evaluated item's reference variable: it is read from the
+    dataset when present (falling back to ``discharge_var``) and names the
+    variable in the per-station files, which are read back under that name.
 
     Modifies ``info`` in-place: sets ``stn_list``, ``ref_fulllist``,
     ``use_syear``, ``use_eyear``.
@@ -581,7 +599,10 @@ def run_station_matching(
         station_id_key = _require_dataset_field(ds, station_id_var, "station_id_var", dataset_path)
         lon_key = _require_dataset_field(ds, lon_var, "lon_var", dataset_path)
         lat_key = _require_dataset_field(ds, lat_var, "lat_var", dataset_path)
-        discharge_key = _require_dataset_field(ds, discharge_var, "discharge_var", dataset_path)
+        discharge_key = get_xarray_key_case_insensitive(ds, varname) if varname else None
+        if discharge_key is None:
+            discharge_key = _require_dataset_field(ds, discharge_var, "discharge_var", dataset_path)
+        output_var = varname or "discharge"
         time_key = get_xarray_key_case_insensitive(ds, time_var) or get_xarray_key_case_insensitive(ds, "time")
         if time_key is None:
             time_key = _require_dataset_field(ds, time_var, "time_var", dataset_path)
@@ -691,6 +712,7 @@ def run_station_matching(
                     station_indices,
                     duplicate_station_ids,
                     missing_sentinels,
+                    output_var=output_var,
                 )
                 for idx in range(station_indices.size)
             )
@@ -744,6 +766,7 @@ def run_station_matching(
                     station_indices,
                     duplicate_station_ids,
                     missing_sentinels,
+                    output_var=output_var,
                 )
                 for idx in range(station_indices.size)
             )

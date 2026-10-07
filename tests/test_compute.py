@@ -164,3 +164,23 @@ def test_compute_membership_checks_are_case_insensitive():
     result = execute_compute(ds, "ds['RUNOFF'] if 'RUNOFF' in ds else 0", "Runoff")
 
     np.testing.assert_array_equal(result.values, [4.0, 5.0])
+
+
+def test_sum_prefix_adds_every_numbered_part():
+    ds = xr.Dataset(
+        {
+            "f_sedcon_1": ("x", [1.0, 2.0]),
+            "F_SEDCON_2": ("x", [0.5, np.nan]),
+            "f_sedcon": ("x", [100.0, 100.0]),
+            "f_discharge": ("x", [3.0, 4.0]),
+        }
+    )
+    result = execute_compute(ds, "ds.sum_prefix('f_sedcon_') * 2", "Suspended_Sediment_Concentration")
+    np.testing.assert_array_equal(result.values, [3.0, np.nan])
+
+
+def test_sum_prefix_without_matching_variables_is_a_missing_variable():
+    from openbench.data.compute import MissingComputeVariable
+
+    with pytest.raises(MissingComputeVariable, match="f_sedout_"):
+        execute_compute(_make_ds(), "ds.sum_prefix('f_sedout_')", "Suspended_Sediment_Load")

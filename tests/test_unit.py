@@ -442,3 +442,52 @@ def test_methane_fluxes_convert_to_carbon_flux():
         converted, base_unit = UnitProcessing.convert_unit(value, declared)
         assert base_unit == "gc m-2 day-1", declared
         np.testing.assert_allclose(converted, expected, err_msg=declared)
+
+
+def test_sediment_units_convert_to_concentration_and_load_bases():
+    unit._UNIT_LOOKUP_CACHE = None
+    cases = [
+        ("mg L-1", 5.0, "mg l-1", 5.0),
+        ("g m-3", 5.0, "mg l-1", 5.0),
+        ("kg m-3", 0.005, "mg l-1", 5.0),
+        ("g/L", 0.005, "mg l-1", 5.0),
+        ("t d-1", 864.0, "t day-1", 864.0),
+        ("kg s-1", 10.0, "t day-1", 864.0),
+        ("kg d-1", 864000.0, "t day-1", 864.0),
+        ("t yr-1", 365.25, "t day-1", 1.0),
+    ]
+    for declared, value, base, expected in cases:
+        converted, base_unit = UnitProcessing.convert_unit(value, declared)
+        assert base_unit == base, declared
+        np.testing.assert_allclose(converted, expected, err_msg=declared)
+
+
+def test_colm2024_sediment_outputs_reach_the_sedref_units(tmp_path):
+    """CoLM's per-size-class volume outputs, summed and given CoLM's grain density."""
+    import xarray as xr
+
+    from openbench.data.compute import execute_compute
+    from openbench.data.registry.manager import RegistryManager
+
+    unit._UNIT_LOOKUP_CACHE = None
+    colm = RegistryManager(user_dir=tmp_path).get_model("CoLM2024")
+    density = 2650.0
+    ssc_mg_l, ssl_t_d = 120.0, 4300.0
+    ds = xr.Dataset(
+        {
+            "f_sedcon_1": ("x", [0.6 * ssc_mg_l / 1000 / density]),
+            "f_sedcon_2": ("x", [0.4 * ssc_mg_l / 1000 / density]),
+            "f_sedout_1": ("x", [0.7 * ssl_t_d / 86.4 / density]),
+            "f_sedout_2": ("x", [0.3 * ssl_t_d / 86.4 / density]),
+        }
+    )
+    for item, expected, base in (
+        ("Suspended_Sediment_Concentration", ssc_mg_l, "mg l-1"),
+        ("Suspended_Sediment_Load", ssl_t_d, "t day-1"),
+    ):
+        mapping = colm.variables[item]
+        computed = execute_compute(ds, mapping.compute, item)
+        converted, base_unit = UnitProcessing.convert_unit(computed.values, mapping.varunit)
+        assert base_unit == base
+        np.testing.assert_allclose(converted, [expected])
+    assert colm.variables["Discharge_for_Sediment"].varname == "f_discharge"

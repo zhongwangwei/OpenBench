@@ -45,7 +45,7 @@ BRSC_Monthly:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -100,7 +100,7 @@ CAMELSH_Hourly:
   timezone: 0
   variables:
     Streamflow:
-      varname: discharge
+      varname: streamflow
       varunit: m3 s-1
   years:
   - 1980
@@ -422,7 +422,7 @@ Caravan_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: streamflow
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -453,7 +453,7 @@ Dai_Trenberth_Monthly:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: FLOW
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -1702,7 +1702,7 @@ GRDC_Caravan_extension_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: streamflow
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -1732,7 +1732,7 @@ GRDC_Daily:
     time_var: Time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -1762,7 +1762,7 @@ GRDC_Monthly:
     time_var: Time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
       max_uparea: 50000000000.0
       min_uparea: 1000.0
@@ -1792,7 +1792,7 @@ GRDC_RESG_Monthly:
     time_var: Time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -1919,7 +1919,7 @@ GSHA_Monthly:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: mean
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -1947,7 +1947,7 @@ GSIM_Monthly:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: MEAN
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2088,7 +2088,7 @@ Hubei_Hydro_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: streamflow
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2624,7 +2624,7 @@ R_ArcticNet_Daily:
     time_var: Time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2652,7 +2652,7 @@ R_ArcticNet_Monthly:
     time_var: Time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2958,7 +2958,7 @@ YCZ_Bulletin_Monthly:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: Disch
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -2986,7 +2986,7 @@ YRC_Daily:
     time_var: time
   variables:
     Streamflow:
-      varname: discharge
+      varname: streamflow
       varunit: m3 s-1
   _provenance:
     data_groupby: profile
@@ -4293,3 +4293,96 @@ FLUXNET-CH4_Monthly:
       sub_dir: ''
       varname: FCH4
       varunit: mg CH4 m-2 d-1
+OpenBench_Sediment_Daily:
+  name: OpenBench_Sediment_Daily
+  description: SedRef v1.0.0 daily river discharge, suspended sediment concentration and load at sediment gauges
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Sediment/Daily
+  years:
+  - 1948
+  - 2025
+  station_matching:
+    area_var: upstream_area
+    dataset_file: OpenBench_Sediment_Daily_full.nc
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    method: cama_allocation
+    station_id_var: station
+    time_var: time
+  variables:
+    Discharge_for_Sediment:
+      varname: discharge
+      varunit: m3 s-1
+    Suspended_Sediment_Concentration:
+      varname: ssc
+      varunit: mg L-1
+    Suspended_Sediment_Load:
+      varname: ssl
+      varunit: t d-1
+OpenBench_Sediment_Monthly:
+  name: OpenBench_Sediment_Monthly
+  description: SedRef v1.0.0 monthly river discharge, suspended sediment concentration and load at sediment gauges
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Sediment/Monthly
+  years:
+  - 1938
+  - 2000
+  station_matching:
+    area_var: upstream_area
+    dataset_file: OpenBench_Sediment_Monthly_full.nc
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    method: cama_allocation
+    station_id_var: station
+    time_var: time
+  variables:
+    Discharge_for_Sediment:
+      varname: discharge
+      varunit: m3 s-1
+    Suspended_Sediment_Concentration:
+      varname: ssc
+      varunit: mg L-1
+    Suspended_Sediment_Load:
+      varname: ssl
+      varunit: t d-1
+OpenBench_Sediment_Annual:
+  name: OpenBench_Sediment_Annual
+  description: SedRef v1.0.0 annual river discharge, suspended sediment concentration and load at sediment gauges
+  category: Water
+  data_type: stn
+  tim_res: Year
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Sediment/Annual
+  years:
+  - 1912
+  - 2020
+  station_matching:
+    area_var: upstream_area
+    dataset_file: OpenBench_Sediment_Annual_full.nc
+    discharge_var: discharge
+    lat_var: lat
+    lon_var: lon
+    method: cama_allocation
+    station_id_var: station
+    time_var: time
+  variables:
+    Discharge_for_Sediment:
+      varname: discharge
+      varunit: m3 s-1
+    Suspended_Sediment_Concentration:
+      varname: ssc
+      varunit: mg L-1
+    Suspended_Sediment_Load:
+      varname: ssl
+      varunit: t d-1

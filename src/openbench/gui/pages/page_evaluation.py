@@ -83,6 +83,11 @@ EVALUATION_ITEMS = {
         "River_Water_Level",
         "Streamflow",
     ],
+    "Sediment": [
+        "Discharge_for_Sediment",
+        "Suspended_Sediment_Concentration",
+        "Suspended_Sediment_Load",
+    ],
     "Urban": [
         "Urban_Air_Temperature_Max",
         "Urban_Air_Temperature_Min",

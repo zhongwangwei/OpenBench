@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 ### Added
+- River sediment references OpenBench_Sediment_Daily,
+  OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
+  CC BY 4.0) with three evaluation items:
+  `Discharge_for_Sediment` (river discharge at the sediment gauges, kept apart
+  from `Streamflow`), `Suspended_Sediment_Concentration` (mg L-1) and
+  `Suspended_Sediment_Load` (t d-1). They are matched to the river network
+  like Streamflow: CaMa allocation, the fixed minimum upstream area per
+  resolution, allocation error at most 0.2, and the `_dist` fallback. The data
+  are not bundled; they go under
+  `${OPENBENCH_REF_ROOT}/Station/Water/Sediment/<Daily|Monthly|Annual>`. The
+  GUI lists the items in a new Sediment group.
+- CoLM2024 maps the sediment items to Grid_RiverLake routing output:
+  `f_discharge`, and the sum of the size classes `f_sedcon_*` or `f_sedout_*`
+  times CoLM's default grain density of 2650 kg m-3. A run with another
+  density needs its own `compute` expression.
+- Compute expressions can add numbered outputs whose count depends on the run
+  with `ds.sum_prefix('f_sedcon_')`.
+- Unit conversions for sediment concentration (mg L-1, g m-3, kg m-3, g L-1)
+  and load (t d-1, kg s-1, kg d-1, t yr-1).
 - Thirty reference datasets for land-surface CH4 emission and the areas that
   emit it: FLUXNET-CH4 monthly tower fluxes (Methane), the 22 GCP-CH4
   wetland runs and their ensemble mean (Wetland_Methane_Emission,
@@ -18,6 +37,13 @@
   file. `openbench init` accepts either file too.
 
 ### Changed
+- Station matching reads the evaluated item's `varname` from the dataset,
+  falling back to `station_matching.discharge_var`, and writes the station
+  files under that name, so one dataset can serve several items. The
+  Streamflow references now give their dataset variable as `varname` (for
+  example `Disch` for GRDC), which also names their output files
+  (`Streamflow_ref_GRDC_Daily_Disch.nc`). A user catalog that still says
+  `discharge` keeps working through the fallback.
 - The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
   now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
   coverage of the 2026-10-06 release.

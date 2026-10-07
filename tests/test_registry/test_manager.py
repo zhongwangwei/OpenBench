@@ -507,7 +507,9 @@ def test_station_catalog_entries_have_a_station_list_matching_filter_or_scan_pro
     assert incomplete == []
 
 
-def test_station_matching_is_only_configured_for_streamflow():
+def test_station_matching_is_only_configured_for_station_matched_items():
+    from openbench.data.station_matcher import is_station_matched_item
+
     offenders = {}
 
     for filename in ("reference_catalog.yaml", "reference_profiles.yaml"):
@@ -517,7 +519,7 @@ def test_station_matching_is_only_configured_for_streamflow():
             for name, data in entries.items()
             if isinstance(data, dict)
             and data.get("station_matching")
-            and "Streamflow" not in (data.get("variables") or {})
+            and not any(is_station_matched_item(item) for item in (data.get("variables") or {}))
         ]
 
     assert offenders == {

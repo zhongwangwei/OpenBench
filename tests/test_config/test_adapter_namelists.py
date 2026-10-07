@@ -39,7 +39,7 @@ def test_non_streamflow_reference_ignores_stale_station_matching(monkeypatch, ca
     with caplog.at_level(logging.WARNING):
         assert reader._get_custom_filter() is None
 
-    assert "Ignoring station_matching for non-Streamflow reference OpenBench_FLUX_Daily" in caplog.text
+    assert "Ignoring station_matching for reference OpenBench_FLUX_Daily" in caplog.text
 
 
 def _write_streamflow_stations(path, areas):
@@ -655,3 +655,55 @@ def test_integration_fixture_uses_lowres_registry_root_without_duplicate_categor
     assert source == "GLEAM_v4.2a_LowRes"
     assert "/Water/Water/" not in ref_dir
     assert ref_dir.endswith("OpenBench-wei/dataset/Reference/Grid/LowRes/Water/Evapotranspiration/GLEAM_v4.2a")
+
+
+def test_sediment_reference_matches_each_item_from_its_own_variable(monkeypatch, tmp_path):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+
+    import openbench.data.registry.manager as registry_manager_module
+    from openbench.data.registry.schema import StationMatchingConfig
+
+    xr.Dataset(
+        {
+            "station": ("station", np.array(["S1", "S2"], dtype=object)),
+            "lon": ("station", [10.0, 11.0]),
+            "lat": ("station", [20.0, 21.0]),
+            "upstream_area": ("station", [5000.0, 6000.0]),
+            "cama_lon_15min": ("station", [10.0, 11.0]),
+            "cama_lat_15min": ("station", [20.0, 21.0]),
+            "cama_alloc_err_15min": ("station", [0.0, 0.0]),
+            "discharge": (("station", "time"), [[1.0, 2.0], [np.nan, np.nan]]),
+            "ssc": (("station", "time"), [[30.0, 40.0], [50.0, 60.0]]),
+        },
+        coords={"time": pd.date_range("2000-01-01", periods=2, freq="D")},
+    ).to_netcdf(tmp_path / "Sed_Daily_full.nc")
+    reference = SimpleNamespace(
+        station_matching=StationMatchingConfig(dataset_file="Sed_Daily_full.nc", area_var="upstream_area"),
+        variables={
+            "Discharge_for_Sediment": SimpleNamespace(),
+            "Suspended_Sediment_Concentration": SimpleNamespace(),
+            "Suspended_Sediment_Load": SimpleNamespace(),
+        },
+    )
+    registry = SimpleNamespace(get_reference=lambda _name: reference)
+    monkeypatch.setattr(registry_manager_module, "get_registry", lambda: registry)
+
+    matched = {}
+    for item, varname in (("Discharge_for_Sediment", "discharge"), ("Suspended_Sediment_Concentration", "ssc")):
+        reader = _streamflow_matching_reader(monkeypatch, tmp_path, "Sed_Daily_full.nc", 0.25)
+        monkeypatch.setattr(registry_manager_module, "get_registry", lambda: registry)
+        reader.__dict__.update(item=item, ref_source="Sed_Daily", ref_varname=varname, stn_list=pd.DataFrame())
+        reader._filter_stations()
+        matched[item] = reader.stn_list
+
+    # Only S1 has discharge; both stations have SSC. Each item reads its own variable,
+    # and its station files sit in a scratch directory of their own.
+    assert matched["Discharge_for_Sediment"]["ID"].tolist() == ["S1"]
+    assert matched["Suspended_Sediment_Concentration"]["ID"].tolist() == ["S1", "S2"]
+    q_file = matched["Discharge_for_Sediment"]["ref_dir"].iloc[0]
+    ssc_file = matched["Suspended_Sediment_Concentration"]["ref_dir"].iloc[0]
+    assert "Discharge_for_Sediment" in q_file and "Suspended_Sediment_Concentration" in ssc_file
+    with xr.open_dataset(ssc_file) as station_ds:
+        assert list(station_ds.data_vars) == ["ssc"]
