@@ -21,6 +21,11 @@
 - The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
   now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
   coverage of the 2026-10-06 release.
+- OpenBench_Streamflow_Daily and OpenBench_Streamflow_Hourly read the upstream
+  area from `upstream_area`, as OpenBench_Streamflow_Monthly does. A station
+  dataset without its configured area variable now falls back to
+  `upstream_area` or `area`, and warns when it has neither. It used to skip
+  the minimum upstream area without a word.
 - CH4 fluxes in kg CH4 m-2 s-1; g CH4 m-2 per second, day or year;
   mg CH4 m-2 d-1; and umol or nmol CH4 m-2 s-1 now convert to gC m-2 day-1.
   Before, they kept their declared unit. A bare nmol m-2 s-1 is read as a

@@ -136,6 +136,41 @@ def resolve_station_dataset(root, dataset_file: str) -> Optional[Path]:
     return None
 
 
+# Upstream-area names tried when a dataset lacks the configured one, e.g. an
+# older OpenBench_Streamflow file that still calls it "area".
+AREA_VAR_FALLBACKS = ("upstream_area", "area")
+
+
+def _station_area_key(ds: xr.Dataset, area_var: str, dataset_path: Path, min_uparea: float) -> Optional[str]:
+    """Return the dataset's upstream-area variable, or None when it has none.
+
+    An empty ``area_var`` means the dataset has no areas. A configured name that
+    is missing falls back to ``AREA_VAR_FALLBACKS``; without any area the minimum
+    upstream area cannot be applied, which is logged rather than skipped silently.
+    """
+    if not area_var:
+        return None
+    key = get_xarray_key_case_insensitive(ds, area_var)
+    if key is not None:
+        return key
+    for name in AREA_VAR_FALLBACKS:
+        key = get_xarray_key_case_insensitive(ds, name)
+        if key is not None:
+            logging.warning(
+                "Station matching: %s has no %r; using %r as upstream area", dataset_path.name, area_var, key
+            )
+            return key
+    logging.warning(
+        "Station matching: %s has no upstream-area variable (%r or %s); the minimum upstream area of %g km2 "
+        "is not applied",
+        dataset_path.name,
+        area_var,
+        "/".join(AREA_VAR_FALLBACKS),
+        min_uparea,
+    )
+    return None
+
+
 def _station_id_to_string(value) -> str:
     """Return a stable station identifier without assuming it is numeric."""
     if isinstance(value, bytes):
@@ -557,7 +592,7 @@ def run_station_matching(
         lats = ds[lat_key].values
 
         # Area variable (optional — may not exist in all datasets)
-        area_key = get_xarray_key_case_insensitive(ds, area_var) if area_var else None
+        area_key = _station_area_key(ds, area_var, dataset_path, min_uparea)
         if area_key:
             areas = ds[area_key].values
         else:
