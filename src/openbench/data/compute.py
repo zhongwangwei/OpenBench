@@ -15,6 +15,7 @@ before evaluation to prevent code injection.
 from __future__ import annotations
 
 import ast
+import re
 import logging
 from collections.abc import Iterable
 from typing import Any
@@ -25,6 +26,24 @@ import xarray as xr
 from openbench.util.names import get_xarray_key_case_insensitive
 
 logger = logging.getLogger(__name__)
+
+
+_DS_ITEM_PATTERN = re.compile(r"ds\[['\"]([^'\"]+)['\"]\]")
+_SUM_PREFIX_PATTERN = re.compile(r"sum_prefix\(\s*['\"]([^'\"]+)['\"]\s*,\s*(\d+)\s*\)")
+
+
+def compute_dependency_names(expression: Any) -> list[str]:
+    """Dataset variables a compute expression reads, in order and without repeats.
+
+    Covers ``ds['name']`` and the parts of ``ds.sum_prefix('f_sedcon_', 3)``
+    (``f_sedcon_1`` .. ``f_sedcon_3``), so file lookup and scanning find every
+    file such an expression needs.
+    """
+    text = str(expression or "")
+    names = list(_DS_ITEM_PATTERN.findall(text))
+    for prefix, parts in _SUM_PREFIX_PATTERN.findall(text):
+        names.extend(f"{prefix}{index}" for index in range(1, int(parts) + 1))
+    return list(dict.fromkeys(name for name in names if name))
 
 
 class _CaseInsensitiveDatasetProxy:
@@ -54,20 +73,35 @@ class _CaseInsensitiveDatasetProxy:
             return False
         return get_xarray_key_case_insensitive(self._dataset, key) is not None
 
-    def sum_prefix(self, prefix: str) -> Any:
-        """Sum every data variable whose name starts with ``prefix`` (case-insensitive).
+    def sum_prefix(self, prefix: str, parts: int) -> Any:
+        """Sum the numbered variables ``<prefix>1`` .. ``<prefix><parts>`` (case-insensitive).
 
-        For outputs split into numbered parts whose count depends on the run,
-        such as CoLM's per-size-class sediment variables ``f_sedcon_1``,
-        ``f_sedcon_2``, ...
+        For outputs split into a configured number of parts, such as CoLM's
+        ``nsed`` sediment size classes ``f_sedcon_1``, ``f_sedcon_2``, ...
+        Every part must be in the dataset and no higher-numbered part may be,
+        so a part kept in another file, or a run with another number of parts,
+        stops the computation instead of giving a partial sum.
         """
+        if isinstance(parts, bool) or not isinstance(parts, int) or parts < 1:
+            raise ComputeError(f"sum_prefix({prefix!r}, parts) needs a positive whole number of parts, got {parts!r}")
         wanted = str(prefix).lower()
-        names = sorted(str(name) for name in self._dataset.data_vars if str(name).lower().startswith(wanted))
-        if not names:
-            raise MissingComputeVariable(f"No variable starting with {prefix!r} found in dataset")
-        total = self._dataset[names[0]]
-        for name in names[1:]:
-            total = total + self._dataset[name]
+        numbered = {}
+        for name in self._dataset.data_vars:
+            suffix = str(name).lower()[len(wanted) :]
+            if str(name).lower().startswith(wanted) and suffix.isdigit():
+                numbered[int(suffix)] = str(name)
+        missing = [f"{prefix}{index}" for index in range(1, parts + 1) if index not in numbered]
+        if missing:
+            raise MissingComputeVariable(f"Variable(s) {', '.join(missing)} not found in dataset")
+        extra = sorted(index for index in numbered if index > parts)
+        if extra:
+            raise ComputeError(
+                f"{numbered[extra[0]]} found beyond the {parts} parts summed for {prefix!r}; "
+                "set the part count to the run's number of parts"
+            )
+        total = self._dataset[numbered[1]]
+        for index in range(2, parts + 1):
+            total = total + self._dataset[numbered[index]]
         return total
 
     def __getattr__(self, name: str) -> Any:

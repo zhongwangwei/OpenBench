@@ -15,6 +15,7 @@ from openbench.data.time_utils import decode_nonstandard_time
 from openbench.data.coordinates import NC_SUFFIXES, glob_nc_pattern
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
+from openbench.data.compute import compute_dependency_names
 
 try:
     from openbench.util.dataset_loader import (
@@ -349,7 +350,7 @@ class SelectionMixin:
                     if fallback.varname:
                         candidates.append(fallback.varname)
                 if mapping.compute:
-                    candidates.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", mapping.compute))
+                    candidates.extend(compute_dependency_names(mapping.compute))
         except Exception as exc:
             logging.debug("Variable-aware prefix fallback lookup skipped: %s", exc)
 
@@ -377,61 +378,8 @@ class SelectionMixin:
     def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
         deps = []
         for expr in self._compute_expressions_for_file_lookup(datasource):
-            deps.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", expr))
-        return list(dict.fromkeys(dep for dep in deps if dep))
-
-    def _compute_dependency_prefixes(self, datasource: str) -> list[str]:
-        """Prefixes whose numbered parts a compute expression adds with ``ds.sum_prefix()``."""
-        prefixes = []
-        for expr in self._compute_expressions_for_file_lookup(datasource):
-            prefixes.extend(re.findall(r"sum_prefix\(\s*['\"]([^'\"]+)['\"]\s*\)", expr))
-        return list(dict.fromkeys(prefix for prefix in prefixes if prefix))
-
-    def _ensure_prefix_parts_together(self, dirx: str, year: int | None, selected, datasource: str) -> None:
-        """Refuse files that hold only some of the parts ``ds.sum_prefix()`` adds.
-
-        The selected files are opened one time step at a time, so a part kept in
-        another file (e.g. f_sedcon_2 split from f_sedcon_1) would silently drop
-        out of the sum. CoLM writes all size classes of a step to one file.
-        """
-        prefixes = [prefix.lower() for prefix in self._compute_dependency_prefixes(datasource)]
-        if not prefixes:
-            return
-        selected_files = [selected] if isinstance(selected, str) else list(selected)
-
-        def prefixed_names(path: str) -> set[str]:
-            with _xr().open_dataset(path, decode_times=False) as ds:
-                return {str(name) for name in ds.variables if str(name).lower().startswith(tuple(prefixes))}
-
-        present = set()
-        for path in selected_files:
-            try:
-                present.update(name.lower() for name in prefixed_names(path))
-            except Exception as exc:
-                logging.debug("Could not inspect %s for summed parts: %s", path, exc)
-        year_token = f"*{year}*" if year is not None else "*"
-        pattern = os.path.join(dirx, "**", f"{year_token}.nc")
-        siblings = set(glob.glob(pattern, recursive=True)) | set(glob.glob(pattern + "4", recursive=True))
-        chosen = {os.path.abspath(path) for path in selected_files}
-        elsewhere = {}
-        for path in sorted(siblings):
-            if os.path.abspath(path) in chosen:
-                continue
-            try:
-                names = prefixed_names(path)
-            except Exception as exc:
-                logging.debug("Could not inspect %s for summed parts: %s", path, exc)
-                continue
-            for name in names:
-                if name.lower() not in present:
-                    elsewhere.setdefault(name, path)
-        if elsewhere:
-            listed = ", ".join(f"{name} in {os.path.basename(path)}" for name, path in sorted(elsewhere.items()))
-            raise ValueError(
-                f"{getattr(self, 'item', 'compute')}: the parts added by sum_prefix() are split across files "
-                f"({listed}), so the sum would miss them. Keep all parts of a time step in one file, "
-                "as CoLM writes them."
-            )
+            deps.extend(compute_dependency_names(expr))
+        return list(dict.fromkeys(deps))
 
     def _find_compute_dependency_files(self, dirx: str, year: int | None, datasource: str) -> list[str]:
         deps = self._compute_dependency_varnames_for_file_lookup(datasource)
@@ -515,13 +463,11 @@ class SelectionMixin:
                         continue
                     if try_prefix != prefix:
                         logging.info(f"Using fallback prefix '{try_prefix}' for single file")
-                    self._ensure_prefix_parts_together(dirx, None, path, datasource)
                     return path
         compute_files = self._find_compute_dependency_files(dirx, None, datasource)
         if compute_files:
             return compute_files
         if first_existing_path is not None:
-            self._ensure_prefix_parts_together(dirx, None, first_existing_path, datasource)
             return first_existing_path
         raise FileNotFoundError(f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc[4]')}")
 
@@ -607,12 +553,9 @@ class SelectionMixin:
                     continue
                 if try_prefix != prefix:
                     logging.info(f"Using fallback prefix '{try_prefix}' for year {year} (primary '{prefix}' not found)")
-                self._ensure_prefix_parts_together(dirx, year, var_files, datasource)
                 return var_files
 
         compute_files = self._find_compute_dependency_files(dirx, year, datasource)
         if compute_files:
             return compute_files
-        if first_matching_pattern_files:
-            self._ensure_prefix_parts_together(dirx, year, first_matching_pattern_files, datasource)
         return first_matching_pattern_files or []

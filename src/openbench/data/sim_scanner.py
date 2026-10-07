@@ -14,6 +14,7 @@ import re
 import unicodedata
 from typing import Any
 
+from openbench.data.compute import compute_dependency_names
 from openbench.data.coordinates import glob_nc
 from openbench.data.registry.scanner import (
     filename_split_match,
@@ -685,7 +686,7 @@ def _filename_pattern_for_file(file_path: Path) -> tuple[str, str]:
 
 
 def _compute_dependencies_span_file_patterns(files: list[Path], mapping) -> bool:
-    deps = re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(getattr(mapping, "compute", "")))
+    deps = compute_dependency_names(getattr(mapping, "compute", ""))
     if len(deps) < 2:
         return False
     patterns = set()
@@ -724,7 +725,7 @@ def _mapping_candidate_varnames(mapping) -> list[str]:
 
     compute = getattr(mapping, "compute", None)
     if compute:
-        candidates.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(compute)))
+        candidates.extend(compute_dependency_names(compute))
 
     seen: set[str] = set()
     unique = []

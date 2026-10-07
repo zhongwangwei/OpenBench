@@ -15,13 +15,16 @@
   `${OPENBENCH_REF_ROOT}/Station/Water/Sediment/<Daily|Monthly|Annual>`. The
   GUI lists the items in a new Sediment group.
 - CoLM2024 maps the sediment items to Grid_RiverLake routing output:
-  `f_discharge`, and the sum of the size classes `f_sedcon_*` or `f_sedout_*`
-  times CoLM's default grain density of 2650 kg m-3. A run with another
-  density needs its own `compute` expression.
-- Compute expressions can add numbered outputs whose count depends on the run
-  with `ds.sum_prefix('f_sedcon_')`. All parts of a time step must sit in one
-  file, as CoLM writes them; when some are found in another file the
-  evaluation stops naming them instead of summing only part of them.
+  `f_discharge`, and the three size classes of CoLM's standard sediment
+  parameters (`f_sedcon_1..3`, `f_sedout_1..3`) summed and multiplied by its
+  default grain density of 2650 kg m-3. A run with another number of classes
+  or another density needs its own `compute` expression.
+- Compute expressions can sum numbered parts with
+  `ds.sum_prefix('f_sedcon_', 3)`. Exactly parts 1..3 must be in the data
+  computed: a missing part (for example one kept in another file) or a
+  higher-numbered one stops the evaluation instead of giving a partial sum.
+  File lookup and simulation scanning treat the parts as dependencies, like
+  `ds['name']`.
 - Unit conversions for sediment concentration (mg L-1, g m-3, kg m-3, g L-1)
   and load (t d-1, kg s-1, kg d-1, t yr-1).
 - Thirty reference datasets for land-surface CH4 emission and the areas that

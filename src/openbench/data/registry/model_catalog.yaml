@@ -1399,13 +1399,13 @@ CoLM2024:
       varname: Surface_Wind_Speed
       varunit: m s-1
     Suspended_Sediment_Concentration:
-      compute: ds.sum_prefix('f_sedcon_') * 2650
+      compute: ds.sum_prefix('f_sedcon_', 3) * 2650
       prefix_fallback:
       - _unitcat_
       varname: f_sedcon_1
       varunit: kg m-3
     Suspended_Sediment_Load:
-      compute: ds.sum_prefix('f_sedout_') * 2650
+      compute: ds.sum_prefix('f_sedout_', 3) * 2650
       prefix_fallback:
       - _unitcat_
       varname: f_sedout_1

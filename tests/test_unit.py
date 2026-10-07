@@ -473,12 +473,11 @@ def test_colm2024_sediment_outputs_reach_the_sedref_units(tmp_path):
     colm = RegistryManager(user_dir=tmp_path).get_model("CoLM2024")
     density = 2650.0
     ssc_mg_l, ssl_t_d = 120.0, 4300.0
+    shares = (0.5, 0.3, 0.2)  # CoLM's three size classes: clay, silt, sand
     ds = xr.Dataset(
         {
-            "f_sedcon_1": ("x", [0.6 * ssc_mg_l / 1000 / density]),
-            "f_sedcon_2": ("x", [0.4 * ssc_mg_l / 1000 / density]),
-            "f_sedout_1": ("x", [0.7 * ssl_t_d / 86.4 / density]),
-            "f_sedout_2": ("x", [0.3 * ssl_t_d / 86.4 / density]),
+            **{f"f_sedcon_{i}": ("x", [share * ssc_mg_l / 1000 / density]) for i, share in enumerate(shares, 1)},
+            **{f"f_sedout_{i}": ("x", [share * ssl_t_d / 86.4 / density]) for i, share in enumerate(shares, 1)},
         }
     )
     for item, expected, base in (
