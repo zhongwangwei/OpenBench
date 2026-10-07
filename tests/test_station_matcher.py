@@ -619,3 +619,38 @@ def test_resolve_station_dataset_only_falls_back_for_full_files(tmp_path):
     (tmp_path / "GRDC_daily_dist.nc").touch()
 
     assert resolve_station_dataset(tmp_path, "GRDC_daily.nc") is None
+
+
+def test_station_matching_falls_back_to_other_upstream_area_name(tmp_path, caplog):
+    import logging
+
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = _uparea_stations(tmp_path, [100.0, 200.0])  # stored as "area"
+    info = _uparea_info(tmp_path, 0.05)
+
+    with caplog.at_level(logging.WARNING):
+        run_station_matching(info, str(dataset_path), method="cama_allocation", area_var="upstream_area", n_jobs=1)
+
+    assert info.stn_list["ID"].tolist() == ["1"]
+    assert "using 'area' as upstream area" in caplog.text
+
+
+def test_station_matching_warns_when_dataset_has_no_upstream_area(tmp_path, caplog):
+    import logging
+
+    from openbench.data.station_matcher import run_station_matching
+
+    dataset_path = _uparea_stations(tmp_path, [100.0])
+    with xr.open_dataset(dataset_path) as ds:
+        no_area = ds.drop_vars("area").load()
+    no_area.to_netcdf(tmp_path / "no_area.nc")
+    info = _uparea_info(tmp_path, 0.05)
+
+    with caplog.at_level(logging.WARNING):
+        run_station_matching(
+            info, str(tmp_path / "no_area.nc"), method="cama_allocation", area_var="upstream_area", n_jobs=1
+        )
+
+    assert info.stn_list["ID"].tolist() == ["0"]
+    assert "minimum upstream area of 150 km2 is not applied" in caplog.text
