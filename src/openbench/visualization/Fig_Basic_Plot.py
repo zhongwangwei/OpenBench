@@ -330,11 +330,36 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     plt.close(fig)
 
 
+# Older plot_stn options gave line widths and marker sizes as totals that were
+# divided by the series length, calibrated for 144 steps (12 years of months).
+_LEGACY_STN_SERIES_LENGTH = 144
+_LEGACY_STN_LINEWIDTH_MIN = 20.0
+_LEGACY_STN_MARKERSIZE_MIN = 40.0
+
+
+def _stn_line_style(option, side, n_points):
+    """Return (linewidth, marker, markersize) in points for one station series.
+
+    Widths and sizes do not depend on the series length, so stations with short
+    and long records are drawn alike. Markers are drawn only for series of at
+    most ``marker_max_points`` steps; on denser series they hide the line.
+    """
+    width = float(option[f"{side}_lineswidth"])
+    size = float(option[f"{side}_markersize"])
+    if width > _LEGACY_STN_LINEWIDTH_MIN:
+        width /= _LEGACY_STN_SERIES_LENGTH
+    if size > _LEGACY_STN_MARKERSIZE_MIN:
+        size /= _LEGACY_STN_SERIES_LENGTH
+    marker = option[f"{side}_marker"] if n_points <= int(option.get("marker_max_points", 200)) else None
+    return width, marker, size
+
+
 @with_isolated_rc
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml["plot_stn"].copy()
     import matplotlib
     import matplotlib.pyplot as plt
+    from matplotlib.transforms import offset_copy
     from pylab import rcParams
 
     # font = {'family': 'Times-Roman'}
@@ -356,7 +381,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     }
     rcParams.update(params)
 
-    lines = [option["obs_lineswidth"], option["sim_lineswidth"]]
     alphas = [option["obs_alphas"], option["sim_alphas"]]
     linestyles = [option["obs_linestyle"], option["sim_linestyle"]]
 
@@ -369,13 +393,11 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
     else:
         colors = [option["obs_linecolor"], option["sim_linecolor"]]
-    markers = [option["obs_marker"], option["sim_marker"]]
-    markersizes = [option["obs_markersize"], option["sim_markersize"]]
+    n_points = max(len(sim), len(obs))
+    obs_width, obs_marker, obs_markersize = _stn_line_style(option, "obs", n_points)
+    sim_width, sim_marker, sim_markersize = _stn_line_style(option, "sim", n_points)
 
     fig, ax = plt.subplots(1, 1, figsize=(option["x_wise"], option["y_wise"]))
-    # Guard zero-length inputs: if both series are empty, dividing lines/markers
-    # by 0 below would raise ZeroDivisionError and abort the figure.
-    max_time_len = max(1, max(len(sim), len(obs)))
 
     # Convert cftime to pandas datetime for plotting compatibility
     obs_plot = convert_cftime_to_pandas(obs)
@@ -385,23 +407,23 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         x="time",
         ax=ax,
         label="Obs",
-        linewidth=lines[0] / max_time_len,
+        linewidth=obs_width,
         linestyle=linestyles[0],
         alpha=alphas[0],
         color=colors[0],
-        marker=markers[0],
-        markersize=markersizes[0] / max_time_len,
+        marker=obs_marker,
+        markersize=obs_markersize,
     )
     sim_plot.plot.line(
         x="time",
         ax=ax,
         label="Sim",
-        linewidth=lines[1] / max_time_len,
+        linewidth=sim_width,
         linestyle=linestyles[1],
         alpha=alphas[1],
         color=colors[1],
-        marker=markers[1],
-        markersize=markersizes[1] / max_time_len,
+        marker=sim_marker,
+        markersize=sim_markersize,
         add_legend=True,
     )
 
@@ -418,20 +440,30 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
 
     # ax.scatter([], [], color='black', marker='o', label=overall_label)
     ax.legend(loc="best", shadow=False, labelspacing=option["labelspacing"], fontsize=option["fontsize"])
-    # add RMSE,KGE,correlation in two digital to the legend in left top
+    # The metrics sit on their own row just above the axes, right-aligned, and
+    # the title on the row above them, so a long title cannot run into them.
+    metrics_size = option["fontsize"] - 4
+    metrics_gap = 4  # points between the axes and the metrics row
     ax.text(
-        0.6,
-        1.08,
+        1.0,
+        1.0,
         f"RMSE: {RMSE:.2f}   R: {correlation:.2f}   KGESS: {KGESS:.2f}",
-        transform=ax.transAxes,
-        fontsize=option["fontsize"] - 4,
-        verticalalignment="top",
+        transform=offset_copy(ax.transAxes, fig=fig, y=metrics_gap, units="points"),
+        fontsize=metrics_size,
+        horizontalalignment="right",
+        verticalalignment="bottom",
     )
     if not option["title"]:
         lat = f"{abs(lat_lon[0]):.2f}°{'N' if lat_lon[0] > 0 else ('S' if lat_lon[0] < 0 else '')}"
         lon = f"{abs(lat_lon[1]):.2f}°{'E' if lat_lon[1] > 0 else ('W' if lat_lon[1] < 0 else '')}"
-        option["title"] = f"ID: {str(ID).title()}  ({lat}, {lon})"
-    ax.set_title(option["title"], fontsize=option["title_size"], fontweight="bold", x=0, y=1.08, ha="left", va="top")
+        option["title"] = f"ID: {ID}  ({lat}, {lon})"
+    ax.set_title(
+        option["title"],
+        fontsize=option["title_size"],
+        fontweight="bold",
+        loc="left",
+        pad=metrics_gap + 1.6 * metrics_size,
+    )
     if option["grid"]:
         ax.grid(linestyle=option["grid_linestyle"], alpha=0.7, linewidth=option["grid_width"])
 
