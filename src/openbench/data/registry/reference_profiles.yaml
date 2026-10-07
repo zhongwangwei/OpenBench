@@ -812,7 +812,7 @@ OpenBench_Streamflow_Daily:
   scan:
     layout: station_shared_files
     root_sub_dir: Station/Water/StreamFlow/Daily
-    file_glob: OpenBench_Streamflow_Daily_full.nc
+    file_glob: OpenBench_Streamflow_Daily*.nc
   description: OpenBench consolidated daily streamflow
   tim_res: Day
   data_groupby: single
@@ -867,7 +867,7 @@ OpenBench_Streamflow_Monthly:
     dataset_file: OpenBench_Streamflow_Monthly_full.nc
     station_id_var: station
     time_var: time
-    discharge_var: streamflow
+    discharge_var: discharge
     lat_var: lat
     lon_var: lon
     area_var: upstream_area

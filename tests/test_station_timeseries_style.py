@@ -16,14 +16,17 @@ def _plot_stn_option():
     return yaml.safe_load(text)["general"]
 
 
-def _drawn_figure(monkeypatch, tmp_path, n_points, freq, station_id="A", lat_lon=(10.0, 20.0)):
+def _drawn_figure(
+    monkeypatch, tmp_path, n_points, freq, station_id="A", lat_lon=(10.0, 20.0), obs_values=None, sim_values=None
+):
     import openbench.visualization.Fig_Basic_Plot as fig_basic
 
     figures = []
     monkeypatch.setattr(fig_basic, "save_figure", lambda fig, *args, **kwargs: figures.append(fig))
     times = pd.date_range("2000-01-01", periods=n_points, freq=freq)
-    obs = xr.DataArray(np.linspace(1.0, 2.0, n_points), coords={"time": times}, dims="time")
-    sim = obs * 1.1
+    values = np.linspace(1.0, 2.0, n_points) if obs_values is None else obs_values
+    obs = xr.DataArray(values, coords={"time": times}, dims="time")
+    sim = obs * 1.1 if sim_values is None else xr.DataArray(sim_values, coords={"time": times}, dims="time")
     caller = SimpleNamespace(
         fig_nml={"plot_stn": _plot_stn_option()},
         casedir=str(tmp_path),
@@ -92,3 +95,46 @@ def test_station_timeseries_title_keeps_station_id_and_clears_the_metrics(monkey
     title_box, metrics_box = title.get_window_extent(renderer), metrics.get_window_extent(renderer)
     assert not title_box.overlaps(metrics_box)
     assert metrics_box.y0 >= ax.get_window_extent(renderer).y1
+
+
+def _every_other_day(n_points=365):
+    values = np.linspace(1.0, 2.0, n_points)
+    values[1::2] = np.nan
+    return values
+
+
+def test_station_timeseries_marks_isolated_values_of_dense_records(monkeypatch, tmp_path):
+    option = _plot_stn_option()
+    values = _every_other_day()
+    fig = _drawn_figure(monkeypatch, tmp_path, len(values), "D", obs_values=values)
+    obs_line = fig.axes[0].get_lines()[0]
+
+    assert len(values) > option["marker_max_points"]
+    assert obs_line.get_marker() == option["obs_marker"]
+    assert list(obs_line.get_markevery()) == list(range(0, len(values), 2))
+    assert obs_line.get_linewidth() == pytest.approx(option["obs_lineswidth"])
+
+
+def test_station_timeseries_draws_records_without_adjacent_values(monkeypatch, tmp_path):
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    def obs_pixels(obs_values):
+        missing = np.full(obs_values.size, np.nan)
+        fig = _drawn_figure(monkeypatch, tmp_path, obs_values.size, "D", obs_values=obs_values, sim_values=missing)
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        rgb = np.asarray(canvas.buffer_rgba())[..., :3].astype(int)
+        # the obs colour F96969 at alpha 0.8 over white
+        return int(np.count_nonzero((rgb[..., 0] > 200) & (rgb[..., 1] < 170) & (rgb[..., 2] < 170)))
+
+    legend_only = obs_pixels(np.full(365, np.nan))
+
+    assert obs_pixels(_every_other_day()) > legend_only + 183
+
+
+def test_station_timeseries_leaves_dense_records_without_gaps_unmarked(monkeypatch, tmp_path):
+    fig = _drawn_figure(monkeypatch, tmp_path, 3650, "D")
+    obs_line = fig.axes[0].get_lines()[0]
+
+    assert obs_line.get_marker() in (None, "None", "")
+    assert obs_line.get_markevery() is None

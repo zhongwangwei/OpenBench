@@ -354,6 +354,30 @@ def _stn_line_style(option, side, n_points):
     return width, marker, size
 
 
+def _isolated_indices(values):
+    """Indices of finite values whose neighbours are both missing (or absent)."""
+    finite = np.isfinite(np.asarray(values, dtype=float))
+    before = np.concatenate(([False], finite[:-1]))
+    after = np.concatenate((finite[1:], [False]))
+    return np.flatnonzero(finite & ~before & ~after)
+
+
+def _stn_series_style(option, side, values, n_points):
+    """Line keyword arguments for one station series.
+
+    A value with missing neighbours forms no line segment, so on a dense
+    series drawn without markers it would vanish; those values keep their
+    marker. Lines are never drawn across missing values.
+    """
+    width, marker, size = _stn_line_style(option, side, n_points)
+    style = {"linewidth": width, "marker": marker, "markersize": size}
+    if marker is None:
+        isolated = _isolated_indices(values)
+        if isolated.size:
+            style.update(marker=option[f"{side}_marker"], markevery=isolated.tolist())
+    return style
+
+
 @with_isolated_rc
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml["plot_stn"].copy()
@@ -393,38 +417,33 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
     else:
         colors = [option["obs_linecolor"], option["sim_linecolor"]]
-    n_points = max(len(sim), len(obs))
-    obs_width, obs_marker, obs_markersize = _stn_line_style(option, "obs", n_points)
-    sim_width, sim_marker, sim_markersize = _stn_line_style(option, "sim", n_points)
-
     fig, ax = plt.subplots(1, 1, figsize=(option["x_wise"], option["y_wise"]))
 
     # Convert cftime to pandas datetime for plotting compatibility
     obs_plot = convert_cftime_to_pandas(obs)
     sim_plot = convert_cftime_to_pandas(sim)
+    n_points = max(len(sim), len(obs))
+    obs_style = _stn_series_style(option, "obs", obs_plot.values, n_points)
+    sim_style = _stn_series_style(option, "sim", sim_plot.values, n_points)
 
     obs_plot.plot.line(
         x="time",
         ax=ax,
         label="Obs",
-        linewidth=obs_width,
         linestyle=linestyles[0],
         alpha=alphas[0],
         color=colors[0],
-        marker=obs_marker,
-        markersize=obs_markersize,
+        **obs_style,
     )
     sim_plot.plot.line(
         x="time",
         ax=ax,
         label="Sim",
-        linewidth=sim_width,
         linestyle=linestyles[1],
         alpha=alphas[1],
         color=colors[1],
-        marker=sim_marker,
-        markersize=sim_markersize,
         add_legend=True,
+        **sim_style,
     )
 
     for spine in ax.spines.values():

@@ -58,6 +58,14 @@
   points (1 and 4); older totals such as 144 and 432 are read as they were
   meant for a 144-step record. Markers are left out of records longer than
   `marker_max_points` (200) steps, where they hid the line.
+- Station time-series plots keep a marker on a value whose neighbours are both
+  missing. Records longer than `marker_max_points` are drawn without markers,
+  so such a value formed no line segment and vanished; a record with a value
+  every other day was not drawn at all. Lines still never cross missing values.
+- Rescanning the reference root registers OpenBench_Streamflow_Daily from its
+  `_dist.nc` file too, and OpenBench_Streamflow_Monthly with
+  `discharge_var: discharge`. The scan profile said `streamflow`, so a
+  rescanned monthly reference could not be matched.
 - In station time-series plots the RMSE/R/KGESS line now sits on its own row
   above the plot, right-aligned, under the title. It was placed at a fixed 60 %
   of the width on the title's row, so a long station id or coordinate ran into
