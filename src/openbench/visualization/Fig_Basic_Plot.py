@@ -330,6 +330,30 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     plt.close(fig)
 
 
+# Older plot_stn options gave line widths and marker sizes as totals that were
+# divided by the series length, calibrated for 144 steps (12 years of months).
+_LEGACY_STN_SERIES_LENGTH = 144
+_LEGACY_STN_LINEWIDTH_MIN = 20.0
+_LEGACY_STN_MARKERSIZE_MIN = 40.0
+
+
+def _stn_line_style(option, side, n_points):
+    """Return (linewidth, marker, markersize) in points for one station series.
+
+    Widths and sizes do not depend on the series length, so stations with short
+    and long records are drawn alike. Markers are drawn only for series of at
+    most ``marker_max_points`` steps; on denser series they hide the line.
+    """
+    width = float(option[f"{side}_lineswidth"])
+    size = float(option[f"{side}_markersize"])
+    if width > _LEGACY_STN_LINEWIDTH_MIN:
+        width /= _LEGACY_STN_SERIES_LENGTH
+    if size > _LEGACY_STN_MARKERSIZE_MIN:
+        size /= _LEGACY_STN_SERIES_LENGTH
+    marker = option[f"{side}_marker"] if n_points <= int(option.get("marker_max_points", 200)) else None
+    return width, marker, size
+
+
 @with_isolated_rc
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml["plot_stn"].copy()
@@ -356,7 +380,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     }
     rcParams.update(params)
 
-    lines = [option["obs_lineswidth"], option["sim_lineswidth"]]
     alphas = [option["obs_alphas"], option["sim_alphas"]]
     linestyles = [option["obs_linestyle"], option["sim_linestyle"]]
 
@@ -369,13 +392,11 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
     else:
         colors = [option["obs_linecolor"], option["sim_linecolor"]]
-    markers = [option["obs_marker"], option["sim_marker"]]
-    markersizes = [option["obs_markersize"], option["sim_markersize"]]
+    n_points = max(len(sim), len(obs))
+    obs_width, obs_marker, obs_markersize = _stn_line_style(option, "obs", n_points)
+    sim_width, sim_marker, sim_markersize = _stn_line_style(option, "sim", n_points)
 
     fig, ax = plt.subplots(1, 1, figsize=(option["x_wise"], option["y_wise"]))
-    # Guard zero-length inputs: if both series are empty, dividing lines/markers
-    # by 0 below would raise ZeroDivisionError and abort the figure.
-    max_time_len = max(1, max(len(sim), len(obs)))
 
     # Convert cftime to pandas datetime for plotting compatibility
     obs_plot = convert_cftime_to_pandas(obs)
@@ -385,23 +406,23 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         x="time",
         ax=ax,
         label="Obs",
-        linewidth=lines[0] / max_time_len,
+        linewidth=obs_width,
         linestyle=linestyles[0],
         alpha=alphas[0],
         color=colors[0],
-        marker=markers[0],
-        markersize=markersizes[0] / max_time_len,
+        marker=obs_marker,
+        markersize=obs_markersize,
     )
     sim_plot.plot.line(
         x="time",
         ax=ax,
         label="Sim",
-        linewidth=lines[1] / max_time_len,
+        linewidth=sim_width,
         linestyle=linestyles[1],
         alpha=alphas[1],
         color=colors[1],
-        marker=markers[1],
-        markersize=markersizes[1] / max_time_len,
+        marker=sim_marker,
+        markersize=sim_markersize,
         add_legend=True,
     )
 

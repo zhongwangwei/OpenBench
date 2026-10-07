@@ -50,6 +50,14 @@
   warning.
 
 ### Fixed
+- Station time-series plots draw every station with the same line width and
+  marker size. Both used to be divided by the length of the station's record,
+  so a 1-year monthly record was drawn 12 points wide and a 10-year daily
+  record almost invisibly. `obs_lineswidth`/`sim_lineswidth` and
+  `obs_markersize`/`sim_markersize` in `plot_stn.yaml` are now plain sizes in
+  points (1 and 4); older totals such as 144 and 432 are read as they were
+  meant for a 144-step record. Markers are left out of records longer than
+  `marker_max_points` (200) steps, where they hid the line.
 - Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
   KGE they are now drawn on -1 to 1, with values beyond shown by the colour
   bar's end arrows. The MFM components keep their colour bar within 0 to 1.
