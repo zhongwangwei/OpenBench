@@ -565,6 +565,7 @@ def run_station_matching(
     scratch_subdir: Optional[str] = None,
     n_jobs: int | None = None,
     varname: Optional[str] = None,
+    varname_falls_back: bool = False,
 ):
     """Run station matching on a consolidated reference NC file.
 
@@ -577,8 +578,11 @@ def run_station_matching(
     The allocation error limit is ``MAX_CAMA_ALLOC_ERR``.
 
     ``varname`` is the evaluated item's reference variable: it is read from the
-    dataset when present (falling back to ``discharge_var``) and names the
-    variable in the per-station files, which are read back under that name.
+    dataset and names the variable in the per-station files, which are read
+    back under that name. A missing ``varname`` is an error unless
+    ``varname_falls_back`` allows reading ``discharge_var`` instead, which only
+    Streamflow does (older catalogs call its variable "discharge" while GRDC
+    files say "Disch"); a sediment item must never read discharge in its place.
 
     Modifies ``info`` in-place: sets ``stn_list``, ``ref_fulllist``,
     ``use_syear``, ``use_eyear``.
@@ -599,9 +603,14 @@ def run_station_matching(
         station_id_key = _require_dataset_field(ds, station_id_var, "station_id_var", dataset_path)
         lon_key = _require_dataset_field(ds, lon_var, "lon_var", dataset_path)
         lat_key = _require_dataset_field(ds, lat_var, "lat_var", dataset_path)
-        discharge_key = get_xarray_key_case_insensitive(ds, varname) if varname else None
-        if discharge_key is None:
+        if not varname:
             discharge_key = _require_dataset_field(ds, discharge_var, "discharge_var", dataset_path)
+        elif varname_falls_back:
+            discharge_key = get_xarray_key_case_insensitive(ds, varname) or _require_dataset_field(
+                ds, discharge_var, "discharge_var", dataset_path
+            )
+        else:
+            discharge_key = _require_dataset_field(ds, varname, "varname", dataset_path)
         output_var = varname or "discharge"
         time_key = get_xarray_key_case_insensitive(ds, time_var) or get_xarray_key_case_insensitive(ds, "time")
         if time_key is None:

@@ -490,4 +490,4 @@ def test_colm2024_sediment_outputs_reach_the_sedref_units(tmp_path):
         converted, base_unit = UnitProcessing.convert_unit(computed.values, mapping.varunit)
         assert base_unit == base
         np.testing.assert_allclose(converted, [expected])
-    assert colm.variables["Discharge_for_Sediment"].varname == "f_discharge"
+    assert colm.variables["Discharge_For_Sediment"].varname == "f_discharge"

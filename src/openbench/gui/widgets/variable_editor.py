@@ -59,7 +59,7 @@ def _collect_known_variables() -> list[str]:
         "Snow_Depth",
         "Snow_Water_Equivalent",
         "Streamflow",
-        "Discharge_for_Sediment",
+        "Discharge_For_Sediment",
         "Suspended_Sediment_Concentration",
         "Suspended_Sediment_Load",
         "Subsurface_Runoff",

@@ -682,7 +682,7 @@ def test_sediment_reference_matches_each_item_from_its_own_variable(monkeypatch,
     reference = SimpleNamespace(
         station_matching=StationMatchingConfig(dataset_file="Sed_Daily_full.nc", area_var="upstream_area"),
         variables={
-            "Discharge_for_Sediment": SimpleNamespace(),
+            "Discharge_For_Sediment": SimpleNamespace(),
             "Suspended_Sediment_Concentration": SimpleNamespace(),
             "Suspended_Sediment_Load": SimpleNamespace(),
         },
@@ -691,7 +691,7 @@ def test_sediment_reference_matches_each_item_from_its_own_variable(monkeypatch,
     monkeypatch.setattr(registry_manager_module, "get_registry", lambda: registry)
 
     matched = {}
-    for item, varname in (("Discharge_for_Sediment", "discharge"), ("Suspended_Sediment_Concentration", "ssc")):
+    for item, varname in (("Discharge_For_Sediment", "discharge"), ("Suspended_Sediment_Concentration", "ssc")):
         reader = _streamflow_matching_reader(monkeypatch, tmp_path, "Sed_Daily_full.nc", 0.25)
         monkeypatch.setattr(registry_manager_module, "get_registry", lambda: registry)
         reader.__dict__.update(item=item, ref_source="Sed_Daily", ref_varname=varname, stn_list=pd.DataFrame())
@@ -700,10 +700,31 @@ def test_sediment_reference_matches_each_item_from_its_own_variable(monkeypatch,
 
     # Only S1 has discharge; both stations have SSC. Each item reads its own variable,
     # and its station files sit in a scratch directory of their own.
-    assert matched["Discharge_for_Sediment"]["ID"].tolist() == ["S1"]
+    assert matched["Discharge_For_Sediment"]["ID"].tolist() == ["S1"]
     assert matched["Suspended_Sediment_Concentration"]["ID"].tolist() == ["S1", "S2"]
-    q_file = matched["Discharge_for_Sediment"]["ref_dir"].iloc[0]
+    q_file = matched["Discharge_For_Sediment"]["ref_dir"].iloc[0]
     ssc_file = matched["Suspended_Sediment_Concentration"]["ref_dir"].iloc[0]
-    assert "Discharge_for_Sediment" in q_file and "Suspended_Sediment_Concentration" in ssc_file
+    assert "Discharge_For_Sediment" in q_file and "Suspended_Sediment_Concentration" in ssc_file
     with xr.open_dataset(ssc_file) as station_ds:
         assert list(station_ds.data_vars) == ["ssc"]
+
+
+def test_sediment_item_fails_when_its_variable_is_missing(monkeypatch, tmp_path):
+    """Without ssc in the file the SSC item must stop, not evaluate discharge as SSC."""
+    import openbench.data.registry.manager as registry_manager_module
+    from openbench.data.registry.schema import StationMatchingConfig
+    from openbench.util.exceptions import DataProcessingError
+
+    _write_streamflow_stations(tmp_path / "Sed_Monthly_full.nc", [5000.0])
+    reference = SimpleNamespace(
+        station_matching=StationMatchingConfig(dataset_file="Sed_Monthly_full.nc"),
+        variables={"Discharge_For_Sediment": SimpleNamespace(), "Suspended_Sediment_Concentration": SimpleNamespace()},
+    )
+    reader = _streamflow_matching_reader(monkeypatch, tmp_path, "Sed_Monthly_full.nc", 0.25)
+    monkeypatch.setattr(
+        registry_manager_module, "get_registry", lambda: SimpleNamespace(get_reference=lambda _name: reference)
+    )
+    reader.__dict__.update(item="Suspended_Sediment_Concentration", ref_varname="ssc")
+
+    with pytest.raises(DataProcessingError, match="'ssc'"):
+        reader._filter_stations()

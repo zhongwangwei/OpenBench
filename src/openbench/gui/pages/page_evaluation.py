@@ -84,7 +84,7 @@ EVALUATION_ITEMS = {
         "Streamflow",
     ],
     "Sediment": [
-        "Discharge_for_Sediment",
+        "Discharge_For_Sediment",
         "Suspended_Sediment_Concentration",
         "Suspended_Sediment_Load",
     ],

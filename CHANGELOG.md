@@ -6,7 +6,7 @@
 - River sediment references OpenBench_Sediment_Daily,
   OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
   CC BY 4.0) with three evaluation items:
-  `Discharge_for_Sediment` (river discharge at the sediment gauges, kept apart
+  `Discharge_For_Sediment` (river discharge at the sediment gauges, kept apart
   from `Streamflow`), `Suspended_Sediment_Concentration` (mg L-1) and
   `Suspended_Sediment_Load` (t d-1). They are matched to the river network
   like Streamflow: CaMa allocation, the fixed minimum upstream area per
@@ -43,7 +43,9 @@
   Streamflow references now give their dataset variable as `varname` (for
   example `Disch` for GRDC), which also names their output files
   (`Streamflow_ref_GRDC_Daily_Disch.nc`). A user catalog that still says
-  `discharge` keeps working through the fallback.
+  `discharge` keeps working through the fallback, which only Streamflow has:
+  a sediment item whose variable is missing from the dataset stops with an
+  error instead of reading discharge in its place.
 - The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
   now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
   coverage of the 2026-10-06 release.

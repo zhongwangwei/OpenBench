@@ -112,7 +112,7 @@ def _guess_category(path: Path) -> str:
         "Inundation_Area",
         "Depth_Of_Surface_Water",
         "Open_Water_Evaporation",
-        "Discharge_for_Sediment",
+        "Discharge_For_Sediment",
         "Suspended_Sediment_Concentration",
         "Suspended_Sediment_Load",
     }

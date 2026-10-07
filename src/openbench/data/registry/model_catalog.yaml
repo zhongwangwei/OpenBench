@@ -1164,15 +1164,15 @@ CoLM2024:
   tim_res: Month
   time_offset:
     Day:
-      ? Streamflow,Discharge_for_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 days
       default: '0'
     Hour:
-      ? Streamflow,Discharge_for_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 hours
       default: '0'
     Month:
-      ? Streamflow,Discharge_for_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
+      ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 months
       default: '0'
   variables:
@@ -1249,7 +1249,7 @@ CoLM2024:
       prefix_fallback: *id013
       varname: damsto
       varunit: m3
-    Discharge_for_Sediment:
+    Discharge_For_Sediment:
       prefix_fallback:
       - _unitcat_
       varname: f_discharge

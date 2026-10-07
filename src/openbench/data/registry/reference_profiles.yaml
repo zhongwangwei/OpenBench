@@ -1579,7 +1579,7 @@ OpenBench_Sediment_Daily:
     station_id_var: station
     time_var: time
   variables:
-    Discharge_for_Sediment:
+    Discharge_For_Sediment:
       varname: discharge
       varunit: m3 s-1
     Suspended_Sediment_Concentration:
@@ -1607,7 +1607,7 @@ OpenBench_Sediment_Monthly:
     station_id_var: station
     time_var: time
   variables:
-    Discharge_for_Sediment:
+    Discharge_For_Sediment:
       varname: discharge
       varunit: m3 s-1
     Suspended_Sediment_Concentration:
@@ -1635,7 +1635,7 @@ OpenBench_Sediment_Annual:
     station_id_var: station
     time_var: time
   variables:
-    Discharge_for_Sediment:
+    Discharge_For_Sediment:
       varname: discharge
       varunit: m3 s-1
     Suspended_Sediment_Concentration:

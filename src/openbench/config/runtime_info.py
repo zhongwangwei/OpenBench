@@ -732,6 +732,7 @@ class GeneralInfoReader:
                             time_format=sm.time_format,
                             scratch_subdir=f"{dataset_path.stem}_{info.item}" if per_item_scratch else None,
                             varname=varname or None,
+                            varname_falls_back=str(info.item).casefold() == "streamflow",
                         )
 
                     _station_matcher_filter.is_station_matcher = True
