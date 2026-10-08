@@ -3,6 +3,8 @@ import logging
 import numpy as np
 import xarray as xr
 
+from openbench.core.metrics import varies_along
+
 
 class scores:
     """
@@ -89,7 +91,7 @@ class scores:
         crms = np.sqrt(((o - o.mean(dim="time")) ** 2).mean(dim="time"))
         # Constant observations -> crms=0 -> inf. Return NaN instead so the
         # overall score correctly drops these grid cells.
-        return xr.where(crms != 0, np.exp(-np.abs(bias) / crms), np.nan)
+        return xr.where(varies_along(o), np.exp(-np.abs(bias) / crms), np.nan)
 
     def nRMSEScore(self, s, o):
         """
@@ -106,7 +108,7 @@ class scores:
         s_mean, o_mean = s.mean(dim="time"), o.mean(dim="time")
         crms = np.sqrt(((o - o_mean) ** 2).mean(dim="time"))
         crmse = np.sqrt((((s - s_mean) - (o - o_mean)) ** 2).mean(dim="time"))
-        return xr.where(crms != 0, np.exp(-crmse / crms), np.nan)
+        return xr.where(varies_along(o), np.exp(-crmse / crms), np.nan)
 
     def nPhaseScore(self, s, o):
         """
@@ -152,8 +154,11 @@ class scores:
         # Tropical evergreen / arid grid cells can have no IAV (o_iav=0),
         # which would otherwise yield inf. Such cells should be NaN — they
         # also fail the np.isnan(...).all() check in Overall_Score and would
-        # silently pollute the aggregate.
-        return xr.where(o_iav != 0, np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
+        # silently pollute the aggregate. A repeated climatology has no IAV either:
+        # each calendar month then takes a single value over the years.
+        month = o.groupby("time.month")
+        o_has_iav = (month.max("time") > month.min("time")).any("month")
+        return xr.where(o_has_iav, np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
 
     def nSpatialScore(self, s, o):
         """

@@ -216,7 +216,7 @@ def get_colormap(cmap_name):
 def get_index(vmin, vmax, colormap="Spectral", varname=""):
     def get_ticks(vmin, vmax):
         diff = vmax - vmin
-        small_value = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+        small_value = [0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
         large_value = sorted(
             set(
                 [
@@ -260,9 +260,9 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     colorbar_ticks = get_ticks(vmin, vmax)
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    mticks = [
-        round(tick, 2) if isinstance(tick, float) and len(str(tick).split(".")[1]) > 2 else tick for tick in mticks
-    ]
+    # Two decimals, or as many as a tick spacing below 0.01 needs.
+    decimals = max(2, -math.floor(math.log10(colorbar_ticks)))
+    mticks = [round(tick, decimals) if isinstance(tick, float) else tick for tick in mticks]
 
     # if (varname in list1) or (varname in list3):
     if max((vmin - mticks[0]), (mticks[-1] - vmax)) <= (colorbar_ticks / 2):
@@ -287,7 +287,9 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     elif (varname in list4) or (varname in score_list):
         mticks = [x for x in mticks if 1 >= x >= 0]
     else:
-        if (mticks[0] < 0) & (mticks[-1] > 0):
+        # Centre on zero whenever the data range spans it, also when trimming the
+        # outer ticks above has left zero as an end tick.
+        if (vmin < 0 < vmax) or ((mticks[0] < 0) & (mticks[-1] > 0)):
             max_num = max(-mticks[0], mticks[-1])
             mticks = np.linspace(-max_num, max_num, 3)
 
