@@ -212,3 +212,34 @@ def test_get_index_centres_on_zero_when_range_spans_it(vmin, vmax):
 
     assert mticks[0] == pytest.approx(-mticks[-1])
     assert 0 in list(mticks)
+
+
+@pytest.mark.parametrize(
+    ("low", "high", "metric"),
+    [
+        (0.0, 4e-5, "RMSE"),
+        (-4e-5, 1e-5, "bias"),
+        (-3e-5, 3e-5, "bias"),
+        (1.2e-9, 1.8e-9, "RMSE"),
+        (0.0, 4e-24, "RMSE"),
+        (0.0, 0.0, "RMSE"),
+    ],
+)
+def test_tiny_automatic_colorbar_ranges_render_contours(low, high, metric):
+    import matplotlib.pyplot as plt
+
+    from openbench.visualization.Fig_Basic_Plot import rounded_limits
+    from openbench.visualization.Fig_toolbox import get_index
+
+    cmap, ticks, norm, levels, extend = get_index(*rounded_limits(low, high), "viridis", metric)
+
+    assert len(ticks) >= 2
+    assert np.all(np.diff(levels) > 0)
+    assert norm.vmin < norm.vmax
+    if low < high:
+        assert norm(low) < norm(high)
+    fig, ax = plt.subplots()
+    try:
+        ax.contourf(np.linspace(low, high, 4).reshape(2, 2), levels=levels, cmap=cmap, norm=norm, extend=extend)
+    finally:
+        plt.close(fig)

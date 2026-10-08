@@ -230,6 +230,9 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
         ALLOWED_TICKS = small_value + large_value
         TARGET_NUM_TICKS = 4
         ideal_tick = diff / TARGET_NUM_TICKS
+        if 0 < ideal_tick < ALLOWED_TICKS[0]:
+            scale = 10.0 ** math.floor(math.log10(ideal_tick))
+            return next(multiplier * scale for multiplier in (1, 2, 5, 10) if multiplier * scale >= ideal_tick)
         for tick in ALLOWED_TICKS:
             if tick >= ideal_tick:
                 return tick
@@ -294,9 +297,8 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
             mticks = np.linspace(-max_num, max_num, 3)
 
     if mticks[0] == mticks[-1]:
-        n = get_least_significant_digit(mticks[-1])
-        mticks[-1] = mticks[-1] + n
-        mticks[0] = mticks[0] - n
+        n = get_least_significant_digit(mticks[-1]) or colorbar_ticks
+        mticks = [mticks[0] - n, mticks[-1] + n]
 
     cmap = get_colormap(colormap)
 
