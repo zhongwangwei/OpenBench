@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.0.7] - 2026-10-09
+
 ### Added
 - `openbench registry diff` and the throttled startup notice identify overrides
   matching older bundled defaults without guessing their intent. Use
@@ -136,6 +138,19 @@
   warning.
 
 ### Fixed
+- Scores and metrics normalized by temporal spread return NaN for references
+  constant in time, including repeated climatologies without interannual
+  variability. Nonzero-denominator guards are retained when varying float32
+  or float64 data have a spread that underflows to zero.
+- Metric colour bars preserve sub-unit ranges, use tick spacing appropriate
+  to arbitrarily small ranges, and keep distinct bounds for all-zero fields.
+  Contour plots no longer fail on tiny positive or cross-zero metric ranges.
+- Default station filtering recognizes normalized reference and simulation
+  coordinates. Merged files accept n_stations and n_station dimensions, and
+  station longitude coordinates are preserved instead of being treated as
+  duplicate grid seam cells.
+- Reference and root-relative paths expand environment variables and use
+  consistent separators, including on Windows.
 - Per-file (Month/Day) compute preflight rejects split mandatory inputs while
   preserving optional inputs and independent raw fallbacks; it reads the first
   and last selected file only, so a gap in between is still reported by
