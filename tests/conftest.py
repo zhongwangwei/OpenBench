@@ -1,6 +1,7 @@
 """Shared fixtures for the test suite."""
 
 import os
+import sys
 
 # Must be set before any test module imports PySide6.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -16,11 +17,17 @@ def _isolated_user_config(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.delenv("OPENBENCH_HOME", raising=False)
-    from openbench.data.registry.manager import clear_registry_cache
-
-    clear_registry_cache()
+    _clear_loaded_registry_cache()
     yield
-    clear_registry_cache()
+    _clear_loaded_registry_cache()
+
+
+def _clear_loaded_registry_cache():
+    # Only a loaded registry holds a cache. Importing it here would make every
+    # test need PyYAML; the wheel smoke job installs only build and pytest.
+    manager = sys.modules.get("openbench.data.registry.manager")
+    if manager is not None:
+        manager.clear_registry_cache()
 
 
 @pytest.fixture
