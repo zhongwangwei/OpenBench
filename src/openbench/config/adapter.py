@@ -18,6 +18,13 @@ from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_v
 logger = logging.getLogger(__name__)
 
 
+def _normalize_path(path_value: object | None) -> str:
+    """Expand and normalize a configured path without turning an empty value into ``.``."""
+    if path_value is None or str(path_value) == "":
+        return ""
+    return os.path.normpath(os.path.expanduser(str(path_value)))
+
+
 def _resolve_root_relative_path(path_value: str, root_dir: str | None) -> str:
     """Resolve relative catalog paths against their dataset root_dir."""
     expanded = os.path.expanduser(os.path.expandvars(str(path_value)))
@@ -748,22 +755,22 @@ def reference_data_dir(
     # Station data uses its own root_dir; grid data prefers data_root (shared
     # grid directory) over registry root_dir.
     data_type = getattr(ref_ds, "data_type", None)
-    root_dir = getattr(ref_ds, "root_dir", None)
+    root_dir = _normalize_path(getattr(ref_ds, "root_dir", None))
+    configured_data_root = _normalize_path(getattr(cfg.reference, "data_root", None))
     sub_dir = getattr(var_map, "sub_dir", None)
-    if isinstance(root_dir, str):
-        root_dir = os.path.expanduser(root_dir)  # check and preprocessing must read the same directory
     if data_type == "stn":
-        data_root = root_dir or cfg.reference.data_root or ""
+        data_root = root_dir or configured_data_root
     else:
         data_root = (
             (root_dir if source_override and source_override.get("root_dir") else None)
-            or cfg.reference.data_root
+            or configured_data_root
             or root_dir
             or ""
         )
     ref_dir = data_root
     if sub_dir:
-        ref_dir = os.path.join(ref_dir, sub_dir) if ref_dir else sub_dir
+        ref_dir = os.path.join(ref_dir, str(sub_dir)) if ref_dir else str(sub_dir)
+        ref_dir = os.path.normpath(ref_dir)
 
     # If ref_dir has no NC files, search one level deeper (e.g., 0p25deg-daily/)
     if ref_dir and data_type != "stn":
