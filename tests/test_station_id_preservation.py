@@ -60,6 +60,32 @@ def test_runtime_station_fulllist_keeps_leading_zero_ids(tmp_path):
     assert reader.stn_list["ID"].tolist() == ["0000000009463", "0000000009464"]
 
 
+def test_default_filter_applies_bounds_to_normalized_reference_coordinates():
+    from openbench.config.runtime_info import GeneralInfoReader
+
+    reader = GeneralInfoReader.__new__(GeneralInfoReader)
+    reader.ref_data_type = "stn"
+    reader.sim_data_type = "grid"
+    reader.syear = reader.sim_syear = 2001
+    reader.eyear = reader.sim_eyear = 2002
+    reader.min_year = 1
+    reader.min_lon, reader.max_lon = -81.0, -35.0
+    reader.min_lat, reader.max_lat = -22.0, 11.0
+    reader.stn_list = pd.DataFrame(
+        {
+            "ID": ["amazon", "europe"],
+            "ref_syear": [1948, 1948],
+            "ref_eyear": [2025, 2025],
+            "ref_lon": [-60.0, 10.0],
+            "ref_lat": [-3.0, 48.0],
+        }
+    )
+
+    reader._apply_default_filter()
+
+    assert reader.stn_list["ID"].tolist() == ["amazon"]
+
+
 def test_station_evaluation_keeps_leading_zero_ids(tmp_path, monkeypatch):
     from openbench.core.evaluation import Evaluation_stn
 
@@ -159,6 +185,26 @@ def test_padded_station_ids_select_integer_station_coordinates(tmp_path):
     assert proc.station_list["ID"].tolist() == ["0000000009463", "0000000009464"]
     with xr.open_dataset(nc) as ds:
         assert proc._select_merged_station_data(ds, proc.station_list.iloc[1], "ref")["wse"].item() == 2.0
+
+
+def test_merged_station_selection_recognizes_n_stations_dimension(tmp_path):
+    from openbench.data.processing import StationDatasetProcessing
+
+    proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    proc.ref_varname = "ssc"
+    dataset = xr.Dataset(
+        {"ssc": (("n_stations", "time"), [[1.0], [2.0]])},
+        coords={
+            "station_id": ("n_stations", ["amazon-a", "amazon-b"]),
+            "lon": ("n_stations", [-60.0, -61.0]),
+            "time": pd.date_range("2001-01-01", periods=1),
+        },
+    )
+
+    selected = proc._select_merged_station_data(dataset, pd.Series({"ID": "amazon-b"}), "ref")
+
+    assert selected["ssc"].item() == 2.0
+    assert "n_stations" not in selected.dims
 
 
 def test_station_fulllists_merge_padded_and_unpadded_ids(tmp_path):

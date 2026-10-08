@@ -816,13 +816,13 @@ class GeneralInfoReader:
         self.stn_list["Flag"] = valid_time_range
 
         lon_col = None
-        for col in ["lon", "LON", "longitude", "Longitude"]:
+        for col in ["ref_lon", "sim_lon", "lon", "LON", "longitude", "Longitude"]:
             if col in self.stn_list.columns:
                 lon_col = col
                 break
 
         lat_col = None
-        for col in ["lat", "LAT", "latitude", "Latitude"]:
+        for col in ["ref_lat", "sim_lat", "lat", "LAT", "latitude", "Latitude"]:
             if col in self.stn_list.columns:
                 lat_col = col
                 break

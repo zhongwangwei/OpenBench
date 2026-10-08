@@ -28,6 +28,8 @@ _MERGED_STATION_DIMS = {
     "sites",
     "nstations",
     "nstation",
+    "n_stations",
+    "n_station",
     "location",
     "locations",
     "point",

@@ -97,7 +97,7 @@ class ProcessingTransformMixin:
     @staticmethod
     def _normalize_longitude_axis(ds: xr.Dataset) -> xr.Dataset:
         """Normalize 1-D longitude coordinates and remove duplicate seam cells."""
-        if "lon" not in ds.coords or ds["lon"].ndim != 1:
+        if "lon" not in ds.coords or ds["lon"].dims != ("lon",):
             return ds
 
         lon = ds["lon"]
