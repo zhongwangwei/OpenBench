@@ -476,6 +476,11 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         lat = f"{abs(lat_lon[0]):.2f}°{'N' if lat_lon[0] > 0 else ('S' if lat_lon[0] < 0 else '')}"
         lon = f"{abs(lat_lon[1]):.2f}°{'E' if lat_lon[1] > 0 else ('W' if lat_lon[1] < 0 else '')}"
         option["title"] = f"ID: {ID}  ({lat}, {lon})"
+    # xarray titles the axes with the series' scalar coordinates
+    # ("lat = ..., lon = ..., variable = ...") in the centre slot; the left
+    # title below would be drawn over it.
+    ax.set_title("")
+    ax.set_title("", loc="right")
     ax.set_title(
         option["title"],
         fontsize=option["title_size"],

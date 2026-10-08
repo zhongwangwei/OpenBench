@@ -171,7 +171,6 @@ class GridRegridMixin:
         return regridder(data)
 
     def remap_cdo(self, data: xr.Dataset, new_grid: xr.Dataset) -> xr.Dataset:
-        import os
         import subprocess
         import tempfile
 
@@ -258,9 +257,7 @@ class GridRegridMixin:
             if "time" in data.coords:
                 data["time"].attrs.pop("_openbench_temporal_resolution", None)
 
-            varname = self.ref_varname[0] if data_source == "ref" else self.sim_varname[0]
-
-            out_file = os.path.join(self.casedir, "scratch", f"{data_source}_{varname}_remap_{year}.nc")
+            out_file = self._remap_scratch_file(data_source, year)
             _write_netcdf_atomic(data, out_file, compression=False)
             logging.info(f"Saved remapped {data_source} data for year {year} to {out_file}")
         finally:

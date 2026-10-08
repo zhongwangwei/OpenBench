@@ -49,6 +49,67 @@ def test_model_remove_var_from_bundled_profile_persists_after_reload(tmp_path, m
     assert "Snow_Depth" not in _load_model(home, "CoLM2024").variables
 
 
+def test_model_remove_var_works_on_sparse_overlay_of_bundled_profile(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    _catalog(home).parent.mkdir(parents=True)
+    _catalog(home).write_text(yaml.safe_dump({"CoLM2024": {"description": "mine"}}))
+
+    result = runner.invoke(cli, ["model", "remove-var", "CoLM2024", "Snow_Depth"])
+
+    assert result.exit_code == 0, result.output
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["CoLM2024"]
+    assert descriptor == {"description": "mine", "_delete_variables": ["Snow_Depth"]}
+    model = _load_model(home, "CoLM2024")
+    assert "Snow_Depth" not in model.variables
+    assert model.description == "mine"
+
+
+def test_model_remove_var_from_differently_cased_sparse_overlay(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(
+        yaml.safe_dump({"BCC_AVIM": {"variables": {"snow_depth": {"varname": "custom_snow", "varunit": "m"}}}})
+    )
+    result = runner.invoke(cli, ["model", "remove-var", "BCC_AVIM", "Snow_Depth"])
+    assert result.exit_code == 0, result.output
+    assert not any(name.lower() == "snow_depth" for name in _load_model(tmp_path, "BCC_AVIM").variables)
+
+
+def test_model_description_edit_preserves_disabled_time_offset(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"BCC_AVIM": {"time_offset": None}}))
+    result = runner.invoke(cli, ["model", "register", "BCC_AVIM", "--description", "changed description"])
+    assert result.exit_code == 0, result.output
+    assert yaml.safe_load(catalog.read_text())["BCC_AVIM"]["description"] == "changed description"
+    assert yaml.safe_load(catalog.read_text())["BCC_AVIM"]["time_offset"] is None
+    assert not _load_model(tmp_path, "BCC_AVIM").time_offset
+
+
+def test_model_register_on_sparse_overlay_keeps_bundled_fields(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    _catalog(home).parent.mkdir(parents=True)
+    _catalog(home).write_text(yaml.safe_dump({"VIC5": {"description": "mine"}}))
+
+    result = runner.invoke(cli, ["model", "register", "VIC5", "-v", "Audit_Var:audit_var:1"])
+
+    assert result.exit_code == 0, result.output
+    descriptor = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))["VIC5"]
+    assert descriptor == {
+        "description": "mine",
+        "variables": {"Audit_Var": {"varname": "audit_var", "varunit": "1"}},
+    }
+    model = _load_model(home, "VIC5")
+    assert model.tim_res == "Day"
+    assert "Audit_Var" in model.variables
+
+
 def test_model_remove_var_from_bundled_profile_matches_variable_ignoring_case(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
@@ -469,7 +530,10 @@ def test_model_import_preserves_existing_catalog_key_case(tmp_path, monkeypatch)
     assert result.exit_code == 0, result.output
     descriptor = yaml.safe_load(catalog.read_text(encoding="utf-8"))
     assert list(descriptor) == ["CLM5"]
-    assert descriptor["CLM5"]["name"] == "CLM5"
+    # The overlay of a bundled profile stores only changed fields; the name
+    # comes from the catalog key, so the import must not rename it to "clm5".
+    assert descriptor["CLM5"].get("name", "CLM5") == "CLM5"
+    assert descriptor["CLM5"]["variables"]["Runoff"] == {"varname": "runoff", "varunit": "mm day-1"}
 
 
 def test_model_status_supports_json(tmp_path, monkeypatch):
@@ -1084,3 +1148,395 @@ def test_model_register_and_validate_accept_compute_source_variable_names(tmp_pa
     assert result.exit_code == 0, result.output
     validate = runner.invoke(cli, ["model", "validate", "ComputeModel"])
     assert validate.exit_code == 0, validate.output
+
+
+def test_model_alias_edits_and_removal_survive_registry_reload(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    for args in (
+        ["-v", "Bare_Soil_Evaporation:custom_soil:mm"],
+        ["--var-attr", "Bare_Soil_Evaporation:prefix=soil_"],
+        ["-f", "Bare_Soil_Evaporation:alternate_soil:mm"],
+    ):
+        result = runner.invoke(cli, ["model", "register", "CoLM2024", *args])
+        assert result.exit_code == 0, result.output
+    mapping = _load_model(tmp_path, "CoLM2024").variables["Soil_Evaporation"]
+    assert mapping.varname == "custom_soil"
+    assert mapping.prefix == "soil_"
+    assert mapping.fallbacks[0].varname == "alternate_soil"
+    removed = runner.invoke(cli, ["model", "remove-var", "CoLM2024", "Bare_Soil_Evaporation"])
+    assert removed.exit_code == 0, removed.output
+    assert "Soil_Evaporation" not in _load_model(tmp_path, "CoLM2024").variables
+
+
+def test_model_native_replacement_clears_inherited_compute(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    baseline = _load_model(tmp_path, "CoLM2024")
+    variable = next(name for name, mapping in baseline.variables.items() if mapping.compute)
+    result = runner.invoke(cli, ["model", "register", "CoLM2024", "-v", f"{variable}:native:1"])
+    assert result.exit_code == 0, result.output
+    mapping = _load_model(tmp_path, "CoLM2024").variables[variable]
+    assert mapping.varname == "native"
+    assert mapping.compute is None
+    assert not mapping.fallbacks
+
+
+def test_model_time_offset_edit_keeps_other_resolutions_disabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"BCC_AVIM": {"time_offset": None}}))
+    result = runner.invoke(cli, ["model", "register", "BCC_AVIM", "--time-offset", "Day=0"])
+    assert result.exit_code == 0, result.output
+    offsets = _load_model(tmp_path, "BCC_AVIM").time_offset
+    assert offsets["Day"] == "0"
+    assert not offsets.get("Hour")
+    assert not offsets.get("Month")
+    result = runner.invoke(cli, ["model", "register", "BCC_AVIM", "--description", "later edit"])
+    assert result.exit_code == 0, result.output
+    assert _load_model(tmp_path, "BCC_AVIM").time_offset == offsets
+
+
+def test_model_register_restores_deleted_bundled_profile_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    baseline = _load_model(tmp_path, "VIC5")
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(yaml.safe_dump({"VIC5": {"_deleted": True}}))
+    result = runner.invoke(cli, ["model", "register", "VIC5", "--description", "restored"])
+    assert result.exit_code == 0, result.output
+    restored = _load_model(tmp_path, "VIC5")
+    assert restored.tim_res == baseline.tim_res
+    assert restored.variables == baseline.variables
+    assert restored.description == "restored"
+
+
+def test_model_station_conversion_clears_bundled_grid_resolution(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    result = runner.invoke(cli, ["model", "register", "CoLM2024", "--data-type", "stn"])
+    assert result.exit_code == 0, result.output
+    profile = _load_model(tmp_path, "CoLM2024")
+    assert profile.data_type == "stn"
+    assert profile.grid_res is None
+
+
+def test_model_te_metadata_edit_keeps_valid_soil_alias(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    result = runner.invoke(cli, ["model", "register", "TE", "--description", "my TE"])
+    assert result.exit_code == 0, result.output
+    profile = _load_model(tmp_path, "TE")
+    assert profile.description == "my TE"
+    assert profile.variables["Soil_Evaporation"].varname == "EBFLX"
+
+
+def test_model_export_import_preserves_deletions_and_disabled_offsets(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"BCC_AVIM": {"time_offset": None, "_delete_variables": ["Snow_Depth"]}}))
+    before = _load_model(tmp_path, "BCC_AVIM")
+    exported = tmp_path / "export.yaml"
+    result = runner.invoke(cli, ["model", "export", "BCC_AVIM", "-o", str(exported)])
+    assert result.exit_code == 0, result.output
+    catalog.write_text("{}\n")
+    result = runner.invoke(cli, ["model", "import", str(exported), "--yes"])
+    assert result.exit_code == 0, result.output
+    after = _load_model(tmp_path, "BCC_AVIM")
+    assert after == before
+
+
+def test_model_export_import_preserves_partial_complete_offsets(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from openbench.data.registry.manager import RegistryManager
+
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    manager = RegistryManager()
+    before = replace(manager.get_model("BCC_AVIM"), time_offset={"Day": "0"})
+    manager.save_model(before.name, before)
+    exported = tmp_path / "export.yaml"
+    result = runner.invoke(cli, ["model", "export", before.name, "-o", str(exported)])
+    assert result.exit_code == 0, result.output
+    _catalog(tmp_path).write_text("{}\n")
+    result = runner.invoke(cli, ["model", "import", str(exported), "--yes"])
+    assert result.exit_code == 0, result.output
+    assert _load_model(tmp_path, before.name) == before
+
+
+def test_model_rename_refuses_bundled_destination(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"Mine": {"variables": {"Runoff": {"varname": "ro", "varunit": "mm"}}}}))
+    result = runner.invoke(cli, ["model", "rename", "Mine", "CoLM2024", "--yes"])
+    assert result.exit_code == 1
+    assert "bundled catalog" in result.output
+    assert "Mine" in yaml.safe_load(catalog.read_text())
+
+
+def test_model_metadata_edit_preserves_null_variable_deletion(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"CLM5": {"variables": {"Snow_Depth": None}}}))
+    result = runner.invoke(cli, ["model", "register", "CLM5", "--description", "updated"])
+    assert result.exit_code == 0, result.output
+    profile = _load_model(tmp_path, "CLM5")
+    assert "Snow_Depth" not in profile.variables
+    assert profile.description == "updated"
+
+
+def test_model_metadata_edit_keeps_legacy_list_sparse(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"CaMa": {"variables": {"Dam_Outflow": {"varname": ["a", "b"]}}}}))
+    before = _load_model(tmp_path, "CaMa")
+    result = runner.invoke(cli, ["model", "register", "CaMa", "--description", "updated"])
+    assert result.exit_code == 0, result.output
+    after = _load_model(tmp_path, "CaMa")
+    assert after.variables == before.variables
+    mapping = yaml.safe_load(catalog.read_text())["CaMa"]["variables"]["Dam_Outflow"]
+    assert mapping["varname"] == ["a", "b"]
+    assert "fallbacks" not in mapping
+
+
+def test_model_history_resolves_sparse_profile_counts(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.with_suffix(".yaml.bak").write_text(yaml.safe_dump({"VIC5": {"description": "historical"}}))
+    result = runner.invoke(cli, ["model", "show", "VIC5", "--history", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    entry = json.loads(result.output)[0]
+    assert entry["description"] == "historical"
+    assert entry["variables"] == len(_load_model(tmp_path, "VIC5").variables)
+
+
+def test_model_rename_explains_restoring_bundled_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    catalog = _catalog(tmp_path)
+    catalog.parent.mkdir(parents=True)
+    catalog.write_text(yaml.safe_dump({"VIC5": {"description": "custom"}}))
+    result = runner.invoke(cli, ["model", "rename", "VIC5", "MyVIC", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "bundled defaults again" in result.output
+    assert _load_model(tmp_path, "MyVIC").description == "custom"
+    assert _load_model(tmp_path, "VIC5").description != "custom"
+
+
+def test_model_conflicting_alias_input_is_rejected_before_write(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path))
+    result = runner.invoke(
+        cli,
+        [
+            "model",
+            "register",
+            "CoLM2024",
+            "-v",
+            "Bare_Soil_Evaporation:first:mm",
+            "-v",
+            "Soil_Evaporation:second:mm",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "Conflicting variable alias" in result.output
+    catalog = _catalog(tmp_path)
+    assert not catalog.exists() or not yaml.safe_load(catalog.read_text())
+
+
+def test_model_register_fallback_after_variable_replacement(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    replaced = runner.invoke(cli, ["model", "register", "CaMa", "-v", "Dam_Outflow:dout:m3 s-1"])
+    assert replaced.exit_code == 0, replaced.output
+    added = runner.invoke(cli, ["model", "register", "CaMa", "-f", "Dam_Outflow:outflw:m3 s-1"])
+
+    assert added.exit_code == 0, added.output
+    mapping = _load_model(home, "CaMa").variables["Dam_Outflow"]
+    assert mapping.varname == "dout"
+    assert [fb.varname for fb in mapping.fallbacks] == ["outflw"]
+
+
+def test_gui_save_under_builtin_alias_updates_the_named_profile(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    from dataclasses import replace
+
+    registry = RegistryManager(user_dir=home / ".openbench")
+    alias_copy = registry.get_model("CoLM")
+    registry.save_model("CoLM", replace(alias_copy, description="edited via alias"))
+
+    catalog = yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))
+    assert list(catalog) == ["CoLM2024"]
+    assert _load_model(home, "CoLM2024").description == "edited via alias"
+    assert _load_model(home, "colm").description == "edited via alias"
+
+
+def test_model_import_under_builtin_alias_updates_the_named_profile(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    exported = _load_model(home, "CoLM2024").to_dict()
+    exported.update(name="colm", description="imported via alias")
+    source = tmp_path / "colm.yaml"
+    source.write_text(yaml.safe_dump(exported), encoding="utf-8")
+
+    result = runner.invoke(cli, ["model", "import", str(source), "--yes"])
+
+    assert result.exit_code == 0, result.output
+    assert list(yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))) == ["CoLM2024"]
+    assert _load_model(home, "CoLM2024").description == "imported via alias"
+
+
+def test_model_register_back_to_grid_restores_bundled_resolution(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    bundled = _load_model(home, "CLM5").grid_res
+
+    to_stn = runner.invoke(cli, ["model", "register", "CLM5", "--data-type", "stn"])
+    assert to_stn.exit_code == 0, to_stn.output
+    assert _load_model(home, "CLM5").grid_res is None
+    to_grid = runner.invoke(cli, ["model", "register", "CLM5", "--data-type", "grid"])
+
+    assert to_grid.exit_code == 0, to_grid.output
+    assert _load_model(home, "CLM5").grid_res == bundled
+    assert "grid_res" not in (yaml.safe_load(_catalog(home).read_text(encoding="utf-8")).get("CLM5") or {})
+
+
+def test_model_show_history_lists_valid_backups_next_to_an_invalid_one(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    assert runner.invoke(cli, ["model", "register", "VIC5", "--description", "first"]).exit_code == 0
+    assert runner.invoke(cli, ["model", "register", "VIC5", "--description", "second"]).exit_code == 0
+    broken = _catalog(home).with_name(f"{_catalog(home).name}.20000101-000000-000000.bak")
+    broken.write_text(
+        yaml.safe_dump(
+            {"VIC5": {"variables": {"Soil_Evaporation": {"varname": "a"}, "Bare_Soil_Evaporation": {"varname": "b"}}}}
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(cli, ["model", "show", "VIC5", "--history", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    entries = json.loads(result.output)
+    assert [entry["variables"] for entry in entries if entry["backup"] == str(broken)] == ["invalid"]
+    assert any(entry["variables"] != "invalid" for entry in entries)
+
+
+def test_real_profiles_keep_their_name_when_an_alias_spells_the_same(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    from dataclasses import replace
+
+    registry = RegistryManager(user_dir=home / ".openbench")
+    assert registry.model_write_target("CaMaFlood") == "CaMaFlood"  # also an alias of CaMa
+    assert registry.model_write_target("cama-flood") == "CaMa"
+    assert registry.model_write_target("colm") == "CoLM2024"
+    cama_before = registry.get_model("CaMa")
+
+    registry.save_model("CaMaFlood", replace(registry.get_model("CaMaFlood"), description="edited"))
+
+    assert list(yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))) == ["CaMaFlood"]
+    assert _load_model(home, "CaMaFlood").description == "edited"
+    assert _load_model(home, "CaMa") == cama_before
+    result = runner.invoke(cli, ["model", "register", "CaMaFlood", "--description", "cli edit"])
+    assert result.exit_code == 0, result.output
+    assert _load_model(home, "CaMaFlood").description == "cli edit"
+    assert _load_model(home, "CaMa") == cama_before
+
+
+def test_model_alias_cannot_take_an_existing_profile_name(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    result = runner.invoke(cli, ["model", "alias", "clm5", "CoLM2024"])
+
+    assert result.exit_code != 0
+    assert "already a model profile name" in result.output
+
+
+def test_model_import_over_a_bundled_profile_asks_first(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    source = tmp_path / "clm5.yaml"
+    source.write_text(
+        yaml.safe_dump(
+            {"name": "CLM5", "description": "partial", "variables": {"Runoff": {"varname": "q", "varunit": "mm"}}}
+        )
+    )
+
+    declined = runner.invoke(cli, ["model", "import", str(source)], input="n\n")
+
+    assert "Overwrite existing profile 'CLM5'?" in declined.output
+    assert not _catalog(home).exists() or not yaml.safe_load(_catalog(home).read_text(encoding="utf-8"))
+
+
+def test_per_variable_offset_keeps_cleared_bundled_offsets_cleared(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    _catalog(home).parent.mkdir(parents=True)
+    _catalog(home).write_text(yaml.safe_dump({"CLM5": {"time_offset": {"Month": None}}}))
+
+    result = runner.invoke(cli, ["model", "register", "CLM5", "--time-offset", "Month:Latent_Heat=-2 days"])
+
+    assert result.exit_code == 0, result.output
+    assert _load_model(home, "CLM5").time_offset["Month"] == {"Latent_Heat": "-2 days"}
+
+
+def test_rename_refuses_an_overlay_the_registry_cannot_merge(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    _catalog(home).parent.mkdir(parents=True)
+    broken = {
+        "TE": {
+            "description": "mine",
+            "variables": {"Soil_Evaporation": {"varname": "a"}, "Bare_Soil_Evaporation": {"varname": "b"}},
+        }
+    }
+    _catalog(home).write_text(yaml.safe_dump(broken))
+
+    result = runner.invoke(cli, ["model", "rename", "TE", "TE2", "--yes"])
+
+    assert result.exit_code != 0
+    assert "Conflicting variable alias definitions" in result.output
+    assert yaml.safe_load(_catalog(home).read_text(encoding="utf-8")) == broken
+
+
+def test_history_marks_non_mapping_backups_and_resolves_aliases(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    assert runner.invoke(cli, ["model", "register", "colm", "--description", "one"]).exit_code == 0
+    assert runner.invoke(cli, ["model", "register", "colm", "--description", "two"]).exit_code == 0
+    listed = _catalog(home).with_name(f"{_catalog(home).name}.20000101-000000-000000.bak")
+    listed.write_text("- a\n- b\n", encoding="utf-8")
+
+    result = runner.invoke(cli, ["model", "show", "colm", "--history", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    entries = json.loads(result.output)
+    assert any(entry["backup"] == str(listed) and entry["variables"] == "invalid" for entry in entries)
+    assert any(entry["catalog_name"] == "CoLM2024" for entry in entries)
+
+
+def test_repeating_a_fallback_does_not_stack_copies(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    for _ in range(2):
+        result = runner.invoke(cli, ["model", "register", "CaMa", "-f", "Dam_Outflow:outflw2:m3 s-1"])
+        assert result.exit_code == 0, result.output
+
+    fallbacks = [fb.varname for fb in _load_model(home, "CaMa").variables["Dam_Outflow"].fallbacks]
+    assert fallbacks.count("outflw2") == 1

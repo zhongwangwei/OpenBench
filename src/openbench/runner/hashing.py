@@ -73,6 +73,8 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.core.statistics.stat_z_score",
     "openbench.runner.masking",
     "openbench.data.climatology",
+    "openbench.data.compute",
+    "openbench.data.file_lookup",
     "openbench.data.coordinates",
     "openbench.data.processing",
     "openbench.data._processing_base",
@@ -531,6 +533,11 @@ def task_hash_payload(
             "version": openbench_version_fn(),
             "algorithm_version": OPENBENCH_ALGORITHM_VERSION,
             "source_fingerprint": algorithm_source_fingerprint(source_modules),
+            # Preprocessing code alone: ``--resume`` reuses preprocessed inputs
+            # across evaluation-code changes, but not across changes to this.
+            "preprocessing_fingerprint": algorithm_source_fingerprint(
+                tuple(module for module in source_modules if module.startswith("openbench.data."))
+            ),
             "source_modules": source_modules,
             "numeric_stack": numeric_stack_signature(),
         },

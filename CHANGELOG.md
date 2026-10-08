@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 ### Added
+- `openbench registry diff` and the throttled startup notice identify overrides
+  matching older bundled defaults without guessing their intent. Use
+  `openbench registry reset ENTRY` (`--kind references|models` only when the
+  name is both) to restore an entry explicitly: it shows the overrides it
+  removes, backs up the overlay, and reports overrides kept in separate
+  `~/.openbench/<kind>/*.yaml` files instead of claiming success. It finds
+  entries that exist only in the overlay or in a per-file override, accepts
+  built-in aliases such as `CoLM`, refuses a symlinked or read-only overlay,
+  and lists only the overrides that actually change the effective entry.
+  `diff` also reports an unreadable overlay, duplicate entries and entries no
+  longer bundled. The GUI registry page shows the same hints (at most three,
+  the rest in a tooltip), for remote servers too. Entries in separate
+  `~/.openbench/<kind>/*.yaml` files are audited the same way in `diff`, the
+  GUI hints and the startup notice (editing only such a file triggers a new
+  check); `diff` no longer calls the overlay clean while one of them
+  overrides a bundled entry, and points to the file, since prune and reset do
+  not edit it.
+- When a reference file name was not found and its prefix, suffix or sub_dir
+  differs from the bundled catalog, `openbench check` says whether the value
+  comes from `reference.overrides` in the config or from the `~/.openbench`
+  overlay, and how to restore it.
 - Rescanning checks preserved station-matching variable names against the
   dataset, warning about missing fields with available names while keeping
   user settings unchanged. A malformed block (not a mapping, or a file or
@@ -50,6 +71,30 @@
   file. `openbench init` accepts either file too.
 
 ### Changed
+- `openbench init` checks station references with station rules and resolves
+  nested grid directories consistently with preprocessing. Model edits preserve
+  explicit disabled settings and case-insensitive variable deletions.
+- Legacy catalogs in `~/.openbench` are compacted once without changing their
+  effective settings. Values matching historical defaults remain as overrides:
+  historical equality cannot prove that a setting was not intentionally chosen.
+  A legacy seeded copy is reset only when its recorded hash proves it was never
+  edited. Only commands that write the registry compact it (`gui`, `init`,
+  `run`, `model register/import/rename/remove-var/delete`,
+  `ref register/register-profile/scan/delete`, `sim scan`); help, `--dry-run`
+  and every other command, including ones added later, leave the file
+  untouched. A symlinked or read-only overlay (such as a shared team catalog)
+  is never rewritten automatically; `OPENBENCH_NO_REGISTRY_CHECK` also
+  disables compaction.
+  Explicit fixed paths stay fixed when environment variables change. Rewritten
+  files are backed up next to the original (`*.before-bundled-sync-<time>.bak`).
+  `bundled_history.json` records past values; regenerate it with
+  `python scripts/build_bundled_registry_history.py [--ref main]` after editing
+  a bundled catalog. Regeneration only adds values and refuses shallow clones.
+- Writes to the user reference and model catalogs keep only the fields that
+  differ from the bundled entry, down to single fields inside a variable. A
+  GUI save of a whole entry, a rescan or `openbench model register` no longer
+  freezes unchanged inherited defaults in the user file. Explicit fixed paths
+  and cleared paths are preserved.
 - Station matching reads the evaluated item's `varname` from the dataset,
   falling back to `station_matching.discharge_var`, and writes the station
   files under that name, so one dataset can serve several items. The
@@ -91,6 +136,120 @@
   warning.
 
 ### Fixed
+- Per-file (Month/Day) compute preflight rejects split mandatory inputs while
+  preserving optional inputs and independent raw fallbacks; it reads the first
+  and last selected file only, so a gap in between is still reported by
+  preprocessing. File lookup uses only the effective compute expression when a
+  model expression is overridden.
+- Compute preflight follows runtime file selection even when a named file has
+  unrelated variables. Branch checks allow complementary inputs with the same
+  filename, and reuse directory inventories within each check. File headers
+  are read only when they can change the selection (a prefix fallback or a
+  compute expression), and an unreadable header is read once.
+- Compute configuration errors propagate instead of silently reading an input
+  as the result. A partially present numbered aggregate, extra parts or an
+  invalid part count stops processing. When all parts are absent, an independent
+  native result may be used, or an unavailable station is skipped. Attribute,
+  indexing and `get()` reads receive the same input protection; a configured
+  fallback cannot bypass it. Successful calculations do not receive conversions
+  intended for the raw fallback. Inputs are found when an expression starts
+  with whitespace or continues on an indented line after `;`, and a raw
+  variable that is an input of the applicable compute is never the fallback,
+  whatever made the compute fail. When an expression reads variables in a
+  way that cannot be listed (`ds[key]`, `ds[['a']]`, `ds.data_vars[...]`),
+  no raw variable is trusted as its fallback. Stations whose files already carry the
+  standard item name use it, as gridded data do. A fatal station error names
+  the station, and temp files left by stopped workers are removed. Task
+  fingerprints include compute and file lookup changes, and `--resume` no
+  longer reuses station files written by other preprocessing code.
+- Model edits recognize logical variable aliases at every editing entry point
+  and reject conflicting definitions before writing. GUI saves and CLI imports
+  preserve removed variables, cleared compute/grid settings and complete or
+  partial disabled time offsets. Metadata absent from the GUI remains intact;
+  sparse overlays retain only changed time-offset fields. History displays the
+  effective profile, and renaming an overlay explains that the bundled original
+  returns while preserving the customization in the new profile. "New Model"
+  and "New Dataset" in the GUI no longer save onto the entry shown before.
+  `-f` after `-v` replaced a variable works again; saves and imports under the
+  built-in alias `CoLM`/`colm` update CoLM2024; switching a profile back to
+  grid restores the bundled resolution; `model show --history` marks an
+  invalid backup instead of failing; a legacy list-form varname no longer
+  repeats its fallback, and `-f` given twice for the same fallback is kept
+  once. Saving under an alias that names another model's equivalent (for
+  example `CaMaFlood`) writes that model's own profile rather than the
+  aliased one; `model alias` refuses a name that is already a model. A new
+  GUI entry or `model import` under a name that already exists (bundled or
+  user) asks before replacing it, and the GUI keeps
+  editing the resolution variant (such as `GRFR_LowRes`) that was opened.
+  `model register` writes explicit nulls when it disables bundled
+  time-offset fields, and `model rename` validates the merged profile.
+  Removing a variable of a bundled reference dataset in the GUI, or replacing
+  the dataset, now sticks: it used to come back after a restart. So does
+  deleting a bundled reference or model that had user overrides. A save,
+  delete or CLI edit that an entry in a separate `~/.openbench/<kind>/*.yaml`
+  file would undo on load (those files are merged after the catalog) is
+  refused with the file and fields named, instead of appearing saved until a
+  restart; this includes deleting a variable or dataset that only such a file
+  adds. Scans only warn.
+- Catalog compaction preserves sequential overrides with duplicate case variants,
+  meaningful descriptor names and existing file permissions. Classification no
+  longer creates user directories; absent or read-only overlays do not generate
+  repeated sync warnings. Tests use isolated home directories.
+- `openbench check` and the reference check in `openbench init` look for the
+  data files preprocessing will read, named from each source's prefix, suffix
+  and data_groupby: the single file, or every required evaluation year.
+  They used to accept any NetCDF file in the directory, so a wrong prefix
+  passed and the run failed during preprocessing. Both now share the lookup
+  code with preprocessing and name the expected file. A source with a
+  `compute` expression only gets a warning. A gridded reference or simulation
+  directory without any NetCDF file is an error (station references still only
+  warn). Missing years are listed as ranges, once per directory. Reference overrides,
+  strict alignment, station-pair coverage and nested year/month directories use
+  the runtime rules. A shared directory inventory and filename index avoid
+  repeating recursive scans for missing years; directory symlink cycles are
+  excluded. Each reference directory is resolved once per check and "has
+  NetCDF files" stops at the first file, so a check of 8 variables x 5
+  simulations over 15k-file daily references takes about 1 s instead of 9 s.
+  A single `prefix_fallback` string is one fallback, not one per character.
+  `project.only_drawing` no longer checks raw reference files it does not
+  read, and a `root_dir` starting with `~` is expanded for checks and runs.
+  On Windows, where directory entries report no inode, the walk falls back to
+  a full stat so nested data folders are not skipped as cycles.
+  Preprocessing keeps the reference root when its files are stored per year
+  instead of switching into the first year folder, which failed from the
+  second year on; only folders named like plausible years that hold NetCDF
+  files count. A `data_groupby: Single` file stored in a dated folder is
+  still found there. Folders beside the year folders, such as another
+  resolution, are not read, so years are never mixed from two branches, also
+  for the files a `compute` expression reads its inputs from;
+  `openbench check` warns about such folders. Without year folders, a year
+  whose files come from several folders (such as `0p25/` and `0p5/`) is
+  reported: an error when the same file names repeat, a warning otherwise.
+  The files holding a compute expression's inputs are checked the same way,
+  and years read through those inputs are no longer reported as missing. `openbench run --dry-run` runs
+  the same data-file checks and fails when files are missing, as
+  `openbench check` does.
+- Overlay compaction keeps keys it does not merge (for example `notes`)
+  instead of dropping them.
+- A numbered aggregate whose parts appear under two names for one number
+  (`x_1` and `x_01`) stops with an error instead of being counted twice. A
+  configured fallback no longer skips a compute expression that cannot be
+  parsed; the parse error is reported.
+- Gridded data whose variable is derived by a `compute` expression no longer
+  stop with "Missing configured-year scratch file(s)" for single-file data or
+  a single core: the scratch files are written, read and removed under one
+  name.
+- CN05.1_MidRes Surface_Air_Temperature looked for `CN05.1_Tm__2021_daily_0P25.nc`;
+  the prefix now includes the start year (`CN05.1_Tm_1961`). Its air
+  temperature is declared in `degree_Celsius` instead of an empty unit, so
+  it is converted to K like the simulation instead of being compared in °C,
+  and its precipitation in `mm day-1`.
+- The bundled model catalog no longer ships `InteractiveModel`, a profile a
+  test had written into it.
+- `openbench model register` and `model remove-var` on a user overlay that
+  holds only some fields of a bundled profile start from the merged profile:
+  `register` no longer resets `tim_res`/`data_type` to defaults and
+  `remove-var` finds variables defined only in the bundled profile.
 - Station evaluation no longer warns "time coordinates required
   normalization" for every station. Simulations extracted from a grid are
   stamped at the end of each period and station references in its middle;
@@ -118,7 +277,8 @@
   above the plot, right-aligned, under the title. It was placed at a fixed 60 %
   of the width on the title's row, so a long station id or coordinate ran into
   it. The title shows the station id as it is (`01010000_USGS`, not
-  `01010000_Usgs`).
+  `01010000_Usgs`), and no longer overlaps the "lat = …, lon = …,
+  variable = …" title xarray adds for series with scalar coordinates.
 - Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
   KGE they are now drawn on -1 to 1, with values beyond shown by the colour
   bar's end arrows. The MFM components keep their colour bar within 0 to 1.

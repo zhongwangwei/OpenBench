@@ -966,6 +966,9 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
     s2 = tmp_path / "s2"
     s1.mkdir()
     s2.mkdir()
+    for directory in (tmp_path, s1, s2):  # data named as preprocessing reads it (empty prefix/suffix)
+        for year in (2000, 2001):
+            (directory / f"{year}.nc").touch()
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="fallback", output_dir="/out", years=[2000, 2001]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),

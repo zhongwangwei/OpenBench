@@ -17,6 +17,7 @@ from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields
 from openbench.cli._wizard import prompt as wizard_prompt
 from openbench.util.names import (
     AmbiguousNameError,
+    canonical_variable_name,
     get_mapping_key_case_insensitive,
     normalize_name,
 )
@@ -41,6 +42,69 @@ def _case_insensitive_catalog_entry(catalog: dict[str, Any], name: str) -> tuple
     return (key, catalog[key]) if key is not None else (None, None)
 
 
+def _effective_overlay_entry(name: str, entry: Any) -> Any:
+    """Complete a user-catalog entry over the bundled profile it overlays.
+
+    User overlays of bundled profiles hold only the changed fields, so commands
+    that edit one must start from the merged descriptor, as the registry sees it.
+    """
+    from openbench.data.registry.manager import REGISTRY_DIR, _build_model, _deep_merge_model
+
+    if not isinstance(entry, dict):
+        raise click.ClickException(f"Invalid model profile {name!r}: expected a mapping")
+    if entry.get("_deleted"):
+        return entry
+    bundled_catalog = yaml.safe_load((REGISTRY_DIR / "model_catalog.yaml").read_text(encoding="utf-8")) or {}
+    bundled_key = get_mapping_key_case_insensitive(bundled_catalog, name)
+    base = deepcopy(bundled_catalog[bundled_key]) if bundled_key is not None else {"name": name}
+    base.setdefault("name", bundled_key)
+    try:
+        result = _deep_merge_model(_build_model(base), entry).to_dict()
+    except (TypeError, ValueError, KeyError, AttributeError) as exc:
+        raise click.ClickException(f"Invalid model profile {name!r}: {exc}") from exc
+    # Serialization omits empty values, but explicit null/empty overrides
+    # can disable inherited settings. Keep those and overlay control keys.
+    for key, value in entry.items():
+        if key != "variables" and key not in result:
+            result[key] = deepcopy(value)
+    # A time-offset null is a deletion in the runtime merge. Keep those
+    # tombstones in the editable view so a later metadata edit cannot restore
+    # the bundled keys that were explicitly cleared.
+    if isinstance(entry.get("time_offset"), dict):
+        offsets = result.setdefault("time_offset", {})
+        for group, value in entry["time_offset"].items():
+            if value is None:
+                offsets[group] = None
+            elif isinstance(value, dict):
+                cleared = {key: None for key, item in value.items() if item is None}
+                if cleared:
+                    offsets.setdefault(group, {}).update(cleared)
+    for raw_name, mapping in (entry.get("variables") or {}).items():
+        key = get_mapping_key_case_insensitive(result["variables"], canonical_variable_name(raw_name))
+        if mapping is None:
+            deleted = result.setdefault("_delete_variables", [])
+            canonical = canonical_variable_name(raw_name)
+            if canonical not in deleted:
+                deleted.append(canonical)
+        if key is not None and isinstance(mapping, dict):
+            if isinstance(mapping.get("varname"), list):
+                result["variables"][key]["varname"] = deepcopy(mapping["varname"])
+                if "fallbacks" not in mapping:
+                    result["variables"][key].pop("fallbacks", None)
+            for field, value in mapping.items():
+                result["variables"][key].setdefault(field, deepcopy(value))
+    return result
+
+
+def _validate_profile(name: str, profile: dict[str, Any]) -> None:
+    from openbench.data.registry.manager import _build_model
+
+    try:
+        _build_model(_effective_overlay_entry(name, profile))
+    except (TypeError, ValueError, KeyError, AttributeError) as exc:
+        raise click.ClickException(f"Invalid model profile {name!r}: {exc}") from exc
+
+
 def _model_lookup_key(name: str) -> str:
     from openbench.data.registry.manager import RegistryManager, canonical_model_key
 
@@ -50,6 +114,11 @@ def _model_lookup_key(name: str) -> str:
 
 def _resolve_write_name(name: str, mgr) -> tuple[str, str | None]:
     requested = _validate_model_name(name)
+    target = mgr.model_write_target(requested) if hasattr(mgr, "model_write_target") else None
+    if target is not None:
+        if normalize_name(requested) == normalize_name(target):
+            return target, None
+        return target, f"model alias '{requested}' resolved to '{target}'"
     lookup_key = _model_lookup_key(requested)
     model = mgr.get_model(lookup_key)
     if model is not None:
@@ -170,7 +239,7 @@ def _parse_var_attrs(
             valid_keys = ", ".join(sorted(_VAR_ATTR_KEYS))
             raise click.ClickException(f"Invalid --var-attr key. Valid keys: {valid_keys}")
         idx, key, marker = max(marker_matches, key=lambda item: item[0])
-        std_name = raw[:idx].strip()
+        std_name = canonical_variable_name(raw[:idx].strip())
         value = raw[idx + len(marker) :].strip()
         if not std_name:
             raise click.ClickException("Invalid --var-attr: variable name is empty")
@@ -302,6 +371,16 @@ def _emit_model(model_obj, *, fmt: str, source: str | None = None) -> None:
         raise click.ClickException(f"Unsupported format: {fmt}")
 
 
+def _invalid_history_entry(path: Path, catalog_name: str, error: click.ClickException) -> dict[str, Any]:
+    return {
+        "backup": str(path),
+        "catalog_name": catalog_name,
+        "description": f"invalid backup: {error.message}",
+        "variables": "invalid",
+        "mtime": path.stat().st_mtime,
+    }
+
+
 def _model_history_entries(name: str) -> list[dict[str, Any]]:
     from openbench.data.registry.manager import get_writable_model_catalog_path
 
@@ -314,9 +393,21 @@ def _model_history_entries(name: str) -> list[dict[str, Any]]:
 
     entries: list[dict[str, Any]] = []
     for path in candidates:
-        catalog = _load_catalog(path)
-        key, profile = _case_insensitive_catalog_entry(catalog, name)
+        # One unreadable or invalid backup must not hide the others.
+        try:
+            catalog = _load_catalog(path)
+            if not isinstance(catalog, dict):
+                raise click.ClickException("the backup is not a mapping of model profiles")
+            key, profile = _case_insensitive_catalog_entry(catalog, name)
+        except click.ClickException as exc:
+            entries.append(_invalid_history_entry(path, name, exc))
+            continue
         if key is None:
+            continue
+        try:
+            profile = _effective_overlay_entry(key, profile)
+        except click.ClickException as exc:
+            entries.append(_invalid_history_entry(path, key, exc))
             continue
         entries.append(
             {
@@ -351,6 +442,7 @@ def _merge_model_profile_descriptor(
     incoming_variables = (incoming or {}).get("variables")
     if incoming_variables is not None:
         for var_name, var_descriptor in incoming_variables.items():
+            var_name = canonical_variable_name(var_name)
             existing_key = get_mapping_key_case_insensitive(variables, var_name)
             target_key = existing_key or var_name
             if existing_key is not None:
@@ -362,7 +454,13 @@ def _merge_model_profile_descriptor(
                 updated_keys.append(target_key)
             else:
                 added_keys.append(var_name)
-            variables[target_key] = var_descriptor
+            replacement = {
+                field: "" if field in {"prefix", "suffix"} else None
+                for field in (variables.get(target_key) or {})
+                if field not in {"varname", "varunit"}
+            }
+            replacement.update(var_descriptor)
+            variables[target_key] = replacement
 
     merged["variables"] = variables
     return merged, added_keys, updated_keys, skipped_keys
@@ -395,7 +493,9 @@ def _write_model_profile_descriptor(
         catalog = _load_catalog(catalog_path)
         key, existing = _case_insensitive_catalog_entry(catalog, write_name)
         catalog_name = key or write_name
-        if existing is None:
+        if existing is not None:
+            existing = _effective_overlay_entry(catalog_name, existing)
+        else:
             existing_model = RegistryManager().get_model(write_name)
             if existing_model is not None:
                 existing = existing_model.to_dict()
@@ -415,8 +515,9 @@ def _write_model_profile_descriptor(
             descriptor.setdefault("name", catalog_name)
 
         if descriptor.get("data_type") == "stn":
-            descriptor.pop("grid_res", None)
+            descriptor["grid_res"] = None
         descriptor.pop("_deleted", None)
+        _validate_profile(catalog_name, descriptor)
         catalog[catalog_name] = descriptor
         backup_path = _backup_then_write(catalog_path, catalog)
     _invalidate_registry_caches()
@@ -466,7 +567,7 @@ def show(name, fmt, history):
     from openbench.data.registry import RegistryManager
 
     if history:
-        entries = _model_history_entries(name)
+        entries = _model_history_entries(_resolve_write_name(name, RegistryManager())[0])
         if fmt == "json":
             click.echo(json.dumps(entries, indent=2, sort_keys=True))
         elif fmt == "yaml":
@@ -600,7 +701,8 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
         catalog_name = write_name
         key, existing = _case_insensitive_catalog_entry(catalog, catalog_name)
         if existing is not None:
-            return key, existing
+            restored = {} if isinstance(existing, dict) and existing.get("_deleted") else existing
+            return key, _effective_overlay_entry(key, restored)
         existing_model = RegistryManager().get_model(catalog_name)
         if existing_model is None and normalize_name(catalog_name) != normalize_name(name):
             existing_model = RegistryManager().get_model(name)
@@ -649,8 +751,12 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
     # Parse primary variables. Fallbacks are attached inside the write lock so
     # they see the latest catalog variables in concurrent register calls.
     from openbench.cli._parsing import parse_fallbacks, parse_variables
+    from openbench.data.registry.manager import _canonical_variable_overlays
 
-    new_vars = parse_variables(variable)
+    try:
+        new_vars = _canonical_variable_overlays(parse_variables(variable))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if interactive_variables:
         candidate_entries = []
@@ -772,7 +878,14 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
                 raise click.ClickException("--grid-res is not valid for station model profiles")
             profile["grid_res"] = grid_res
         elif profile.get("data_type") == "stn":
-            profile.pop("grid_res", None)
+            profile["grid_res"] = None
+        elif data_type == "grid" and profile.get("grid_res") is None and existing.get("data_type") == "stn":
+            # Back from stn: the earlier switch stored an explicit null resolution.
+            bundled_grid_res = _effective_overlay_entry(catalog_name, {}).get("grid_res")
+            if bundled_grid_res is not None:
+                profile["grid_res"] = bundled_grid_res
+            else:
+                click.secho(f"  Note: '{catalog_name}' has no grid resolution; set one with --grid-res.", fg="yellow")
         if tim_res:
             profile["tim_res"] = tim_res
         elif "tim_res" not in profile:
@@ -781,14 +894,29 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
             profile["description"] = f"{catalog_name} model profile"
         if time_offset:
             offsets = deepcopy(profile.get("time_offset") or {})
+            if "time_offset" in profile and profile["time_offset"] is None:
+                inherited = _effective_overlay_entry(catalog_name, {}).get("time_offset") or {}
+                offsets = {key: None for key in inherited}
+            bundled_offsets = _effective_overlay_entry(catalog_name, {}).get("time_offset") or {}
             for key, value in _parse_time_offsets(time_offset).items():
-                offsets[key] = _merge_time_offset_value(offsets.get(key), value)
+                current = offsets.get(key)
+                merged = _merge_time_offset_value(current, value)
+                bundled_group = bundled_offsets.get(key)
+                if isinstance(merged, dict) and not isinstance(current, dict) and isinstance(bundled_group, dict):
+                    # The registry merges per-variable offsets key by key, so a cleared
+                    # or single-value resolution needs explicit nulls for the bundled keys.
+                    merged = {**dict.fromkeys(bundled_group), **merged}
+                offsets[key] = merged
             profile["time_offset"] = offsets
 
         vars_to_merge = deepcopy(new_vars)
         existing_vars = profile.get("variables") or {}
         _parse_var_attrs(var_attr, vars_to_merge, existing_vars)
-        parse_fallbacks(fallback, vars_to_merge, existing_vars)
+        canonical_fallbacks = []
+        for raw in fallback:
+            target, separator, definition = raw.partition(":")
+            canonical_fallbacks.append(canonical_variable_name(target.strip()) + separator + definition)
+        parse_fallbacks(tuple(canonical_fallbacks), vars_to_merge, existing_vars)
         source_names = _source_var_names({**existing_vars, **vars_to_merge})
         for std_name, entry in vars_to_merge.items():
             for fb in entry.get("fallbacks") or []:
@@ -809,6 +937,7 @@ openbench model register CoLM2024 -v "Snow_Depth:f_snowdp:m"
             )
             merged_vars = profile["variables"]
             profile.pop("_deleted", None)
+            _validate_profile(catalog_name, profile)
             latest_catalog[catalog_name] = profile
             backup_path = _backup_then_write(catalog_path, latest_catalog)
     if cancellation_reason == "no_vars":
@@ -865,6 +994,7 @@ def remove_var(name, variable_name):
         key, profile = _case_insensitive_catalog_entry(catalog, catalog_name)
         if key:
             catalog_name = key
+            profile = _effective_overlay_entry(key, profile)
         if profile is None:
             existing = RegistryManager().get_model(catalog_name)
             if existing is not None:
@@ -874,7 +1004,7 @@ def remove_var(name, variable_name):
             raise click.ClickException(f"Model not found: {name}")
 
         variables = profile.get("variables") or {}
-        variable_key = get_mapping_key_case_insensitive(variables, variable_name)
+        variable_key = get_mapping_key_case_insensitive(variables, canonical_variable_name(variable_name))
         if variable_key is None:
             raise click.ClickException(f"Variable '{variable_name}' not in {name}")
 
@@ -965,7 +1095,12 @@ def export_model(name, output):
 @click.option("--yes", "-y", is_flag=True, help="Overwrite existing user profile without confirmation.")
 def import_model(path, yes):
     """Import a standalone model profile YAML into the user catalog."""
-    from openbench.data.registry.manager import _build_model, get_writable_model_catalog_path
+    from openbench.data.registry.manager import (
+        REGISTRY_DIR,
+        _build_model,
+        get_writable_model_catalog_path,
+        model_snapshot_overlay,
+    )
     from openbench.data.registry.scanner import (
         _backup_then_write,
         _catalog_write_lock,
@@ -978,15 +1113,32 @@ def import_model(path, yes):
         raise click.ClickException("Imported model YAML must be a mapping with a 'name' field")
     name = _validate_model_name(data["name"])
     try:
-        _build_model(data)
+        imported_profile = _build_model(data)
     except Exception as exc:
         raise click.ClickException(f"Invalid model profile: {exc}") from exc
+    from openbench.data.registry.manager import RegistryManager
+
+    # Like `model register`: an alias (e.g. colm) imports onto the profile it names.
+    name, alias_message = _resolve_write_name(name, RegistryManager())
+    if alias_message:
+        click.secho(f"~ {alias_message}", fg="cyan")
     catalog_path = get_writable_model_catalog_path()
     catalog = _load_catalog(catalog_path)
     key, _ = _case_insensitive_catalog_entry(catalog, name)
     write_name = key or name
-    if key is not None and not yes and not click.confirm(f"Overwrite existing profile '{key}'?"):
+    existing = key or (name if RegistryManager().get_model(name) is not None else None)
+    if (
+        existing is not None
+        and not yes
+        and not click.confirm(
+            f"Overwrite existing profile '{existing}'? Variables missing from the imported file are removed."
+        )
+    ):
         return
+    bundled_catalog = _read_yaml_mapping(REGISTRY_DIR / "model_catalog.yaml", label="bundled model catalog")
+    bundled_key = get_mapping_key_case_insensitive(bundled_catalog, write_name)
+    bundled = _build_model({**bundled_catalog[bundled_key], "name": bundled_key}) if bundled_key is not None else None
+    data = model_snapshot_overlay(imported_profile, bundled)
     data["name"] = write_name
     with _catalog_write_lock(catalog_path):
         catalog = _load_catalog(catalog_path)
@@ -1007,7 +1159,7 @@ def import_model(path, yes):
 @click.option("--yes", "-y", is_flag=True, help="Rename without confirmation.")
 def rename(old, new, yes):
     """Rename a user model profile in the user catalog."""
-    from openbench.data.registry.manager import get_writable_model_catalog_path
+    from openbench.data.registry.manager import REGISTRY_DIR, RegistryManager, get_writable_model_catalog_path
     from openbench.data.registry.scanner import (
         _backup_then_write,
         _catalog_write_lock,
@@ -1016,6 +1168,7 @@ def rename(old, new, yes):
     )
 
     new_name = _validate_model_name(new)
+    old, _alias_message = _resolve_write_name(old, RegistryManager())
     catalog_path = get_writable_model_catalog_path()
     catalog = _safe_load_catalog(catalog_path)
     old_key, _profile = _case_insensitive_catalog_entry(catalog, old)
@@ -1024,6 +1177,14 @@ def rename(old, new, yes):
     new_key, _ = _case_insensitive_catalog_entry(catalog, new_name)
     if new_key is not None:
         raise click.ClickException(f"Model already exists in user catalog: {new_key}")
+    bundled = _read_yaml_mapping(REGISTRY_DIR / "model_catalog.yaml", label="bundled model catalog")
+    if (
+        RegistryManager().get_model(new_name) is not None
+        or get_mapping_key_case_insensitive(bundled, new_name) is not None
+    ):
+        raise click.ClickException(f"Model already exists in bundled catalog: {new_name}")
+    if get_mapping_key_case_insensitive(bundled, old_key) is not None:
+        click.echo(f"Moving customizations to {new_name!r}; {old_key!r} will use bundled defaults again.")
     if not yes and not click.confirm(f"Rename '{old_key}' to '{new_name}'?"):
         return
     with _catalog_write_lock(catalog_path):
@@ -1034,7 +1195,13 @@ def rename(old, new, yes):
         new_key, _ = _case_insensitive_catalog_entry(catalog, new_name)
         if new_key is not None:
             raise click.ClickException(f"Model already exists in user catalog: {new_key}")
-        profile = dict(profile)
+        # An overlay the registry cannot merge is ignored at load, so get_model()
+        # would return the bundled profile and the customizations would be lost.
+        _effective_overlay_entry(old_key, profile)
+        resolved = RegistryManager().get_model(old_key)
+        if resolved is None:
+            raise click.ClickException(f"Model profile is deleted or invalid: {old_key}")
+        profile = resolved.to_dict()
         profile["name"] = new_name
         catalog.pop(old_key, None)
         catalog[new_name] = profile
@@ -1063,8 +1230,12 @@ def alias(alias_name, canonical_name):
         raise click.ClickException("Usage: openbench model alias ALIAS CANONICAL")
     alias_key = normalize_name(_validate_model_name(alias_name))
     canonical = _validate_model_name(canonical_name)
-    if RegistryManager().get_model(canonical) is None:
+    registry = RegistryManager()
+    if registry.get_model(canonical) is None:
         raise click.ClickException(f"Canonical model not found: {canonical}")
+    if alias_key in registry._models:
+        # The profile would keep winning lookups, while edits under the name moved.
+        raise click.ClickException(f"'{alias_name}' is already a model profile name; choose another alias.")
     with _catalog_write_lock(alias_path):
         aliases = _read_yaml_mapping(alias_path, label="model aliases")
         aliases[alias_key] = canonical

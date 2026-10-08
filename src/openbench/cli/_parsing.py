@@ -193,6 +193,8 @@ def parse_fallbacks(
                 "Define -v first or attach fallback to an existing variable."
             )
 
-        if "fallbacks" not in target:
+        if not target.get("fallbacks"):
+            # Absent, or an explicit ``fallbacks: null`` written when ``-v`` replaced the variable.
             target["fallbacks"] = []
-        target["fallbacks"].append(fb_entry)
+        if fb_entry not in target["fallbacks"]:  # repeating -f must not stack copies
+            target["fallbacks"].append(fb_entry)

@@ -109,6 +109,8 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         _validate_comparison_only_dry_run(cfg)
     elif dry_run and cfg.project.only_drawing:
         _validate_existing_outputs_dry_run(cfg)
+    elif dry_run:
+        _validate_data_files_dry_run(cfg, resolved)
 
     if dry_run:
         click.secho("Dry run — config valid, would evaluate:", bold=True)
@@ -339,6 +341,17 @@ def _simulation_fulllist_errors(cfg):
             )
             errors.extend(list_errors)
     return errors
+
+
+def _validate_data_files_dry_run(cfg, resolved) -> None:
+    """Fail a dry run on the raw-data errors ``openbench check`` reports."""
+    from openbench.cli.check import data_file_errors
+    from openbench.data.registry.manager import get_registry
+
+    errors = data_file_errors(cfg, resolved, get_registry())
+    if errors:
+        details = "\n  ".join(errors)
+        raise click.ClickException(f"Data files:\n  {details}\nRun `openbench check` for details.")
 
 
 def _resolve_references_for_run(cfg):

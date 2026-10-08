@@ -8,6 +8,21 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolated_user_config(monkeypatch, tmp_path):
+    """Tests must never read, compact, or overwrite the developer's catalog."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("OPENBENCH_HOME", raising=False)
+    from openbench.data.registry.manager import clear_registry_cache
+
+    clear_registry_cache()
+    yield
+    clear_registry_cache()
+
+
 @pytest.fixture
 def qapp():
     """Reuse QApplication, but do not leak widgets or event filters across tests."""
@@ -34,7 +49,7 @@ def qapp():
 
 
 @pytest.fixture(autouse=True)
-def _fast_credential_manager(monkeypatch):
+def _fast_credential_manager(monkeypatch, _isolated_user_config):
     """Keep RemoteConfigWidget construction cheap and out of the real home dir.
 
     The production CredentialManager runs 100k PBKDF2 iterations and reads/

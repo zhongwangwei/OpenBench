@@ -103,12 +103,26 @@ class GridProcessingCoreMixin:
     """Split grid processing helpers."""
 
     def process_grid_data(self, data_params: Dict[str, Any]) -> None:
+        # A compute replaces ``{source}_varname`` with the item name in whichever
+        # process evaluates it (this one for Single files or a single core), so
+        # scratch files are named from the configured varname captured here.
+        scratch_name = f"_{data_params['datasource']}_scratch_varname"
+        setattr(self, scratch_name, data_params["varname"][0])
         try:
             self.prepare_grid_data(data_params)
             yearly_files = self.remap_and_combine_data(data_params)
             self.extract_station_data_if_needed(data_params, yearly_files)
         finally:
+            self.__dict__.pop(scratch_name, None)
             gc.collect()
+
+    def _remap_scratch_file(self, data_source: str, year: int, varname: str | None = None) -> str:
+        """Yearly regridded scratch file; writing, reading and cleanup use this one name."""
+        if varname is None:
+            varname = getattr(self, f"_{data_source}_scratch_varname", None) or (
+                self.ref_varname[0] if data_source == "ref" else self.sim_varname[0]
+            )
+        return os.path.join(self.casedir, "scratch", f"{data_source}_{varname}_remap_{year}.nc")
 
     def prepare_grid_data(self, data_params: Dict[str, Any]) -> None:
         if data_params["data_groupby"] == "single":
@@ -207,9 +221,7 @@ class GridProcessingCoreMixin:
                 )
                 for year in years
             )
-            var_files = [
-                os.path.join(data_dir, f"{data_source}_{data_params['varname'][0]}_remap_{year}.nc") for year in years
-            ]
+            var_files = [self._remap_scratch_file(data_source, year, data_params["varname"][0]) for year in years]
         else:
             prefix = data_params.get("prefix") or ""
             suffix = data_params.get("suffix") or ""
@@ -326,9 +338,7 @@ class GridProcessingCoreMixin:
         """Clean up temporary files, silently skipping non-existent files."""
         failed_removals = []
         for year in range(self.minyear, self.maxyear + 1):
-            temp_file = os.path.join(
-                self.casedir, "scratch", f"{data_params['datasource']}_{data_params['varname'][0]}_remap_{year}.nc"
-            )
+            temp_file = self._remap_scratch_file(data_params["datasource"], year, data_params["varname"][0])
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)

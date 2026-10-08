@@ -17,7 +17,15 @@ def _plot_stn_option():
 
 
 def _drawn_figure(
-    monkeypatch, tmp_path, n_points, freq, station_id="A", lat_lon=(10.0, 20.0), obs_values=None, sim_values=None
+    monkeypatch,
+    tmp_path,
+    n_points,
+    freq,
+    station_id="A",
+    lat_lon=(10.0, 20.0),
+    obs_values=None,
+    sim_values=None,
+    scalar_coords=None,
 ):
     import openbench.visualization.Fig_Basic_Plot as fig_basic
 
@@ -25,7 +33,7 @@ def _drawn_figure(
     monkeypatch.setattr(fig_basic, "save_figure", lambda fig, *args, **kwargs: figures.append(fig))
     times = pd.date_range("2000-01-01", periods=n_points, freq=freq)
     values = np.linspace(1.0, 2.0, n_points) if obs_values is None else obs_values
-    obs = xr.DataArray(values, coords={"time": times}, dims="time")
+    obs = xr.DataArray(values, coords={"time": times}, dims="time").assign_coords(scalar_coords or {})
     sim = obs * 1.1 if sim_values is None else xr.DataArray(sim_values, coords={"time": times}, dims="time")
     caller = SimpleNamespace(
         fig_nml={"plot_stn": _plot_stn_option()},
@@ -95,6 +103,22 @@ def test_station_timeseries_title_keeps_station_id_and_clears_the_metrics(monkey
     title_box, metrics_box = title.get_window_extent(renderer), metrics.get_window_extent(renderer)
     assert not title_box.overlaps(metrics_box)
     assert metrics_box.y0 >= ax.get_window_extent(renderer).y1
+
+
+def test_station_timeseries_title_replaces_the_xarray_coordinate_title(monkeypatch, tmp_path):
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    # Station series carry scalar coordinates; xarray turns them into a centred title.
+    coords = {"lat": 35.62, "lon": -89.38, "variable": "f_discharge"}
+    fig = _drawn_figure(
+        monkeypatch, tmp_path, 120, "MS", station_id="US_0005359", lat_lon=(35.62, -89.38), scalar_coords=coords
+    )
+    ax = fig.axes[0]
+    FigureCanvasAgg(fig).draw()
+
+    assert ax.get_title(loc="center") == ""
+    assert ax.get_title(loc="right") == ""
+    assert ax.get_title(loc="left").startswith("ID: US_0005359")
 
 
 def _every_other_day(n_points=365):

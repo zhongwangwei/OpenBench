@@ -5,17 +5,21 @@ from __future__ import annotations
 import glob
 import logging
 import os
-import re
 import sys
 from typing import List
 
 import xarray as xr
 
 from openbench.data.time_utils import decode_nonstandard_time
-from openbench.data.coordinates import NC_SUFFIXES, glob_nc_pattern
+from openbench.data.file_lookup import compute_input_files, select_data_files
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
-from openbench.data.compute import compute_dependency_names
+from openbench.data.compute import (
+    ComputeError,
+    MissingComputeVariable,
+    compute_dependency_names,
+    compute_inputs_known,
+)
 
 try:
     from openbench.util.dataset_loader import (
@@ -66,6 +70,8 @@ class SelectionMixin:
         # this, every call leaks an open NetCDF/HDF5 handle — which under
         # joblib.Parallel turns into HDF5 lock errors on the next call.
         src_ds = None
+        original_convert = getattr(self, f"_fb_convert_{datasource}", None)
+        filter_succeeded = False
         ds = None
         try:
             if isinstance(VarFile, list):
@@ -109,7 +115,10 @@ class SelectionMixin:
             try:
                 ds = self.apply_custom_filter(datasource, ds, varname)
                 ds = _convert_type().convert_nc(ds)
-            except Exception:
+                filter_succeeded = True
+            except Exception as error:
+                if isinstance(error, ComputeError) and not isinstance(error, MissingComputeVariable):
+                    raise
                 if not varname or len(varname) == 0:
                     logging.error("Variable name list is empty")
                     raise ValueError("Variable name list cannot be empty")
@@ -216,8 +225,13 @@ class SelectionMixin:
                 else:
                     target_var = actual_target_var
 
+                if self._may_be_compute_input(datasource, error, target_var):
+                    # An input of a failed derivation is not the derived quantity.
+                    raise error
                 ds = _convert_type().convert_nc(ds[target_var])
-        except Exception:
+        except Exception as error:
+            if isinstance(error, ComputeError):
+                error.args = (f"{VarFile} ({syear}–{eyear}): {error}", *error.args[1:])
             # Bubble up after closing the file handle.
             if src_ds is not None:
                 try:
@@ -231,6 +245,10 @@ class SelectionMixin:
         # NOTE: This must be outside the except block so it runs even when the
         # primary varname is found without error (adapter-resolved fallbacks).
         fb_convert = getattr(self, f"_fb_convert_{datasource}", None)
+        # A successful compute clears conversion only for this file; later files
+        # may need the adapter-selected independent raw fallback again.
+        if filter_succeeded and original_convert is not None and not hasattr(self, f"_fb_convert_{datasource}"):
+            setattr(self, f"_fb_convert_{datasource}", original_convert)
         if fb_convert:
             try:
                 from openbench.data.compute import _validate_expression
@@ -291,33 +309,6 @@ class SelectionMixin:
 
         return (ds, src_ds) if return_source else ds
 
-    def _get_prefix_fallback_list(self, prefix: str, datasource: str = "sim") -> list:
-        """Build list of prefixes to try: primary + fallbacks.
-
-        Args:
-            prefix: Primary file prefix (e.g., "Case01_hist_")
-            datasource: "sim" or "ref" — determines which source's fallback to use
-        """
-        prefixes = [prefix]
-        # Use the correct source based on datasource context
-        source = getattr(self, f"{datasource}_source", "")
-        if not source:
-            source = getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
-            if source:
-                logging.debug(
-                    "prefix_fallback: using fallback source '%s' for datasource='%s'",
-                    source,
-                    datasource,
-                )
-        pf_list = getattr(self, f"{source}_prefix_fallback", None)
-        if pf_list:
-            for fb in pf_list:
-                if prefix.endswith("_"):
-                    prefixes.append(prefix[:-1] + fb)
-                else:
-                    prefixes.append(prefix + fb)
-        return prefixes
-
     def _candidate_varnames_for_file_lookup(self, varname: List[str] | None, datasource: str) -> list[str]:
         """Return concrete variables that can satisfy this item in a candidate file."""
         candidates: list[str] = []
@@ -349,31 +340,33 @@ class SelectionMixin:
                 for fallback in mapping.fallbacks or []:
                     if fallback.varname:
                         candidates.append(fallback.varname)
-                if mapping.compute:
-                    candidates.extend(compute_dependency_names(mapping.compute))
         except Exception as exc:
             logging.debug("Variable-aware prefix fallback lookup skipped: %s", exc)
 
         return list(dict.fromkeys(candidates))
 
     def _compute_expressions_for_file_lookup(self, datasource: str) -> list[str]:
+        """Return only the expression selected by ``_try_compute_from_profile``."""
         source = getattr(self, f"{datasource}_source", "")
-        expressions = [
-            getattr(self, f"{datasource}_compute", ""),
-            getattr(self, f"{source}_compute", "") if source else "",
-        ]
+        expression = getattr(self, f"{datasource}_compute", "") or (
+            getattr(self, f"{source}_compute", "") if source else ""
+        )
+        if expression:
+            return [str(expression)]
         try:
             model = getattr(self, f"{source}_model", source)
             from openbench.data.registry.manager import get_registry
 
-            profile = get_registry().get_model(model)
+            registry = get_registry()
             item = getattr(self, "item", "")
-            profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
-            if profile and profile_key is not None:
-                expressions.append(profile.variables[profile_key].compute or "")
+            for lookup in ("get_model", "get_reference"):
+                profile = getattr(registry, lookup)(model)
+                profile_key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+                if profile and profile_key is not None and profile.variables[profile_key].compute:
+                    return [str(profile.variables[profile_key].compute)]
         except Exception as exc:
             logging.debug("Compute dependency lookup skipped: %s", exc)
-        return [str(expr) for expr in expressions if expr]
+        return []
 
     def _compute_dependency_varnames_for_file_lookup(self, datasource: str) -> list[str]:
         deps = []
@@ -381,66 +374,56 @@ class SelectionMixin:
             deps.extend(compute_dependency_names(expr))
         return list(dict.fromkeys(deps))
 
+    def _may_be_compute_input(self, datasource: str, error: BaseException, name: str) -> bool:
+        """Whether ``name`` may be an input of the failed compute or of the compute that applies.
+
+        Whatever made the derivation fail, one of its inputs read raw is not the
+        derived quantity, so it must never stand in as a fallback. An expression
+        whose inputs cannot be listed (``ds[key]``) may read any variable. Only
+        the expression that applies counts (an inline compute replaces the
+        profile's, as in ``_try_compute_from_profile``), so an overridden
+        expression does not block an independent raw variable.
+        """
+        may_read = getattr(error, "may_read", None)
+        if may_read is not None and may_read(name):
+            return True
+        try:
+            expressions = self._compute_expressions_for_file_lookup(datasource)
+        except Exception as exc:
+            logging.debug("Could not read compute inputs for the fallback check: %s", exc)
+            expressions = []
+        if not expressions:
+            return False
+        expression = expressions[0]
+        return not compute_inputs_known(expression) or name.casefold() in {
+            dependency.casefold() for dependency in compute_dependency_names(expression)
+        }
+
     def _find_compute_dependency_files(self, dirx: str, year: int | None, datasource: str) -> list[str]:
         deps = self._compute_dependency_varnames_for_file_lookup(datasource)
-        if not deps:
-            return []
-        year_token = f"*{year}*" if year is not None else "*"
-        pattern = os.path.join(dirx, "**", f"{year_token}.nc")
-        files = sorted(
-            set(
-                glob.glob(pattern, recursive=True)
-                + glob.glob(pattern + "4", recursive=True)
-                + glob.glob(pattern[:-3] + ".NC", recursive=True)
-                + glob.glob(pattern[:-3] + ".NC4", recursive=True)
-            )
-        )
-        selected = []
-        found = set()
-        for file_path in files:
-            try:
-                with _xr().open_dataset(file_path, decode_times=False) as ds:
-                    available = {str(name).lower(): str(name) for name in ds.variables}
-                    hits = [dep for dep in deps if dep.lower() in available]
-                    if hits:
-                        selected.append(file_path)
-                        found.update(hits)
-            except Exception as exc:
-                logging.debug("Could not inspect compute dependency file %s: %s", file_path, exc)
-        if selected and set(deps).issubset(found):
+        # Shared with ``openbench check``; the candidates follow the lookup's
+        # branch rule, so inputs of one compute never come from two branches.
+        selected = compute_input_files(dirx, year, deps)
+        if selected:
             logging.info(
                 "Using %d files containing compute dependencies%s", len(selected), f" for year {year}" if year else ""
             )
-            return selected
-        return []
+        return selected
 
-    def _files_contain_any_var(self, files: list, varnames: list[str]) -> bool:
-        if not varnames:
-            return True
-
-        inspected = False
-        for file_path in files[:3]:
-            try:
-                with _xr().open_dataset(file_path, decode_times=False) as ds:
-                    inspected = True
-                    available = {str(name).lower() for name in ds.variables}
-                    if any(str(name).lower() in available for name in varnames):
-                        return True
-            except Exception as exc:
-                logging.debug("Could not inspect variables in %s: %s", file_path, exc)
-
-        return not inspected
-
-    def _prefixes_for_variable_lookup(
-        self,
-        prefix: str,
-        datasource: str,
-        candidate_varnames: list[str],
-    ) -> list:
-        prefixes = self._get_prefix_fallback_list(prefix, datasource)
-        if candidate_varnames and len(prefixes) > 1:
-            return [*prefixes[1:], prefixes[0]]
-        return prefixes
+    def _select_files(self, dirx, prefix, suffix, year, datasource, varname):
+        source = getattr(self, f"{datasource}_source", "") or (
+            getattr(self, "sim_source", "") or getattr(self, "ref_source", "")
+        )
+        files, used_compute = select_data_files(
+            dirx,
+            prefix,
+            suffix,
+            year,
+            prefix_fallback=getattr(self, f"{source}_prefix_fallback", None),
+            candidate_varnames=self._candidate_varnames_for_file_lookup(varname, datasource),
+            dependencies=self._compute_dependency_varnames_for_file_lookup(datasource),
+        )
+        return files, used_compute
 
     def _find_single_file(
         self,
@@ -450,25 +433,9 @@ class SelectionMixin:
         datasource: str = "sim",
         varname: List[str] | None = None,
     ) -> str | list[str]:
-        """Find a single data file, trying prefix fallbacks and .nc/.nc4 extensions."""
-        candidate_varnames = self._candidate_varnames_for_file_lookup(varname, datasource)
-        first_existing_path = None
-        for try_prefix in self._prefixes_for_variable_lookup(prefix, datasource, candidate_varnames):
-            for ext in NC_SUFFIXES:
-                path = os.path.join(dirx, f"{try_prefix}{suffix}{ext}")
-                if os.path.exists(path):
-                    if first_existing_path is None:
-                        first_existing_path = path
-                    if not self._files_contain_any_var([path], candidate_varnames):
-                        continue
-                    if try_prefix != prefix:
-                        logging.info(f"Using fallback prefix '{try_prefix}' for single file")
-                    return path
-        compute_files = self._find_compute_dependency_files(dirx, None, datasource)
-        if compute_files:
-            return compute_files
-        if first_existing_path is not None:
-            return first_existing_path
+        files, used_compute = self._select_files(dirx, prefix, suffix, None, datasource, varname)
+        if files:
+            return files if used_compute else files[0]
         raise FileNotFoundError(f"Data file not found: {os.path.join(dirx, f'{prefix}{suffix}.nc[4]')}")
 
     def _find_data_files(
@@ -480,82 +447,4 @@ class SelectionMixin:
         datasource: str = "sim",
         varname: List[str] | None = None,
     ) -> list:
-        """Find data files, trying prefix_fallback if primary prefix has no matches.
-
-        Search order for each prefix:
-            1. dirx/prefix_year*suffix.nc
-            2. dirx/year/prefix_year*suffix.nc
-
-        Prefix order:
-            1. Primary prefix (e.g., "Case01_hist_")
-            2. Fallback prefixes (e.g., "Case01_hist_cama_", "Case01_hist_unitcat_")
-        """
-        candidate_varnames = self._candidate_varnames_for_file_lookup(varname, datasource)
-        first_matching_pattern_files = None
-        for try_prefix in self._prefixes_for_variable_lookup(prefix, datasource, candidate_varnames):
-            # Escape glob metacharacters in user-supplied prefix/suffix. Without
-            # this, a prefix or suffix containing '[', '?', or '*' would be
-            # interpreted as a wildcard and either match the wrong files or fail
-            # entirely. The intentional wildcard is between {year} and {suffix}.
-            escaped_prefix = glob.escape(try_prefix)
-            escaped_suffix = glob.escape(suffix)
-            # Try primary path, then year subdir, then scanner-style nested date dirs.
-            patterns = [
-                os.path.join(dirx, f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
-                os.path.join(dirx, str(year), f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
-                os.path.join(dirx, "**", f"{escaped_prefix}{year}*{escaped_suffix}.nc"),
-            ]
-            var_files = []
-            for pattern_path in patterns:
-                var_files = glob_nc_pattern(pattern_path)
-                if "**" in pattern_path:
-                    var_files = sorted(set(var_files + glob.glob(pattern_path, recursive=True)))
-                    if pattern_path.endswith(".nc"):
-                        var_files = sorted(set(var_files + glob.glob(pattern_path + "4", recursive=True)))
-                        var_files = sorted(set(var_files + glob.glob(pattern_path[:-3] + ".NC", recursive=True)))
-                        var_files = sorted(set(var_files + glob.glob(pattern_path[:-3] + ".NC4", recursive=True)))
-                if var_files:
-                    break
-
-            # Filter: only keep files where part between prefix+year and suffix has no letters
-            if var_files:
-                filtered = []
-                prefix_escaped = re.escape(try_prefix)
-                suffix_escaped = re.escape(suffix) if suffix else ""
-                pattern = re.compile(rf"^{prefix_escaped}{year}[^a-zA-Z]*{suffix_escaped}\.nc4?$", re.IGNORECASE)
-                for f in var_files:
-                    if pattern.match(os.path.basename(f)):
-                        filtered.append(f)
-                var_files = filtered
-
-            if not var_files and (try_prefix or suffix):
-                exact = os.path.join(dirx, "**", f"{escaped_prefix}{escaped_suffix}.nc")
-                nested = set(glob.glob(exact, recursive=True))
-                nested.update(glob.glob(exact + "4", recursive=True))
-                nested.update(glob.glob(exact[:-3] + ".NC", recursive=True))
-                nested.update(glob.glob(exact[:-3] + ".NC4", recursive=True))
-                year_dir = re.compile(rf"^{year}(?:[-_](?:0[1-9]|1[0-2]))?(?:[-_](?:0[1-9]|[12]\d|3[01]))?$")
-                var_files = sorted(
-                    path
-                    for path in nested
-                    if any(year_dir.fullmatch(part) for part in os.path.relpath(path, dirx).split(os.sep)[:-1])
-                )
-
-            if var_files:
-                if first_matching_pattern_files is None:
-                    first_matching_pattern_files = var_files
-                if not self._files_contain_any_var(var_files, candidate_varnames):
-                    logging.debug(
-                        "Files for prefix '%s' do not contain any of %s; trying prefix fallback",
-                        try_prefix,
-                        candidate_varnames,
-                    )
-                    continue
-                if try_prefix != prefix:
-                    logging.info(f"Using fallback prefix '{try_prefix}' for year {year} (primary '{prefix}' not found)")
-                return var_files
-
-        compute_files = self._find_compute_dependency_files(dirx, year, datasource)
-        if compute_files:
-            return compute_files
-        return first_matching_pattern_files or []
+        return self._select_files(dirx, prefix, suffix, year, datasource, varname)[0]

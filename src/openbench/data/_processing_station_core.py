@@ -14,7 +14,7 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
-from openbench.data.compute import MissingComputeVariable
+from openbench.data.compute import ComputeError, MissingComputeVariable
 from openbench.data.station_missing import StationDataUnavailable, mask_station_missing, record_station_skip
 from openbench.util.converttype import Convert_Type
 from openbench.util.names import get_xarray_key_case_insensitive
@@ -94,6 +94,7 @@ class StationProcessingCoreMixin:
                 raise RuntimeError("Station list is empty; cannot process station data")
 
             indices = list(range(len(self.station_list["ID"])))
+            self._remove_stale_station_temp_files(data_params["datasource"])
             try:
                 results = _parallel()(n_jobs=self.num_cores)(
                     _delayed()(self._make_stn_parallel)(self.station_list, data_params["datasource"], i)
@@ -101,6 +102,10 @@ class StationProcessingCoreMixin:
                 )
                 if len(results) != len(indices):
                     raise OSError("parallel station processing returned incomplete results")
+            except ComputeError:
+                # Workers stopped mid-write leave temp files their own cleanup never ran for.
+                self._remove_stale_station_temp_files(data_params["datasource"])
+                raise
             except (PermissionError, OSError) as exc:
                 logging.warning(
                     "Parallel station processing unavailable (%s). Falling back to sequential execution.", exc
@@ -131,6 +136,23 @@ class StationProcessingCoreMixin:
                 )
         finally:
             gc.collect()
+
+    def _remove_stale_station_temp_files(self, datasource: str) -> None:
+        """Delete this task's leftover atomic-write temp files (``.<output>.*.tmp.nc``)."""
+        # Best effort: cleanup must never stop station processing.
+        casedir = getattr(self, "casedir", None)
+        ref_source, sim_source = getattr(self, "ref_source", None), getattr(self, "sim_source", None)
+        item = getattr(self, "item", None)
+        if not (casedir and ref_source and sim_source and item):
+            return
+        station_dir = Path(casedir) / "data" / f"stn_{ref_source}_{sim_source}"
+        if not station_dir.is_dir():
+            return
+        for leftover in station_dir.glob(f".{item}_{datasource}_*.tmp.nc"):
+            try:
+                leftover.unlink()
+            except OSError as exc:
+                logging.debug("Could not remove stale station temp file %s: %s", leftover, exc)
 
     def process_single_station_data(
         self, stn_data: xr.Dataset, start_year: int, end_year: int, datasource: str
@@ -171,26 +193,40 @@ class StationProcessingCoreMixin:
                         ds = stn_data[actual_fb_var]
                         fb_convert = fb.get("convert", "") if isinstance(fb, dict) else getattr(fb, "convert", "")
                         fb_unit = fb.get("varunit", "") if isinstance(fb, dict) else getattr(fb, "varunit", "")
-                        if fb_convert:
-                            setattr(self, f"_fb_convert_{datasource}", fb_convert)
-                        elif fb_unit:
-                            setattr(self, f"{datasource}_varunit", fb_unit)
                         runtime_fallback_used = True
                         break
 
                 # Priority 1: compute
+                item_var = None
                 try:
                     computed = (
-                        None
+                        self._try_compute_from_profile(
+                            source_name, stn_data, datasource, fallback_var=current_var_list[0]
+                        )
                         if runtime_fallback_used
                         else self._try_compute_from_profile(source_name, stn_data, datasource)
                     )
                 except MissingComputeVariable as exc:
-                    raise StationDataUnavailable(str(exc)) from exc
-                if computed is not None:
+                    # Aggregate integrity errors remain fatal, not station gaps. As on
+                    # the grid path, a file that already carries the standard item
+                    # name may stand in, unless that name is an input of the compute.
+                    item_var = None if runtime_fallback_used else self._station_item_variable(stn_data, exc)
+                    if item_var is None:
+                        raise StationDataUnavailable(str(exc)) from exc
+                    computed = None
+                if item_var is not None:
+                    current_var_list = [item_var]
+                    ds = stn_data[item_var]
+                    self.__dict__.pop(f"_fb_convert_{datasource}", None)
+                elif computed is not None:
                     current_var_list = [getattr(self, "item", current_var_list[0])]
                     ds = computed
-                elif not runtime_fallback_used:
+                elif runtime_fallback_used:
+                    if fb_convert:
+                        setattr(self, f"_fb_convert_{datasource}", fb_convert)
+                    elif fb_unit:
+                        setattr(self, f"{datasource}_varunit", fb_unit)
+                else:
                     # Priority 2: filter (station filters handle CaMA allocation etc.)
                     from openbench.data.custom import load_filter
 
@@ -217,15 +253,22 @@ class StationProcessingCoreMixin:
                             raise RuntimeError(f"Station filter returned None for {source_name}")
                     elif stn_module is not None:
                         raise AttributeError(f"No filter function for {source_name}")
+                    elif (item_var := self._station_item_variable(stn_data)) is not None:
+                        current_var_list = [item_var]
+                        ds = stn_data[item_var]
+                        self.__dict__.pop(f"_fb_convert_{datasource}", None)
                     else:
                         raise StationDataUnavailable(f"Variable '{current_var_list[0]}' not found in station data.")
             else:
                 # Catalog compute wins over a same-named raw variable, as on the grid
                 # path (e.g. -ds['FIRA']); read the raw variable only when the compute
-                # does not apply or its own dependencies are absent from this file.
+                # does not apply or an optional dependency is absent. Aggregate
+                # integrity errors propagate rather than using a partial raw value.
                 try:
                     computed = self._try_compute_from_profile(source_name, stn_data, datasource)
                 except MissingComputeVariable as exc:
+                    if exc.may_read(actual_station_var):
+                        raise StationDataUnavailable(str(exc)) from exc
                     logging.debug(
                         "Station compute skipped for %s; using raw '%s': %s", source_name, actual_station_var, exc
                     )
@@ -299,6 +342,10 @@ class StationProcessingCoreMixin:
                 ds.attrs["_original_varname"] = original_varname
 
             return ds
+        except ComputeError as error:
+            source = stn_data.encoding.get("source", "station data")
+            error.args = (f"{source} ({start_year}–{end_year}): {error}", *error.args[1:])
+            raise
         finally:
             # Restore the canonical variable definition and transient fallback
             # state so per-station fallback decisions do not leak into the next
@@ -316,7 +363,18 @@ class StationProcessingCoreMixin:
             elif hasattr(self, f"_fb_convert_{datasource}"):
                 delattr(self, f"_fb_convert_{datasource}")
 
+    def _station_item_variable(self, stn_data: xr.Dataset, error: BaseException | None = None) -> str | None:
+        """The standard item-named variable, if present and not an input of a failed compute."""
+        item = getattr(self, "item", "")
+        actual = get_xarray_key_case_insensitive(stn_data, item) if item else None
+        may_read = getattr(error, "may_read", None)
+        if actual is None or (may_read is not None and may_read(actual)):
+            return None
+        logging.warning("Using standard item-named variable '%s' already present in the station file", actual)
+        return actual
+
     def _make_stn_parallel(self, station_list: pd.DataFrame, datasource: str, index: int) -> dict:
+        station = None
         try:
             station = station_list.iloc[index]
             start_year = int(station["use_syear"])
@@ -340,6 +398,11 @@ class StationProcessingCoreMixin:
             )
             record_station_skip(output, str(e))
             return {"ok": False, "station": station["ID"], "error": str(e)}
+        except ComputeError as e:
+            # Fatal for the task; name the station, since merged files share a path.
+            if station is not None:
+                e.args = (f"Station {station['ID']}: {e}", *e.args[1:])
+            raise
         finally:
             gc.collect()
 
