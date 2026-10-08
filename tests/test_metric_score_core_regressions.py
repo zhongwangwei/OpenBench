@@ -229,7 +229,8 @@ def test_annual_climatology_rejects_overall_score():
 def test_r2_metrics_are_clipped(monkeypatch):
     monkeypatch.setattr("xarray.corr", lambda *_args, **_kwargs: xr.DataArray([1.0000001, -1.0000001], dims=["x"]))
     m = metrics()
-    arr = xr.DataArray(np.ones((2, 2)), dims=["time", "x"])
+    # Varying in time: correlation is undefined, hence NaN, for a constant series.
+    arr = xr.DataArray(np.arange(4.0).reshape(2, 2), dims=["time", "x"])
 
     out = m.correlation_R2(arr, arr)
 
@@ -430,3 +431,49 @@ def test_parallel_metric_keeps_parallel_map_with_shared_mfm(monkeypatch):
     assert calls and calls[0][0] == ev.metrics
     assert calls[0][1]["backend"] == "threading"
     assert counts == {"omega": 1, "varphi": 1, "eta": 1, "mfm": 0, "other": 1}
+
+
+def _reference_constant_in_time(dtype, climatology=False):
+    """A varying simulation against a reference that repeats one value per cell, or one seasonal cycle."""
+    rng = np.random.default_rng(0)
+    times = pd.date_range("2000-01-01", periods=120, freq="MS")
+    level = rng.uniform(1e-3, 0.5, 50)
+    if climatology:
+        o = np.tile(rng.uniform(0.5, 1.5, (12, 50)) * level, (10, 1))
+    else:
+        o = np.repeat(level[None], 120, axis=0)
+    s = o * rng.uniform(0.5, 1.5, o.shape)
+
+    def wrap(values):
+        return xr.DataArray(values.astype(dtype), coords={"time": times}, dims=["time", "cell"])
+
+    return wrap(s), wrap(o)
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+@pytest.mark.parametrize(
+    ("owner", "name"),
+    [
+        ("scores", "nBiasScore"),
+        ("scores", "nRMSEScore"),
+        ("scores", "nIavScore"),
+        ("metrics", "rSD"),
+        ("metrics", "KGE"),
+        ("metrics", "KGEln"),
+        ("metrics", "NSE"),
+        ("metrics", "correlation"),
+    ],
+)
+def test_reference_constant_in_time_gives_nan(owner, name, dtype):
+    """Rounding in the time mean must not let a static reference pass the zero-spread guards."""
+    s, o = _reference_constant_in_time(dtype)
+    func = getattr(scores() if owner == "scores" else metrics(), name)
+
+    assert np.isnan(func(s, o).values).all()
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_repeated_climatology_has_no_iav_score(dtype):
+    s, o = _reference_constant_in_time(dtype, climatology=True)
+
+    assert np.isnan(scores().nIavScore(s, o).values).all()
