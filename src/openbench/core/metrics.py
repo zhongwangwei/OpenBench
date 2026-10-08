@@ -22,7 +22,7 @@ except ImportError:
 def varies_along(x, dim="time"):
     """True where x takes more than one value along dim.
 
-    Guards on the spread of a series use this instead of testing a standard
+    Guards on the spread of a series use this alongside testing a standard
     deviation or a sum of squared anomalies against zero. For a series that
     repeats one value (a static map or a repeated climatology as reference) the
     mean taken in floating point differs from the value by rounding, so such a
@@ -146,7 +146,7 @@ class metrics:
         s, o = self._validate_inputs(s, o)
         denom = np.sqrt(((o - o.mean(dim=dim)) ** 2).sum(dim=dim))
         numer = np.sqrt(((s - o) ** 2).sum(dim=dim))
-        return xr.where(varies_along(o, dim), numer / denom, np.nan)
+        return xr.where(varies_along(o, dim) & (denom != 0), numer / denom, np.nan)
 
     def RSS(self, s, o, dim="time"):
         """Residual sum of squares."""
@@ -256,7 +256,7 @@ class metrics:
         tmp1 = ((o - o.mean(dim="time")) ** 2).sum(dim="time")
         tmp2 = -N * (((s - o) ** 2).sum(dim="time"))
         # Guard against constant-observation series (tmp1 == 0)
-        var = xr.where(varies_along(o), np.exp(tmp2 / tmp1), np.nan)
+        var = xr.where(varies_along(o) & (tmp1 != 0), np.exp(tmp2 / tmp1), np.nan)
         return var
 
     def correlation(self, s, o):
@@ -297,7 +297,7 @@ class metrics:
         # 1 - sum((s-o)**2)/sum((o-np.mean(o))**2)
         _tmp1 = ((o - o.mean(dim="time")) ** 2).sum(dim="time")
         _tmp2 = ((s - o) ** 2).sum(dim="time")
-        var = xr.where(varies_along(o), 1 - _tmp2 / _tmp1, np.nan)
+        var = xr.where(varies_along(o) & (_tmp1 != 0), 1 - _tmp2 / _tmp1, np.nan)
         return var
 
     def KGE(self, s, o):
@@ -319,7 +319,7 @@ class metrics:
         # become inf and kge becomes -inf, silently polluting downstream output.
         o_std = o.std(dim="time")
         o_mean = o.mean(dim="time")
-        alpha = xr.where(varies_along(o), s.std(dim="time") / o_std, np.nan)
+        alpha = xr.where(varies_along(o) & (o_std != 0), s.std(dim="time") / o_std, np.nan)
         beta = xr.where(o_mean != 0, s.mean(dim="time") / o_mean, np.nan)
         kge = 1 - ((cc - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2) ** 0.5
         return kge  # , cc, alpha, beta
@@ -423,7 +423,7 @@ class metrics:
         s, o = self._validate_inputs(s, o)
         o_std = o.std(dim="time")
         # Protect against division by zero when observed std is 0 or very small.
-        return xr.where(varies_along(o), s.std(dim="time") / o_std - 1.0, np.nan)
+        return xr.where(varies_along(o) & (o_std != 0), s.std(dim="time") / o_std - 1.0, np.nan)
 
     def ubNSE(self, s, o):
         """
@@ -439,7 +439,7 @@ class metrics:
         _tmp2 = (((s - s.mean(dim="time")) - (o - o.mean(dim="time"))) ** 2).sum(dim="time")
         # Mirror the NSE guard above — constant observations would otherwise
         # produce ±inf instead of NaN.
-        var = xr.where(varies_along(o), 1 - _tmp2 / _tmp1, np.nan)
+        var = xr.where(varies_along(o) & (_tmp1 != 0), 1 - _tmp2 / _tmp1, np.nan)
         return var
 
     def ubKGE(self, s, o):
@@ -455,7 +455,7 @@ class metrics:
         s, o = self.rm_mean(s, o)
         cc = self.correlation(s, o)
         o_std = o.std(dim="time")
-        alpha = xr.where(varies_along(o), s.std(dim="time") / o_std, np.nan)
+        alpha = xr.where(varies_along(o) & (o_std != 0), s.std(dim="time") / o_std, np.nan)
         # With mean-zero inputs beta is undefined (0/0), so ubKGE uses the
         # two-component unbiased form rather than delegating to KGE.
         return 1 - ((cc - 1) ** 2 + (alpha - 1) ** 2) ** 0.5
@@ -543,7 +543,7 @@ class metrics:
         o_mean = o.mean(dim=dim)
         s_std = s.std(dim=dim)
         o_std = o.std(dim=dim)
-        alpha = xr.where(o_varies, s_std / o_std, np.nan)
+        alpha = xr.where(o_varies & (o_std != 0), s_std / o_std, np.nan)
         beta = xr.where(o_mean != 0, s_mean / o_mean, np.nan)
         cv_s = xr.where(s_mean != 0, s_std / s_mean, np.nan)
         cv_o = xr.where(o_mean != 0, o_std / o_mean, np.nan)
@@ -554,7 +554,7 @@ class metrics:
         """Ratio of simulated to observed standard deviation."""
         s, o = self._validate_inputs(s, o)
         o_std = o.std(dim=dim)
-        return xr.where(varies_along(o, dim), s.std(dim=dim) / o_std, np.nan)
+        return xr.where(varies_along(o, dim) & (o_std != 0), s.std(dim=dim) / o_std, np.nan)
 
     def PBIAS_HF(self, s, o, quantile=0.98, dim="time"):
         """Percent bias over observed high-flow samples; default threshold is Q98."""
@@ -660,13 +660,13 @@ class metrics:
         log_o = np.log(o.where(positive_pair))
         denom = ((log_o - log_o.mean(dim=dim)) ** 2).sum(dim=dim)
         numer = ((log_s - log_o) ** 2).sum(dim=dim)
-        return xr.where(valid_domain & varies_along(log_o, dim), 1 - numer / denom, np.nan)
+        return xr.where(valid_domain & varies_along(log_o, dim) & (denom != 0), 1 - numer / denom, np.nan)
 
     def mNSE(self, s, o, dim="time"):
         """Modified NSE using absolute errors and absolute observed deviations."""
         s, o = self._validate_inputs(s, o)
         denom = np.abs(o - o.mean(dim=dim)).sum(dim=dim)
-        return xr.where(varies_along(o, dim), 1 - np.abs(s - o).sum(dim=dim) / denom, np.nan)
+        return xr.where(varies_along(o, dim) & (denom != 0), 1 - np.abs(s - o).sum(dim=dim) / denom, np.nan)
 
     def rNSE(self, s, o, dim="time"):
         """Relative NSE; only defined for non-zero observations and observed mean."""
@@ -676,7 +676,7 @@ class metrics:
         nonzero = ((o != 0) | ~valid_pair).all(dim=dim) & (valid_pair.sum(dim=dim) > 0) & (o_mean != 0)
         numer = (((s - o) / o.where(o != 0)) ** 2).sum(dim=dim)
         denom = (((o - o_mean) / o_mean) ** 2).sum(dim=dim)
-        return xr.where(nonzero & varies_along(o, dim), 1 - numer / denom, np.nan)
+        return xr.where(nonzero & varies_along(o, dim) & (denom != 0), 1 - numer / denom, np.nan)
 
     def wNSE(self, s, o, weights, dim="time"):
         """Weighted NSE using explicit non-negative sample weights."""
@@ -689,7 +689,7 @@ class metrics:
         denom = (weights * (o - o_mean) ** 2).sum(dim=dim)
         numer = (weights * (s - o) ** 2).sum(dim=dim)
         o_varies = varies_along(o.where(weights > 0), dim)
-        return xr.where(valid_weight_domain & (wsum > 0) & o_varies, 1 - numer / denom, np.nan)
+        return xr.where(valid_weight_domain & (wsum > 0) & o_varies & (denom != 0), 1 - numer / denom, np.nan)
 
     def wsNSE(self, s, o, season_weights, seasons=None, dim="time"):
         """Weighted seasonal NSE using explicit season weights and labels."""
@@ -1111,7 +1111,7 @@ class metrics:
         o_climate = o.mean(dim="time")
 
         diff_squared = (s_climate - o_climate) ** 2
-        normalized_diff = diff_squared / obs_var.where(varies_along(o))
+        normalized_diff = diff_squared / obs_var.where(varies_along(o) & (obs_var != 0))
 
         smpi_dims = list(normalized_diff.dims)
         smpi = normalized_diff.mean(dim=smpi_dims, skipna=True) if smpi_dims else normalized_diff
@@ -1126,7 +1126,7 @@ class metrics:
             o_boot = o.isel(time=bootstrap_indices)
             obs_var_boot = o_boot.var(dim="time", ddof=1)
             diff_boot = (s_boot.mean(dim="time") - o_boot.mean(dim="time")) ** 2
-            normalized_boot = diff_boot / obs_var_boot.where(varies_along(o_boot))
+            normalized_boot = diff_boot / obs_var_boot.where(varies_along(o_boot) & (obs_var_boot != 0))
             boot_dims = list(normalized_boot.dims)
             boot_mean = normalized_boot.mean(dim=boot_dims, skipna=True) if boot_dims else normalized_boot
             bootstrap_smpi.append(boot_mean if dask_backed else float(boot_mean))

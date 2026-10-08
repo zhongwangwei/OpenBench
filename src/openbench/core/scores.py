@@ -91,7 +91,7 @@ class scores:
         crms = np.sqrt(((o - o.mean(dim="time")) ** 2).mean(dim="time"))
         # Constant observations -> crms=0 -> inf. Return NaN instead so the
         # overall score correctly drops these grid cells.
-        return xr.where(varies_along(o), np.exp(-np.abs(bias) / crms), np.nan)
+        return xr.where(varies_along(o) & (crms != 0), np.exp(-np.abs(bias) / crms), np.nan)
 
     def nRMSEScore(self, s, o):
         """
@@ -108,7 +108,7 @@ class scores:
         s_mean, o_mean = s.mean(dim="time"), o.mean(dim="time")
         crms = np.sqrt(((o - o_mean) ** 2).mean(dim="time"))
         crmse = np.sqrt((((s - s_mean) - (o - o_mean)) ** 2).mean(dim="time"))
-        return xr.where(varies_along(o), np.exp(-crmse / crms), np.nan)
+        return xr.where(varies_along(o) & (crms != 0), np.exp(-crmse / crms), np.nan)
 
     def nPhaseScore(self, s, o):
         """
@@ -158,7 +158,7 @@ class scores:
         # each calendar month then takes a single value over the years.
         month = o.groupby("time.month")
         o_has_iav = (month.max("time") > month.min("time")).any("month")
-        return xr.where(o_has_iav, np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
+        return xr.where(o_has_iav & (o_iav != 0), np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
 
     def nSpatialScore(self, s, o):
         """
