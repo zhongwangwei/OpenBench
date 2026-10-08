@@ -170,6 +170,8 @@ def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons()
     assert "openbench.core._comparison_helpers" in modules
     assert "openbench.runner.masking" in modules
     assert "openbench.data._processing_grid_regrid" in modules
+    assert "openbench.data.compute" in modules
+    assert "openbench.data.file_lookup" in modules
 
 
 def test_source_specific_section_does_not_capture_longer_source_name():
@@ -418,3 +420,20 @@ def test_unified_mask_batch_matches_sequential_for_spatial_coordinate_mismatch(t
         new = new_ds.load()
     xr.testing.assert_identical(new, old)
     assert old.sizes == {"time": 1, "lat": 1, "lon": 1}
+
+
+@pytest.mark.parametrize("changed_module", ["openbench.data.compute", "openbench.data.file_lookup"])
+def test_algorithm_fingerprint_changes_with_compute_and_lookup(monkeypatch, changed_module):
+    from openbench.runner import hashing
+
+    sources = {}
+    monkeypatch.setattr(hashing.importlib, "import_module", lambda name: name)
+    monkeypatch.setattr(hashing.inspect, "getsource", lambda name: sources.get(name, "original"))
+    hashing.algorithm_source_fingerprint.cache_clear()
+    try:
+        before = hashing.algorithm_source_fingerprint()
+        sources[changed_module] = "updated"
+        hashing.algorithm_source_fingerprint.cache_clear()
+        assert hashing.algorithm_source_fingerprint() != before
+    finally:
+        hashing.algorithm_source_fingerprint.cache_clear()

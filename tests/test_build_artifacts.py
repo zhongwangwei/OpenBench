@@ -186,6 +186,7 @@ def test_archives_contain_required_data_files(archive_members) -> None:
         "openbench/data/registry/reference_catalog.yaml",
         "openbench/data/registry/reference_profiles.yaml",
         "openbench/data/registry/model_catalog.yaml",
+        "openbench/data/registry/bundled_history.json",
     }
     missing = required - _package_members(archive_members)
     assert not missing, f"Archive missing required files: {missing}"

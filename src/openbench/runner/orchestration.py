@@ -62,6 +62,9 @@ def _resume_preprocess_signature(payload: Any) -> dict[str, Any] | None:
         "variable": payload.get("variable"),
         "sim_source": payload.get("sim_source"),
         "ref_source": payload.get("ref_source"),
+        # Preprocessed files written by other preprocessing code are not reusable;
+        # evaluation-code changes (the full source fingerprint) do not matter here.
+        "preprocessing_code": (payload.get("openbench") or {}).get("preprocessing_fingerprint"),
         "general": general,
         "project": project,
         "regrid_backend": payload.get("regrid_backend"),

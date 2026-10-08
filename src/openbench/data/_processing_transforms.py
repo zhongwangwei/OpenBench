@@ -122,7 +122,7 @@ class ProcessingTransformMixin:
             ds["lon"].attrs["valid_max"] = 180.0
         return ds
 
-    def _try_compute_from_profile(self, source_name: str, ds, datasource: str):
+    def _try_compute_from_profile(self, source_name: str, ds, datasource: str, *, fallback_var: str | None = None):
         """Try to compute a derived variable using a compute expression.
 
         Checks model profiles first, then reference datasets.
@@ -163,8 +163,18 @@ class ProcessingTransformMixin:
         if not compute_expr:
             return None
 
+        from openbench.data.compute import compute_dependency_names, compute_inputs_known, execute_compute
+
+        # Skip the compute only when its inputs are known: a step that does not
+        # parse, or a computed key such as ds[key], may read the fallback.
+        if (
+            fallback_var is not None
+            and compute_inputs_known(compute_expr)
+            and fallback_var.casefold() not in {name.casefold() for name in compute_dependency_names(compute_expr)}
+        ):
+            return None
+
         logging.info("Computing %s via compute expression", item)
-        from openbench.data.compute import execute_compute
 
         result = execute_compute(ds, compute_expr, item)
 
@@ -174,6 +184,8 @@ class ProcessingTransformMixin:
 
         setattr(self, f"{datasource}_varname", [item])
         setattr(self, f"{datasource}_varunit", compute_unit)
+        # The expression already produced the target quantity and units.
+        self.__dict__.pop(f"_fb_convert_{datasource}", None)
 
         return result
 

@@ -388,7 +388,7 @@ class ProcessingConfigMixin:
 
     def get_data_params(self, datasource: str) -> Dict[str, Any]:
         # Note: prefix_fallback is read directly from instance attributes
-        # by _get_prefix_fallback_list(), not passed through params dict.
+        # by file selection, not passed through params dict.
         return {
             "data_dir": getattr(self, f"{datasource}_dir"),
             "data_groupby": getattr(self, f"{datasource}_data_groupby").lower(),

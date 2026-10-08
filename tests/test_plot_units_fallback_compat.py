@@ -12,8 +12,9 @@ from openbench.data.unit import UnitProcessing
 
 class _StationProcessor:
     from openbench.data._processing_station_core import StationProcessingCoreMixin
+    from openbench.data._processing_transforms import ProcessingTransformMixin
 
-    class Processor(StationProcessingCoreMixin):
+    class Processor(StationProcessingCoreMixin, ProcessingTransformMixin):
         item = "Latent_Heat"
         ref_source = "FLUXNET_PLUMBER2"
         ref_varname = "Qle_cor"
@@ -24,15 +25,9 @@ class _StationProcessor:
             mapping = RegistryManager().get_reference("FLUXNET_PLUMBER2").variables["Latent_Heat"]
             self.FLUXNET_PLUMBER2_fallbacks = [fb.to_dict() for fb in mapping.fallbacks]
             self.units_seen = []
-            self.compute_calls = 0
 
         def _is_climatology_mode(self):
             return True
-
-        def _try_compute_from_profile(self, *args, **kwargs):
-            # FLUXNET_PLUMBER2 has no catalog compute for Latent_Heat.
-            self.compute_calls += 1
-            return None
 
         def check_coordinate(self, ds):
             return ds
@@ -79,7 +74,24 @@ def test_fluxnet_plumber2_primary_wins_over_raw_fallback():
     assert proc.units_seen == ["W m-2"]
 
 
-def test_fluxnet_plumber2_raw_fallback_is_used_when_corrected_missing():
+@pytest.fixture
+def executed_computes(monkeypatch):
+    """Expressions actually evaluated (asking whether a compute applies is not one)."""
+    from openbench.data import compute
+
+    calls = []
+    real_execute = compute.execute_compute
+
+    def counting_execute(ds, expression, var_name=""):
+        calls.append(expression)
+        return real_execute(ds, expression, var_name)
+
+    monkeypatch.setattr(compute, "execute_compute", counting_execute)
+    return calls
+
+
+def test_fluxnet_plumber2_raw_fallback_is_used_when_corrected_missing(executed_computes):
+    # FLUXNET_PLUMBER2 has no compute for Latent_Heat: the catalog fallback is the value.
     proc = _StationProcessor.Processor()
     ds = _station_ds(Qle=[4.0, 5.0])
 
@@ -88,7 +100,29 @@ def test_fluxnet_plumber2_raw_fallback_is_used_when_corrected_missing():
     np.testing.assert_allclose(out.values, [4.0, 5.0])
     assert proc.ref_varname == "Qle_cor"
     assert proc.units_seen == ["W m-2"]
-    assert proc.compute_calls == 0  # catalog fallback runs before compute
+    assert executed_computes == []
+
+
+def test_raw_fallback_is_used_when_it_is_not_a_compute_input(executed_computes):
+    proc = _StationProcessor.Processor()
+    proc.ref_compute = "ds['Qle_alt'] * 2"
+    ds = _station_ds(Qle=[4.0, 5.0])
+
+    out = proc.process_single_station_data(ds, 2000, 2000, "ref")
+
+    np.testing.assert_allclose(out.values, [4.0, 5.0])
+    assert executed_computes == []
+
+
+def test_compute_wins_when_the_raw_fallback_is_one_of_its_inputs(executed_computes):
+    proc = _StationProcessor.Processor()
+    proc.ref_compute = "ds['Qle'] * 2"
+    ds = _station_ds(Qle=[4.0, 5.0])
+
+    out = proc.process_single_station_data(ds, 2000, 2000, "ref")
+
+    np.testing.assert_allclose(out.values, [8.0, 10.0])
+    assert executed_computes == ["ds['Qle'] * 2"]
 
 
 def test_unit_aliases_convert_exactly():

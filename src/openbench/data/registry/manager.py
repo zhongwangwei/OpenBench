@@ -78,7 +78,6 @@ def get_writable_model_catalog_path() -> Path:
     or edited model profiles are always written to ~/.openbench/models/.
     """
     fallback = _get_user_dir() / "models"
-    fallback.mkdir(parents=True, exist_ok=True)
     return fallback / "model_catalog.yaml"
 
 
@@ -89,7 +88,6 @@ def get_writable_reference_catalog_path() -> Path:
     or scanned reference entries are always written to ~/.openbench/references/.
     """
     fallback = _get_user_dir() / "references"
-    fallback.mkdir(parents=True, exist_ok=True)
     return fallback / "reference_catalog.yaml"
 
 
@@ -112,6 +110,21 @@ def get_legacy_reference_profiles_path() -> Path:
 _REGISTRY_CACHE: Optional["RegistryManager"] = None
 
 _UNRESOLVED_ENV_VARS_WARNED: set = set()
+_QUIET_UNRESOLVED_ENV = 0
+
+
+class quiet_unresolved_env:
+    """Skip the unset-variable warning while building objects only to compare them."""
+
+    def __enter__(self):
+        global _QUIET_UNRESOLVED_ENV
+        _QUIET_UNRESOLVED_ENV += 1
+        return self
+
+    def __exit__(self, *exc):
+        global _QUIET_UNRESOLVED_ENV
+        _QUIET_UNRESOLVED_ENV -= 1
+        return False
 
 
 def _is_file_resource(path: Any) -> bool:
@@ -181,7 +194,7 @@ def _expand_env_path(value, context: str = "") -> Optional[str]:
         match = _re.search(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", expanded)
         var_name = match.group(1) if match else "<unknown>"
         # Dedupe by var name so one missing env var = one warning, not 100+
-        if var_name not in _UNRESOLVED_ENV_VARS_WARNED:
+        if not _QUIET_UNRESOLVED_ENV and var_name not in _UNRESOLVED_ENV_VARS_WARNED:
             _UNRESOLVED_ENV_VARS_WARNED.add(var_name)
             logger.warning(
                 "Reference catalog references env var $%s which is unset. "
@@ -198,8 +211,21 @@ def get_registry() -> "RegistryManager":
     """Get a cached RegistryManager instance (avoids re-reading YAML on every call)."""
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is None:
+        _sync_legacy_user_overlays()
         _REGISTRY_CACHE = RegistryManager()
     return _REGISTRY_CACHE
+
+
+def _sync_legacy_user_overlays() -> None:
+    """Compact legacy overlays without replacing intentional user overrides."""
+    try:
+        from openbench.data.registry.overlay_audit import format_sync_notice, sync_legacy_overlays
+
+        notice = format_sync_notice(sync_legacy_overlays())
+        if notice:
+            logger.warning("%s", notice)
+    except Exception as e:  # registry hygiene must never block loading the registry
+        logger.debug("Skipped user overlay sync: %s", e)
 
 
 def clear_registry_cache() -> None:
@@ -594,6 +620,25 @@ class RegistryManager:
         "orchidee-ol": "orchidee",
     }
 
+    def model_write_target(self, name: str) -> Optional[str]:
+        """Name of the profile that an edit of ``name`` is saved onto, or None if unknown.
+
+        An equivalent alias (``CoLM``) is a copy rebuilt from its canonical profile,
+        so edits go to ``CoLM2024``. Otherwise a real profile of that name wins over
+        an alias of the same spelling: bundled ``CaMaFlood`` is its own profile even
+        though ``camaflood`` also names CaMa. Remaining aliases redirect.
+        """
+        key = normalize_name(name)
+        if key in _MODEL_EQUIVALENT_ALIASES:
+            target = self._models.get(_MODEL_EQUIVALENT_ALIASES[key][0])
+            return target.name if target is not None else None
+        if key in self._models:
+            return self._models[key].name
+        canonical = self._model_aliases.get(key)
+        if canonical and canonical in self._models:
+            return self._models[canonical].name
+        return None
+
     def get_model(self, name: str) -> Optional[ModelProfile]:
         key = normalize_name(name)
         # Try direct lookup first
@@ -618,9 +663,17 @@ class RegistryManager:
 
     def save_model(self, name: str, profile: ModelProfile) -> None:
         """Save or update a model profile to the catalog."""
+        from openbench.data.registry.overlay_audit import check_saved_entry_against_separate_files
         from openbench.data.registry.scanner import _catalog_write_lock
 
         catalog_path = get_writable_model_catalog_path()
+        # An alias saves onto the profile it names, as ``openbench model register``
+        # does; written under ``CoLM`` the edit would be replaced by the alias copy.
+        # A real profile keeps its own name (see model_write_target).
+        target = self.model_write_target(name)
+        if target is not None and normalize_name(target) != normalize_name(name):
+            name = target
+            profile = replace(profile, name=name)
         # Hold the cross-process lock across read->modify->write so concurrent
         # writers (GUI + CLI, HPC shared registry) cannot lose each other's edits.
         with _catalog_write_lock(catalog_path):
@@ -634,9 +687,14 @@ class RegistryManager:
                     f"Model name '{name}' conflicts with existing catalog entry '{existing_key}' case-insensitively"
                 )
             profile = replace(profile, variables=_canonicalize_variable_mappings(profile.variables))
-            catalog[name] = profile.to_dict()
+            bundled_data = self._read_catalog(REGISTRY_DIR / "model_catalog.yaml")
+            bundled_key = get_mapping_key_case_insensitive(bundled_data, name)
+            bundled = _build_model({**bundled_data[bundled_key], "name": bundled_key}) if bundled_key else None
+            catalog[name] = model_snapshot_overlay(profile, bundled)
+            check_saved_entry_against_separate_files("models", catalog_path, name, profile)
             self._write_catalog(catalog_path, catalog)
         self._models[normalize_name(name)] = profile
+        self._sync_model_equivalent_aliases()
         logger.info("Saved model '%s' to %s", name, catalog_path)
 
     def delete_model(self, name: str) -> None:
@@ -645,7 +703,8 @@ class RegistryManager:
 
         catalog_path = get_writable_model_catalog_path()
         key = normalize_name(name)
-        canonical = self._model_aliases.get(canonical_model_key(name), canonical_model_key(name))
+        target = self.model_write_target(name)
+        canonical = normalize_name(target) if target is not None else canonical_model_key(name)
         with _catalog_write_lock(catalog_path):
             catalog = self._read_catalog(catalog_path)
             catalog_key = None
@@ -653,12 +712,16 @@ class RegistryManager:
                 if normalize_name(candidate) in {key, canonical}:
                     catalog_key = candidate
                     break
-            if catalog_key is not None:
+            bundled = self._is_bundled("models", canonical)
+            if catalog_key is not None and not bundled:
                 catalog.pop(catalog_key, None)
                 self._write_catalog(catalog_path, catalog)
-            elif canonical in self._models:
-                profile = self._models[canonical]
-                catalog[profile.name] = {"name": profile.name, "_deleted": True}
+            elif canonical in self._models or bundled:
+                # Dropping only the overlay of a bundled profile would bring it back on load.
+                profile_name = self._models[canonical].name if canonical in self._models else name
+                if catalog_key is not None:
+                    catalog.pop(catalog_key, None)
+                catalog[profile_name] = {"name": profile_name, "_deleted": True}
                 self._write_catalog(catalog_path, catalog)
         self._models.pop(canonical, None)
         self._models.pop(key, None)
@@ -666,6 +729,7 @@ class RegistryManager:
 
     def save_reference(self, name: str, dataset: ReferenceDataset) -> None:
         """Save or update a reference dataset to the catalog."""
+        from openbench.data.registry.overlay_audit import check_saved_entry_against_separate_files
         from openbench.data.registry.scanner import _catalog_write_lock
 
         catalog_path = get_writable_reference_catalog_path()
@@ -684,7 +748,33 @@ class RegistryManager:
                     f"Reference name '{name}' conflicts with existing catalog entry '{existing_name}' case-insensitively"
                 )
             dataset = replace(dataset, variables=_canonicalize_variable_mappings(dataset.variables))
-            catalog[name] = dataset.to_dict()
+            snapshot = dataset.to_dict()
+            snapshot["root_dir"] = dataset.root_dir
+            snapshot["fulllist"] = dataset.fulllist
+            bundled_data = self._read_catalog(REGISTRY_DIR / "reference_catalog.yaml")
+            bundled_key = get_mapping_key_case_insensitive(bundled_data, name)
+            raw_base = bundled_data[bundled_key] if bundled_key else None
+            raw_overlay = catalog.get(existing_key, {}) if existing_key else {}
+            current = _build_reference({**raw_base, "name": bundled_key}) if raw_base else None
+            if current is not None:
+                # The saved dataset lists every variable it keeps. A deep merge
+                # cannot drop a bundled variable, so a removed one is a null.
+                for var_name in current.variables:
+                    if get_mapping_key_case_insensitive(dataset.variables, canonical_variable_name(var_name)) is None:
+                        snapshot.setdefault("variables", {})[var_name] = None
+                current = _deep_merge_reference(current, raw_overlay)
+            elif raw_overlay and not raw_overlay.get("_deleted"):
+                current = _build_reference({**raw_overlay, "name": name})
+            # Loaded paths may be expanded. Preserve their original expression
+            # when the editor did not change them, including an explicit pin.
+            for path_field in ("root_dir", "fulllist"):
+                if current is not None and getattr(dataset, path_field) == getattr(current, path_field):
+                    if path_field in raw_overlay:
+                        snapshot[path_field] = raw_overlay[path_field]
+                    elif path_field in (raw_base or {}):
+                        snapshot[path_field] = raw_base[path_field]
+            catalog[name] = snapshot
+            check_saved_entry_against_separate_files("references", catalog_path, name, dataset)
             self._write_catalog(catalog_path, catalog)
         self._references[normalize_name(name)] = dataset
         self._build_var_index()
@@ -699,19 +789,28 @@ class RegistryManager:
         with _catalog_write_lock(catalog_path):
             catalog = self._read_catalog(catalog_path)
             catalog_key = get_mapping_key_case_insensitive(catalog, name)
-            removed = catalog.pop(catalog_key, None) if catalog_key is not None else None
-            if removed is not None:
+            bundled = self._is_bundled("references", key)
+            if catalog_key is not None and not bundled:
+                catalog.pop(catalog_key, None)
                 self._write_catalog(catalog_path, catalog)
-            elif key in self._references:
-                # Built-in-only reference: write a tombstone so the deletion survives
-                # a restart (mirrors delete_model; otherwise _load_reference_catalog
-                # would silently resurrect it).
-                ref = self._references[key]
-                catalog[ref.name] = {"name": ref.name, "_deleted": True}
+            elif key in self._references or bundled:
+                # A bundled reference needs a tombstone so the deletion survives a
+                # restart (mirrors delete_model): dropping only its overlay, or
+                # writing nothing, would let the bundled catalog resurrect it.
+                ref_name = self._references[key].name if key in self._references else name
+                if catalog_key is not None:
+                    catalog.pop(catalog_key, None)
+                catalog[ref_name] = {"name": ref_name, "_deleted": True}
                 self._write_catalog(catalog_path, catalog)
         self._references.pop(key, None)
         self._build_var_index()
         logger.info("Deleted reference '%s'", name)
+
+    @staticmethod
+    def _is_bundled(kind: str, key: str) -> bool:
+        """Whether the package itself defines this entry, apart from any user overlay."""
+        bundled = RegistryManager(user_dir=REGISTRY_DIR)  # REGISTRY_DIR as user dir loads no overlay
+        return key in (bundled._models if kind == "models" else bundled._references)
 
     @staticmethod
     def _read_catalog(path: Path) -> dict:
@@ -722,20 +821,20 @@ class RegistryManager:
 
     @staticmethod
     def _write_catalog(path: Path, catalog: dict) -> None:
-        import tempfile
+        from openbench.data.registry.overlay_audit import (
+            check_separate_file_overrides,
+            overlay_kind_for_path,
+            sparsify_overlay_catalog,
+        )
+        from openbench.data.registry.scanner import _atomic_yaml_write
 
+        overlay_kind = overlay_kind_for_path(path)
+        if overlay_kind is not None:
+            # An edit a separate overlay file undoes on load would appear saved until a restart.
+            check_separate_file_overrides(overlay_kind, path, catalog)
+            catalog = sparsify_overlay_catalog(overlay_kind, catalog)
         path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                yaml.dump(catalog, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-            os.replace(tmp, str(path))
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+        _atomic_yaml_write(path, catalog)
 
 
 def _is_empty_value(value: Any) -> bool:
@@ -779,6 +878,33 @@ def _canonicalize_variable_mappings(raw_variables: dict[str, VariableMapping]) -
     return variables
 
 
+def model_snapshot_overlay(profile: ModelProfile, bundled: ModelProfile | None = None) -> dict:
+    """Encode a complete editable profile, including fields the user cleared."""
+    snapshot = profile.to_dict()
+    snapshot["grid_res"] = profile.grid_res
+    snapshot["time_offset"] = profile.time_offset or None
+    snapshot["variables"] = {}
+    variables = _canonicalize_variable_mappings(profile.variables)
+    for name, mapping in variables.items():
+        data = mapping.to_dict()
+        for key in ("prefix", "suffix", "sub_dir", "fallbacks", "compute", "accumulated", "prefix_fallback"):
+            data.setdefault(key, getattr(mapping, key))
+        snapshot["variables"][name] = data
+    if bundled is not None:
+        if profile.time_offset:
+            offsets = dict(profile.time_offset)
+            for key, original in (bundled.time_offset or {}).items():
+                if key not in offsets:
+                    offsets[key] = None
+                elif isinstance(original, dict) and isinstance(offsets[key], dict):
+                    offsets[key] = {**dict.fromkeys(original), **offsets[key]}
+            snapshot["time_offset"] = offsets
+        removed = [name for name in bundled.variables if get_mapping_key_case_insensitive(variables, name) is None]
+        if removed:
+            snapshot["_delete_variables"] = removed
+    return snapshot
+
+
 def _auto_resolve_variant(
     variants: dict[str, ReferenceDataset],
     sim_tim_res: Optional[str] = None,
@@ -794,7 +920,7 @@ def _auto_resolve_variant(
     Returns:
         (best_ref, reason) — reason is a human-readable decision trace.
     """
-    from openbench.data.registry.scanner import _tim_res_rank
+    from openbench.data.registry._tim_res import _tim_res_rank
 
     sim_rank = _tim_res_rank(sim_tim_res) if sim_tim_res else -1
     reasons = []
@@ -871,7 +997,15 @@ def _normalize_legacy_varname_list(var_data: dict) -> tuple[str, list[FallbackVa
 
     primary = raw_varname[0]
     legacy_fallbacks = [FallbackVar(varname=name, varunit=var_data.get("varunit", "")) for name in raw_varname[1:]]
-    combined = legacy_fallbacks + parsed_fallbacks
+    # A list-form varname merged onto its own normalized form (whose fallbacks
+    # already hold the list's tail) must not repeat those fallbacks.
+    combined = []
+    seen = set()
+    for fallback in legacy_fallbacks + parsed_fallbacks:
+        key = (str(fallback.varname).casefold(), fallback.varunit or "", fallback.convert or "")
+        if key not in seen:
+            seen.add(key)
+            combined.append(fallback)
     return primary, combined or None
 
 
@@ -980,6 +1114,13 @@ def _canonical_variable_overlays(raw_variables: dict | None) -> dict[str, Any]:
     for raw_name, var_data in (raw_variables or {}).items():
         name = canonical_variable_name(raw_name)
         if name in overlays and overlays[name] != var_data:
+            # Older catalogs contain an empty canonical placeholder beside a
+            # populated alias. Use the same rule as bundled descriptor loading.
+            if isinstance(overlays[name], dict) and _is_empty_value(overlays[name]):
+                overlays[name] = var_data
+                continue
+            if isinstance(var_data, dict) and _is_empty_value(var_data):
+                continue
             raise ValueError(f"Conflicting variable alias definitions for '{name}'")
         overlays[name] = var_data
     return overlays
@@ -1040,6 +1181,9 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
             variables.pop(delete_key, None)
     for var_name, var_data in _canonical_variable_overlays(overlay.get("variables")).items():
         variable_key = get_mapping_key_case_insensitive(variables, var_name) or var_name
+        if var_data is None:
+            variables.pop(variable_key, None)
+            continue
         variables[variable_key] = _merge_variable_mapping(
             variables.get(variable_key),
             var_data,
@@ -1054,8 +1198,11 @@ def _deep_merge_model(existing: ModelProfile, overlay: dict) -> ModelProfile:
             time_offset = {}
         elif isinstance(user_to, dict):
             for k, v in user_to.items():
-                if isinstance(v, dict) and isinstance(time_offset.get(k), dict):
-                    time_offset[k] = {**time_offset[k], **v}
+                if v is None:
+                    time_offset.pop(k, None)
+                elif isinstance(v, dict) and isinstance(time_offset.get(k), dict):
+                    merged = {**time_offset[k], **v}
+                    time_offset[k] = {field: value for field, value in merged.items() if value is not None}
                 else:
                     time_offset[k] = v
 

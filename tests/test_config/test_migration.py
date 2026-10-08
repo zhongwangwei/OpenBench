@@ -180,7 +180,9 @@ def test_migrated_config_validation_and_run_dry_run_agree(tmp_path: Path, monkey
     import numpy as np
     import xarray as xr
 
-    xr.Dataset({"runoff": ("time", np.array([1.0]))}).to_netcdf(ref_root / "runoff_2000.nc")
+    for year in (2000, 2001):
+        xr.Dataset({"runoff": ("time", np.array([1.0]))}).to_netcdf(ref_root / f"runoff_{year}.nc")
+        (sim_root / f"{year}.nc").touch()  # the migrated simulation has no prefix/suffix
 
     old = tmp_path / "old"
     old.mkdir()
@@ -265,17 +267,18 @@ def test_migrated_config_validation_and_run_dry_run_agree(tmp_path: Path, monkey
     migrated = tmp_path / "migrated.yaml"
     migrate_config(main, migrated)
 
-    from types import SimpleNamespace
-
     from openbench.data.registry import manager as mgr_mod
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
 
     class Registry:
         def get_resolution_variants(self, name):
             return {}
 
         def get_reference(self, name, **kwargs):
-            return SimpleNamespace(
+            return ReferenceDataset(
                 name=name,
+                description="",
+                category="Water",
                 data_type="grid",
                 tim_res="Month",
                 grid_res=0.5,
@@ -283,16 +286,7 @@ def test_migrated_config_validation_and_run_dry_run_agree(tmp_path: Path, monkey
                 timezone=0,
                 years=[2000, 2001],
                 root_dir=str(ref_root),
-                variables={
-                    "Runoff": SimpleNamespace(
-                        varname="runoff",
-                        varunit="mm day-1",
-                        sub_dir="",
-                        prefix="",
-                        suffix="",
-                        fulllist=None,
-                    )
-                },
+                variables={"Runoff": VariableMapping(varname="runoff", varunit="mm day-1", prefix="runoff_")},
                 _provenance={},
             )
 

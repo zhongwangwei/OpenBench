@@ -120,6 +120,7 @@ def test_notice_silent_when_clean(tmp_path, monkeypatch):
     monkeypatch.delenv(oa._SUPPRESS_ENV, raising=False)
     _write_overlay(tmp_path, {})  # empty overlay
     assert oa.maybe_emit_overlay_notice(tmp_path) is None
-    # a deliberate sparse delta is NOT bloat -> still silent
-    _write_overlay(tmp_path, {"CLARA_3_LowRes": {"variables": {"Surface_Albedo": {"varunit": "1"}}}})
+    # An override that has never shipped as a default is neither bloat nor
+    # a historical match; its intent needs no warning.
+    _write_overlay(tmp_path, {"CLARA_3_LowRes": {"variables": {"Surface_Albedo": {"varunit": "user_unit"}}}})
     assert oa.maybe_emit_overlay_notice(tmp_path) is None

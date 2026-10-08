@@ -324,13 +324,13 @@ CN05.1_MidRes:
   variables:
     Surface_Air_Temperature:
       varname: tm
-      varunit: ''
+      varunit: degree_Celsius
       sub_dir: Meteo/Surface_Air_Temperature/CN05.1
-      prefix: CN05.1_Tm_
+      prefix: CN05.1_Tm_1961
       suffix: _2021_daily_0P25
     Precipitation:
       varname: pre
-      varunit: ''
+      varunit: mm day-1
       sub_dir: Water/Precipitation/CN05.1
       prefix: CN05.1_Pre_1961
       suffix: _2021_daily_0P25

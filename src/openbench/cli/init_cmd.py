@@ -587,40 +587,61 @@ def _init_reference_registry_preflight(
     click.echo()
 
 
-def _validate_selected_reference_data(selected: dict[str, object]) -> None:
-    """Fail init when a selected registry entry does not resolve to local data."""
-    from openbench.cli.check import _expanded_reference_path, _has_nearby_netcdf_files
-    from openbench.config.adapter import _find_nc_dir
+def _validate_selected_reference_data(selected: dict[str, object], years: tuple[int, int] | None = None) -> None:
+    """Fail init when a selected registry entry does not resolve to local data.
+
+    With ``years`` (the evaluation period), also require the grid files
+    preprocessing will read, named from the entry's prefix/suffix.
+    """
+    from types import SimpleNamespace
+
+    from openbench.cli.check import (
+        _expanded_reference_path,
+        _file_candidate_names,
+        _probe_years,
+        data_file_findings,
+        reference_data_findings,
+    )
+    from openbench.config.adapter import reference_data_dir
+    from openbench.util.names import get_mapping_key_case_insensitive
 
     errors = []
+    cfg = SimpleNamespace(reference=SimpleNamespace(data_root=None))
     for variable, ref in _selected_reference_items(selected):
         name = getattr(ref, "name", "<unknown>")
-        raw_root = getattr(ref, "root_dir", None)
-        if not raw_root:
-            errors.append(f"{variable} / {name}: reference root is not configured")
-            continue
-        root, error = _expanded_reference_path(str(raw_root))
-        if error or root is None:
-            errors.append(f"{variable} / {name}: {error or 'reference root could not be resolved'}")
-            continue
-
-        station_matching = getattr(ref, "station_matching", None)
-        dataset_file = getattr(station_matching, "dataset_file", "") if station_matching else ""
-        if dataset_file:
-            from openbench.data.station_matcher import resolve_station_dataset, station_dataset_candidates
-
-            if resolve_station_dataset(root, dataset_file) is None:
-                tried = " or ".join(str(p) for p in station_dataset_candidates(root, dataset_file))
-                errors.append(f"{variable} / {name}: dataset file does not exist: {tried}")
-            continue
-
-        var_map = (getattr(ref, "variables", None) or {}).get(variable)
-        sub_dir = getattr(var_map, "sub_dir", None)
-        candidate = Path(_find_nc_dir(str(root / sub_dir), str(root), str(sub_dir))) if sub_dir else root
-        if not candidate.is_dir():
-            errors.append(f"{variable} / {name}: reference directory does not exist: {candidate}")
-        elif not _has_nearby_netcdf_files(candidate):
-            errors.append(f"{variable} / {name}: no NetCDF files found near: {candidate}")
+        mappings = getattr(ref, "variables", None) or {}
+        key = get_mapping_key_case_insensitive(mappings, variable)
+        var_map = mappings.get(key) if key is not None else None
+        root, directory = reference_data_dir(cfg, ref, var_map, None)
+        ref_errors, warnings, _info = reference_data_findings(ref, var_map, root, directory)
+        if (
+            not ref_errors
+            and not any("no NetCDF files" in message for message in warnings)
+            and getattr(ref, "data_type", None) != "stn"
+            and years is not None
+            and var_map is not None
+        ):
+            file_errors, file_warnings = data_file_findings(
+                "Reference",
+                str(_expanded_reference_path(str(directory))[0]),
+                prefix=getattr(var_map, "prefix", ""),
+                suffix=getattr(var_map, "suffix", ""),
+                data_groupby=getattr(ref, "data_groupby", "Year"),
+                years=_probe_years(list(years), getattr(ref, "years", None)),
+                prefix_fallback=getattr(var_map, "prefix_fallback", None),
+                compute=getattr(var_map, "compute", None),
+                standard_varname=variable,
+                fallback_varnames=_file_candidate_names(getattr(var_map, "varname", None))[:1]
+                + _file_candidate_names([], getattr(var_map, "fallbacks", None)),
+                candidate_varnames=_file_candidate_names(
+                    getattr(var_map, "varname", None), getattr(var_map, "fallbacks", None)
+                ),
+            )
+            ref_errors.extend(file_errors)
+            warnings.extend(file_warnings)
+        errors.extend(f"{variable} / {name}: {message}" for message in ref_errors)
+        for message in warnings:
+            click.secho(f"{variable} / {name}: {message}", fg="yellow")
 
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
@@ -859,7 +880,7 @@ def _infer_project_resolution_fields(selected_refs: dict, simulation: dict) -> d
     fields = {}
     # Every source must be able to supply the target cadence, so use the
     # coarsest known time resolution across simulations and references.
-    from openbench.data.registry.scanner import _tim_res_rank
+    from openbench.data.registry._tim_res import _tim_res_rank
 
     tim_res_values = _unique_non_null_values(
         [entry.get("tim_res") for entry in sim_entries] + [getattr(ref, "tim_res", None) for ref in refs]
@@ -2027,7 +2048,7 @@ def init_cmd(
                     if not candidate_vars:
                         raise click.ClickException("No reference data selected for evaluation variables.")
                     if not no_ref_check:
-                        _validate_selected_reference_data(selected_reference_objects)
+                        _validate_selected_reference_data(selected_reference_objects, years=(syear, eyear))
                     _warn_reference_year_coverage(selected_reference_objects, (syear, eyear))
                 selected_vars = candidate_vars
                 step = 4

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import re
+from contextlib import contextmanager
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -42,15 +44,9 @@ def _expanded_reference_path(raw: str) -> tuple[Path | None, str | None]:
 
 
 def _has_nearby_netcdf_files(path: Path) -> bool:
-    from openbench.data.coordinates import glob_nc
+    from openbench.data.file_lookup import iter_netcdf_paths
 
-    if glob_nc(path):
-        return True
-    try:
-        children = sorted(child for child in path.iterdir() if child.is_dir())
-    except OSError:
-        return False
-    return any(glob_nc(child) for child in children)
+    return next(iter_netcdf_paths(str(path)), None) is not None
 
 
 def _figlib_names(section: str) -> set[str]:
@@ -223,55 +219,442 @@ def _groupby_static_dataset_findings(cfg) -> list[str]:
     return errors
 
 
-def _reference_data_findings(cfg, resolved_ref) -> tuple[list[str], list[str], list[str]]:
-    if resolved_ref.status != "ok" or resolved_ref.ref_ds is None:
-        return [], [], []
+# Resolved reference directories for the check() call in progress. Resolving
+# one lists its data directory, and the reference, file and simulation checks
+# all need it, once per simulation and variable without this.
+_EFFECTIVE_REFERENCES: dict[tuple[int, int], tuple] | None = None
+_FILE_INVENTORIES: dict[str, list[str]] | None = None
+_UNREAD_FOLDERS: dict[str, list[str]] | None = None
 
-    raw_root = _reference_root_value(cfg, resolved_ref.ref_ds)
-    if not raw_root or not str(raw_root).strip():
+
+@contextmanager
+def _reference_resolution_cache():
+    global _EFFECTIVE_REFERENCES, _FILE_INVENTORIES, _UNREAD_FOLDERS
+    previous = _EFFECTIVE_REFERENCES, _FILE_INVENTORIES, _UNREAD_FOLDERS
+    _EFFECTIVE_REFERENCES, _FILE_INVENTORIES, _UNREAD_FOLDERS = {}, {}, {}
+    try:
+        yield
+    finally:
+        _EFFECTIVE_REFERENCES, _FILE_INVENTORIES, _UNREAD_FOLDERS = previous
+
+
+def _file_inventory(directory: str) -> list[str]:
+    from openbench.data.file_lookup import netcdf_inventory
+
+    if _FILE_INVENTORIES is None:
+        return netcdf_inventory(directory)
+    key = os.path.normcase(os.path.abspath(directory))
+    if key not in _FILE_INVENTORIES:
+        _FILE_INVENTORIES[key] = netcdf_inventory(directory)
+    return _FILE_INVENTORIES[key]
+
+
+def _unread_folders(directory: str) -> list[str]:
+    from openbench.data.file_lookup import unread_folders
+
+    if _UNREAD_FOLDERS is None:
+        return unread_folders(directory)
+    key = os.path.normcase(os.path.abspath(directory))
+    if key not in _UNREAD_FOLDERS:
+        _UNREAD_FOLDERS[key] = unread_folders(directory)
+    return _UNREAD_FOLDERS[key]
+
+
+def _with_reference_resolution_cache(function):
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        with _reference_resolution_cache():
+            return function(*args, **kwargs)
+
+    return wrapper
+
+
+def _effective_reference(cfg, resolved_ref):
+    cache = _EFFECTIVE_REFERENCES
+    key = (id(cfg), id(resolved_ref))
+    if cache is not None and key in cache:
+        return cache[key][2]
+    result = _resolve_effective_reference(cfg, resolved_ref)
+    if cache is not None:
+        cache[key] = (cfg, resolved_ref, result)  # holding both keeps their ids from being reused
+    return result
+
+
+def _resolve_effective_reference(cfg, resolved_ref):
+    from openbench.config.adapter import _apply_reference_override, _source_override, reference_data_dir
+
+    override = _source_override(cfg, resolved_ref.source_name) or _source_override(cfg, resolved_ref.resolved_name)
+    ref_ds, var_map = _apply_reference_override(
+        resolved_ref.ref_ds, resolved_ref.var_map, resolved_ref.var_name, override
+    )
+    root, directory = reference_data_dir(cfg, ref_ds, var_map, override)
+    return ref_ds, var_map, root, directory
+
+
+def reference_data_findings(ref_ds, var_map, root: str, directory: str):
+    """Common init/check directory and station-dataset validation."""
+    if not root or not str(root).strip():
         return (
-            [
-                f"Reference root is not configured for {resolved_ref.resolved_name}; "
-                "set reference.data_root or register the reference with --root-dir."
-            ],
+            ["Reference root is not configured; set reference.data_root or register the reference with --root-dir."],
             [],
             [],
         )
+    root_path, error = _expanded_reference_path(str(root))
+    path, path_error = _expanded_reference_path(str(directory))
+    if error or path_error or root_path is None or path is None:
+        return [error or path_error or "Reference root could not be resolved."], [], []
+    info = [f"effective root: {root_path}"]
+    matching = getattr(ref_ds, "station_matching", None)
+    dataset_file = getattr(matching, "dataset_file", "") if matching else ""
+    if dataset_file:
+        path = root_path
+    if not path.is_dir():
+        label = "Reference data path" if getattr(var_map, "sub_dir", None) else "Reference root"
+        return [f"{label} does not exist or is not a directory: {path}"], [], info
+    warnings = []
+    direct_path = root_path / (getattr(var_map, "sub_dir", None) or "")
+    if not dataset_file and path != direct_path:
+        warnings.append(f"Reference data path uses fallback: {path}")
+    if dataset_file:
+        from openbench.data.station_matcher import resolve_station_dataset, station_dataset_candidates
 
-    root_path, error = _expanded_reference_path(str(raw_root).strip())
-    if error:
-        return [error], [], []
-    if root_path is None:
-        return ["Reference root could not be resolved."], [], []
-
-    from openbench.config.adapter import _find_nc_dir
-
-    warnings: list[str] = []
-    info: list[str] = [f"effective root: {root_path}"]
-    sub_dir = getattr(resolved_ref.var_map, "sub_dir", None)
-
-    if sub_dir:
-        direct_path = root_path / sub_dir
-        candidate = Path(_find_nc_dir(str(direct_path), str(root_path), str(sub_dir)))
-        if candidate.exists() and candidate.is_dir():
-            if candidate != direct_path:
-                warnings.append(f"Reference data path uses fallback: {candidate}")
-            if not _has_nearby_netcdf_files(candidate):
-                warnings.append(f"Reference root has no NetCDF files found near: {candidate}")
-            return [], warnings, info
-        if direct_path.exists() and not direct_path.is_dir():
-            return [f"Reference data path is not a directory: {direct_path}"], warnings, info
-        return [f"Reference data path does not exist: {direct_path}"], warnings, info
-
-    if not root_path.exists() or not root_path.is_dir():
-        return [f"Reference root does not exist: {root_path}"], warnings, info
-    if not _has_nearby_netcdf_files(root_path):
-        warnings.append(f"Reference root has no NetCDF files found near: {root_path}")
+        if resolve_station_dataset(root_path, dataset_file) is None:
+            tried = " or ".join(str(p) for p in station_dataset_candidates(root_path, dataset_file))
+            return [f"Reference dataset file does not exist: {tried}"], warnings, info
+    elif not _has_nearby_netcdf_files(path):
+        if getattr(ref_ds, "data_type", "grid") != "stn":
+            # Gridded preprocessing reads files from this tree; with none it cannot run.
+            return [f"Reference data path has no NetCDF files: {path}"], warnings, info
+        # Station files may be listed by a station list rather than found here.
+        warnings.append(f"Reference root has no NetCDF files found near: {path}")
     return [], warnings, info
 
 
+def _reference_data_findings(cfg, resolved_ref) -> tuple[list[str], list[str], list[str]]:
+    if resolved_ref.status != "ok" or resolved_ref.ref_ds is None:
+        return [], [], []
+    return reference_data_findings(*_effective_reference(cfg, resolved_ref))
+
+
+def _probe_years(project_years: list[int], data_years: Any) -> list[int]:
+    """Check every required year, clipped when runtime uses an intersection."""
+    start, end = project_years[0], project_years[1]
+    if isinstance(data_years, list) and len(data_years) >= 2:
+        start, end = max(start, data_years[0]), min(end, data_years[1])
+    return list(range(start, end + 1)) if start <= end else []
+
+
+def _station_year_span(fulllist, root, default, *, side):
+    """Use the station list's coverage when it narrows catalog/project years."""
+    import csv
+
+    from openbench.config.adapter import _resolve_root_relative_path
+
+    if not fulllist:
+        return default
+    try:
+        starts, ends = [], []
+        with open(_resolve_root_relative_path(fulllist, root), newline="", encoding="utf-8-sig") as handle:
+            for row in csv.DictReader(handle):
+                fields = {key.casefold(): value for key, value in row.items() if key is not None}
+                try:
+                    start = next(fields[key] for key in (f"{side}_syear", "syear", "use_syear") if key in fields)
+                    end = next(fields[key] for key in (f"{side}_eyear", "eyear", "use_eyear") if key in fields)
+                    start, end = int(float(start)), int(float(end))
+                except (StopIteration, TypeError, ValueError, OverflowError):
+                    continue
+                if start <= end:
+                    starts.append(start)
+                    ends.append(end)
+        return [min(starts), max(ends)] if starts else default
+    except (OSError, csv.Error, UnicodeError):
+        return default  # The existing fulllist check reports unreadable paths.
+
+
+def _simulation_probe_years(cfg, variable, resolved_refs):
+    """Grid-only preprocessing reads project years; station pairs read overlaps."""
+    required = set()
+    references = [ref for ref in resolved_refs if ref.var_name == variable and ref.status == "ok"]
+    if not references:
+        return _probe_years(cfg.project.years, None)
+    for resolved in references:
+        ref, mapping, root, _directory = _effective_reference(cfg, resolved)
+        if str(getattr(ref, "data_type", "grid")).lower() != "stn":
+            return _probe_years(cfg.project.years, None)
+        span = _station_year_span(
+            getattr(mapping, "fulllist", None) or getattr(ref, "fulllist", None),
+            root,
+            getattr(ref, "years", None),
+            side="ref",
+        )
+        required.update(_probe_years(cfg.project.years, span))
+    return sorted(required)
+
+
+def _year_ranges(years: list[int]) -> str:
+    """``[2001, 2002, 2003, 2008]`` -> ``"2001–2003, 2008"``."""
+    ranges: list[str] = []
+    ordered = sorted(dict.fromkeys(years))
+    start = previous = None
+    for year in ordered + [None]:
+        if year is not None and previous is not None and year == previous + 1:
+            previous = year
+            continue
+        if start is not None:
+            ranges.append(str(start) if start == previous else f"{start}–{previous}")
+        start = previous = year
+    return ", ".join(ranges)
+
+
+def data_file_findings(
+    kind: str,
+    data_dir: str,
+    *,
+    prefix: str,
+    suffix: str,
+    data_groupby: str,
+    years: list[int],
+    prefix_fallback: Any = None,
+    compute: Any = None,
+    candidate_varnames: Any = (),
+    standard_varname: str = "",
+    fallback_varnames: Any = None,
+    inventory: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Check the files runtime selects, including variable-aware compute fallback."""
+    from openbench.data.compute import compute_dependency_names
+    from openbench.data.file_lookup import mixed_branches, prefix_candidates, select_data_files, year_matches
+
+    single = str(data_groupby).strip().lower() == "single"
+    dependencies = compute_dependency_names(compute) if compute else []
+    candidates = list(dict.fromkeys([*candidate_varnames, *dependencies]))
+    if inventory is None:
+        inventory = _file_inventory(data_dir)
+    layout_errors, layout_warnings = [], []
+    if not single and (unread := _unread_folders(data_dir)):
+        layout_warnings.append(
+            f"{kind} directory {data_dir} is read through its year folders; {', '.join(unread)} "
+            f"also {'holds' if len(unread) == 1 else 'hold'} NetCDF files that are not read "
+            "(set sub_dir to read such a folder instead)"
+        )
+
+    # Index once per prefix, not once per year. Selection still decides which
+    # prefix is usable from its file contents, exactly as preprocessing does.
+    indexed = (
+        {}
+        if single
+        else {
+            name: year_matches(data_dir, name, suffix, years, inventory=inventory)
+            for name in prefix_candidates(prefix or "", prefix_fallback)
+        }
+    )
+    selected, computed = {}, {}
+    for year in [None] if single else years:
+        files, used_compute = select_data_files(
+            data_dir,
+            prefix or "",
+            suffix or "",
+            year,
+            prefix_fallback=prefix_fallback,
+            candidate_varnames=candidates,
+            dependencies=dependencies,
+            inventory=inventory,
+            named_matches=None if single else {name: matches[year] for name, matches in indexed.items()},
+        )
+        selected[year] = files
+        if used_compute:
+            computed[year] = files
+
+    # Month/Day preprocessing computes each file before concatenating time.
+    # Only unconditional reads are required: ds.get() and conditional branches
+    # may legitimately omit an input, and an independent raw fallback may work.
+    if compute and str(data_groupby).strip().lower() not in {"single", "year"}:
+        from openbench.data.compute import compute_inputs_known, compute_required_inputs
+        from openbench.data.file_lookup import variable_names
+
+        required_names, sum_groups = compute_required_inputs(compute)
+        required = {name.lower() for name in required_names}
+        sum_groups = [{name.lower() for name in group} for group in sum_groups]
+        fallback_order = [*(candidate_varnames if fallback_varnames is None else fallback_varnames), standard_varname]
+        inputs = {name.lower() for name in dependencies}
+        failures = []
+        # Only the first and last selected file, in year order: opening every
+        # daily header made check slow. A file in between that lacks an input is
+        # still reported by preprocessing.
+        ordered = list(dict.fromkeys(path for files in selected.values() for path in files))
+        for path in dict.fromkeys(ordered[:1] + ordered[-1:]):
+            names = variable_names(path)
+            if names is None:
+                continue  # The runtime loader reports unreadable files.
+            missing = required - names
+            target = next((name.lower() for name in fallback_order if name and name.lower() in names), None)
+            partial_sum = any(group & names and not group <= names for group in sum_groups)
+            if missing and (partial_sum or not (compute_inputs_known(compute) and target and target not in inputs)):
+                failures.append(f"{os.path.relpath(path, data_dir)}: missing {', '.join(sorted(missing))}")
+        if failures:
+            details = "; ".join(failures[:3])
+            if len(failures) > 3:
+                details += f"; and {len(failures) - 3} more files"
+            layout_errors.append(
+                f"{kind} {data_groupby} compute runs on each file before combining time; "
+                f"inputs in separate files cannot satisfy it ({details})"
+            )
+
+    for found, inputs, what in (
+        (
+            {year: files for year, files in selected.items() if year not in computed},
+            candidates if dependencies else None,
+            f"{kind} files",
+        ),
+        (computed, dependencies, f"{kind} files holding the compute inputs ({', '.join(dependencies)})"),
+    ):
+        groups: dict[tuple, list] = {}
+        for year, branch_info in mixed_branches(data_dir, found, dependencies=inputs).items():
+            groups.setdefault(branch_info, []).append(year)
+        for (branches, repeated), branch_years in groups.items():
+            folders = ", ".join(f"{branch}/" for branch in branches)
+            span = "" if branch_years == [None] else f" for {_year_ranges(branch_years)}"
+            if repeated:
+                layout_errors.append(
+                    f"{what}{span} exist with the same names in several folders of {data_dir} ({folders}); "
+                    "preprocessing would read them together (set sub_dir to choose one folder)"
+                )
+            else:
+                layout_warnings.append(
+                    f"{what}{span} are split across folders of {data_dir} ({folders}) and are read together; "
+                    "check they belong to one dataset, or set sub_dir to choose one folder"
+                )
+    missing_years = [year for year, files in selected.items() if not files]
+    if not missing_years:
+        return layout_errors, layout_warnings
+    naming = f"prefix '{prefix or ''}', suffix '{suffix or ''}', data_groupby {data_groupby}"
+    if single:
+        missing = os.path.join(data_dir, f"{prefix or ''}{suffix or ''}.nc")
+        messages = [f"{kind} data file not found: {missing} ({naming})"]
+        from openbench.data.coordinates import glob_nc
+
+        nearby = get_close_matches(Path(missing).name, [p.name for p in glob_nc(Path(data_dir))], n=3, cutoff=0.4)
+        if nearby:
+            messages[0] += f"; nearby files: {', '.join(nearby)}"
+    else:
+        template = f"{prefix or ''}<year>*{suffix or ''}.nc"
+        messages = [
+            f"{kind} data files not found in {data_dir}: {template} for {_year_ranges(missing_years)} ({naming})"
+        ]
+    if compute:
+        note = (
+            f"; no files holding all compute inputs ({', '.join(dependencies)}) were found either"
+            if dependencies
+            else "; preprocessing will look for files holding the compute inputs"
+        )
+        return layout_errors, [*layout_warnings, *(f"{message}{note}" for message in messages)]
+    return [*messages, *layout_errors], layout_warnings
+
+
+def _file_candidate_names(varname, fallbacks=()) -> list[str]:
+    names = [varname] if isinstance(varname, str) else list(varname or [])
+    names.extend(
+        fallback.get("varname", "") if isinstance(fallback, dict) else getattr(fallback, "varname", "")
+        for fallback in fallbacks or []
+    )
+    return [name for name in dict.fromkeys(names) if name]
+
+
+def _naming_origin_hint(cfg, resolved_ref, var_map) -> str | None:
+    """Say where a file-naming field that differs from the bundled catalog was set."""
+    from openbench.config.adapter import _source_override
+    from openbench.data.registry import overlay_audit as oa
+    from openbench.util.names import normalize_name
+
+    match = oa._bundled_lookup(oa._bundled_catalog("references")).get(normalize_name(resolved_ref.resolved_name))
+    if match is None:
+        return None
+    bundled_var = oa._raw_variable(match[1].get("variables") or {}, resolved_ref.var_name) or {}
+    changed = [
+        field
+        for field in ("prefix", "suffix", "sub_dir")
+        if (getattr(var_map, field, None) or "") != (bundled_var.get(field) or "")
+    ]
+    if not changed:
+        return None
+    override = _source_override(cfg, resolved_ref.source_name) or _source_override(cfg, resolved_ref.resolved_name)
+    override_vars = override.get("variables") if isinstance(override.get("variables"), dict) else {}
+    var_override = next(
+        (value for key, value in override_vars.items() if str(key).lower() == str(resolved_ref.var_name).lower()), {}
+    )
+    fields = ", ".join(changed)
+    if isinstance(var_override, dict) and any(field in var_override for field in changed):
+        return f"{fields} set in reference.overrides of this config differ from the bundled catalog"
+    wanted = normalize_name(resolved_ref.resolved_name)
+    files = [str(path) for name, path in oa.per_file_overrides("references") if normalize_name(name) == wanted]
+    if files:
+        # Separate files merge after the catalog, and reset does not edit them.
+        return f"{fields} differ from the bundled catalog (set in {', '.join(files)}; edit or remove the entry there)"
+    return (
+        f"{fields} differ from the bundled catalog (set in your ~/.openbench registry overlay; "
+        f"`openbench registry reset {resolved_ref.resolved_name}` restores the bundled values)"
+    )
+
+
+def _reference_file_findings(cfg, resolved_ref, registry=None) -> tuple[list[str], list[str]]:
+    """Check the reference files preprocessing will read for one resolved reference."""
+    ref_ds, var_map, _data_root, ref_dir = _effective_reference(cfg, resolved_ref)
+    if getattr(ref_ds, "data_type", None) == "stn" or var_map is None:
+        return [], []
+    path, error = _expanded_reference_path(str(ref_dir))
+    if error or path is None or not path.is_dir() or not _has_nearby_netcdf_files(path):
+        return [], []  # the directory checks already report a missing or empty directory
+    required_years = _probe_years(
+        cfg.project.years,
+        None if getattr(cfg.project, "time_alignment", "intersection") == "strict" else getattr(ref_ds, "years", None),
+    )
+    if registry is None:
+        from openbench.data.registry.manager import get_registry
+
+        registry = get_registry()
+    station_years = set()
+    only_station_pairs = bool(cfg.simulation)
+    for entry in cfg.simulation.values():
+        profile = registry.get_model(entry.model) if hasattr(registry, "get_model") else None
+        values = _effective_sim_values(entry, profile, resolved_ref.var_name)
+        if str(values["data_type"]).lower() != "stn":
+            only_station_pairs = False
+            break
+        span = _station_year_span(values["fulllist"], entry.root_dir, cfg.project.years, side="sim")
+        station_years.update(_probe_years(cfg.project.years, span))
+    if only_station_pairs:
+        required_years = sorted(
+            station_years.intersection(_probe_years(cfg.project.years, getattr(ref_ds, "years", None)))
+        )
+    errors, warnings = data_file_findings(
+        "Reference",
+        str(path),
+        prefix=getattr(var_map, "prefix", ""),
+        suffix=getattr(var_map, "suffix", ""),
+        data_groupby=getattr(ref_ds, "data_groupby", "Year"),
+        years=required_years,
+        prefix_fallback=getattr(var_map, "prefix_fallback", None),
+        compute=getattr(var_map, "compute", None),
+        standard_varname=resolved_ref.var_name,
+        fallback_varnames=_file_candidate_names(getattr(var_map, "varname", None))[:1]
+        + _file_candidate_names([], getattr(var_map, "fallbacks", None)),
+        candidate_varnames=_file_candidate_names(
+            getattr(var_map, "varname", None), getattr(var_map, "fallbacks", None)
+        ),
+    )
+    if errors or warnings:
+        try:
+            hint = _naming_origin_hint(cfg, resolved_ref, var_map)
+        except Exception:  # a hint must never hide the finding itself
+            hint = None
+        if hint:
+            errors = [f"{message}; {hint}" for message in errors]
+            warnings = [f"{message}; {hint}" for message in warnings]
+    return errors, warnings
+
+
 def _tim_res_rank(value: str | None) -> int:
-    from openbench.data.registry.scanner import _tim_res_rank as scanner_tim_res_rank
+    from openbench.data.registry._tim_res import _tim_res_rank as scanner_tim_res_rank
 
     return scanner_tim_res_rank(value or "")
 
@@ -330,7 +713,7 @@ def _reference_metadata_findings(
     if resolved_ref.status != "ok" or resolved_ref.ref_ds is None:
         return errors, warnings
 
-    ref_ds = resolved_ref.ref_ds
+    ref_ds, _var_map, _root, _directory = _effective_reference(cfg, resolved_ref)
     ref_name = resolved_ref.resolved_name
     ref_tim_res = getattr(ref_ds, "tim_res", None)
     if ref_tim_res and target_tim_res:
@@ -356,7 +739,7 @@ def _reference_metadata_findings(
     warnings.extend(year_warnings)
 
     if file_checks and getattr(ref_ds, "data_type", None) == "stn":
-        var_map = resolved_ref.var_map
+        var_map = _var_map
         fulllist = getattr(var_map, "fulllist", None) or getattr(ref_ds, "fulllist", None)
         root_dir = getattr(ref_ds, "root_dir", None) or _reference_root_value(cfg, ref_ds)
         if fulllist:
@@ -377,6 +760,9 @@ def _reference_metadata_findings(
 
 
 def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]:
+    from openbench.config.adapter import simulation_file_layout
+
+    layout = simulation_file_layout(entry, model_profile, var_name)
     inline_variables = entry.variables or {}
     inline_key = get_mapping_key_case_insensitive(inline_variables, var_name)
     inline = inline_variables.get(inline_key, {}) if inline_key is not None else {}
@@ -399,10 +785,13 @@ def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]
             else (getattr(model_profile, "grid_res", None) if model_profile else None)
         ),
         "fulllist": inline.get("fulllist") if "fulllist" in inline else entry.fulllist,
-        "data_groupby": inline.get("data_groupby") or entry.data_groupby or "Year",
-        "sub_dir": inline.get("sub_dir") or getattr(profile_var, "sub_dir", None),
-        "prefix": inline.get("prefix", entry.prefix or getattr(profile_var, "prefix", "")),
-        "suffix": inline.get("suffix", entry.suffix or getattr(profile_var, "suffix", "")),
+        "dir": layout["dir"],
+        "data_groupby": layout["data_groupby"],
+        "sub_dir": inline.get("sub_dir")
+        if inline.get("sub_dir") is not None
+        else getattr(profile_var, "sub_dir", None),
+        "prefix": layout["prefix"],
+        "suffix": layout["suffix"],
     }
 
 
@@ -410,10 +799,10 @@ def _simulation_data_years(entry, values: dict[str, Any], *, max_workers: int | 
     if str(values["data_type"]).lower() == "stn":
         return None
 
-    root, error = _expanded_path(str(entry.root_dir), "Simulation root")
+    root, error = _expanded_path(str(values["dir"]), "Simulation root")
     if error or root is None:
         return None
-    data_dir = root / values["sub_dir"] if values["sub_dir"] else root
+    data_dir = root
 
     from openbench.data.coordinates import glob_nc
     from openbench.data.sim_scanner import _infer_time_coverage
@@ -485,6 +874,7 @@ def _simulation_findings(
     *,
     comparison_only: bool,
     only_drawing: bool = False,
+    resolved_refs=None,
 ) -> dict[str, dict[str, list[str]]]:
     findings: dict[str, dict[str, list[str]]] = {
         label: {"errors": [], "warnings": [], "info": []} for label in cfg.simulation
@@ -500,7 +890,21 @@ def _simulation_findings(
     if output_only:
         return findings
 
+    from openbench.config.adapter import simulation_file_layout
+    from openbench.config.resolver import resolve_all_references
+
+    if resolved_refs is None:
+        resolved_refs = (
+            resolve_all_references(cfg, registry, strict=False) if hasattr(registry, "get_reference") else []
+        )
+
+    probe_years = {
+        var_name: tuple(_simulation_probe_years(cfg, var_name, resolved_refs)) for var_name in cfg.evaluation.variables
+    }
     year_cache: dict[tuple[str, str, str, str, str], list[int] | None] = {}
+    file_cache: dict[tuple, tuple[list[str], list[str]]] = {}
+    inventory_cache: dict[str, list[str]] = {}
+    root_errors = {label for label, _message in simulation_root_errors(cfg)}
     for label, entry in cfg.simulation.items():
         can_validate_model = hasattr(registry, "get_model")
         model_profile = registry.get_model(entry.model) if can_validate_model else None
@@ -534,6 +938,34 @@ def _simulation_findings(
                 for message in year_warnings:
                     if message not in findings[label]["warnings"]:
                         findings[label]["warnings"].append(message)
+            layout = simulation_file_layout(entry, model_profile, var_name)
+            if label not in root_errors and str(layout["data_type"]).lower() != "stn":
+                file_key = (
+                    str(layout["dir"]),
+                    str(layout["prefix"] or ""),
+                    str(layout["suffix"] or ""),
+                    str(layout["data_groupby"] or ""),
+                    (layout["prefix_fallback"],)
+                    if isinstance(layout["prefix_fallback"], str)
+                    else tuple(layout["prefix_fallback"] or ()),
+                    var_name,
+                    str(layout["compute"] or ""),
+                    tuple(_simulation_candidate_names(layout)),
+                    probe_years[var_name],
+                )
+                if file_key not in file_cache:
+                    file_cache[file_key] = _simulation_file_findings(
+                        layout, file_key[-1], inventory_cache=inventory_cache, standard_varname=var_name
+                    )
+                file_errors, file_warnings = file_cache[file_key]
+                for message in file_errors:
+                    message = f"{var_name}: {message}"
+                    if message not in findings[label]["errors"]:
+                        findings[label]["errors"].append(message)
+                for message in file_warnings:
+                    message = f"{var_name}: {message}"
+                    if message not in findings[label]["warnings"]:
+                        findings[label]["warnings"].append(message)
             if str(values["data_type"]).lower() == "stn":
                 fulllist = values["fulllist"]
                 if fulllist:
@@ -558,6 +990,76 @@ def _simulation_findings(
                     )
 
     return findings
+
+
+def _simulation_candidate_names(layout) -> list[str]:
+    profile_var = layout.get("profile_var")
+    inline = layout.get("inline_vars", {})
+    return [
+        *_file_candidate_names(getattr(profile_var, "varname", None), getattr(profile_var, "fallbacks", None)),
+        *_file_candidate_names(inline.get("varname"), inline.get("fallbacks")),
+    ]
+
+
+def _simulation_file_findings(
+    layout: dict[str, Any],
+    years: tuple[int, ...],
+    *,
+    inventory_cache: dict[str, list[str]] | None = None,
+    standard_varname: str = "",
+) -> tuple[list[str], list[str]]:
+    """Check the simulation files preprocessing will read for one variable layout."""
+    path, error = _expanded_path(str(layout["dir"]), "Simulation data directory")
+    if error or path is None:
+        return [error] if error else [], []
+    if not path.is_dir():
+        return [f"Simulation data directory does not exist: {path}"], []
+    if inventory_cache is None:
+        inventory_cache = {}
+    if str(path) not in inventory_cache:
+        inventory_cache[str(path)] = _file_inventory(str(path))
+    inventory = inventory_cache[str(path)]
+    if not inventory:
+        return [f"Simulation data directory has no NetCDF files: {path}"], []
+    return data_file_findings(
+        "Simulation",
+        str(path),
+        prefix=layout["prefix"],
+        suffix=layout["suffix"],
+        data_groupby=layout["data_groupby"],
+        years=list(years),
+        prefix_fallback=layout["prefix_fallback"],
+        compute=layout["compute"],
+        candidate_varnames=_simulation_candidate_names(layout),
+        standard_varname=standard_varname,
+        fallback_varnames=_file_candidate_names(
+            layout.get("inline_vars", {}).get("varname", getattr(layout.get("profile_var"), "varname", None))
+        )[:1]
+        + _file_candidate_names([], layout.get("inline_vars", {}).get("fallbacks"))
+        + _file_candidate_names([], getattr(layout.get("profile_var"), "fallbacks", None)),
+        inventory=inventory,
+    )
+
+
+@_with_reference_resolution_cache
+def data_file_errors(cfg, resolved, registry) -> list[str]:
+    """Raw-data errors ``openbench check`` reports, for ``openbench run --dry-run``.
+
+    The reference and simulation lookups are the ones check and preprocessing
+    use, so a dry run no longer accepts a configuration whose files are missing.
+    """
+    errors = []
+    for r in resolved or []:
+        if getattr(r, "status", "ok") != "ok":
+            continue  # the resolver preflight already reports it
+        ref_errors, _warnings, _info = _reference_data_findings(cfg, r)
+        if not ref_errors:
+            ref_errors, _warnings = _reference_file_findings(cfg, r, registry)
+        errors.extend(f"{r.var_name} → {r.source_name}: {message}" for message in ref_errors)
+    findings = _simulation_findings(cfg, registry, comparison_only=False, resolved_refs=resolved)
+    for label, label_findings in findings.items():
+        errors.extend(f"{label}: {message}" for message in label_findings["errors"])
+    return errors
 
 
 def _format_optional_list(value: Any) -> str:
@@ -588,8 +1090,9 @@ def _format_optional_list(value: Any) -> str:
     help="Validate only specified evaluation variable (repeatable). --variables retained as alias.",
 )
 @click.argument("config", type=click.Path(exists=True, file_okay=True, dir_okay=False))
+@_with_reference_resolution_cache
 def check(config, comparison_only=False, strict_reference=False, variables=()):
-    """Validate config file and check data availability."""
+    """Validate config and check data files for every required evaluation year."""
     from openbench.cli.run import _expand_config_paths
     from openbench.config import ConfigError, load_config
 
@@ -648,15 +1151,15 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
         if r.status == "ok":
             if r.resolved_name != r.source_name:
                 click.secho(
-                    f"  ✓ {r.var_name} → {r.source_name} → {r.resolved_name} "
+                    f"  • {r.var_name} → {r.source_name} → {r.resolved_name} "
                     f"({r.ref_ds.data_type}, {r.ref_ds.tim_res}, "
                     f"{f'{r.ref_ds.grid_res}°' if r.ref_ds.grid_res is not None else 'N/A'})",
                     fg="cyan",
                 )
             else:
                 click.secho(
-                    f"  ✓ {r.var_name} → {r.source_name} ({r.ref_ds.data_type}, {r.ref_ds.tim_res})",
-                    fg="green",
+                    f"  • {r.var_name} → {r.source_name} ({r.ref_ds.data_type}, {r.ref_ds.tim_res})",
+                    fg="cyan",
                 )
             ds_prov = getattr(r.ref_ds, "_provenance", None) or {}
             for fld in PROVENANCE_FIELDS:
@@ -693,10 +1196,15 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
                 target_tim_res,
                 file_checks=not comparison_only,
             )
-            if comparison_only:
+            if comparison_only or cfg.project.only_drawing:
+                # Output-only modes read existing results, not the raw reference files.
                 ref_errors, ref_warnings, ref_info = [], [], []
             else:
                 ref_errors, ref_warnings, ref_info = _reference_data_findings(cfg, r)
+                if not ref_errors and not cfg.project.only_drawing:
+                    file_errors, file_warnings = _reference_file_findings(cfg, r, mgr)
+                    ref_errors = [*ref_errors, *file_errors]
+                    ref_warnings = [*ref_warnings, *file_warnings]
             for message in ref_info:
                 click.echo(f"    {message}")
             for message in [*ref_meta_errors, *ref_errors]:
@@ -733,6 +1241,7 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
         mgr,
         comparison_only=comparison_only,
         only_drawing=cfg.project.only_drawing,
+        resolved_refs=resolved,
     )
     for label, entry in cfg.simulation.items():
         label_findings = sim_findings[label]

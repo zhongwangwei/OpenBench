@@ -9,6 +9,7 @@ import yaml
 from click.testing import CliRunner
 
 from openbench.cli.main import cli
+from openbench.data.registry.manager import RegistryManager
 
 runner = CliRunner()
 
@@ -2720,8 +2721,10 @@ def test_model_register_preserves_canonical_profile_name_when_input_case_differs
     descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
         "CoLM2024"
     ]
-    assert descriptor["name"] == "CoLM2024"
+    # The overlay of a bundled profile keeps only changed fields; its name is the catalog key.
+    assert descriptor.get("name", "CoLM2024") == "CoLM2024"
     assert descriptor["variables"]["Snow_Depth"]["varname"] == "sd"
+    assert RegistryManager(user_dir=home / ".openbench").get_model("colm2024").name == "CoLM2024"
 
 
 def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch):
@@ -4338,6 +4341,105 @@ def test_init_validates_every_selected_reference(tmp_path):
         _validate_selected_reference_data({"Latent_Heat": refs})
 
 
+def test_init_reference_check_requires_files_named_by_the_catalog(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    data_dir = tmp_path / "Meteo" / "CN05.1"
+    data_dir.mkdir(parents=True)
+    (data_dir / "CN05.1_Tm_1961_2021_daily_0P25.nc").touch()
+
+    def reference(prefix):
+        var = VariableMapping(
+            varname="tm", varunit="", prefix=prefix, suffix="_2021_daily_0P25", sub_dir="Meteo/CN05.1"
+        )
+        return ReferenceDataset(
+            name="CN05.1_MidRes",
+            description="",
+            category="Meteorology",
+            data_type="grid",
+            tim_res="Day",
+            data_groupby="Single",
+            timezone=0,
+            years=[1961, 2021],
+            variables={"Surface_Air_Temperature": var},
+            root_dir=str(tmp_path),
+        )
+
+    with pytest.raises(click.ClickException, match=r"CN05\.1_Tm__2021_daily_0P25\.nc"):
+        _validate_selected_reference_data({"Surface_Air_Temperature": reference("CN05.1_Tm_")}, years=(2000, 2010))
+    _validate_selected_reference_data({"Surface_Air_Temperature": reference("CN05.1_Tm_1961")}, years=(2000, 2010))
+
+
+def test_init_reference_check_accepts_station_named_files(tmp_path, capsys):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    ref = ReferenceDataset(
+        name="StationRef",
+        description="",
+        category="Energy",
+        data_type="stn",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2010],
+        root_dir=str(tmp_path),
+        variables={"Latent_Heat": VariableMapping(varname="Qle", varunit="W m-2")},
+    )
+
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+    assert "no NetCDF files found" in capsys.readouterr().out
+    (tmp_path / "AU-Tum.nc").touch()
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+
+
+def test_init_reference_check_resolves_nested_grid_directory_without_sub_dir(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    data_dir = tmp_path / "0p25deg-daily"
+    data_dir.mkdir()
+    (data_dir / "reference.nc").touch()
+    ref = ReferenceDataset(
+        name="GridRef",
+        description="",
+        category="Energy",
+        data_type="grid",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2010],
+        root_dir=str(tmp_path),
+        variables={"Latent_Heat": VariableMapping(varname="Qle", varunit="W m-2", prefix="reference", sub_dir="")},
+    )
+
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+
+
+def test_init_reference_check_rejects_an_empty_grid_directory(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    (tmp_path / "Meteo" / "CN05.1").mkdir(parents=True)
+    var = VariableMapping(varname="tm", varunit="", prefix="CN05.1_Tm_1961", suffix="_2021", sub_dir="Meteo/CN05.1")
+    reference = ReferenceDataset(
+        name="CN05.1_MidRes",
+        description="",
+        category="Meteorology",
+        data_type="grid",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[1961, 2021],
+        variables={"Surface_Air_Temperature": var},
+        root_dir=str(tmp_path),
+    )
+
+    with pytest.raises(click.ClickException, match="no NetCDF files"):
+        _validate_selected_reference_data({"Surface_Air_Temperature": reference}, years=(2000, 2010))
+
+
 def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
 
@@ -4413,7 +4515,7 @@ def test_init_reloads_reference_status_after_overlay_creation(tmp_path, monkeypa
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(init_module, "ensure_user_registry_overlays", fake_ensure_user_registry_overlays)
     monkeypatch.setattr(init_module, "_init_reference_registry_preflight", fake_preflight)
-    monkeypatch.setattr(init_module, "_validate_selected_reference_data", lambda selected: None)
+    monkeypatch.setattr(init_module, "_validate_selected_reference_data", lambda selected, **kwargs: None)
     _install_single_reference_registry(monkeypatch)
 
     output = tmp_path / "openbench.yaml"
@@ -5729,7 +5831,7 @@ def test_check_fails_when_resolved_reference_root_is_missing(tmp_path, monkeypat
     assert "Ready to run" not in result.output
 
 
-def test_check_warns_when_resolved_reference_root_has_no_netcdf_files(tmp_path, monkeypatch):
+def test_check_rejects_resolved_grid_reference_root_without_netcdf_files(tmp_path, monkeypatch):
     from openbench.data.registry import manager as mgr_mod
 
     ref_root = tmp_path / "empty-reference"
@@ -5782,9 +5884,22 @@ def test_check_warns_when_resolved_reference_root_has_no_netcdf_files(tmp_path, 
 
     result = runner.invoke(cli, ["check", str(config_path)])
 
-    assert result.exit_code == 0, result.output
-    assert "no NetCDF files found" in result.output
-    assert "Ready to run" in result.output
+    # Gridded preprocessing reads files from this tree; with none, the run cannot start.
+    assert result.exit_code == 1, result.output
+    assert "Reference data path has no NetCDF files" in result.output
+
+
+def test_station_reference_root_without_netcdf_files_is_only_a_warning(tmp_path):
+    from types import SimpleNamespace
+
+    from openbench.cli.check import reference_data_findings
+
+    ref = SimpleNamespace(data_type="stn", station_matching=None)
+    var_map = SimpleNamespace(sub_dir="")
+    errors, warnings, _info = reference_data_findings(ref, var_map, str(tmp_path), str(tmp_path))
+
+    assert errors == []
+    assert any("no NetCDF files found" in message for message in warnings)
 
 
 def test_run_dry_run_fails_on_missing_simulation_root(tmp_path):
@@ -6717,6 +6832,8 @@ def test_run_dry_run_dump_config_is_read_only(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(mgr_mod, "get_registry", lambda: MockRegistry())
+    for year in (2000, 2001):  # the dry run checks the data files preprocessing reads
+        (tmp_path / f"{year}.nc").touch()
 
     result = runner.invoke(cli, ["run", "--dump-config", "--dry-run", str(config_path)])
 

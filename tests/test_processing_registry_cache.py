@@ -546,6 +546,47 @@ def test_select_var_computes_from_dependency_files_found_by_lookup(tmp_path):
     assert float(result.values[0]) == 3.0
 
 
+@pytest.mark.parametrize("item", ["Suspended_Sediment_Concentration", "Suspended_Sediment_Load"])
+@pytest.mark.parametrize("parts", [(1, 3), (1, 2, 3, 4), (1, 2, 3)])
+def test_select_var_sediment_requires_complete_size_classes(tmp_path, item, parts):
+    import openbench.data.processing as processing
+    from openbench.data.compute import ComputeIntegrityError
+    from openbench.data.registry.manager import RegistryManager
+
+    mapping = RegistryManager(user_dir=tmp_path / "user").get_model("CoLM2024").variables[item]
+    prefix = "f_sedcon_" if item == "Suspended_Sediment_Concentration" else "f_sedout_"
+    variables = {f"{prefix}{part}": ("time", [float(part)]) for part in parts}
+    variables[item] = ("time", [999.0])
+    path = tmp_path / "sediment.nc"
+    xr.Dataset(variables, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    processor.item = item
+    processor.SimA_compute = mapping.compute
+    processor.sim_varname = [mapping.varname]
+    processor.sim_data_type = processor.ref_data_type = "grid"
+    processor.sim_tim_res = processor.compare_tim_res = "Day"
+
+    if parts == (1, 2, 3):
+        out = processor.select_var(2000, 2000, "Day", path, [mapping.varname], "sim")
+        np.testing.assert_allclose(out.values, [6.0 * 2650])
+    else:
+        with pytest.raises(ComputeIntegrityError, match=prefix):
+            processor.select_var(2000, 2000, "Day", path, [mapping.varname], "sim")
+
+
+def test_select_var_preserves_raw_fallback_for_optional_compute_dependency(tmp_path):
+    import openbench.data.processing as processing
+
+    path = tmp_path / "runoff.nc"
+    xr.Dataset({"runoff": ("time", [2.0])}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    processor.SimA_compute = "ds['rain'] + ds['snow']"
+
+    out = processor.select_var(2000, 2000, "Day", path, ["runoff"], "sim")
+
+    np.testing.assert_allclose(out.values, [2.0])
+
+
 def test_find_single_file_returns_all_undated_compute_dependencies(tmp_path):
     import openbench.data.processing as processing
 
@@ -705,7 +746,7 @@ def _sediment_lookup(tmp_path, monkeypatch, item, files):
 )
 def test_a_month_missing_size_classes_stops_instead_of_summing_part(tmp_path, monkeypatch, item, prefix):
     """January keeps class 1 in the routing file and the rest elsewhere; February is whole."""
-    from openbench.data.compute import MissingComputeVariable, execute_compute
+    from openbench.data.compute import ComputeIntegrityError, execute_compute
     from openbench.data.registry.manager import RegistryManager
 
     files = {
@@ -721,7 +762,7 @@ def test_a_month_missing_size_classes_stops_instead_of_summing_part(tmp_path, mo
     with xr.open_dataset(by_name["case_hist_unitcat_1985-02.nc"]) as february:
         np.testing.assert_allclose(execute_compute(february, compute, item).values, [6.0 * 2650])
     with xr.open_dataset(by_name["case_hist_unitcat_1985-01.nc"]) as january:
-        with pytest.raises(MissingComputeVariable, match=f"{prefix}2"):
+        with pytest.raises(ComputeIntegrityError, match=f"{prefix}2"):
             execute_compute(january, compute, item)
 
 
@@ -756,3 +797,107 @@ def test_sediment_compute_dependencies_name_every_size_class(monkeypatch, tmp_pa
     processor.item = "Suspended_Sediment_Load"
 
     assert processor._compute_dependency_varnames_for_file_lookup("sim") == ["f_sedout_1", "f_sedout_2", "f_sedout_3"]
+
+
+@pytest.mark.parametrize("profile_compute", [False, True])
+@pytest.mark.parametrize(
+    "expression,error_type",
+    [
+        ("ds.sum_prefix('runoff_', 0)", "integrity"),
+        ("ds.sum_prefix('runoff_')", "compute"),
+        ("ds.sum_prefx('runoff_', 3)", "compute"),
+        ("ds['runoff'] + ds['missing']", "missing"),
+        ("ds.runoff + ds['missing']", "missing"),
+        ("ds.get('runoff') + ds['missing']", "missing"),
+    ],
+)
+def test_select_var_does_not_hide_failed_derivation(tmp_path, monkeypatch, profile_compute, expression, error_type):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as manager
+    from openbench.data.compute import ComputeError, ComputeIntegrityError, MissingComputeVariable
+
+    path = tmp_path / "runoff.nc"
+    xr.Dataset({"runoff": ("time", [2.0])}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    if profile_compute:
+        profile = ModelProfile(
+            name="ModelA",
+            description="test",
+            variables={"Runoff": VariableMapping(varname="runoff", varunit="mm", compute=expression)},
+        )
+        monkeypatch.setattr(manager, "get_registry", lambda: _FakeRegistry(profile))
+    else:
+        processor.SimA_compute = expression
+    expected = {
+        "integrity": ComputeIntegrityError,
+        "compute": ComputeError,
+        "missing": MissingComputeVariable,
+    }[error_type]
+    with pytest.raises(expected, match=r"runoff.nc.*2000"):
+        processor.select_var(2000, 2000, "Day", path, ["runoff"], "sim")
+
+
+@pytest.mark.parametrize("profile_compute", [False, True])
+def test_select_var_all_missing_parts_allows_standard_result(tmp_path, monkeypatch, profile_compute):
+    import openbench.data.processing as processing
+    import openbench.data.registry.manager as manager
+
+    path = tmp_path / "runoff.nc"
+    xr.Dataset({"Runoff": ("time", [7.0])}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    expression = "ds.sum_prefix('f_runoff_', 3)"
+    if profile_compute:
+        profile = ModelProfile(
+            name="ModelA",
+            description="test",
+            variables={"Runoff": VariableMapping(varname="f_runoff_1", varunit="mm", compute=expression)},
+        )
+        monkeypatch.setattr(manager, "get_registry", lambda: _FakeRegistry(profile))
+    else:
+        processor.SimA_compute = expression
+    result = processor.select_var(2000, 2000, "Day", path, ["f_runoff_1"], "sim")
+    np.testing.assert_allclose(result.values, [7.0])
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        " ds['runoff'] + ds['missing']",
+        "t = ds['runoff'];\n    t + ds['missing']",
+        # Computed keys hide the input from the parser; the fallback must not be trusted.
+        "key = 'runoff'; ds[key] + ds['missing']",
+        "ds[['runoff']]['runoff'] + ds['missing']",
+    ],
+)
+def test_select_var_whitespace_in_compute_cannot_expose_raw_input(tmp_path, expression):
+    import openbench.data.processing as processing
+    from openbench.data.compute import MissingComputeVariable
+
+    path = tmp_path / "runoff.nc"
+    xr.Dataset({"runoff": ("time", [2.0])}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    processor.SimA_compute = expression
+
+    with pytest.raises(MissingComputeVariable, match=r"runoff.nc.*2000"):
+        processor.select_var(2000, 2000, "Day", path, ["runoff"], "sim")
+
+
+@pytest.mark.parametrize("compute,raw_is_input", [("ds['runoff'] * 2", True), ("ds['rain'] + ds['snow']", False)])
+def test_select_var_any_derivation_failure_keeps_compute_inputs_out_of_fallback(tmp_path, compute, raw_is_input):
+    import openbench.data.processing as processing
+
+    path = tmp_path / "runoff.nc"
+    xr.Dataset({"runoff": ("time", [2.0])}, coords={"time": pd.date_range("2000-01-01", periods=1)}).to_netcdf(path)
+    processor = _make_processor(processing)
+    processor.SimA_compute = compute
+
+    def broken_filter(*args, **kwargs):
+        raise RuntimeError("filter broke")
+
+    processor.apply_custom_filter = broken_filter
+    if raw_is_input:
+        with pytest.raises(RuntimeError, match="filter broke"):
+            processor.select_var(2000, 2000, "Day", path, ["runoff"], "sim")
+    else:
+        out = processor.select_var(2000, 2000, "Day", path, ["runoff"], "sim")
+        np.testing.assert_allclose(out.values, [2.0])

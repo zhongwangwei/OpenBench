@@ -15,9 +15,9 @@ before evaluation to prevent code injection.
 from __future__ import annotations
 
 import ast
-import re
 import logging
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -28,22 +28,172 @@ from openbench.util.names import get_xarray_key_case_insensitive
 logger = logging.getLogger(__name__)
 
 
-_DS_ITEM_PATTERN = re.compile(r"ds\[['\"]([^'\"]+)['\"]\]")
-_SUM_PREFIX_PATTERN = re.compile(r"sum_prefix\(\s*['\"]([^'\"]+)['\"]\s*,\s*(\d+)\s*\)")
+def _parsed_steps(expression: Any) -> list[ast.AST]:
+    """Parse each ``;`` step the way :func:`execute_compute` runs it.
+
+    Steps are stripped first, so leading whitespace or an indented line after
+    ``;`` (both fine at evaluation) does not hide the expression's inputs. A
+    step that does not parse is skipped; evaluation reports it as an error.
+    """
+    trees = []
+    for step in str(expression or "").split(";"):
+        step = step.strip()
+        if not step:
+            continue
+        try:
+            trees.append(ast.parse(step))
+        except SyntaxError:
+            continue
+    return trees
+
+
+# Dataset attributes that describe the dataset without reading a variable.
+_METADATA_ATTRIBUTES = frozenset({"dims", "sizes", "attrs"})
+
+
+def _string_constant(node: Any) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
+def _listed_dataset_use(node: ast.Name, parents: dict[int, ast.AST]) -> bool:
+    """Whether this use of ``ds`` reads only what :func:`compute_dependency_names` lists."""
+    parent = parents.get(id(node))
+    if isinstance(parent, ast.Subscript) and parent.value is node:
+        return _string_constant(parent.slice)
+    if isinstance(parent, ast.Compare):
+        # 'name' in ds tests membership without reading a value.
+        return any(
+            comparator is node and isinstance(op, (ast.In, ast.NotIn))
+            for op, comparator in zip(parent.ops, parent.comparators)
+        )
+    if not (isinstance(parent, ast.Attribute) and parent.value is node):
+        return False
+    call = parents.get(id(parent))
+    if isinstance(call, ast.Call) and call.func is parent:
+        kwargs = {kw.arg: kw.value for kw in call.keywords}
+        if parent.attr == "get":
+            return _string_constant(call.args[0] if call.args else kwargs.get("key"))
+        if parent.attr == "sum_prefix":
+            prefix = call.args[0] if call.args else kwargs.get("prefix")
+            count = call.args[1] if len(call.args) > 1 else kwargs.get("parts")
+            return (
+                _string_constant(prefix)
+                and isinstance(count, ast.Constant)
+                and type(count.value) is int
+                and count.value > 0
+            )
+        return False
+    return parent.attr in _METADATA_ATTRIBUTES or not hasattr(xr.Dataset, parent.attr)
+
+
+@lru_cache(maxsize=256)
+def _inputs_known(expression: str) -> bool:
+    steps = [step.strip() for step in expression.split(";") if step.strip()]
+    trees = _parsed_steps(expression)
+    if len(trees) != len(steps):
+        return False
+    for tree in trees:
+        parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "ds" and not _listed_dataset_use(node, parents):
+                return False
+    return True
+
+
+def compute_inputs_known(expression: Any) -> bool:
+    """True when :func:`compute_dependency_names` lists every variable the expression can read.
+
+    Every ``;`` step must parse, and ``ds`` may appear only as ``ds['name']``,
+    ``ds.name``, ``ds.get('name')``, ``ds.sum_prefix('prefix', n)``,
+    ``'name' in ds`` or a metadata attribute such as ``ds.dims``. A computed
+    key (``ds[key]``), a list (``ds[['a']]``), ``ds.data_vars[...]`` or ``ds``
+    passed on may read any variable, so no raw variable is provably independent.
+    """
+    return _inputs_known(str(expression or ""))
+
+
+def compute_required_inputs(expression: Any) -> tuple[list[str], list[list[str]]]:
+    """Statically certain reads, excluding conditional branches and optional get().
+
+    This is a lower bound, not validation of arbitrary expressions. It lets
+    preflight reject demonstrably incomplete per-file inputs without requiring
+    every alternative in a conditional expression to exist. The second result
+    groups mandatory sum_prefix parts: partial sums disallow raw fallback.
+    """
+    required = []
+    sum_groups = []
+    pending = list(reversed(_parsed_steps(expression)))
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.IfExp):
+            children = [node.test]
+        elif isinstance(node, ast.BoolOp):
+            children = node.values[:1]
+        elif isinstance(node, ast.Compare):
+            children = [node.left, *node.comparators[:1]]
+        else:
+            children = list(ast.iter_child_nodes(node))
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "ds"
+            ):
+                children.remove(node.func)  # A dataset method is not a variable read.
+                if node.func.attr == "sum_prefix" or (
+                    node.func.attr == "get"
+                    and len(node.args) < 2
+                    and not any(keyword.arg == "default" for keyword in node.keywords)
+                ):
+                    required.extend(compute_dependency_names(ast.unparse(node)))
+                    if node.func.attr == "sum_prefix":
+                        sum_groups.append(compute_dependency_names(ast.unparse(node)))
+        if isinstance(node, (ast.Subscript, ast.Attribute)) and isinstance(node.value, ast.Name):
+            if node.value.id == "ds":
+                required.extend(compute_dependency_names(ast.unparse(node)))
+        pending.extend(reversed(children))
+    return list(dict.fromkeys(required)), sum_groups
 
 
 def compute_dependency_names(expression: Any) -> list[str]:
-    """Dataset variables a compute expression reads, in order and without repeats.
+    """Names read through dataset indexing, attributes, get(), and sum_prefix()."""
+    trees = _parsed_steps(expression)
+    calls = {id(node.func) for tree in trees for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    names = []
+    parts = []
+    for node in (node for tree in trees for node in ast.walk(tree)):
+        key = None
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id == "ds":
+            key = node.slice
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "ds":
+            if id(node) not in calls and not hasattr(xr.Dataset, node.attr):
+                names.append(node.attr)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "ds"
+        ):
+            kwargs = {kw.arg: kw.value for kw in node.keywords}
+            if node.func.attr == "get":
+                key = node.args[0] if node.args else kwargs.get("key")
+            elif node.func.attr == "sum_prefix":
+                prefix = node.args[0] if node.args else kwargs.get("prefix")
+                count = node.args[1] if len(node.args) > 1 else kwargs.get("parts")
+                if (
+                    isinstance(prefix, ast.Constant)
+                    and isinstance(prefix.value, str)
+                    and isinstance(count, ast.Constant)
+                    and type(count.value) is int
+                    and count.value > 0
+                ):
+                    parts.extend(f"{prefix.value}{index}" for index in range(1, count.value + 1))
+        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+            names.append(key.value)
+    return list(dict.fromkeys(name for name in [*names, *parts] if name))
 
-    Covers ``ds['name']`` and the parts of ``ds.sum_prefix('f_sedcon_', 3)``
-    (``f_sedcon_1`` .. ``f_sedcon_3``), so file lookup and scanning find every
-    file such an expression needs.
-    """
-    text = str(expression or "")
-    names = list(_DS_ITEM_PATTERN.findall(text))
-    for prefix, parts in _SUM_PREFIX_PATTERN.findall(text):
-        names.extend(f"{prefix}{index}" for index in range(1, int(parts) + 1))
-    return list(dict.fromkeys(name for name in names if name))
+
+_NO_DEFAULT = object()
 
 
 class _CaseInsensitiveDatasetProxy:
@@ -83,19 +233,31 @@ class _CaseInsensitiveDatasetProxy:
         stops the computation instead of giving a partial sum.
         """
         if isinstance(parts, bool) or not isinstance(parts, int) or parts < 1:
-            raise ComputeError(f"sum_prefix({prefix!r}, parts) needs a positive whole number of parts, got {parts!r}")
+            raise ComputeIntegrityError(
+                f"sum_prefix({prefix!r}, parts) needs a positive whole number of parts, got {parts!r}"
+            )
         wanted = str(prefix).lower()
         numbered = {}
         for name in self._dataset.data_vars:
             suffix = str(name).lower()[len(wanted) :]
             if str(name).lower().startswith(wanted) and suffix.isdigit():
+                if int(suffix) in numbered:
+                    raise ComputeIntegrityError(
+                        f"{numbered[int(suffix)]} and {name} are both part {int(suffix)} of {prefix!r}; "
+                        "keep one name per part"
+                    )
                 numbered[int(suffix)] = str(name)
+        if not numbered:
+            raise MissingComputeVariable(f"No numbered variables with prefix {prefix!r} found in dataset")
         missing = [f"{prefix}{index}" for index in range(1, parts + 1) if index not in numbered]
         if missing:
-            raise MissingComputeVariable(f"Variable(s) {', '.join(missing)} not found in dataset")
+            raise ComputeIntegrityError(
+                f"Variable(s) {', '.join(missing)} not found in dataset; "
+                "check the configured part count and input files"
+            )
         extra = sorted(index for index in numbered if index > parts)
         if extra:
-            raise ComputeError(
+            raise ComputeIntegrityError(
                 f"{numbered[extra[0]]} found beyond the {parts} parts summed for {prefix!r}; "
                 "set the part count to the run's number of parts"
             )
@@ -104,8 +266,28 @@ class _CaseInsensitiveDatasetProxy:
             total = total + self._dataset[numbered[index]]
         return total
 
+    def get(self, key: Any, default: Any = _NO_DEFAULT) -> Any:
+        """``ds.get('var'[, default])``: a missing variable without a default is a missing input."""
+        if isinstance(key, str) and get_xarray_key_case_insensitive(self._dataset, key) is not None:
+            return self[key]
+        if default is not _NO_DEFAULT:
+            return default
+        if isinstance(key, str):
+            raise MissingComputeVariable(f"Variable {key!r} not found in dataset")
+        return self._dataset.get(key)
+
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._dataset, name)
+        if name.startswith("_"):
+            raise AttributeError(name)
+        try:
+            return getattr(self._dataset, name)
+        except AttributeError:
+            # ``ds.var`` reads a data variable like ``ds['var']``: case-insensitive,
+            # and a missing one is a missing input, not an arbitrary failure.
+            actual = get_xarray_key_case_insensitive(self._dataset, name)
+            if actual is not None:
+                return self._dataset[actual]
+            raise _MissingComputeAttribute(f"Variable {name!r} not found in dataset") from None
 
 
 _SAFE_NODES = {
@@ -304,8 +486,12 @@ def execute_compute(ds: Any, expression: str, var_name: str = "") -> Any:
         logger.debug("Computed %s successfully", var_name)
         return result
 
-    except MissingComputeVariable as e:
-        raise MissingComputeVariable(f"{e} when computing {var_name}") from e
+    except ComputeError as e:
+        if isinstance(e, MissingComputeVariable):
+            e.dependencies = tuple(name.casefold() for name in compute_dependency_names(expression))
+            e.inputs_known = compute_inputs_known(expression)
+        e.args = (f"Computing {var_name}: {e}", *e.args[1:])
+        raise
     except KeyError as e:
         raise ComputeError(
             f"Variable {e} not found in dataset when computing {var_name}. Available: {list(ds.data_vars)[:10]}..."
@@ -320,3 +506,20 @@ class ComputeError(Exception):
 
 class MissingComputeVariable(ComputeError):
     """A compute expression references a variable absent from the source dataset."""
+
+    dependencies: tuple[str, ...] = ()
+    # False when the expression reads variables the parser cannot list
+    # (``ds[key]``); any raw variable may then be one of its inputs.
+    inputs_known: bool = True
+
+    def may_read(self, name: str) -> bool:
+        """Whether the failed expression may read ``name``, so it cannot stand in for the result."""
+        return not self.inputs_known or str(name).casefold() in self.dependencies
+
+
+class _MissingComputeAttribute(MissingComputeVariable, AttributeError):
+    """``ds.var`` for an absent variable; still an AttributeError for ``hasattr``."""
+
+
+class ComputeIntegrityError(ComputeError):
+    """A required aggregate is incomplete or inconsistent; raw fallback is unsafe."""

@@ -1677,19 +1677,6 @@ GLDAS:
       compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
       varname: Runoff
       varunit: mm 3h-1
-InteractiveModel:
-  data_type: grid
-  description: InteractiveModel model profile
-  grid_res: 0.5
-  name: InteractiveModel
-  tim_res: Month
-  variables:
-    Runoff:
-      fallbacks:
-        - varname: runoff_fallback
-          varunit: mm day-1
-      varname: runoff_primary
-      varunit: mm day-1
 JRA3Q:
   data_type: grid
   description: JRA-3Q Reanalysis Forcing
@@ -2746,9 +2733,6 @@ TE:
       varname: ''
       varunit: ''
     Ground_Evaporation:
-      varname: ''
-      varunit: ''
-    Soil_Evaporation:
       varname: ''
       varunit: ''
     Snow_Evaporation:

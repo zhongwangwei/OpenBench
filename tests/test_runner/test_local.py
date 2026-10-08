@@ -9534,6 +9534,31 @@ def test_resume_preprocess_signature_ignores_evaluation_code_fingerprint():
     assert _resume_preprocess_signature(base) != _resume_preprocess_signature(changed_input)
 
 
+def test_resume_preprocess_signature_tracks_preprocessing_code():
+    from openbench.runner.orchestration import _resume_preprocess_signature
+
+    base = {
+        "variable": "Runoff",
+        "openbench": {"source_fingerprint": "eval-a", "preprocessing_fingerprint": "prep-a"},
+    }
+    changed_eval = {**base, "openbench": {"source_fingerprint": "eval-b", "preprocessing_fingerprint": "prep-a"}}
+    changed_prep = {**base, "openbench": {"source_fingerprint": "eval-a", "preprocessing_fingerprint": "prep-b"}}
+
+    assert _resume_preprocess_signature(base) == _resume_preprocess_signature(changed_eval)
+    assert _resume_preprocess_signature(base) != _resume_preprocess_signature(changed_prep)
+
+
+def test_task_hash_payload_records_preprocessing_fingerprint_of_data_modules():
+    from openbench.runner import hashing
+
+    modules = hashing.algorithm_source_modules_for_task("grid", "stn")
+    data_modules = tuple(module for module in modules if module.startswith("openbench.data."))
+
+    assert "openbench.data.compute" in data_modules and "openbench.data._processing_station_core" in data_modules
+    assert not any(module.startswith("openbench.core.") for module in data_modules)
+    assert hashing.algorithm_source_fingerprint(data_modules) != hashing.algorithm_source_fingerprint(modules)
+
+
 def test_resume_skips_dataset_preprocessing_for_reused_task(monkeypatch):
     import openbench.data.processing as processing
     import openbench.runner.local as local_runner
