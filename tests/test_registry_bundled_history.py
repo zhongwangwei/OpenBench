@@ -167,6 +167,7 @@ def test_historical_delta_warns_after_compaction_and_can_reset(tmp_path, monkeyp
     from openbench.cli.main import cli
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     base = tmp_path / ".openbench"
     legacy = _bundled_ref("CN05.1_MidRes")
     legacy["variables"]["Surface_Air_Temperature"]["prefix"] = "CN05.1_Tm_"
@@ -320,6 +321,7 @@ def test_overlay_classification_does_not_create_user_directories(tmp_path, monke
     from openbench.config.user_settings import get_user_config_dir
 
     monkeypatch.setenv("HOME", str(tmp_path / "absent-home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "absent-home"))
     other = tmp_path / "other" / "reference_catalog.yaml"
     assert oa.overlay_kind_for_path(other) is None
     assert not get_user_config_dir().exists()
@@ -344,6 +346,7 @@ def test_read_only_invocations_leave_the_overlay_untouched(tmp_path, monkeypatch
     from openbench.cli.main import cli
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     base = tmp_path / ".openbench"
     path = _write_overlays(base, {"CN05.1_MidRes": _bundled_ref("CN05.1_MidRes")})  # compaction would drop it
     original = path.read_bytes()
@@ -361,6 +364,7 @@ def test_commands_that_change_the_registry_still_compact_once(tmp_path, monkeypa
     from openbench.cli.main import cli
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     base = tmp_path / ".openbench"
     path = _write_overlays(base, {"CN05.1_MidRes": _bundled_ref("CN05.1_MidRes")})
 
@@ -396,6 +400,7 @@ def _cli_home(tmp_path, monkeypatch):
     from click.testing import CliRunner
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.delenv("OPENBENCH_REF_ROOT", raising=False)
     return CliRunner(), tmp_path / ".openbench"
 

@@ -119,7 +119,7 @@ def test_cli_and_runtime_agree_on_compute_branches(tmp_path, monkeypatch, comman
     processor = object.__new__(DatasetProcessing)
     processor.__dict__.update(item="Runoff", sim_source="Sim", Sim_model="KnownModel")
     selected = processor._find_data_files(str(root), "runoff_", 2001, "", "sim", ["runoff"])
-    assert {str(path.relative_to(root)) for path in map(Path, selected)} == {
+    assert {path.relative_to(root).as_posix() for path in map(Path, selected)} == {
         "rain/input_2001.nc",
         "snow/input_2001.nc",
     }

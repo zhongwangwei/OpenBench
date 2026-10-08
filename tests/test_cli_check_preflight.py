@@ -1687,6 +1687,7 @@ def test_reference_naming_error_says_where_the_value_was_set(tmp_path, monkeypat
     # A separate overlay file is not edited by `registry reset`; name the file instead.
     cfg.reference.overrides = {}
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.delenv("OPENBENCH_HOME", raising=False)
     legacy = tmp_path / ".openbench" / "references" / "legacy.yaml"
     legacy.parent.mkdir(parents=True)
@@ -1711,6 +1712,7 @@ def test_reference_root_with_tilde_is_expanded_for_check_and_runtime(tmp_path, m
     from openbench.config.adapter import reference_data_dir
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     (tmp_path / "ref").mkdir()
     cfg = SimpleNamespace(reference=SimpleNamespace(data_root=None))
     ref = SimpleNamespace(data_type="grid", root_dir="~/ref", data_groupby="Year")
