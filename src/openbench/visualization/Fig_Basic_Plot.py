@@ -88,6 +88,25 @@ def colorbar_extend(min_value, max_value, vmin, vmax):
     return "neither"
 
 
+def rounded_limits(low, high):
+    """Colour-bar limits from the 5th and 95th percentiles, rounded outward.
+
+    Limits are rounded to integers. When both percentiles are smaller than one
+    in magnitude (CH4 fluxes in gC m-2 day-1, area fractions) integer rounding
+    would stretch the colour bar to [-1, 1] or [0, 1] and leave the map in one
+    colour, so they are rounded at the first significant digit of the larger
+    percentile instead.
+    """
+    import math
+
+    largest = max(abs(low), abs(high))
+    if largest >= 1 or largest == 0:
+        return math.floor(low), math.ceil(high)
+    exponent = math.floor(math.log10(largest))
+    step = 10.0**exponent
+    return round(math.floor(low / step) * step, -exponent), round(math.ceil(high / step) * step, -exponent)
+
+
 def determine_display_unit(self):
     """
     Determine the consistent display unit for plotting.
@@ -138,8 +157,9 @@ def make_plot_index_grid(self):
             del ds
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
-                    option["vmax"] = math.ceil(quantiles[1].values)
-                    option["vmin"] = math.floor(quantiles[0].values)
+                    option["vmin"], option["vmax"] = rounded_limits(
+                        float(quantiles[0].values), float(quantiles[1].values)
+                    )
                     if metric == "percent_bias":
                         if option["vmax"] > 100:
                             option["vmax"] = 100
@@ -171,7 +191,7 @@ def make_plot_index_grid(self):
                     "ve",
                     "absolute_percent_bias",
                 ]:
-                    option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
+                    option["vmin"], option["vmax"] = 0, rounded_limits(0, float(quantiles[1].values))[1]
                 else:
                     option["vmin"], option["vmax"] = 0, 1
 
@@ -687,8 +707,7 @@ def make_plot_index_stn(self):
 
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
-                    option["vmax"] = math.ceil(vmax)
-                    option["vmin"] = math.floor(vmin)
+                    option["vmin"], option["vmax"] = rounded_limits(vmin, vmax)
                     if option["vmax"] > 100:
                         option["vmax"] = 100
                     if option["vmin"] < -100:
@@ -719,7 +738,7 @@ def make_plot_index_stn(self):
                     "ve",
                     "absolute_percent_bias",
                 ]:
-                    option["vmin"], option["vmax"] = 0, math.ceil(vmax)
+                    option["vmin"], option["vmax"] = 0, rounded_limits(0, vmax)[1]
                 else:
                     option["vmin"], option["vmax"] = 0, 1
         except Exception:

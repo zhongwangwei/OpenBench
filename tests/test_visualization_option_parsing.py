@@ -179,3 +179,36 @@ def test_all_nan_sensitive_map_renderers_use_finite_validation_helpers():
 
     assert "math.ceil(data.max().values)" not in (_VIZ_DIR / "Fig_Standard_Deviation.py").read_text(encoding="utf-8")
     assert "np.nanmin(data), np.nanmax(data)" not in (_VIZ_DIR / "Fig_geo_plot_index.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("low", "high", "expected"),
+    [
+        (-2.3, 5.1, (-3, 6)),
+        (-0.0031, 0.012, (-0.01, 0.02)),
+        (0.0, 0.034, (0.0, 0.04)),
+        (0.0, 0.0, (0, 0)),
+    ],
+)
+def test_basic_plot_rounded_limits_keep_sub_unit_ranges(low, high, expected):
+    from openbench.visualization.Fig_Basic_Plot import rounded_limits
+
+    assert rounded_limits(low, high) == pytest.approx(expected)
+
+
+def test_get_index_ticks_resolve_ranges_below_one_hundredth():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, _norm, _bnd, _extend = get_index(0.0, 0.004, "viridis", "RMSE")
+
+    assert list(mticks) == pytest.approx([0.0, 0.001, 0.002, 0.003, 0.004])
+
+
+@pytest.mark.parametrize(("vmin", "vmax"), [(-0.004, 0.001), (-4, 1), (-1, 4)])
+def test_get_index_centres_on_zero_when_range_spans_it(vmin, vmax):
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, _norm, _bnd, _extend = get_index(vmin, vmax, "viridis", "bias")
+
+    assert mticks[0] == pytest.approx(-mticks[-1])
+    assert 0 in list(mticks)
