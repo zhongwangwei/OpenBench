@@ -984,7 +984,7 @@ def test_adapter_uses_reference_override_and_fallbacks(monkeypatch, tmp_path):
     _main, ref_nml, _sim = adapter_module.build_legacy_namelists(cfg)
 
     section = ref_nml["Runoff"]
-    assert section["RefA_dir"] == str(ref_root)
+    assert section["RefA_dir"] == ref_root.as_posix()
     assert section["RefA_varname"] == "q2"
     assert section["RefA_prefix_fallback"] == ["alt_"]
     assert section["RefA_fallbacks"][0]["varname"] == "q"
@@ -999,6 +999,15 @@ def test_find_nc_dir_does_not_substitute_lowres(tmp_path):
     (low / "demo.nc").write_bytes(b"x")
 
     assert adapter_module._find_nc_dir(str(mid), str(tmp_path / "Grid" / "MidRes"), "Water/Runoff/Demo") == str(mid)
+
+
+def test_adapter_paths_expand_environment_variables_and_use_posix_separators(monkeypatch):
+    monkeypatch.setenv("OPENBENCH_TEST_ROOT", r"C:\config\root")
+
+    assert adapter_module._normalize_path(r"$OPENBENCH_TEST_ROOT\ref") == "C:/config/root/ref"
+    assert adapter_module._resolve_root_relative_path(r"lists\stations.csv", r"C:\config\root") == (
+        "C:/config/root/lists/stations.csv"
+    )
 
 
 def test_adapter_reference_data_root_still_overrides_catalog_root(monkeypatch):

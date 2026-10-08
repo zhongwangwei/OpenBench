@@ -22,15 +22,16 @@ def _normalize_path(path_value: object | None) -> str:
     """Expand and normalize a configured path without turning an empty value into ``.``."""
     if path_value is None or str(path_value) == "":
         return ""
-    return os.path.normpath(os.path.expanduser(str(path_value)))
+    normalized = os.path.normpath(os.path.expanduser(os.path.expandvars(str(path_value))))
+    return normalized.replace("\\", "/")
 
 
 def _resolve_root_relative_path(path_value: str, root_dir: str | None) -> str:
     """Resolve relative catalog paths against their dataset root_dir."""
     expanded = os.path.expanduser(os.path.expandvars(str(path_value)))
     if os.path.isabs(expanded) or not root_dir:
-        return expanded
-    return os.path.join(root_dir, expanded)
+        return _normalize_path(expanded)
+    return _normalize_path(os.path.join(root_dir, expanded))
 
 
 LEGACY_GENERAL_KEYS = {
@@ -770,11 +771,13 @@ def reference_data_dir(
     ref_dir = data_root
     if sub_dir:
         ref_dir = os.path.join(ref_dir, str(sub_dir)) if ref_dir else str(sub_dir)
-        ref_dir = os.path.normpath(ref_dir)
+        ref_dir = _normalize_path(ref_dir)
 
     # If ref_dir has no NC files, search one level deeper (e.g., 0p25deg-daily/)
     if ref_dir and data_type != "stn":
         ref_dir = _find_nc_dir(ref_dir, data_root, sub_dir, getattr(ref_ds, "data_groupby", None))
+    if ref_dir:
+        ref_dir = _normalize_path(ref_dir)
     return data_root, ref_dir
 
 
