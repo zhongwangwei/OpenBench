@@ -1717,7 +1717,7 @@ def test_reference_root_with_tilde_is_expanded_for_check_and_runtime(tmp_path, m
     cfg = SimpleNamespace(reference=SimpleNamespace(data_root=None))
     ref = SimpleNamespace(data_type="grid", root_dir="~/ref", data_groupby="Year")
 
-    assert reference_data_dir(cfg, ref, SimpleNamespace(sub_dir=None), None) == (str(tmp_path / "ref"),) * 2
+    assert reference_data_dir(cfg, ref, SimpleNamespace(sub_dir=None), None) == ((tmp_path / "ref").as_posix(),) * 2
 
 
 def test_only_drawing_skips_raw_reference_checks(tmp_path, monkeypatch):
