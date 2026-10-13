@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [3.0.8] - 2026-10-13
+
+### Fixed
+- CoLM2024 Streamflow keeps the period labels of native `f_discharge` and
+  `v_discharge` output, while retaining the period-end offsets for CaMa `outflw`.
+  Time-offset resolution uses the selected variable before the evaluation item.
+
 ## [3.0.7] - 2026-10-09
 
 ### Added

@@ -1163,17 +1163,24 @@ CoLM2024:
   name: CoLM2024
   tim_res: Month
   time_offset:
+    # Riverlake discharge is already period-labelled; CaMa outflw is end-labelled.
     Day:
       ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 days
+      f_discharge: '0'
+      v_discharge: '0'
       default: '0'
     Hour:
       ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 hours
+      f_discharge: '0'
+      v_discharge: '0'
       default: '0'
     Month:
       ? Streamflow,Discharge_For_Sediment,Suspended_Sediment_Concentration,Suspended_Sediment_Load,Dam_Inflow,Dam_Outflow,Dam_Water_Storage,Dam_Water_Elevation,Inundation_Fraction,Inundation_Area,River_Water_Level,Lake_Water_Level,Lake_Water_Volume
       : -1 months
+      f_discharge: '0'
+      v_discharge: '0'
       default: '0'
   variables:
     Canopy_Evaporation:
