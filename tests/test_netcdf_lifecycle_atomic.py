@@ -432,3 +432,33 @@ def test_atomic_file_write_fsyncs_temp_file_and_parent_directory(tmp_path, monke
     else:
         assert len(fsynced) >= 1
         assert opened_dirs == []
+
+
+@pytest.mark.parametrize(
+    ("compression", "env", "expect_zlib"), [(False, "1", False), (None, None, False), (None, "1", True)]
+)
+def test_netcdf_write_drops_compression_inherited_from_source(tmp_path, monkeypatch, compression, env, expect_zlib):
+    import netCDF4
+
+    from openbench.util.netcdf import write_netcdf_atomic
+
+    source = tmp_path / "source.nc"
+    xr.Dataset({"v": (("time", "x"), np.arange(20.0).reshape(4, 5))}).to_netcdf(
+        source, encoding={"v": {"zlib": True, "complevel": 4, "shuffle": True}}
+    )
+    if env is None:
+        monkeypatch.delenv("OPENBENCH_NETCDF_COMPRESSION", raising=False)
+    else:
+        monkeypatch.setenv("OPENBENCH_NETCDF_COMPRESSION", env)
+
+    with xr.open_dataset(source) as ds:
+        write_netcdf_atomic(ds, tmp_path / "out.nc", compression=compression)
+        assert ds["v"].encoding["zlib"] is True  # caller's encoding is untouched
+
+    with netCDF4.Dataset(tmp_path / "out.nc") as nc:
+        filters = nc["v"].filters()
+    assert bool(filters["zlib"]) is expect_zlib
+    if expect_zlib:
+        assert filters["complevel"] == 1
+    with xr.open_dataset(tmp_path / "out.nc") as written:
+        np.testing.assert_array_equal(written["v"].values, np.arange(20.0).reshape(4, 5))

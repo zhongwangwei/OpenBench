@@ -368,3 +368,37 @@ def test_weight_cache_activity_reports_miss_then_memory_hit(monkeypatch):
     conservative.reset_weight_cache_activity()
     conservative.get_weights(np.array([0.0, 1.0]), np.array([0.0, 1.0]))
     assert conservative.consume_weight_cache_activity() == "memory"
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_process_grid_data_removes_yearly_preprocessing_scratch(tmp_path, fails):
+    from openbench.data._processing_grid_core import GridProcessingCoreMixin
+
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    kept = scratch / "sim_case_2001.nc"
+    for name in ("ref_E_2001_v4.nc", "ref_E_2002_v4.nc", kept.name):
+        (scratch / name).write_bytes(b"x")
+
+    class Processor(GridProcessingCoreMixin):
+        casedir = str(tmp_path)
+        minyear, maxyear = 2001, 2002
+
+        def prepare_grid_data(self, data_params):
+            if fails:
+                raise RuntimeError("regrid failed")
+
+        def remap_and_combine_data(self, data_params):
+            return []
+
+        def extract_station_data_if_needed(self, data_params, yearly_files):
+            pass
+
+    params = {"datasource": "ref", "varname": ["E"], "prefix": "E_", "suffix": "_v4"}
+    if fails:
+        with pytest.raises(RuntimeError, match="regrid failed"):
+            Processor().process_grid_data(params)
+    else:
+        Processor().process_grid_data(params)
+
+    assert sorted(path.name for path in scratch.iterdir()) == [kept.name]

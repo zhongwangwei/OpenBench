@@ -114,7 +114,38 @@ class GridProcessingCoreMixin:
             self.extract_station_data_if_needed(data_params, yearly_files)
         finally:
             self.__dict__.pop(scratch_name, None)
+            # Nothing reads the yearly preprocessing files after this source is
+            # done; uncompressed they are several times the source size.
+            self._remove_scratch_files(self._preprocess_scratch_files(data_params))
             gc.collect()
+
+    def _preprocess_scratch_files(self, data_params: Dict[str, Any]) -> List[str]:
+        """Yearly preprocessing scratch files of one source (both prefix spellings in use)."""
+        datasource, prefix, suffix = data_params["datasource"], data_params["prefix"], data_params["suffix"]
+        names = {
+            f"{datasource}_{pre}{year}{suf}.nc"
+            for year in range(self.minyear, self.maxyear + 1)
+            for pre, suf in ((prefix, suffix), (prefix or "", suffix or ""))
+        }
+        return [os.path.join(self.casedir, "scratch", name) for name in sorted(names)]
+
+    @staticmethod
+    def _remove_scratch_files(paths: List[str]) -> None:
+        """Remove scratch files, silently skipping missing ones."""
+        failed_removals = []
+        for path in paths:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    logging.debug(f"Removed temporary file: {path}")
+                except OSError as e:
+                    failed_removals.append((path, str(e)))
+
+        # Only warn if we actually failed to remove existing files
+        if failed_removals:
+            logging.warning(f"Failed to remove {len(failed_removals)} temporary file(s)")
+            for file_path, error in failed_removals:
+                logging.debug(f"  Failed to remove {file_path}: {error}")
 
     def _remap_scratch_file(self, data_source: str, year: int, varname: str | None = None) -> str:
         """Yearly regridded scratch file; writing, reading and cleanup use this one name."""
@@ -336,21 +367,12 @@ class GridProcessingCoreMixin:
 
     def cleanup_temp_files(self, data_params: Dict[str, Any]) -> None:
         """Clean up temporary files, silently skipping non-existent files."""
-        failed_removals = []
-        for year in range(self.minyear, self.maxyear + 1):
-            temp_file = self._remap_scratch_file(data_params["datasource"], year, data_params["varname"][0])
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                    logging.debug(f"Removed temporary file: {temp_file}")
-                except OSError as e:
-                    failed_removals.append((temp_file, str(e)))
-
-        # Only warn if we actually failed to remove existing files
-        if failed_removals:
-            logging.warning(f"Failed to remove {len(failed_removals)} temporary file(s)")
-            for file_path, error in failed_removals:
-                logging.debug(f"  Failed to remove {file_path}: {error}")
+        self._remove_scratch_files(
+            [
+                self._remap_scratch_file(data_params["datasource"], year, data_params["varname"][0])
+                for year in range(self.minyear, self.maxyear + 1)
+            ]
+        )
 
     def extract_station_data_if_needed(
         self,

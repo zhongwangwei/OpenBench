@@ -27,6 +27,12 @@
   create GUI canvases. An explicit `MPLBACKEND` is still honoured.
 - Metrics and scores align and pairwise-mask a sim/obs pair once instead of
   once per metric: about 20% faster on gridded evaluation, identical results.
+- Yearly preprocessing scratch files are written uncompressed even when the
+  source file is compressed, and are deleted once their source is processed
+  (they were kept before). Same-frequency comparisons (e.g. daily to daily)
+  preprocess about twice as fast; while they exist the scratch files are about
+  5x larger. Set `OPENBENCH_NETCDF_COMPRESSION=1` or
+  `project.io.netcdf_compression: true` to compress them.
 
 ### Added
 - `project.station_plots` (default `true`; "Station Plots" in the GUI) can turn
