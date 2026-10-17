@@ -333,6 +333,66 @@ def test_overlap_matches_dense_reference():
     np.testing.assert_allclose(utils.overlap(source, target), expected)
 
 
+def _global_cells(resolution, values=None, lat=None):
+    import xarray as xr
+
+    lat = np.arange(-90 + resolution / 2, 90, resolution) if lat is None else lat
+    lon = np.arange(-180 + resolution / 2, 180, resolution)
+    if values is None:
+        values = np.random.default_rng(0).random((lat.size, lon.size))
+    return xr.Dataset({"v": (("lat", "lon"), values)}, coords={"lat": lat, "lon": lon})
+
+
+def test_conservative_same_global_grid_is_identity_at_poles():
+    import openbench.data.regrid  # noqa: F401  register accessor
+
+    source = _global_cells(1.0)
+    source["v"][::7, ::5] = np.nan
+
+    result = source.regrid.conservative(source[["lat", "lon"]], time_dim=None, nan_threshold=0)
+
+    # Cells already end at +-90; a zonal-mean pole row must not be blended in.
+    np.testing.assert_allclose(result["v"].values, source["v"].values, rtol=1e-12, equal_nan=True)
+
+
+def test_conservative_refinement_keeps_polar_cell_values():
+    import openbench.data.regrid  # noqa: F401  register accessor
+
+    source = _global_cells(2.0)
+    target = _global_cells(1.0)[["lat", "lon"]]
+
+    result = source.regrid.conservative(target, time_dim=None)
+
+    # Each 1-degree polar cell lies inside one 2-degree source cell.
+    np.testing.assert_allclose(result["v"].values[[0, -1], ::2], source["v"].values[[0, -1]], rtol=1e-12)
+
+
+def test_conservative_pole_pad_covers_only_the_missing_cap():
+    from openbench.data.regrid import utils
+
+    # 1.7-degree spacing from +-88.4 puts the outer cell edges at +-89.25.
+    source = _global_cells(2.0, lat=np.linspace(-88.4, 88.4, 105))
+    target = _global_cells(1.0)[["lat", "lon"]]
+
+    padded = utils.format_for_regrid(source, target, cell_bounds=True)
+
+    lat = padded["lat"].values
+    np.testing.assert_allclose(lat[[0, -1]], [-90.1, 90.1])
+    edges = utils.to_intervalindex(lat)
+    np.testing.assert_allclose([edges[1].left, edges[-2].right], [-89.25, 89.25])
+    zonal_means = source["v"].values[[0, -1]].mean(axis=1)
+    np.testing.assert_allclose(padded["v"].values[[0, -1]], np.repeat(zonal_means[:, None], padded.sizes["lon"], 1))
+
+
+def test_interpolation_pole_padding_still_adds_pole_values():
+    from openbench.data.regrid import utils
+
+    source = _global_cells(1.0)
+    padded = utils.format_for_regrid(source, source[["lat", "lon"]])
+
+    np.testing.assert_allclose(padded["lat"].values[[0, -1]], [-90.0, 90.0])
+
+
 def test_conservative_regrid_preserves_single_identical_cell():
     import xarray as xr
 

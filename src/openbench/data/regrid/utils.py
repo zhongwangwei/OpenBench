@@ -1,5 +1,6 @@
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, TypedDict, overload
 
 import numpy as np
@@ -8,6 +9,11 @@ import xarray as xr
 
 
 class InvalidBoundsError(Exception): ...
+
+
+# Fraction of the outer latitude spacing within which an extrapolated cell edge
+# counts as reaching the pole.
+_POLE_EDGE_TOLERANCE = 1e-3
 
 
 class CoordHandler(TypedDict):
@@ -266,16 +272,18 @@ def format_for_regrid(
     obj: xr.DataArray | xr.Dataset,
     target: xr.Dataset,
     stats: bool = False,
+    cell_bounds: bool = False,
 ) -> xr.DataArray | xr.Dataset:
     """Apply any pre-formatting to the input dataset to prepare for regridding.
     Currently handles padding of spherical geometry if lat/lon coordinates can
-    be inferred and the domain size requires boundary padding.
+    be inferred and the domain size requires boundary padding. ``cell_bounds``
+    selects pole padding for cell-overlap (conservative) regridding.
     """
     orig_chunksizes = obj.chunksizes
 
     # Special-cased coordinates with accepted names and formatting function
     coord_handlers: dict[str, CoordHandler] = {
-        "lat": {"names": ["lat", "latitude"], "func": format_lat},
+        "lat": {"names": ["lat", "latitude"], "func": partial(format_lat, cell_bounds=cell_bounds)},
         "lon": {"names": ["lon", "longitude"], "func": format_lon},
     }
 
@@ -302,10 +310,31 @@ def format_for_regrid(
     return obj
 
 
+def _pole_pad_centre(outer: float, inner: float, pole: float, cell_bounds: bool) -> float | None:
+    """Latitude of the padded pole row, or ``None`` when no padding is needed.
+
+    Point interpolation needs a value on the pole itself. Cell-overlap
+    (conservative) regridding extrapolates the outer cell half a spacing beyond
+    its centre; when that edge already reaches the pole, a pad would shrink the
+    real polar cell and blend its values with the zonal mean. Otherwise the pad
+    centre sits one spacing beyond the outer centre, so the outer cell keeps its
+    edges and the pad covers only the missing polar cap.
+    """
+    if not cell_bounds:
+        return pole
+    spacing = outer - inner  # signed, pointing towards the pole
+    # The tolerance absorbs float32 round-off in stored coordinates.
+    if abs(outer + spacing / 2) >= abs(pole) - _POLE_EDGE_TOLERANCE * abs(spacing):
+        return None
+    return outer + spacing
+
+
 def format_lat(
     obj: xr.DataArray | xr.Dataset,
     target: xr.Dataset,  # noqa ARG001
     formatted_coords: dict[str, str],
+    *,
+    cell_bounds: bool = False,
 ) -> xr.DataArray | xr.Dataset:
     """If the latitude coordinate is inferred to be global, defined as having
     a value within one grid spacing of the poles, and the grid does not natively
@@ -318,6 +347,10 @@ def format_lat(
     from -88 to 88 would not be padded because coverage does not extend all the way
     to the poles. A grid ranging from -90 to 90 would also not be padded because the
     poles will already be covered in the regridding weights.
+
+    With ``cell_bounds`` (conservative regridding) the -89.5 to 89.5 grid above is
+    not padded, because its cells already end at the poles; a grid from -89 to 89
+    gets pad rows at -90 and 90 covering only the polar caps beyond +-89.5.
     """
     lat_coord = formatted_coords["lat"]
     lon_coord = formatted_coords.get("lon")
@@ -334,22 +367,27 @@ def format_lat(
     # Only pad if global but don't have edge values directly at poles
     # NOTE: could use xr.pad here instead of xr.concat, but none of the
     # modes are an exact fit for this scheme
+    source_lat = obj.coords[lat_coord].values.astype(float)
     lat_vals = obj.coords[lat_coord].values
     # South pole
-    if dy - polar_lat >= obj.coords[lat_coord].values[0] > -polar_lat:
-        south_pole = obj.isel({lat_coord: 0})
-        if lon_coord is not None:
-            south_pole = south_pole.mean(lon_coord, keep_attrs=True)
-        obj = xr.concat([south_pole, obj], dim=lat_coord)  # type: ignore
-        lat_vals = np.concatenate([[-polar_lat], lat_vals])
+    if dy - polar_lat >= source_lat[0] > -polar_lat:
+        pad = _pole_pad_centre(source_lat[0], source_lat[1], -polar_lat, cell_bounds)
+        if pad is not None:
+            south_pole = obj.isel({lat_coord: 0})
+            if lon_coord is not None:
+                south_pole = south_pole.mean(lon_coord, keep_attrs=True)
+            obj = xr.concat([south_pole, obj], dim=lat_coord)  # type: ignore
+            lat_vals = np.concatenate([[pad], lat_vals])
 
     # North pole
-    if polar_lat - dy <= obj.coords[lat_coord].values[-1] < polar_lat:
-        north_pole = obj.isel({lat_coord: -1})
-        if lon_coord is not None:
-            north_pole = north_pole.mean(lon_coord, keep_attrs=True)
-        obj = xr.concat([obj, north_pole], dim=lat_coord)  # type: ignore
-        lat_vals = np.concatenate([lat_vals, [polar_lat]])
+    if polar_lat - dy <= source_lat[-1] < polar_lat:
+        pad = _pole_pad_centre(source_lat[-1], source_lat[-2], polar_lat, cell_bounds)
+        if pad is not None:
+            north_pole = obj.isel({lat_coord: -1})
+            if lon_coord is not None:
+                north_pole = north_pole.mean(lon_coord, keep_attrs=True)
+            obj = xr.concat([obj, north_pole], dim=lat_coord)  # type: ignore
+            lat_vals = np.concatenate([lat_vals, [pad]])
 
     obj = update_coord(obj, lat_coord, lat_vals)
 

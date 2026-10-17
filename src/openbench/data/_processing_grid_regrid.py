@@ -27,7 +27,7 @@ except ImportError:  # pragma: no cover - mirrors processing.py fallback
             _write_netcdf_atomic(ds, output_path, compression=compression)
 
 
-REGRID_ALGORITHM_VERSION = "2026-05-27.regrid-v2"
+REGRID_ALGORITHM_VERSION = "2026-10-17.regrid-v3"
 REGRID_BACKENDS = {
     "openbench_conservative",
     "cdo_remapcon",

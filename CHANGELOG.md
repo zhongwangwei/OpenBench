@@ -12,6 +12,14 @@
   every time step, which speeds up daily and hourly comparisons with identical
   results.
 
+### Fixed
+- Conservative regridding no longer blends the polar rows of grids whose cells
+  already reach ±90° with their zonal mean (up to a few percent at ±89.875° for
+  0.25° data). Grids that stop short of the poles still have only the missing
+  polar cap filled with the zonal mean. Interpolation backends are unchanged.
+  Regridded outputs carry `openbench_regrid_algorithm_version`
+  `2026-10-17.regrid-v3`.
+
 ## [3.0.8] - 2026-10-13
 
 ### Fixed

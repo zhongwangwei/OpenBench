@@ -121,7 +121,7 @@ class Regridder:
             raise ValueError(msg)
 
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
+        ds_formatted = format_for_regrid(self._obj, ds_target_grid, cell_bounds=True)
         return conservative.conservative_regrid(
             ds_formatted,
             ds_target_grid,
