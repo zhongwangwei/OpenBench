@@ -4,7 +4,7 @@ from typing import Any, overload
 import numpy as np
 import xarray as xr
 
-from .methods import conservative, flox_reduce, interp
+from .methods import categorical, conservative, interp
 from .utils import format_for_regrid
 
 
@@ -121,7 +121,7 @@ class Regridder:
             raise ValueError(msg)
 
         ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid)
+        ds_formatted = format_for_regrid(self._obj, ds_target_grid, cell_bounds=True)
         return conservative.conservative_regrid(
             ds_formatted,
             ds_target_grid,
@@ -144,9 +144,7 @@ class Regridder:
         To be used for regridding data to a much coarser resolution, not for regridding
         when the source and target grids are of a similar resolution.
 
-        Note that in the case of two unqiue values with the same count, the behaviour
-        is not deterministic, and the resulting "most common" one will randomly be
-        either of the two.
+        If two labels have the same count, the one listed first in ``values`` wins.
 
         Args:
             ds_target_grid: Target grid dataset
@@ -175,98 +173,7 @@ class Regridder:
 
         ds_formatted = format_for_regrid(self._obj, ds_target_grid, stats=True)
 
-        return flox_reduce.compute_mode(
-            ds_formatted,
-            ds_target_grid,
-            values,
-            time_dim,
-            fill_value,
-            anti_mode=False,
-        )
-
-    def least_common(
-        self,
-        ds_target_grid: xr.Dataset,
-        values: np.ndarray,
-        time_dim: str | None = "time",
-        fill_value: None | Any = None,
-    ) -> xr.DataArray:
-        """Regrid by taking the least common value within the new grid cells.
-
-        To be used for regridding data to a much coarser resolution, not for regridding
-        when the source and target grids are of a similar resolution.
-
-        Note that in the case of two unqiue values with the same count, the behaviour
-        is not deterministic, and the resulting "least common" one will randomly be
-        either of the two.
-
-        Args:
-            ds_target_grid: Target grid dataset
-            values: Numpy array containing all labels expected to be in the
-                input data. For example, `np.array([0, 2, 4])`, if the data only
-                contains the values 0, 2 and 4.
-            time_dim: Name of the time dimension. Defaults to "time". Use `None` to
-                force regridding over the time dimension.
-            fill_value: What value to fill uncovered parts of the target grid.
-                By default this will be NaN, and integer type data will be cast to
-                float to accomodate this.
-        Returns:
-            Regridded data.
-        """
-        ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-
-        if isinstance(self._obj, xr.Dataset):
-            msg = (
-                "The 'least common value' regridder is not implemented for\n",
-                "xarray.Dataset, as it requires specifying the expected labels.\n"
-                "Please select only a single variable (as DataArray),\n"
-                " and regrid it separately.",
-            )
-            raise ValueError(msg)
-
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid, stats=True)
-
-        return flox_reduce.compute_mode(
-            ds_formatted,
-            ds_target_grid,
-            values,
-            time_dim,
-            fill_value,
-            anti_mode=True,
-        )
-
-    def stat(
-        self,
-        ds_target_grid: xr.Dataset,
-        method: str,
-        time_dim: str | None = "time",
-        skipna: bool = False,
-        fill_value: None | Any = None,
-    ) -> xr.DataArray | xr.Dataset:
-        """Upsampling of data using statistical methods (e.g. the mean or variance).
-
-        We use flox Aggregations to perform a "groupby" over multiple dimensions, which
-        we reduce using the specified method.
-        https://flox.readthedocs.io/en/latest/aggregations.html
-
-        Args:
-            ds_target_grid: Target grid dataset
-            method: One of the following reduction methods: "sum", "mean", "var", "std",
-                "median", "min", or "max".
-            time_dim: Name of the time dimension. Defaults to "time". Use `None` to
-                force regridding over the time dimension.
-            skipna: If NaN values should be ignored.
-            fill_value: What value to fill uncovered parts of the target grid.
-                By default this will be NaN, and integer type data will be cast to
-                float to accomodate this.
-
-        Returns:
-            xarray.dataset with regridded land cover categorical data.
-        """
-        ds_target_grid = validate_input(self._obj, ds_target_grid, time_dim)
-        ds_formatted = format_for_regrid(self._obj, ds_target_grid, stats=True)
-
-        return flox_reduce.statistic_reduce(ds_formatted, ds_target_grid, time_dim, method, skipna, fill_value)
+        return categorical.compute_mode(ds_formatted, ds_target_grid, values, time_dim, fill_value)
 
 
 @overload

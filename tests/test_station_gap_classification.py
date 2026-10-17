@@ -27,7 +27,7 @@ def _processor(tmp_path):
     proc._resample_to_compare_resolution = lambda ds, *args: ds
     proc.check_coordinate = lambda ds: ds
     proc.check_dataset_time_integrity = lambda ds, *args: ds
-    proc.process_units = lambda ds, unit: (ds, unit)
+    proc.process_units = lambda ds, unit, datasource=None: (ds, unit)
     proc.select_timerange = lambda ds, *args: ds
     return proc
 
@@ -63,7 +63,7 @@ def test_missing_compute_dependency_is_station_skip_but_broken_compute_fails(tmp
     missing_output = tmp_path / "data/stn_Ref_Sim/Runoff_ref_B_2000_2000.nc"
     assert good_output.exists()
     assert not missing_output.exists()
-    assert "not found in dataset when computing" in missing_output.with_suffix(".skip.txt").read_text()
+    assert "Computing Runoff: Variable 'b' not found in dataset" in missing_output.with_suffix(".skip.txt").read_text()
 
     proc = _processor(tmp_path / "broken")
     raw = tmp_path / "broken_raw.nc"

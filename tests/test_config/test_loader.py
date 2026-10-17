@@ -915,3 +915,12 @@ simulation:
     )
     with pytest.raises(ConfigError, match="path-safe"):
         load_config(cfg)
+
+
+def test_station_plots_defaults_on_and_must_be_boolean():
+    from openbench.config.loader import _build_config
+
+    assert _build_config(_minimal_raw_config()).project.station_plots is True
+    assert _build_config(_minimal_raw_config(station_plots=False)).project.station_plots is False
+    with pytest.raises(ConfigError, match="project.station_plots must be a boolean"):
+        _build_config(_minimal_raw_config(station_plots="no"))

@@ -26,7 +26,7 @@ from openbench.config.schema import OpenBenchConfig
 
 logger = logging.getLogger(__name__)
 
-OPENBENCH_ALGORITHM_VERSION = "2026-09-11.source-range-pair-cache-v4"
+OPENBENCH_ALGORITHM_VERSION = "2026-10-04.item-aware-heat-units-v5"
 NUMERIC_STACK_PACKAGES = ("numpy", "pandas", "xarray", "cftime")
 COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.core.evaluation",
@@ -76,6 +76,8 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.runner.uncertainty",
     "openbench.util.time",
     "openbench.data.climatology",
+    "openbench.data.compute",
+    "openbench.data.file_lookup",
     "openbench.data.coordinates",
     "openbench.data.processing",
     "openbench.data._processing_base",
@@ -90,6 +92,7 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.data._processing_yearly",
     "openbench.data.time_utils",
     "openbench.data.unit",
+    "openbench.util.groupby",
 )
 
 GRID_ALGORITHM_SOURCE_MODULES = (
@@ -99,7 +102,7 @@ GRID_ALGORITHM_SOURCE_MODULES = (
     "openbench.data.regrid.utils",
     "openbench.data.regrid.methods._shared",
     "openbench.data.regrid.methods.conservative",
-    "openbench.data.regrid.methods.flox_reduce",
+    "openbench.data.regrid.methods.categorical",
     "openbench.data.regrid.methods.interp",
     "openbench.data._processing_grid",
     "openbench.data._processing_grid_core",
@@ -517,6 +520,7 @@ def task_hash_payload(
         "time_alignment",
         "regrid_backend",
         "only_drawing",
+        "station_plots",
     )
 
     sim_entry = cfg.simulation.get(sim_source)
@@ -535,6 +539,11 @@ def task_hash_payload(
             "version": openbench_version_fn(),
             "algorithm_version": OPENBENCH_ALGORITHM_VERSION,
             "source_fingerprint": algorithm_source_fingerprint(source_modules),
+            # Preprocessing code alone: ``--resume`` reuses preprocessed inputs
+            # across evaluation-code changes, but not across changes to this.
+            "preprocessing_fingerprint": algorithm_source_fingerprint(
+                tuple(module for module in source_modules if module.startswith("openbench.data."))
+            ),
             "source_modules": source_modules,
             "numeric_stack": numeric_stack_signature(),
         },

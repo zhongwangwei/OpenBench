@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 import yaml
 
+from openbench.data.registry._tim_res import _TIM_RES_RANK, _tim_res_rank  # noqa: F401 (re-exported)
 from openbench.config.schema import DEFAULT_NUM_CORES
 from openbench.config.user_settings import resolve_home_dir, resolve_reference_root
 from openbench.util.names import AmbiguousNameError
@@ -133,6 +134,8 @@ def _atomic_yaml_write(path: Path, data: dict) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        if path.exists():
+            os.chmod(tmp, path.stat().st_mode & 0o777)
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -204,6 +207,10 @@ def _merge_descriptor_overlay(base: Optional[dict], overlay: Optional[dict]) -> 
             for var_name, var_data in value.items():
                 if var_data is None:
                     variables.pop(var_name, None)
+                elif isinstance(var_data, dict) and isinstance(variables.get(var_name), dict):
+                    # Per-field, like the registry deep merge: a sparse
+                    # overlay variable keeps the bundled fields it omits.
+                    variables[var_name] = {**variables[var_name], **copy.deepcopy(var_data)}
                 else:
                     variables[var_name] = copy.deepcopy(var_data)
             merged["variables"] = variables
@@ -252,13 +259,25 @@ def _store_catalog_descriptor(catalog: dict, name: str, descriptor: dict, base_d
         catalog.pop(name, None)
 
 
-def _backup_then_write(catalog_path: Path, data: dict) -> Path | None:
+def _backup_then_write(catalog_path: Path, data: dict, *, separate_files: str = "raise") -> Path | None:
     """Backup the previous catalog (if any) before atomic-writing the new one.
 
     Creates a single-slot backup at ``<catalog>.bak``. The backup is the
     catalog state immediately before this write — useful when a buggy
     rescan overwrites hand-edited fields and the user wants to recover.
+
+    A change that a separate ``<kind>/*.yaml`` overlay file would undo on load
+    is refused by default; batch writes such as scans pass ``"warn"``.
     """
+    from openbench.data.registry.overlay_audit import (
+        check_separate_file_overrides,
+        overlay_kind_for_path,
+        sparsify_overlay_catalog,
+    )
+
+    overlay_kind = overlay_kind_for_path(catalog_path)
+    if overlay_kind is not None:
+        check_separate_file_overrides(overlay_kind, catalog_path, data, mode=separate_files)
     backup_path: Path | None = None
     if catalog_path.exists():
         import shutil
@@ -277,6 +296,8 @@ def _backup_then_write(catalog_path: Path, data: dict) -> Path | None:
             backup_path = candidate_backup_path
         except OSError as e:
             logger.warning("Could not create catalog backup at %s: %s", candidate_backup_path, e)
+    if overlay_kind is not None:
+        data = sparsify_overlay_catalog(overlay_kind, data)
     _atomic_yaml_write(catalog_path, data)
     return backup_path
 
@@ -1810,7 +1831,7 @@ def register_scanned_dataset(
             catalog[scanned.registry_name],
             base_descriptor,
         )
-        _backup_then_write(catalog_path, catalog)
+        _backup_then_write(catalog_path, catalog, separate_files="warn")
         _invalidate_registry_caches()
 
     return catalog_path
@@ -1871,7 +1892,7 @@ def register_scanned_datasets_batch(
             )
 
         # Write once (atomic, with backup of previous state)
-        _backup_then_write(catalog_path, catalog)
+        _backup_then_write(catalog_path, catalog, separate_files="warn")
         _invalidate_registry_caches()
 
     return catalog_path
@@ -1884,7 +1905,7 @@ def _register_to_dict(
     on_multi_var=None,
     station_list_dir: Optional[Path] = None,
 ) -> None:
-    """Build descriptor and add to catalog dict (no file I/O except fulllist).
+    """Build descriptor and add to catalog dict without writing the catalog file.
 
     Stages:
       1. _build_base_descriptor    — base fields + data_groupby from file counts
@@ -1968,10 +1989,100 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     if "timezone" in existing:
         descriptor["timezone"] = existing["timezone"]
 
-    # station_matching is a Streamflow-only runtime contract. Keep valid
+    # station_matching serves Streamflow and the sediment items only. Keep valid
     # user-defined matchers, but drop invalid blocks from other station data.
-    if existing.get("station_matching") and "Streamflow" in descriptor.get("variables", {}):
+    from openbench.data.station_matcher import is_station_matched_item
+
+    if existing.get("station_matching") and any(
+        is_station_matched_item(name) for name in descriptor.get("variables", {})
+    ):
         descriptor["station_matching"] = existing["station_matching"]
+        _warn_station_matching_fields(descriptor)
+
+
+def _warn_station_matching_fields(descriptor: dict) -> None:
+    """Check preserved variable names against file metadata without changing user settings.
+
+    A malformed block only produces a warning: this check must never stop a
+    rescan of the other datasets or the catalog write that follows.
+    """
+    name = descriptor.get("name", "<unknown>")
+    try:
+        _check_station_matching_fields(descriptor, name)
+    except Exception as exc:
+        logger.warning("Reference '%s': cannot check the preserved station_matching block: %s", name, exc)
+
+
+def _check_station_matching_fields(descriptor: dict, name: str) -> None:
+    import xarray as xr
+
+    from openbench.data.registry.manager import _expand_env_path
+    from openbench.data.registry.schema import StationMatchingConfig
+    from openbench.data.station_matcher import resolve_station_dataset
+    from openbench.util.names import get_xarray_key_case_insensitive
+
+    matching = descriptor["station_matching"]
+    if not isinstance(matching, dict):
+        logger.warning(
+            "Reference '%s': station_matching should be a mapping of field names, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(matching).__name__,
+            matching,
+        )
+        return
+    root = descriptor.get("root_dir")
+    filename = matching.get("dataset_file")
+    if not root or not filename:
+        return
+    if not isinstance(filename, str):
+        logger.warning(
+            "Reference '%s': station_matching.dataset_file should be a file name, got %s %r; "
+            "rescanning keeps it unchanged.",
+            name,
+            type(filename).__name__,
+            filename,
+        )
+        return
+    root = os.path.expanduser(_expand_env_path(str(root), context=f"{name}.root_dir"))
+    path = resolve_station_dataset(root, filename)
+    if path is None:
+        logger.warning(
+            "Reference '%s': cannot check preserved station_matching variable names; dataset %s under %s "
+            "(including its _dist fallback) was not found. Check root_dir and station_matching.dataset_file "
+            "in your catalog.",
+            name,
+            filename,
+            root,
+        )
+        return
+    defaults = StationMatchingConfig()
+    with xr.open_dataset(path, decode_cf=False) as ds:
+        for field in ("station_id_var", "lon_var", "lat_var", "area_var", "discharge_var", "time_var"):
+            requested = matching.get(field, getattr(defaults, field))
+            if field == "area_var" and not requested:
+                continue  # Explicitly disabled optional area lookup.
+            if not isinstance(requested, str):
+                logger.warning(
+                    "Reference '%s': station_matching.%s should be a variable name, got %s %r; "
+                    "rescanning keeps it unchanged.",
+                    name,
+                    field,
+                    type(requested).__name__,
+                    requested,
+                )
+                continue
+            if get_xarray_key_case_insensitive(ds, requested) is None:
+                logger.warning(
+                    "Reference '%s': preserved station_matching.%s=%r was not found in %s. "
+                    "Available variables/coordinates: %s. Update this field in your reference catalog; "
+                    "rescanning keeps the existing setting unchanged.",
+                    name,
+                    field,
+                    requested,
+                    path,
+                    ", ".join(map(str, ds.variables)),
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -2579,49 +2690,6 @@ def _fulllist_path_exists(path_value: str, *roots: str | None) -> bool:
 
 # Frequency hierarchy: higher rank = higher frequency
 # When a higher-frequency variant exists, lower-frequency variants are disabled.
-_TIM_RES_RANK = {
-    "climatology-year": 0,
-    "climatology_year": 0,
-    "year": 0,
-    "yearly": 0,
-    "y": 0,
-    "climatology-month": 1,
-    "climatology_month": 1,
-    "month": 1,
-    "monthly": 1,
-    "m": 1,
-    "mon": 1,
-    "8day": 2,
-    "8daily": 2,
-    "week": 2,
-    "weekly": 2,
-    "w": 2,
-    "day": 3,
-    "daily": 3,
-    "d": 3,
-    "6hour": 4,
-    "6h": 4,
-    "6hourly": 4,
-    "3hour": 5,
-    "3h": 5,
-    "3hourly": 5,
-    "hour": 6,
-    "hourly": 6,
-    "h": 6,
-    "30min": 7,
-    "30mins": 7,
-    "30minute": 7,
-    "30minutes": 7,
-    "halfhour": 7,
-    "half-hour": 7,
-}
-
-
-def _tim_res_rank(tim_res: str) -> int:
-    """Return the frequency rank for a time resolution string."""
-    return _TIM_RES_RANK.get(tim_res.lower().strip(), -1) if tim_res else -1
-
-
 def get_compatible_resolutions(
     group: DatasetGroup,
     required_tim_res: Optional[str] = None,
@@ -2922,6 +2990,7 @@ def _inspect_nc_file(
                     "alt",
                     "height",
                     "station",
+                    "station_uid",
                     "station_id",
                     "station_name",
                     "site",

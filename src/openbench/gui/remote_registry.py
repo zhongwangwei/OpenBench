@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from openbench.data.registry.manager import _auto_resolve_variant, _build_model, _build_reference
+from openbench.data.registry.manager import (
+    _auto_resolve_variant,
+    _build_model,
+    _build_reference,
+    model_snapshot_overlay,
+)
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset
 from openbench.util.names import canonical_variable_name, normalize_name
 
@@ -17,10 +22,16 @@ import json
 from openbench.data.registry.manager import get_registry
 
 registry = get_registry()
+try:  # servers on an older OpenBench have no hints; the snapshot must still load
+    from openbench.data.registry.overlay_audit import overlay_hints
+    hints = overlay_hints()
+except Exception:
+    hints = []
 print(json.dumps({
     "references": [ref.to_dict() for ref in registry.list_references()],
     "models": [model.to_dict() for model in registry.list_models()],
     "model_aliases": getattr(registry, "_model_aliases", {}),
+    "overlay_hints": hints,
 }, ensure_ascii=False))
 """
 
@@ -160,6 +171,7 @@ class RemoteRegistrySnapshot:
         self._models: dict[str, ModelProfile] = {}
         self._model_aliases: dict[str, str] = {}
         self._var_index: dict[str, list[str]] = {}
+        self.overlay_hints: list[str] = []
         self._replace(payload)
 
     @property
@@ -179,6 +191,8 @@ class RemoteRegistrySnapshot:
             normalize_name(alias): normalize_name(target)
             for alias, target in (payload.get("model_aliases", {}) if isinstance(payload, dict) else {}).items()
         }
+        hints = payload.get("overlay_hints") if isinstance(payload, dict) else None
+        self.overlay_hints = [str(hint) for hint in hints] if isinstance(hints, list) else []
         self._build_var_index()
 
     def _build_var_index(self) -> None:
@@ -200,6 +214,7 @@ class RemoteRegistrySnapshot:
                 "references": [ref.to_dict() for ref in fresh.list_references()],
                 "models": [model.to_dict() for model in fresh.list_models()],
                 "model_aliases": fresh._model_aliases,
+                "overlay_hints": fresh.overlay_hints,
             }
         )
         return self
@@ -278,7 +293,7 @@ class RemoteRegistrySnapshot:
 
     def save_model(self, name: str, profile: ModelProfile) -> None:
         self._ensure_current_target()
-        _remote_json(self._controller, _remote_crud_script("save_model", name, profile.to_dict()))
+        _remote_json(self._controller, _remote_crud_script("save_model", name, model_snapshot_overlay(profile)))
         self.refresh()
 
     def delete_model(self, name: str) -> None:

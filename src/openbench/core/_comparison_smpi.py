@@ -243,8 +243,6 @@ class SingleModelPerformanceIndexComparisonMixin:
                                         "status": "unavailable",
                                         "reason": str(exc),
                                     }
-                                finally:
-                                    gc.collect()  # Clean up memory after processing
 
                             results = self._run_parallel_or_serial(
                                 delayed(_process_station_data_parallel)(

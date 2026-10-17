@@ -12,16 +12,17 @@ general:
   line_width: 2.5
   obs_linecolor: F96969
   obs_linestyle: solid
-  obs_lineswidth: 144
+  obs_lineswidth: 1.0
   obs_marker: ^
-  obs_markersize: 432
+  obs_markersize: 4
   obs_alphas: 0.8
   sim_linecolor: 599AD4
   sim_linestyle: solid
-  sim_lineswidth: 144
+  sim_lineswidth: 1.0
   sim_marker: d
-  sim_markersize: 432
+  sim_markersize: 4
   sim_alphas: 0.8
+  marker_max_points: 200
   x_wise: 17
   y_wise: 6
   saving_format: jpg

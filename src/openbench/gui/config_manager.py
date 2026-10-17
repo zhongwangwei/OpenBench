@@ -343,6 +343,7 @@ class ConfigManager:
             "only_drawing": project.get("only_drawing", False),
             "unified_mask": project.get("unified_mask", True),
             "generate_report": project.get("generate_report", True),
+            "station_plots": project.get("station_plots", True),
             "dask": project.get("dask", {}) or {},
             "io": project.get("io", {}) or {},
             "IGBP_groupby": project.get("IGBP_groupby", False),
@@ -579,6 +580,7 @@ class ConfigManager:
             "Climate_zone_groupby": general.get("Climate_zone_groupby", True),
             "unified_mask": general.get("unified_mask", True),
             "generate_report": general.get("generate_report", True),
+            "station_plots": general.get("station_plots", True),
         }
 
         main_config["evaluation_items"] = config.get("evaluation_items", {})
@@ -890,6 +892,8 @@ class ConfigManager:
             project["unified_mask"] = False
         if not general.get("generate_report", True):
             project["generate_report"] = False
+        if not general.get("station_plots", True):
+            project["station_plots"] = False
         if general.get("strict_reference"):
             project["strict_reference"] = True
         dask_config = general.get("dask")

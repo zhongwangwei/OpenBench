@@ -22,6 +22,7 @@ from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import convert_unit
 from ._downsample import downsample_for_plot, lat_lon_plot_args
+from ._geo_axes import configure_geo_axis
 from ._validation import finite_min_max
 
 
@@ -70,6 +71,42 @@ from .Fig_toolbox import get_index, process_unit
 logger = logging.getLogger(__name__)
 
 
+def colorbar_extend(min_value, max_value, vmin, vmax):
+    """Return the colour-bar extend for data spanning [min_value, max_value].
+
+    Each end is checked on its own: data equal to a bound lie inside the
+    range, so a minimum of exactly ``vmin`` must not hide values above ``vmax``.
+    """
+    below = min_value < vmin
+    above = max_value > vmax
+    if below and above:
+        return "both"
+    if below:
+        return "min"
+    if above:
+        return "max"
+    return "neither"
+
+
+def rounded_limits(low, high):
+    """Colour-bar limits from the 5th and 95th percentiles, rounded outward.
+
+    Limits are rounded to integers. When both percentiles are smaller than one
+    in magnitude (CH4 fluxes in gC m-2 day-1, area fractions) integer rounding
+    would stretch the colour bar to [-1, 1] or [0, 1] and leave the map in one
+    colour, so they are rounded at the first significant digit of the larger
+    percentile instead.
+    """
+    import math
+
+    largest = max(abs(low), abs(high))
+    if largest >= 1 or largest == 0:
+        return math.floor(low), math.ceil(high)
+    exponent = math.floor(math.log10(largest))
+    step = 10.0**exponent
+    return round(math.floor(low / step) * step, -exponent), round(math.ceil(high / step) * step, -exponent)
+
+
 def determine_display_unit(self):
     """
     Determine the consistent display unit for plotting.
@@ -84,24 +121,13 @@ def determine_display_unit(self):
         if "evapotranspiration" in self.item.lower():
             display_unit = convert_unit("mm day-1")
             logging.info("Using standardized unit for evapotranspiration: mm day-1")
-        elif ref_unit == sim_unit or not sim_unit:
-            # If units are the same or sim unit is missing, use ref unit
-            display_unit = convert_unit(ref_unit)
         else:
-            # If units differ, try to convert to a common base unit
-            try:
-                ref_data, ref_base = UnitProcessing.convert_unit(None, ref_unit.lower())
-                sim_data, sim_base = UnitProcessing.convert_unit(None, sim_unit.lower())
-                if ref_base == sim_base:
-                    display_unit = convert_unit(ref_base)
-                    logging.info(f"Converted both units to common base: {ref_base}")
-                else:
-                    # Fallback: use reference unit
-                    display_unit = convert_unit(ref_unit)
-                    logging.warning(f"Unit mismatch: ref={ref_unit}, sim={sim_unit}. Using ref unit.")
-            except Exception:
-                display_unit = convert_unit(ref_unit)
-                logging.warning(f"Failed to convert units. Using ref unit: {ref_unit}")
+            # Label the unit the data were converted to, not the declared one
+            ref_display = UnitProcessing.display_unit(ref_unit, self.item)
+            sim_display = UnitProcessing.display_unit(sim_unit, self.item) if sim_unit else ref_display
+            if sim_display.lower() != ref_display.lower():
+                logging.warning(f"Unit mismatch: ref={ref_unit}, sim={sim_unit}. Using ref unit.")
+            display_unit = convert_unit(ref_display)
 
     return display_unit
 
@@ -131,14 +157,26 @@ def make_plot_index_grid(self):
             del ds
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
-                    option["vmax"] = math.ceil(quantiles[1].values)
-                    option["vmin"] = math.floor(quantiles[0].values)
+                    option["vmin"], option["vmax"] = rounded_limits(
+                        float(quantiles[0].values), float(quantiles[1].values)
+                    )
                     if metric == "percent_bias":
                         if option["vmax"] > 100:
                             option["vmax"] = 100
                         if option["vmin"] < -100:
                             option["vmin"] = -100
-                elif metric in ["NSE", "KGE", "KGESS", "correlation", "kappa_coeff", "rSpearman"]:
+                elif metric in [
+                    "NSE",
+                    "KGE",
+                    "KGESS",
+                    "KGEln",
+                    "dr",
+                    "cp",
+                    "APFB",
+                    "correlation",
+                    "kappa_coeff",
+                    "rSpearman",
+                ]:
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
                     option["vmin"], option["vmax"] = math.floor(quantiles[0].values), 1
@@ -153,7 +191,7 @@ def make_plot_index_grid(self):
                     "ve",
                     "absolute_percent_bias",
                 ]:
-                    option["vmin"], option["vmax"] = 0, math.ceil(quantiles[1].values)
+                    option["vmin"], option["vmax"] = 0, rounded_limits(0, float(quantiles[1].values))[1]
                 else:
                     option["vmin"], option["vmax"] = 0, 1
 
@@ -185,9 +223,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    import numpy as np
     import xarray as xr
-    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
 
     font = {"family": option["font"]}
@@ -218,14 +254,7 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
 
     var = data.values
     min_value, max_value = finite_min_max(var, label=f"{xitem} grid map")
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = colorbar_extend(min_value, max_value, option["vmin"], option["vmax"])
 
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
@@ -245,34 +274,16 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(
-        draw_labels=False,
-        linestyle=":",
-        linewidth=0.5,
-        color="grey",
-        alpha=0.8,
-        xlocs=np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1],
-        ylocs=np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1],
+    configure_geo_axis(
+        ax,
+        option,
+        (self.min_lon, self.max_lon, self.min_lat, self.max_lat),
+        gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
     )
-
-    if not option["set_lat_lon"]:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[:0:-1], crs=ccrs.PlateCarree())
-    else:
-        ax.set_extent(
-            [option["min_lon"], option["max_lon"], option["min_lat"], option["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
     ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
-    lon_formatter = LongitudeFormatter()
-    lat_formatter = LatitudeFormatter()
-    ax.xaxis.set_major_formatter(lon_formatter)
-    ax.yaxis.set_major_formatter(lat_formatter)
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
@@ -339,11 +350,60 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
     plt.close(fig)
 
 
+# Older plot_stn options gave line widths and marker sizes as totals that were
+# divided by the series length, calibrated for 144 steps (12 years of months).
+_LEGACY_STN_SERIES_LENGTH = 144
+_LEGACY_STN_LINEWIDTH_MIN = 20.0
+_LEGACY_STN_MARKERSIZE_MIN = 40.0
+
+
+def _stn_line_style(option, side, n_points):
+    """Return (linewidth, marker, markersize) in points for one station series.
+
+    Widths and sizes do not depend on the series length, so stations with short
+    and long records are drawn alike. Markers are drawn only for series of at
+    most ``marker_max_points`` steps; on denser series they hide the line.
+    """
+    width = float(option[f"{side}_lineswidth"])
+    size = float(option[f"{side}_markersize"])
+    if width > _LEGACY_STN_LINEWIDTH_MIN:
+        width /= _LEGACY_STN_SERIES_LENGTH
+    if size > _LEGACY_STN_MARKERSIZE_MIN:
+        size /= _LEGACY_STN_SERIES_LENGTH
+    marker = option[f"{side}_marker"] if n_points <= int(option.get("marker_max_points", 200)) else None
+    return width, marker, size
+
+
+def _isolated_indices(values):
+    """Indices of finite values whose neighbours are both missing (or absent)."""
+    finite = np.isfinite(np.asarray(values, dtype=float))
+    before = np.concatenate(([False], finite[:-1]))
+    after = np.concatenate((finite[1:], [False]))
+    return np.flatnonzero(finite & ~before & ~after)
+
+
+def _stn_series_style(option, side, values, n_points):
+    """Line keyword arguments for one station series.
+
+    A value with missing neighbours forms no line segment, so on a dense
+    series drawn without markers it would vanish; those values keep their
+    marker. Lines are never drawn across missing values.
+    """
+    width, marker, size = _stn_line_style(option, side, n_points)
+    style = {"linewidth": width, "marker": marker, "markersize": size}
+    if marker is None:
+        isolated = _isolated_indices(values)
+        if isolated.size:
+            style.update(marker=option[f"{side}_marker"], markevery=isolated.tolist())
+    return style
+
+
 @with_isolated_rc
 def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     option = self.fig_nml["plot_stn"].copy()
     import matplotlib
     import matplotlib.pyplot as plt
+    from matplotlib.transforms import offset_copy
     from pylab import rcParams
 
     # font = {'family': 'Times-Roman'}
@@ -365,7 +425,6 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
     }
     rcParams.update(params)
 
-    lines = [option["obs_lineswidth"], option["sim_lineswidth"]]
     alphas = [option["obs_alphas"], option["sim_alphas"]]
     linestyles = [option["obs_linestyle"], option["sim_linestyle"]]
 
@@ -378,40 +437,33 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
         colors = [f"#{option['obs_linecolor']}", f"#{option['sim_linecolor']}"]
     else:
         colors = [option["obs_linecolor"], option["sim_linecolor"]]
-    markers = [option["obs_marker"], option["sim_marker"]]
-    markersizes = [option["obs_markersize"], option["sim_markersize"]]
-
     fig, ax = plt.subplots(1, 1, figsize=(option["x_wise"], option["y_wise"]))
-    # Guard zero-length inputs: if both series are empty, dividing lines/markers
-    # by 0 below would raise ZeroDivisionError and abort the figure.
-    max_time_len = max(1, max(len(sim), len(obs)))
 
     # Convert cftime to pandas datetime for plotting compatibility
     obs_plot = convert_cftime_to_pandas(obs)
     sim_plot = convert_cftime_to_pandas(sim)
+    n_points = max(len(sim), len(obs))
+    obs_style = _stn_series_style(option, "obs", obs_plot.values, n_points)
+    sim_style = _stn_series_style(option, "sim", sim_plot.values, n_points)
 
     obs_plot.plot.line(
         x="time",
         ax=ax,
         label="Obs",
-        linewidth=lines[0] / max_time_len,
         linestyle=linestyles[0],
         alpha=alphas[0],
         color=colors[0],
-        marker=markers[0],
-        markersize=markersizes[0] / max_time_len,
+        **obs_style,
     )
     sim_plot.plot.line(
         x="time",
         ax=ax,
         label="Sim",
-        linewidth=lines[1] / max_time_len,
         linestyle=linestyles[1],
         alpha=alphas[1],
         color=colors[1],
-        marker=markers[1],
-        markersize=markersizes[1] / max_time_len,
         add_legend=True,
+        **sim_style,
     )
 
     for spine in ax.spines.values():
@@ -427,20 +479,35 @@ def plot_stn(self, sim, obs, ID, key, RMSE, KGESS, correlation, lat_lon):
 
     # ax.scatter([], [], color='black', marker='o', label=overall_label)
     ax.legend(loc="best", shadow=False, labelspacing=option["labelspacing"], fontsize=option["fontsize"])
-    # add RMSE,KGE,correlation in two digital to the legend in left top
+    # The metrics sit on their own row just above the axes, right-aligned, and
+    # the title on the row above them, so a long title cannot run into them.
+    metrics_size = option["fontsize"] - 4
+    metrics_gap = 4  # points between the axes and the metrics row
     ax.text(
-        0.6,
-        1.08,
+        1.0,
+        1.0,
         f"RMSE: {RMSE:.2f}   R: {correlation:.2f}   KGESS: {KGESS:.2f}",
-        transform=ax.transAxes,
-        fontsize=option["fontsize"] - 4,
-        verticalalignment="top",
+        transform=offset_copy(ax.transAxes, fig=fig, y=metrics_gap, units="points"),
+        fontsize=metrics_size,
+        horizontalalignment="right",
+        verticalalignment="bottom",
     )
     if not option["title"]:
         lat = f"{abs(lat_lon[0]):.2f}°{'N' if lat_lon[0] > 0 else ('S' if lat_lon[0] < 0 else '')}"
         lon = f"{abs(lat_lon[1]):.2f}°{'E' if lat_lon[1] > 0 else ('W' if lat_lon[1] < 0 else '')}"
-        option["title"] = f"ID: {str(ID).title()}  ({lat}, {lon})"
-    ax.set_title(option["title"], fontsize=option["title_size"], fontweight="bold", x=0, y=1.08, ha="left", va="top")
+        option["title"] = f"ID: {ID}  ({lat}, {lon})"
+    # xarray titles the axes with the series' scalar coordinates
+    # ("lat = ..., lon = ..., variable = ...") in the centre slot; the left
+    # title below would be drawn over it.
+    ax.set_title("")
+    ax.set_title("", loc="right")
+    ax.set_title(
+        option["title"],
+        fontsize=option["title_size"],
+        fontweight="bold",
+        loc="left",
+        pad=metrics_gap + 1.6 * metrics_size,
+    )
     if option["grid"]:
         ax.grid(linestyle=option["grid_linestyle"], alpha=0.7, linewidth=option["grid_width"])
 
@@ -463,7 +530,6 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     import cartopy.feature as cfeature
     import matplotlib
     import matplotlib.pyplot as plt
-    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from pylab import rcParams
 
     font = {"family": option["font"]}
@@ -488,14 +554,7 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     fig = plt.figure(figsize=(option["x_wise"], option["y_wise"]))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     # set the region of the map based on self.Max_lat, self.Min_lat, self.Max_lon, self.Min_lon
-    if min_value < option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "both"
-    elif min_value > option["vmin"] and max_value > option["vmax"]:
-        option["extend"] = "max"
-    elif min_value < option["vmin"] and max_value < option["vmax"]:
-        option["extend"] = "min"
-    else:
-        option["extend"] = "neither"
+    option["extend"] = colorbar_extend(min_value, max_value, option["vmin"], option["vmax"])
 
     cs = ax.scatter(
         stn_lon,
@@ -522,34 +581,16 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white", zorder=9)
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(
-        draw_labels=False,
-        linestyle=":",
-        linewidth=0.5,
-        color="grey",
-        alpha=0.8,
-        xlocs=np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1],
-        ylocs=np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1],
+    configure_geo_axis(
+        ax,
+        option,
+        (self.min_lon, self.max_lon, self.min_lat, self.max_lat),
+        gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
     )
-
-    if not option["set_lat_lon"]:
-        ax.set_extent([self.min_lon, self.max_lon, self.min_lat, self.max_lat], crs=ccrs.PlateCarree())
-        ax.set_xticks(np.arange(self.max_lon, self.min_lon, -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(self.max_lat, self.min_lat, -30)[:0:-1], crs=ccrs.PlateCarree())
-    else:
-        ax.set_extent(
-            [option["min_lon"], option["max_lon"], option["min_lat"], option["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
     ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
-    lon_formatter = LongitudeFormatter()
-    lat_formatter = LatitudeFormatter()
-    ax.xaxis.set_major_formatter(lon_formatter)
-    ax.yaxis.set_major_formatter(lat_formatter)
 
     ax.set_xlabel(option["xticklabel"], fontsize=option["xtick"] + 1, labelpad=20)
     ax.set_ylabel(option["yticklabel"], fontsize=option["ytick"] + 1, labelpad=40)
@@ -666,13 +707,23 @@ def make_plot_index_stn(self):
 
             if not option["vmin_max_on"]:
                 if metric in ["bias", "percent_bias", "rSD", "PBIAS_HF", "PBIAS_LF"]:
-                    option["vmax"] = math.ceil(vmax)
-                    option["vmin"] = math.floor(vmin)
+                    option["vmin"], option["vmax"] = rounded_limits(vmin, vmax)
                     if option["vmax"] > 100:
                         option["vmax"] = 100
                     if option["vmin"] < -100:
                         option["vmin"] = -100
-                elif metric in ["NSE", "KGE", "KGESS", "correlation", "kappa_coeff", "rSpearman"]:
+                elif metric in [
+                    "NSE",
+                    "KGE",
+                    "KGESS",
+                    "KGEln",
+                    "dr",
+                    "cp",
+                    "APFB",
+                    "correlation",
+                    "kappa_coeff",
+                    "rSpearman",
+                ]:
                     option["vmin"], option["vmax"] = -1, 1
                 elif metric in ["LNSE", "ubNSE", "rNSE", "wNSE", "wsNSE"]:
                     option["vmin"], option["vmax"] = math.floor(vmin), 1
@@ -687,7 +738,7 @@ def make_plot_index_stn(self):
                     "ve",
                     "absolute_percent_bias",
                 ]:
-                    option["vmin"], option["vmax"] = 0, math.ceil(vmax)
+                    option["vmin"], option["vmax"] = 0, rounded_limits(0, vmax)[1]
                 else:
                     option["vmin"], option["vmax"] = 0, 1
         except Exception:
@@ -742,9 +793,7 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     option = option.copy()
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    import numpy as np
     import xarray as xr
-    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
 
     with xr.open_dataset(file) as _ds:
@@ -795,36 +844,16 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(
-        draw_labels=False,
-        linestyle=":",
-        linewidth=0.5,
-        color="grey",
-        alpha=0.8,
-        xlocs=np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1],
-        ylocs=np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1],
+    configure_geo_axis(
+        ax,
+        option,
+        (main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]),
+        gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
     )
-
-    if not option["set_lat_lon"]:
-        ax.set_extent(
-            [main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(main_nml["max_lon"], main_nml["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(main_nml["max_lat"], main_nml["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
-    else:
-        ax.set_extent(
-            [option["min_lon"], option["max_lon"], option["min_lat"], option["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
     ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
-    lon_formatter = LongitudeFormatter()
-    lat_formatter = LatitudeFormatter()
-    ax.xaxis.set_major_formatter(lon_formatter)
-    ax.yaxis.set_major_formatter(lat_formatter)
 
     if option["title"] is None:
         option["title"] = "Correlation Results"

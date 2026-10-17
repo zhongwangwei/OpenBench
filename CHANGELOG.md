@@ -1,5 +1,64 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Faster temporal resampling of grid data: resampling to the comparison
+  resolution no longer goes through flox, and files stored one time step per
+  chunk (e.g. ERA5-Land, GLEAM) are read in larger time blocks. A year of
+  0.25° daily data resampled to monthly took about 12 s and now takes about
+  3 s; results differ only by float32 rounding.
+- Conservative regridding weights a static land/ocean mask once instead of at
+  every time step, which speeds up daily and hourly comparisons with identical
+  results.
+- Monthly and seasonal group-bys in the phase, IAV and seasonality scores, the
+  wsNSE metric and statistics resampling use xarray's own reductions, 5–10x
+  faster on gridded and multi-station data. Environments that still have flox
+  installed bypass it as well.
+- Land-cover and climate-zone most-common regridding is computed with numpy:
+  identical class maps, 2–6x faster.
+- Station extraction, preprocessing and evaluation, yearly scratch files and
+  comparison plots no longer force a full garbage collection for every station,
+  file or plot (about 20 ms each); garbage is still collected at stage
+  boundaries. The bundled smoke evaluation runs about 35% faster with identical
+  outputs.
+- `openbench run` renders figures with Matplotlib's Agg backend instead of the
+  platform's interactive one (macOS, Tk or Qt), so worker threads no longer
+  create GUI canvases. An explicit `MPLBACKEND` is still honoured.
+- Metrics and scores align and pairwise-mask a sim/obs pair once instead of
+  once per metric: about 20% faster on gridded evaluation, identical results.
+- Yearly preprocessing scratch files are written uncompressed even when the
+  source file is compressed, and are deleted once their source is processed
+  (they were kept before). Same-frequency comparisons (e.g. daily to daily)
+  preprocess about twice as fast; while they exist the scratch files are about
+  5x larger. Set `OPENBENCH_NETCDF_COMPRESSION=1` or
+  `project.io.netcdf_compression: true` to compress them.
+- Resampling to the comparison resolution only relabels the time axis when every
+  period already holds exactly one time step (e.g. daily to daily), instead of
+  averaging single values; results are identical and same-frequency regridding
+  runs about 20% faster.
+
+### Added
+- `project.station_plots` (default `true`; "Station Plots" in the GUI) can turn
+  off the per-station time-series figures, which take most of the time of a
+  large station evaluation. Metrics, scores and station maps are unchanged.
+
+### Removed
+- The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which
+  could only be implemented through flox.
+
+### Packaging
+- flox is no longer a dependency of the pip package or the Conda recipe; it is
+  only listed in the `dev` extra so tests can check that it is bypassed.
+
+### Fixed
+- Conservative regridding no longer blends the polar rows of grids whose cells
+  already reach ±90° with their zonal mean (up to a few percent at ±89.875° for
+  0.25° data). Grids that stop short of the poles still have only the missing
+  polar cap filled with the zonal mean. Interpolation backends are unchanged.
+  Regridded outputs carry `openbench_regrid_algorithm_version`
+  `2026-10-17.regrid-v3`.
+
 ## [Unreleased] — uncertainty branch preparation
 
 Notes carried over from the uncertainty-aware evaluation branch's own
@@ -22,6 +81,539 @@ numbered releases below once this branch synced main's history.
   credential handling without removing public compatibility entry points.
 - Share wheel/sdist resource checks between CI and publishing, require explicitly
   selected artifacts to exist, and document fresh-build release verification.
+
+## [3.0.8] - 2026-10-13
+
+### Fixed
+- CoLM2024 Streamflow keeps the period labels of native `f_discharge` and
+  `v_discharge` output, while retaining the period-end offsets for CaMa `outflw`.
+  Time-offset resolution uses the selected variable before the evaluation item.
+
+## [3.0.7] - 2026-10-09
+
+### Added
+- `openbench registry diff` and the throttled startup notice identify overrides
+  matching older bundled defaults without guessing their intent. Use
+  `openbench registry reset ENTRY` (`--kind references|models` only when the
+  name is both) to restore an entry explicitly: it shows the overrides it
+  removes, backs up the overlay, and reports overrides kept in separate
+  `~/.openbench/<kind>/*.yaml` files instead of claiming success. It finds
+  entries that exist only in the overlay or in a per-file override, accepts
+  built-in aliases such as `CoLM`, refuses a symlinked or read-only overlay,
+  and lists only the overrides that actually change the effective entry.
+  `diff` also reports an unreadable overlay, duplicate entries and entries no
+  longer bundled. The GUI registry page shows the same hints (at most three,
+  the rest in a tooltip), for remote servers too. Entries in separate
+  `~/.openbench/<kind>/*.yaml` files are audited the same way in `diff`, the
+  GUI hints and the startup notice (editing only such a file triggers a new
+  check); `diff` no longer calls the overlay clean while one of them
+  overrides a bundled entry, and points to the file, since prune and reset do
+  not edit it.
+- When a reference file name was not found and its prefix, suffix or sub_dir
+  differs from the bundled catalog, `openbench check` says whether the value
+  comes from `reference.overrides` in the config or from the `~/.openbench`
+  overlay, and how to restore it.
+- Rescanning checks preserved station-matching variable names against the
+  dataset, warning about missing fields with available names while keeping
+  user settings unchanged. A malformed block (not a mapping, or a file or
+  variable name that is not text) is reported the same way and never stops
+  the rescan of the other datasets.
+- `openbench init` accepts comma-separated reference numbers or names for each
+  variable. All selected references are checked and evaluated separately;
+  single selections and `0` to skip remain supported.
+- River sediment references OpenBench_Sediment_Daily,
+  OpenBench_Sediment_Monthly and OpenBench_Sediment_Annual (SedRef v1.0.0,
+  CC BY 4.0) with three evaluation items:
+  `Discharge_For_Sediment` (river discharge at the sediment gauges, kept apart
+  from `Streamflow`), `Suspended_Sediment_Concentration` (mg L-1) and
+  `Suspended_Sediment_Load` (t d-1). They are matched to the river network
+  like Streamflow: CaMa allocation, the fixed minimum upstream area per
+  resolution, allocation error at most 0.2, and the `_dist` fallback. The data
+  are not bundled; they go under
+  `${OPENBENCH_REF_ROOT}/Station/Water/Sediment/<Daily|Monthly|Annual>`. The
+  GUI lists the items in a new Sediment group.
+- CoLM2024 maps the sediment items to Grid_RiverLake routing output:
+  `f_discharge`, and the three size classes of CoLM's standard sediment
+  parameters (`f_sedcon_1..3`, `f_sedout_1..3`) summed and multiplied by its
+  default grain density of 2650 kg m-3. A run with another number of classes
+  or another density needs its own `compute` expression.
+- Compute expressions can sum numbered parts with
+  `ds.sum_prefix('f_sedcon_', 3)`. Exactly parts 1..3 must be in the data
+  computed: a missing part (for example one kept in another file) or a
+  higher-numbered one stops the evaluation instead of giving a partial sum.
+  File lookup and simulation scanning treat the parts as dependencies, like
+  `ds['name']`.
+- Unit conversions for sediment concentration (mg L-1, g m-3, kg m-3, g L-1)
+  and load (t d-1, kg s-1, kg d-1, t yr-1).
+- Thirty reference datasets for land-surface CH4 emission and the areas that
+  emit it: FLUXNET-CH4 monthly tower fluxes (Methane), the 22 GCP-CH4
+  wetland runs and their ensemble mean (Wetland_Methane_Emission,
+  Wetland_Fraction), WAD2M and GIEMS-MC wetland fraction, Johnson et al.
+  (2022) lake CH4 flux and lake fraction, MIRCA2000 rice area, GRPI rice CH4
+  flux and GLWD v2.0 lake, wetland and rice fraction. The data are not
+  bundled. Of the new items only Methane can be selected in the GUI so far.
+- `KGEln`, the Kling-Gupta efficiency with log ratios of variability and
+  mean, so that over- and underestimation by the same factor weigh the same.
+- A Streamflow station dataset registered as `<name>_full.nc` falls back to
+  its redistributable subset `<name>_dist.nc` in the same directory when the
+  full file is absent, so the OpenBench_Streamflow references run from either
+  file. `openbench init` accepts either file too.
+
+### Changed
+- `openbench init` checks station references with station rules and resolves
+  nested grid directories consistently with preprocessing. Model edits preserve
+  explicit disabled settings and case-insensitive variable deletions.
+- Legacy catalogs in `~/.openbench` are compacted once without changing their
+  effective settings. Values matching historical defaults remain as overrides:
+  historical equality cannot prove that a setting was not intentionally chosen.
+  A legacy seeded copy is reset only when its recorded hash proves it was never
+  edited. Only commands that write the registry compact it (`gui`, `init`,
+  `run`, `model register/import/rename/remove-var/delete`,
+  `ref register/register-profile/scan/delete`, `sim scan`); help, `--dry-run`
+  and every other command, including ones added later, leave the file
+  untouched. A symlinked or read-only overlay (such as a shared team catalog)
+  is never rewritten automatically; `OPENBENCH_NO_REGISTRY_CHECK` also
+  disables compaction.
+  Explicit fixed paths stay fixed when environment variables change. Rewritten
+  files are backed up next to the original (`*.before-bundled-sync-<time>.bak`).
+  `bundled_history.json` records past values; regenerate it with
+  `python scripts/build_bundled_registry_history.py [--ref main]` after editing
+  a bundled catalog. Regeneration only adds values and refuses shallow clones.
+- Writes to the user reference and model catalogs keep only the fields that
+  differ from the bundled entry, down to single fields inside a variable. A
+  GUI save of a whole entry, a rescan or `openbench model register` no longer
+  freezes unchanged inherited defaults in the user file. Explicit fixed paths
+  and cleared paths are preserved.
+- Station matching reads the evaluated item's `varname` from the dataset,
+  falling back to `station_matching.discharge_var`, and writes the station
+  files under that name, so one dataset can serve several items. The
+  Streamflow references now give their dataset variable as `varname` (for
+  example `Disch` for GRDC), which also names their output files
+  (`Streamflow_ref_GRDC_Daily_Disch.nc`). A user catalog that still says
+  `discharge` keeps working through the fallback, which only Streamflow has:
+  a sediment item whose variable is missing from the dataset stops with an
+  error instead of reading discharge in its place.
+- The OpenBench_Streamflow_Monthly and OpenBench_Streamflow_Daily references
+  now list years 1806-2026, and OpenBench_Streamflow_Hourly 1909-2026, the
+  coverage of the 2026-10-06 release.
+- OpenBench_Streamflow_Daily and OpenBench_Streamflow_Hourly read the upstream
+  area from `upstream_area`, as OpenBench_Streamflow_Monthly does. A station
+  dataset without its configured area variable now falls back to
+  `upstream_area` or `area`, and warns when it has neither. It used to skip
+  the minimum upstream area without a word.
+- CH4 fluxes in kg CH4 m-2 s-1; g CH4 m-2 per second, day or year;
+  mg CH4 m-2 d-1; and umol or nmol CH4 m-2 s-1 now convert to gC m-2 day-1.
+  Before, they kept their declared unit. A bare nmol m-2 s-1 is read as a
+  carbon flux, like umol m-2 s-1.
+- Molar carbon fluxes (mol m-2 s-1 and the umol m-2 s-1 spellings) now use
+  12.011 g mol-1 for carbon, as the CO2 and CH4 entries already did. Results
+  in umol units, such as tower GPP, rise by 0.09 %.
+- Streamflow station matching now drops gauges whose reported upstream area
+  is too small for the river to be resolved at the simulation resolution:
+  3000 km² at 15min, 500 km² at 06min, 350 km² at 05min, 150 km² at 03min and
+  100 km² at 01min. The minimum can no longer be set in the catalog;
+  `station_matching.min_uparea` is ignored with a warning. A gauge without a
+  reported area passes this check but must still pass the others. Station
+  matching, including the `direct` method, now fails with a clear error for
+  other simulation resolutions.
+- CaMA station matching (`cama_allocation`) now keeps only gauges whose
+  allocation error `cama_alloc_err_<res>` is known and at most 0.2 in absolute
+  value, compared at the precision it is stored in. Gauges with a missing
+  (NaN) error used to pass and are now dropped, and an error of exactly 0.2
+  stored as float32 is no longer dropped. The limit can no longer be set in
+  the catalog; `station_matching.area_error_threshold` is ignored with a
+  warning.
+
+### Fixed
+- Scores and metrics normalized by temporal spread return NaN for references
+  constant in time, including repeated climatologies without interannual
+  variability. Nonzero-denominator guards are retained when varying float32
+  or float64 data have a spread that underflows to zero.
+- Metric colour bars preserve sub-unit ranges, use tick spacing appropriate
+  to arbitrarily small ranges, and keep distinct bounds for all-zero fields.
+  Contour plots no longer fail on tiny positive or cross-zero metric ranges.
+- Default station filtering recognizes normalized reference and simulation
+  coordinates. Merged files accept n_stations and n_station dimensions, and
+  station longitude coordinates are preserved instead of being treated as
+  duplicate grid seam cells.
+- Reference and root-relative paths expand environment variables and use
+  consistent separators, including on Windows.
+- Per-file (Month/Day) compute preflight rejects split mandatory inputs while
+  preserving optional inputs and independent raw fallbacks; it reads the first
+  and last selected file only, so a gap in between is still reported by
+  preprocessing. File lookup uses only the effective compute expression when a
+  model expression is overridden.
+- Compute preflight follows runtime file selection even when a named file has
+  unrelated variables. Branch checks allow complementary inputs with the same
+  filename, and reuse directory inventories within each check. File headers
+  are read only when they can change the selection (a prefix fallback or a
+  compute expression), and an unreadable header is read once.
+- Compute configuration errors propagate instead of silently reading an input
+  as the result. A partially present numbered aggregate, extra parts or an
+  invalid part count stops processing. When all parts are absent, an independent
+  native result may be used, or an unavailable station is skipped. Attribute,
+  indexing and `get()` reads receive the same input protection; a configured
+  fallback cannot bypass it. Successful calculations do not receive conversions
+  intended for the raw fallback. Inputs are found when an expression starts
+  with whitespace or continues on an indented line after `;`, and a raw
+  variable that is an input of the applicable compute is never the fallback,
+  whatever made the compute fail. When an expression reads variables in a
+  way that cannot be listed (`ds[key]`, `ds[['a']]`, `ds.data_vars[...]`),
+  no raw variable is trusted as its fallback. Stations whose files already carry the
+  standard item name use it, as gridded data do. A fatal station error names
+  the station, and temp files left by stopped workers are removed. Task
+  fingerprints include compute and file lookup changes, and `--resume` no
+  longer reuses station files written by other preprocessing code.
+- Model edits recognize logical variable aliases at every editing entry point
+  and reject conflicting definitions before writing. GUI saves and CLI imports
+  preserve removed variables, cleared compute/grid settings and complete or
+  partial disabled time offsets. Metadata absent from the GUI remains intact;
+  sparse overlays retain only changed time-offset fields. History displays the
+  effective profile, and renaming an overlay explains that the bundled original
+  returns while preserving the customization in the new profile. "New Model"
+  and "New Dataset" in the GUI no longer save onto the entry shown before.
+  `-f` after `-v` replaced a variable works again; saves and imports under the
+  built-in alias `CoLM`/`colm` update CoLM2024; switching a profile back to
+  grid restores the bundled resolution; `model show --history` marks an
+  invalid backup instead of failing; a legacy list-form varname no longer
+  repeats its fallback, and `-f` given twice for the same fallback is kept
+  once. Saving under an alias that names another model's equivalent (for
+  example `CaMaFlood`) writes that model's own profile rather than the
+  aliased one; `model alias` refuses a name that is already a model. A new
+  GUI entry or `model import` under a name that already exists (bundled or
+  user) asks before replacing it, and the GUI keeps
+  editing the resolution variant (such as `GRFR_LowRes`) that was opened.
+  `model register` writes explicit nulls when it disables bundled
+  time-offset fields, and `model rename` validates the merged profile.
+  Removing a variable of a bundled reference dataset in the GUI, or replacing
+  the dataset, now sticks: it used to come back after a restart. So does
+  deleting a bundled reference or model that had user overrides. A save,
+  delete or CLI edit that an entry in a separate `~/.openbench/<kind>/*.yaml`
+  file would undo on load (those files are merged after the catalog) is
+  refused with the file and fields named, instead of appearing saved until a
+  restart; this includes deleting a variable or dataset that only such a file
+  adds. Scans only warn.
+- Catalog compaction preserves sequential overrides with duplicate case variants,
+  meaningful descriptor names and existing file permissions. Classification no
+  longer creates user directories; absent or read-only overlays do not generate
+  repeated sync warnings. Tests use isolated home directories.
+- `openbench check` and the reference check in `openbench init` look for the
+  data files preprocessing will read, named from each source's prefix, suffix
+  and data_groupby: the single file, or every required evaluation year.
+  They used to accept any NetCDF file in the directory, so a wrong prefix
+  passed and the run failed during preprocessing. Both now share the lookup
+  code with preprocessing and name the expected file. A source with a
+  `compute` expression only gets a warning. A gridded reference or simulation
+  directory without any NetCDF file is an error (station references still only
+  warn). Missing years are listed as ranges, once per directory. Reference overrides,
+  strict alignment, station-pair coverage and nested year/month directories use
+  the runtime rules. A shared directory inventory and filename index avoid
+  repeating recursive scans for missing years; directory symlink cycles are
+  excluded. Each reference directory is resolved once per check and "has
+  NetCDF files" stops at the first file, so a check of 8 variables x 5
+  simulations over 15k-file daily references takes about 1 s instead of 9 s.
+  A single `prefix_fallback` string is one fallback, not one per character.
+  `project.only_drawing` no longer checks raw reference files it does not
+  read, and a `root_dir` starting with `~` is expanded for checks and runs.
+  On Windows, where directory entries report no inode, the walk falls back to
+  a full stat so nested data folders are not skipped as cycles.
+  Preprocessing keeps the reference root when its files are stored per year
+  instead of switching into the first year folder, which failed from the
+  second year on; only folders named like plausible years that hold NetCDF
+  files count. A `data_groupby: Single` file stored in a dated folder is
+  still found there. Folders beside the year folders, such as another
+  resolution, are not read, so years are never mixed from two branches, also
+  for the files a `compute` expression reads its inputs from;
+  `openbench check` warns about such folders. Without year folders, a year
+  whose files come from several folders (such as `0p25/` and `0p5/`) is
+  reported: an error when the same file names repeat, a warning otherwise.
+  The files holding a compute expression's inputs are checked the same way,
+  and years read through those inputs are no longer reported as missing. `openbench run --dry-run` runs
+  the same data-file checks and fails when files are missing, as
+  `openbench check` does.
+- Overlay compaction keeps keys it does not merge (for example `notes`)
+  instead of dropping them.
+- A numbered aggregate whose parts appear under two names for one number
+  (`x_1` and `x_01`) stops with an error instead of being counted twice. A
+  configured fallback no longer skips a compute expression that cannot be
+  parsed; the parse error is reported.
+- Gridded data whose variable is derived by a `compute` expression no longer
+  stop with "Missing configured-year scratch file(s)" for single-file data or
+  a single core: the scratch files are written, read and removed under one
+  name.
+- CN05.1_MidRes Surface_Air_Temperature looked for `CN05.1_Tm__2021_daily_0P25.nc`;
+  the prefix now includes the start year (`CN05.1_Tm_1961`). Its air
+  temperature is declared in `degree_Celsius` instead of an empty unit, so
+  it is converted to K like the simulation instead of being compared in °C,
+  and its precipitation in `mm day-1`.
+- The bundled model catalog no longer ships `InteractiveModel`, a profile a
+  test had written into it.
+- `openbench model register` and `model remove-var` on a user overlay that
+  holds only some fields of a bundled profile start from the merged profile:
+  `register` no longer resets `tim_res`/`data_type` to defaults and
+  `remove-var` finds variables defined only in the bundled profile.
+- Station evaluation no longer warns "time coordinates required
+  normalization" for every station. Simulations extracted from a grid are
+  stamped at the end of each period and station references in its middle;
+  when both hold one value per comparison period they are aligned by period
+  quietly. A series with several values in one period is now skipped as a
+  data gap with that reason; it used to stop the evaluation with a pandas
+  indexing error.
+- Station time-series plots draw every station with the same line width and
+  marker size. Both used to be divided by the length of the station's record,
+  so a 1-year monthly record was drawn 12 points wide and a 10-year daily
+  record almost invisibly. `obs_lineswidth`/`sim_lineswidth` and
+  `obs_markersize`/`sim_markersize` in `plot_stn.yaml` are now plain sizes in
+  points (1 and 4); older totals such as 144 and 432 are read as they were
+  meant for a 144-step record. Markers are left out of records longer than
+  `marker_max_points` (200) steps, where they hid the line.
+- Station time-series plots keep a marker on a value whose neighbours are both
+  missing. Records longer than `marker_max_points` are drawn without markers,
+  so such a value formed no line segment and vanished; a record with a value
+  every other day was not drawn at all. Lines still never cross missing values.
+- Rescanning the reference root registers OpenBench_Streamflow_Daily from its
+  `_dist.nc` file too, and OpenBench_Streamflow_Monthly with
+  `discharge_var: discharge`. The scan profile said `streamflow`, so a
+  rescanned monthly reference could not be matched.
+- In station time-series plots the RMSE/R/KGESS line now sits on its own row
+  above the plot, right-aligned, under the title. It was placed at a fixed 60 %
+  of the width on the title's row, so a long station id or coordinate ran into
+  it. The title shows the station id as it is (`01010000_USGS`, not
+  `01010000_Usgs`), and no longer overlaps the "lat = …, lon = …,
+  variable = …" title xarray adds for series with scalar coordinates.
+- Metric maps no longer cut off negative APFB, dr and cp values. Like NSE and
+  KGE they are now drawn on -1 to 1, with values beyond shown by the colour
+  bar's end arrows. The MFM components keep their colour bar within 0 to 1.
+- KGEln, APFB, br2, cp, dr and the three MFM components no longer log
+  "Unknown metric unit" for every plot.
+- A metric map whose values reach exactly one end of the colour bar and pass
+  the other end now gets the arrow for the end that is passed. Before, it got
+  no arrow, and with `show_method: interpolate` the areas beyond that end
+  were left blank.
+- A failed Streamflow station match (missing dataset, unsupported resolution,
+  or no gauge passing the limits) now stops that evaluation with the original
+  error. It used to be logged and the evaluation continued with the default
+  filter, which could keep a previously loaded station list the matcher never
+  checked.
+
+## [3.0.6] - 2026-10-05
+
+### Changed
+- Reports now also write `reports/<name>_standalone.html`, a single file with
+  every figure embedded, so the report keeps its figures when copied or sent.
+  Embedded figures are downscaled to 1200 px wide and stored as JPEG when that
+  is much smaller than PNG; `evaluation_report.html` still links the
+  full-resolution files under `reports/figures/`.
+- PDF reports are no longer generated. The `report` extra (xhtml2pdf) is now
+  empty and kept only so `pip install colm-openbench[report]` still resolves.
+- An evaluation pair now fails with a clear error when its reference and
+  simulation units convert to different base units (for example `W m-2`
+  against `mm day-1`), instead of computing metrics from incomparable values.
+  Units the converter does not recognize are still compared as declared.
+- Catalog and config variables accept `accumulated: year` or
+  `accumulated: run` for running totals. `year` is for totals that restart on
+  1 January, and `run` for totals counted from the start of the simulation.
+  After the data are assembled per year, and before resampling or unit
+  conversion, the totals are turned into the amount added in each time step.
+  A step that cannot be recovered (a year that starts after January, the first
+  step of a run, or a restart) is left missing.
+- Preprocessing warns once per source when a file's `units` attribute names a
+  different unit than the declared `varunit` (for example `mm.month-1` against
+  `mm day-1`).
+
+### Fixed
+- Carbon stock spellings `kgC m-2`, `kg C m-2`, `gC m-2` and `g C m-2`
+  now resolve to one base unit, avoiding false incompatible-unit errors.
+- Target diagrams pool equally weighted station/cell errors using centred
+  variance and the spread of station/cell biases. This preserves the RMSD
+  identity without losing small centred errors when bias dominates.
+- Since 3.0.0, every variable declared as `W m-2` or `w m-2` was converted to
+  `mm day-1` as if it were evaporation, while `W/m2` and `watt/m2` stayed in
+  W m-2. Sensible heat and radiation were therefore reported in mm day-1, and a
+  CoLM simulation (`w m-2`) evaluated against the OpenBench_FLUX station
+  references (`W/m2`) was about 29 times too small for latent heat, sensible
+  heat, net radiation, ground heat and the radiation components. W m-2 now
+  stays W m-2 in every spelling; evaporation and transpiration items declared
+  in W m-2 are still converted to mm day-1, and figures are labelled with the
+  unit the data were converted to (#211). Cached results from earlier versions
+  are invalidated.
+- Bundled registry units that did not match the data:
+  - ERA5LAND precipitation (stored in m hr-1) was declared `mm`, and its
+    runoff (daily totals in m) `mm`.
+  - ERA5-Land model output (monthly means of daily totals) was declared `m`
+    and `J m-2`. It now uses `m day-1` and `J m-2 day-1`. Evaporation, latent
+    heat and sensible heat are negated, because ECMWF fluxes are positive
+    downward.
+  - GLDAS runoff, a 3-hour accumulation, was declared `kg m-2`.
+  - WRF evapotranspiration, computed in mm day-1, was declared `mm`.
+  - GRAiCE water storage change was declared `cm` instead of
+    `cm of equivalent water thickness`.
+  - Several spellings were not recognised, so the data passed through
+    unconverted. These include `mm/s` (NoahMP5 runoff; CLM5, E3SM and ELM
+    irrigation), `degrees Celsius` (CRU temperatures), `mm d-1` (MSWEP),
+    `m of water equivalent`, `m3/m3`, `g C m-2 yr-1`, `kPa` and `Mg ha-1`.
+  - JULES7 GPP and respiration are carbon fluxes (`kg c m-2 s-1`).
+  - ecLand GPP, respiration and NEE are CO2 mass fluxes, positive downward.
+    They now use the new `kg co2 m-2 s-1`, and respiration and NEE are
+    negated.
+  - NoahMP5:
+    - `SnowDepth` is in m, not mm.
+    - `EvapSoilSfcLiq` is in m s-1.
+    - `NetEcoExchange` is in g CO2 m-2 s-1.
+    - Latent heat used only the vegetated-ground flux and is now the total.
+    - Transpiration pointed at ground evaporation.
+    - Downward shortwave and longwave radiation were swapped.
+  - TE snow water equivalent unit `kg m2-1` is now `kg m-2`.
+  - VIC5 fluxes declared `mm step-1` are `mm day-1` for the catalog's daily
+    output. The CLM5/ELM/E3SM snow cover fraction `FSNO_EFF` was declared
+    `m s-1 wind` and is now `unitless`.
+  - Removed entries whose values cannot be converted to what they are compared
+    with:
+    - CLM5/ELM/E3SM burned area (fraction per second).
+    - NoahMP5 ecosystem respiration (`RespirationSoil` has no documented unit
+      and may include root respiration).
+    - CRU frost-day frequency and the HOMTS root-zone soil temperature (unit
+      `TS`).
+    - The HSWUD water use, UpCH4 wetland methane and ESA CCI burned area
+      datasets.
+  - BCC_AVIM snow depth pointed at the snow water equivalent `H2OSNO` and now
+    uses `SNOWDP` in m.
+  - VIC5 soil moisture pointed at `OUT_SOIL_MOIST_FRAC`, which VIC 5 does not
+    write. Surface soil moisture now uses layer 0 of
+    `OUT_SOIL_LIQ_FRAC + OUT_SOIL_ICE_FRAC`; root-zone soil moisture is left
+    unmapped.
+  - CoLM `f_sum_irrig` is a year-to-date total (`accumulated: year`, monthly
+    amounts in `mm month-1`).
+  - WRF precipitation is now `RAINNC + RAINC`. Both accumulate from the start
+    of the run (`accumulated: run`, `mm hr-1`).
+  - JULES7 `rflow` is a flow per unit grid-box area and is multiplied by the
+    cell area to give m3 s-1.
+  - CLM5/ELM/E3SM rice yield pointed at `GRAINC_TO_FOOD`, the grain carbon
+    flux of all crops in a grid cell, and is no longer mapped.
+  - TE water storage change, a volume difference of `STORGE` in m3, is no
+    longer mapped.
+- A `compute` expression written inline in a config's simulation variables
+  was ignored. Only catalog expressions took effect, because the processor
+  read `sim_compute`/`ref_compute` while the config passes the expression
+  keyed by source name. Expressions from either place are now applied.
+- `openbench smoke-test --run` reported Evapotranspiration against GLEAM 4.2a
+  about 30 times too high: the bundled fixture stores monthly totals
+  (`mm.month-1`) but the smoke catalog declared `mm day-1`, so no conversion
+  was applied. The full GLEAM 4.2a reference set is stored in `mm day-1` and
+  was not affected.
+- Calendar-aware unit conversions (`mm month-1` → `mm day-1`,
+  `mm day-1` → `mm year-1`) dropped the variable name of a DataArray, so the
+  preprocessed file stored it as `__xarray_dataarray_variable__` and station
+  evaluations against such a grid reference failed with
+  `Variable '<name>' not found in ref dataset`. Bundled references declared in
+  `mm month-1` include GGMSEUD and GIWUED (`Total_Irrigation_Amount`).
+
+## [3.0.5] - 2026-09-30
+
+Compatibility and fix release for xarray 2026.9 and station comparisons.
+
+### Changed
+- Map ticks and gridlines follow the plotted extent (global, regional or a
+  user-set `min_lon`/`max_lon`/`min_lat`/`max_lat`) instead of fixed global
+  intervals, through one shared helper used by all map figures (#210).
+  Single-point or dateline-crossing extents (min >= max) still render,
+  without ticks.
+
+### Fixed
+- Map figures failed with xarray 2026.9.0 when large grids were downsampled
+  for plotting (`DataArrayCoarsen` reductions no longer accept `skipna`).
+- The comparison phase converted `compare_tim_res` to invalid pandas aliases
+  (`1DE`, `1HE`, `1WE`), so station comparisons could only align differently
+  stamped sim/ref series through a growing list of special cases, and
+  multi-step resolutions such as `3month` skipped that fallback entirely. It
+  now uses valid pandas frequencies (`1D`, `6h`, `3ME`, `1YE`, `1W`), shared by
+  normal and drawing-only runs, and station time alignment parses the step and
+  unit.
+- `conda/meta.yaml` now carries the checksum of the sdist published with the
+  GitHub release.
+
+## [3.0.4] - 2026-09-30
+
+Interactive `openbench init` now asks for the evaluation settings it used to
+fill in silently, and `openbench run --resume` continues long grid-to-station
+runs without redoing station preprocessing.
+
+### Added
+- New wizard step "Domain, Resolution & Runtime": latitude/longitude range,
+  target `tim_res` and `grid_res` (defaults inferred from the selected
+  references and simulations), `time_alignment`, IGBP/PFT/climate-zone
+  group-by, and `num_cores` (`auto` = all CPU cores). Answers are written to
+  `project` as active values. When simulations disagree on `tim_res` or
+  `grid_res`, a target is required (`none` would fail `openbench check`), and
+  an unsupported inferred `tim_res` (e.g. `2-Day`) is not offered as the
+  default.
+- New wizard step "Metrics, Scores & Analyses": pick metrics, scores,
+  comparison figures and statistics methods by number or name from numbered
+  lists, with defaults marked `*`.
+- `openbench init` asks to confirm scanned simulation cases before station
+  lists are materialized; answering no returns to the simulation roots prompt.
+- `openbench run --resume` reuses a task's station preprocessing when its
+  completion marker matches the current inputs and configuration and every
+  expected station artifact exists (a non-empty `.nc` or a `.skip.txt`
+  data-gap marker). Metrics and scores are always recomputed; tasks that do
+  not qualify are preprocessed normally, and the run manifest records which
+  tasks were resumed. `--resume` cannot be combined with `--force`,
+  `--comparison-only` or `project.only_drawing`.
+- CaMa `Total_Runoff` is converted from a per-cell volume flux (`m3 s-1`) to
+  `mm day-1` using the grid-cell area of the input grid. Catalog `compute`
+  expressions may now use `np.sin` and `.diff()`.
+
+### Changed
+- Every init prompt explains the setting and shows its default; Enter keeps
+  the default. Yes/no prompts read `[yes/no/back, Enter = …]`.
+- `b` is accepted as `back` in all init prompts and in yes/no and numbered
+  prompts of other wizards. Free-text data-name prompts (NetCDF variable
+  names, units, globs) still require the full word `back`.
+- Going back skips comparison/statistics item prompts for disabled phases.
+- `--refresh-ref` help now states that init never rescans without it, and init
+  prints a hint when the reference catalog was not rescanned.
+- Faster grid preprocessing, conservative regridding and station-grid
+  extraction. Station matching reads only candidate time windows, and
+  `openbench check` scans simulation time coverage in parallel using
+  `num_cores`.
+- Preprocessing outputs (yearly scratch files and flat sim/ref NetCDF) follow
+  `OPENBENCH_NETCDF_COMPRESSION` instead of always being written uncompressed.
+- Stations without overlapping finite sim/ref values are no longer filtered
+  when the station list is loaded; evaluation still skips them. The old filter
+  was bypassed whenever any station had a `.skip.txt` marker and reopened
+  every station file.
+
+### Fixed
+- Keep station IDs as text when reading station lists and station metadata,
+  so IDs with leading zeros (e.g. `0000000009463`) are no longer turned into
+  integers and lost. ID-like columns are recognised in any case (`ID`, `Id`,
+  `site_id`, ...).
+- Match station IDs regardless of zero padding (`0000000009463` == `9463`)
+  when merging simulation and reference station lists, selecting stations
+  from merged NetCDF files, and looking up sidecar metadata. HydroWeb also
+  finds station files named by the unpadded ID.
+- Grid evaluation found no overlapping timestamps when a monthly reference kept
+  mid-month labels while a daily simulation was resampled to month-end. Data
+  already at the target frequency is now resampled to the shared time labels.
+- Station comparisons (Taylor and Target diagrams, SMPI, seasonal portraits,
+  scenario correlation, ...) at daily, hourly or yearly `compare_tim_res`
+  reported stations as having no overlapping time steps when sim and ref used
+  different timestamp conventions (e.g. 00 UTC vs 12 UTC daily values). The
+  comparison phase stores the resolution as `1DE`/`1HE`/`1YE`, which the
+  timestamp normalization fallback did not recognise; monthly (`1ME`) was
+  already handled in 3.0.3.
+- Station IDs duplicated across sources get a filename-safe qualifier (the
+  previous `::` separator is invalid in Windows filenames). Only duplicated
+  IDs are qualified.
+- Seasonal portrait plots: annual-cycle scores need all 12 months, so they are
+  reported as N/A for three-month seasons with a warning, and the remaining
+  outputs still render. Constant metric ranges no longer break the colorbar.
+- Parallel-coordinate plots apply the 5–95% outlier trim only when a metric
+  has more than two finite values.
+- SWAMPS_v3.2 catalog entries: corrected root directories, unit `percent`,
+  daily LowRes data and 1992–2020 MidRes years. A user catalog under
+  `~/.openbench/references/` overrides the bundled one, so update the entry
+  there too.
 
 ## [3.0.3] - 2026-09-18
 

@@ -246,6 +246,47 @@ def test_reference_loader_skips_reserved_overlay_files(tmp_path, caplog):
     assert "reference_profiles.yaml" not in caplog.text
 
 
+def test_reference_station_matching_fixed_limits_are_ignored_with_warning(tmp_path, caplog, monkeypatch):
+    """Upstream area and allocation error limits are fixed, so catalog values are dropped."""
+    import logging
+
+    import yaml
+
+    monkeypatch.setattr(registry_manager_module, "_IGNORED_STATION_MATCHING_WARNED", set())
+    references_dir = tmp_path / "references"
+    references_dir.mkdir()
+    (references_dir / "reference_catalog.yaml").write_text(
+        yaml.dump(
+            {
+                "RiverStn": {
+                    "name": "RiverStn",
+                    "category": "Water",
+                    "data_type": "stn",
+                    "tim_res": "Day",
+                    "root_dir": str(tmp_path),
+                    "station_matching": {
+                        "method": "cama_allocation",
+                        "dataset_file": "stations.nc",
+                        "area_error_threshold": 0.1,
+                        "min_uparea": 10.0,
+                        "max_uparea": 5000.0,
+                    },
+                    "variables": {"Streamflow": {"varname": "Q", "varunit": "m3 s-1"}},
+                }
+            }
+        )
+    )
+
+    with caplog.at_level(logging.WARNING):
+        sm = RegistryManager(user_dir=tmp_path).get_reference("RiverStn").station_matching
+
+    assert not hasattr(sm, "min_uparea")
+    assert not hasattr(sm, "area_error_threshold")
+    assert sm.max_uparea == 5000.0
+    assert "station_matching.min_uparea=10.0 is ignored" in caplog.text
+    assert "station_matching.area_error_threshold=0.1 is ignored" in caplog.text
+
+
 def test_user_reference_overlay_partial_variable_update_preserves_existing_fields(tmp_path):
     import yaml
 
@@ -466,7 +507,9 @@ def test_station_catalog_entries_have_a_station_list_matching_filter_or_scan_pro
     assert incomplete == []
 
 
-def test_station_matching_is_only_configured_for_streamflow():
+def test_station_matching_is_only_configured_for_station_matched_items():
+    from openbench.data.station_matcher import is_station_matched_item
+
     offenders = {}
 
     for filename in ("reference_catalog.yaml", "reference_profiles.yaml"):
@@ -476,7 +519,7 @@ def test_station_matching_is_only_configured_for_streamflow():
             for name, data in entries.items()
             if isinstance(data, dict)
             and data.get("station_matching")
-            and "Streamflow" not in (data.get("variables") or {})
+            and not any(is_station_matched_item(item) for item in (data.get("variables") or {}))
         ]
 
     assert offenders == {
@@ -766,7 +809,8 @@ def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
     assert "OPENBENCH_REF_ROOT" not in caplog.text
 
 
-def test_profile_station_matching_dataset_files_match_catalog():
+def test_profile_station_matching_matches_catalog():
+    """A rescan copies the profile's station_matching into the user catalog."""
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
     mismatches = {}
@@ -776,13 +820,24 @@ def test_profile_station_matching_dataset_files_match_catalog():
             continue
         profile_matching = profile.get("station_matching")
         catalog_matching = catalog[name].get("station_matching")
-        if profile_matching and catalog_matching:
-            profile_file = profile_matching.get("dataset_file")
-            catalog_file = catalog_matching.get("dataset_file")
-            if profile_file != catalog_file:
-                mismatches[name] = (profile_file, catalog_file)
+        if profile_matching and catalog_matching and profile_matching != catalog_matching:
+            mismatches[name] = {
+                key: (profile_matching.get(key), catalog_matching.get(key))
+                for key in set(profile_matching) | set(catalog_matching)
+                if profile_matching.get(key) != catalog_matching.get(key)
+            }
 
     assert mismatches == {}
+
+
+def test_openbench_streamflow_profiles_find_full_or_dist_files():
+    import fnmatch
+
+    profiles = _load_builtin_yaml("reference_profiles.yaml")
+    for res in ("Daily", "Hourly", "Monthly"):
+        file_glob = profiles[f"OpenBench_Streamflow_{res}"]["scan"]["file_glob"]
+        for kind in ("full", "dist"):
+            assert fnmatch.fnmatch(f"OpenBench_Streamflow_{res}_{kind}.nc", file_glob), (res, kind)
 
 
 def test_era5land_profile_covers_catalog_variables():
@@ -911,6 +966,9 @@ def test_check_scans_later_simulation_fallbacks_while_adapter_stops_at_first_ent
     s2 = tmp_path / "s2"
     s1.mkdir()
     s2.mkdir()
+    for directory in (tmp_path, s1, s2):  # data named as preprocessing reads it (empty prefix/suffix)
+        for year in (2000, 2001):
+            (directory / f"{year}.nc").touch()
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="fallback", output_dir="/out", years=[2000, 2001]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),

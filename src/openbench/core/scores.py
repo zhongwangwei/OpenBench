@@ -1,7 +1,8 @@
-import logging
-
 import numpy as np
 import xarray as xr
+
+from openbench.core.metrics import validated_pair, varies_along
+from openbench.util.groupby import without_flox
 
 
 class scores:
@@ -33,13 +34,7 @@ class scores:
         a missing model value can be excluded from the numerator but still
         influence the observed variance/mean denominator.
         """
-        if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
-            logging.error("Inputs must be xarray DataArrays")
-            raise TypeError("Inputs must be xarray DataArrays")
-
-        s, o = xr.align(s, o, join="inner")
-        mask = np.isfinite(s) & np.isfinite(o)
-        return s.where(mask), o.where(mask)
+        return validated_pair(s, o)
 
     def _calculate_mean_and_anomalies(self, data):
         """
@@ -52,7 +47,8 @@ class scores:
             tuple: (mean, anomalies)
         """
         mean = data.mean(dim="time")
-        anomalies = data.groupby("time.month") - data.groupby("time.month").mean("time")
+        with without_flox():
+            anomalies = data.groupby("time.month") - data.groupby("time.month").mean("time")
         return mean, anomalies
 
     def index_agreement(self, s, o):
@@ -89,7 +85,7 @@ class scores:
         crms = np.sqrt(((o - o.mean(dim="time")) ** 2).mean(dim="time"))
         # Constant observations -> crms=0 -> inf. Return NaN instead so the
         # overall score correctly drops these grid cells.
-        return xr.where(crms != 0, np.exp(-np.abs(bias) / crms), np.nan)
+        return xr.where(varies_along(o) & (crms != 0), np.exp(-np.abs(bias) / crms), np.nan)
 
     def nRMSEScore(self, s, o):
         """
@@ -106,7 +102,7 @@ class scores:
         s_mean, o_mean = s.mean(dim="time"), o.mean(dim="time")
         crms = np.sqrt(((o - o_mean) ** 2).mean(dim="time"))
         crmse = np.sqrt((((s - s_mean) - (o - o_mean)) ** 2).mean(dim="time"))
-        return xr.where(crms != 0, np.exp(-crmse / crms), np.nan)
+        return xr.where(varies_along(o) & (crms != 0), np.exp(-crmse / crms), np.nan)
 
     def nPhaseScore(self, s, o):
         """
@@ -120,8 +116,9 @@ class scores:
             xarray.DataArray: Normalized Phase Score (0 to 1, 1 being best)
         """
         s, o = self._validate_inputs(s, o)
-        ref_monthly = o.groupby("time.month").mean("time")
-        sim_monthly = s.groupby("time.month").mean("time")
+        with without_flox():
+            ref_monthly = o.groupby("time.month").mean("time")
+            sim_monthly = s.groupby("time.month").mean("time")
         ref_amplitude = ref_monthly.max("month") - ref_monthly.min("month")
         sim_amplitude = sim_monthly.max("month") - sim_monthly.min("month")
         complete_cycle = (np.isfinite(ref_monthly) & np.isfinite(sim_monthly)).sum("month") == 12
@@ -152,8 +149,12 @@ class scores:
         # Tropical evergreen / arid grid cells can have no IAV (o_iav=0),
         # which would otherwise yield inf. Such cells should be NaN — they
         # also fail the np.isnan(...).all() check in Overall_Score and would
-        # silently pollute the aggregate.
-        return xr.where(o_iav != 0, np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
+        # silently pollute the aggregate. A repeated climatology has no IAV either:
+        # each calendar month then takes a single value over the years.
+        with without_flox():
+            month = o.groupby("time.month")
+            o_has_iav = (month.max("time") > month.min("time")).any("month")
+        return xr.where(o_has_iav & (o_iav != 0), np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
 
     def nSpatialScore(self, s, o):
         """
@@ -243,8 +244,9 @@ class scores:
             xarray.DataArray: Normalized Seasonality Score (0 to 1, 1 being best)
         """
         s, o = self._validate_inputs(s, o)
-        s_cycle = s.groupby("time.month").mean("time")
-        o_cycle = o.groupby("time.month").mean("time")
+        with without_flox():
+            s_cycle = s.groupby("time.month").mean("time")
+            o_cycle = o.groupby("time.month").mean("time")
         s_amp = s_cycle.max("month") - s_cycle.min("month")
         o_amp = o_cycle.max("month") - o_cycle.min("month")
         complete_cycle = (np.isfinite(s_cycle) & np.isfinite(o_cycle)).sum("month") == 12

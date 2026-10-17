@@ -9,6 +9,7 @@ import yaml
 from click.testing import CliRunner
 
 from openbench.cli.main import cli
+from openbench.data.registry.manager import RegistryManager
 
 runner = CliRunner()
 
@@ -67,6 +68,25 @@ def _install_single_reference_registry(monkeypatch, refs=None, models=None):
 
     monkeypatch.setattr(registry_package, "RegistryManager", FakeRegistryManager)
     return refs
+
+
+# Step 5 of `openbench init`: lat, lon, tim_res, grid_res, time alignment,
+# IGBP / PFT / climate-zone group-by, and cores. Enter keeps every default.
+_INIT_DOMAIN_DEFAULTS = [""] * 9
+
+
+def _init_options_input(comparison="n", statistics="n", *, scanned=False, domain=None) -> str:
+    """Answers for `openbench init` from the scan confirmation to the end."""
+    answers = [""] if scanned else []
+    answers += list(domain if domain is not None else _INIT_DOMAIN_DEFAULTS)
+    answers += ["", ""]  # metrics, scores
+    answers.append(comparison)
+    if comparison.lower() in {"", "y", "yes"}:
+        answers.append("")  # comparison items
+    answers.append(statistics)
+    if statistics.lower() in {"y", "yes"}:
+        answers.append("")  # statistics items
+    return "\n".join(answers) + "\n"
 
 
 def test_run_help():
@@ -2701,8 +2721,10 @@ def test_model_register_preserves_canonical_profile_name_when_input_case_differs
     descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
         "CoLM2024"
     ]
-    assert descriptor["name"] == "CoLM2024"
+    # The overlay of a bundled profile keeps only changed fields; its name is the catalog key.
+    assert descriptor.get("name", "CoLM2024") == "CoLM2024"
     assert descriptor["variables"]["Snow_Depth"]["varname"] == "sd"
+    assert RegistryManager(user_dir=home / ".openbench").get_model("colm2024").name == "CoLM2024"
 
 
 def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch):
@@ -3246,7 +3268,7 @@ def test_init_command_initializes_user_registry_overlays(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n\n\n\n\n\n\n\n",
+        input="\n" * 7 + _init_options_input("", ""),
     )
 
     assert result.exit_code == 0
@@ -3270,7 +3292,7 @@ def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
         "",
         "",
         "",
-        "back",  # variables -> project
+        "b",  # variables -> project (free-text prompt still accepts the short form in init)
         "fixed-project",
         "",
         "2005",
@@ -3283,17 +3305,15 @@ def test_init_can_return_through_every_wizard_step(tmp_path, monkeypatch):
         "2",
         "",
         "",
-        "back",  # options -> simulation
+        "b",  # options -> simulation
         "",
         "",
-        "n",
-        "n",
     ]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3308,12 +3328,12 @@ def test_init_back_skips_promptless_reference_step(tmp_path, monkeypatch):
     monkeypatch.setattr("openbench.cli.init_cmd.ensure_user_registry_overlays", lambda: tmp_path / "user")
     _install_single_reference_registry(monkeypatch)
     output = tmp_path / "openbench.yaml"
-    answers = ["", "", "", "", "", "back", "", "", "", "n", "n"]
+    answers = ["", "", "", "", "", "back", "", "", ""]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3340,28 +3360,271 @@ def test_prompt_fields_back_keeps_latest_value():
     assert "2019-2020" in result.output
 
 
-def test_init_mixed_simulation_resolutions_keep_target_prompt(monkeypatch):
+def _run_prompt(func, answers):
+    """Invoke an interactive helper inside a click command and return (result, value)."""
+    captured = {}
+
+    @click.command()
+    def demo():
+        captured["value"] = func()
+
+    result = runner.invoke(demo, input="\n".join(answers) + "\n")
+    return result, captured.get("value")
+
+
+def test_init_mixed_simulation_resolutions_keep_target_prompt():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    simulation = {
+        "Monthly": {"tim_res": "Month"},
+        "Daily": {"tim_res": "Day"},
+    }
+    answers = ["", "", "Day", "", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, simulation, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Simulations use mixed time resolutions (Month, Day)" in result.output
+    assert "Target tim_res [Month]" in result.output
+    assert options["tim_res"] == "Day"
+    assert "grid_res" not in options
+
+
+def test_init_domain_options_show_defaults_and_validate_input():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = [
+        "10,95",  # rejected: outside -90..90
+        "10, 60",
+        "70 140",
+        "",
+        "none",
+        "STRICT",
+        "y",
+        "",
+        "",
+        "0",  # rejected: must be >= 1
+        "8",
+    ]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Latitude range (south,north; -90..90) [-90,90]" in result.output
+    assert "need -90 <= min < max <= 90" in result.output
+    assert "Time alignment (intersection, per_pair, strict) [intersection]" in result.output
+    assert "[yes/no/back, Enter = no]" in result.output
+    assert "Number of cores [auto]" in result.output
+    assert "number of cores must be at least 1" in result.output
+    assert options == {
+        "lat_range": [10.0, 60.0],
+        "lon_range": [70.0, 140.0],
+        "tim_res": "Month",
+        "time_alignment": "strict",
+        "IGBP_groupby": True,
+        "PFT_groupby": False,
+        "climate_zone_groupby": False,
+        "num_cores": 8,
+    }
+
+
+def test_init_domain_options_b_returns_to_previous_prompt_with_last_answer():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = ["10,60", "b", "", "", "", "", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Returning to: Latitude range" in result.output
+    assert "Latitude range (south,north; -90..90) [10,60]" in result.output
+    assert options["lat_range"] == [10.0, 60.0]
+    assert "tim_res" not in options
+    assert "num_cores" not in options
+
+
+def test_init_domain_options_require_target_resolution_for_mixed_simulations():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    simulation = {
+        "Coarse": {"tim_res": "Month", "grid_res": 0.5},
+        "Fine": {"tim_res": "Day", "grid_res": 0.25},
+    }
+    answers = ["", "", "none", "Day", "none", "0.25", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({}, simulation, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "the simulations use different tim_res values, so a target is required" in result.output
+    assert "the simulations use different grid_res values, so a target is required" in result.output
+    assert "Simulations use mixed time resolutions (Month, Day); a target is required." in result.output
+    assert "or 'none'" not in result.output
+    assert (options["tim_res"], options["grid_res"]) == ("Day", 0.25)
+
+
+def test_init_domain_options_tim_res_help_matches_accepted_values():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    answers = ["", "", "3hr", "3Month", "nan", "inf", "0.5", "", "", "", "", ""]
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "Month"}, {}, {}),
+        answers,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "3hr" not in result.output.split("Target tim_res [Month]:")[0]
+    assert "Choices: Year, Month, Day, Hour, 3Hour, 6Hour, 8Day, Nmonth" in result.output
+    assert "unsupported tim_res '3hr'; choose one of:" in result.output
+    assert result.output.count("grid_res must be a positive finite number") == 2
+    assert (options["tim_res"], options["grid_res"]) == ("3month", 0.5)
+
+
+def test_init_domain_options_replace_unsupported_inferred_tim_res_default():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    result, options = _run_prompt(
+        lambda: _prompt_domain_runtime_options({"tim_res": "2-Day"}, {}, {}),
+        [""] * 9,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Inferred tim_res '2-Day' is not a supported target; choose one." in result.output
+    assert "Target tim_res [none]" in result.output
+    assert "tim_res" not in options
+
+
+def test_init_domain_options_remember_auto_cores_after_revisits():
+    from openbench.cli.init_cmd import _prompt_domain_runtime_options
+
+    state = {}
+    # Each call is one visit to step 5, e.g. after going back from step 6.
+    for cores in ("8", "auto", ""):
+        result, options = _run_prompt(
+            lambda: _prompt_domain_runtime_options({}, {}, state),
+            [""] * 8 + [cores],
+        )
+        assert result.exit_code == 0, result.output
+
+    assert "Number of cores [auto]" in result.output
+    assert "num_cores" not in options
+
+
+def test_init_analysis_options_select_by_number_or_name_without_all():
+    from openbench.cli.init_cmd import METRIC_OPTIONS, _prompt_analysis_options
+
+    kge_number = str(METRIC_OPTIONS.index("KGE") + 1)
+    answers = [
+        "all",  # rejected: no 'all' shortcut
+        f"{kge_number}, rmse",
+        "",
+        "",
+        "Taylor_Diagram, Target_Diagram",
+        "yes",
+        "Mean, Z_Score",
+    ]
+    result, options = _run_prompt(lambda: _prompt_analysis_options({}), answers)
+
+    assert result.exit_code == 0, result.output
+    assert "'all'" not in result.output
+    assert "unknown item(s): all" in result.output
+    assert "Metrics [bias, RMSE, correlation]" in result.output
+    assert "Scores [Overall_Score]" in result.output
+    assert "Enable comparison? [yes/no/back, Enter = yes]" in result.output
+    assert options == {
+        "metrics": ["KGE", "RMSE"],
+        "scores": ["Overall_Score"],
+        "comparison": {"enabled": True, "items": ["Taylor_Diagram", "Target_Diagram"]},
+        "statistics": {"enabled": True, "items": ["Mean", "Z_Score"]},
+    }
+
+
+def test_init_analysis_options_back_skips_items_of_disabled_phase():
+    from openbench.cli.init_cmd import _prompt_analysis_options
+
+    # Disable comparison, go back from the statistics toggle, then re-enable it.
+    answers = ["", "", "n", "b", "y", "", ""]
+    result, options = _run_prompt(lambda: _prompt_analysis_options({}), answers)
+
+    assert result.exit_code == 0, result.output
+    assert "Returning to: Enable comparison?" in result.output
+    assert "Enable comparison? [yes/no/back, Enter = no]" in result.output
+    assert options["comparison"] == {"enabled": True, "items": ["Taylor_Diagram", "HeatMap"]}
+    assert options["statistics"] == {"enabled": False, "items": None}
+
+
+def test_wizard_confirm_accepts_b_for_back():
+    from openbench.cli._wizard import BackRequested
+    from openbench.cli._wizard import confirm as wizard_confirm
+
+    def ask():
+        try:
+            return wizard_confirm("Continue?", default=True)
+        except BackRequested:
+            return "back"
+
+    result, value = _run_prompt(ask, ["b"])
+
+    assert result.exit_code == 0, result.output
+    assert "Continue? [yes/no/back, Enter = yes]" in result.output
+    assert value == "back"
+
+
+def test_init_rejecting_scanned_cases_returns_to_simulation_roots(tmp_path, monkeypatch):
     import openbench.cli.init_cmd as init_module
+    import openbench.data.sim_scanner as sim_scanner
+    from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
 
-    confirmations = iter([True, False])
-    prompts = []
-    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *_args, **_kwargs: next(confirmations))
-    monkeypatch.setattr(
-        init_module,
-        "_wizard_prompt",
-        lambda text, **_kwargs: prompts.append(text) or "Day",
+    sim_root = tmp_path / "Simulation"
+    sim_root.mkdir()
+    materialized = []
+
+    def fake_scan_simulation_roots(roots, **kwargs):
+        return SimulationScanResult(
+            roots=[sim_root],
+            cases=[
+                SimulationCase(
+                    label="Case01",
+                    root_dir=sim_root / "Case01",
+                    model="CoLM",
+                    depth=1,
+                    data_type="grid",
+                    tim_res="Month",
+                    grid_res=0.5,
+                    data_groupby="Month",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(init_module, "ensure_user_registry_overlays", lambda: tmp_path / "user")
+    _install_single_reference_registry(monkeypatch)
+    monkeypatch.setattr(sim_scanner, "scan_simulation_roots", fake_scan_simulation_roots)
+    monkeypatch.setattr(sim_scanner, "materialize_station_cases", lambda *args, **kwargs: materialized.append(1))
+    output = tmp_path / "openbench.yaml"
+
+    # Reject the scan, then add a simulation manually.
+    answers = ["", "", "2004", "2004", "", "n", "", "MyLSM", str(sim_root), "", ""]
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
-    _comparison, _statistics, resolution = init_module._prompt_project_options(
-        {"tim_res": "Month"},
-        {
-            "Monthly": {"tim_res": "Month"},
-            "Daily": {"tim_res": "Day"},
-        },
-    )
-
-    assert prompts == ["  Target tim_res for mixed simulation resolutions"]
-    assert resolution["tim_res"] == "Day"
+    assert result.exit_code == 0, result.output
+    assert "Found 1 simulation case(s): Case01" in result.output
+    assert "Use these scanned simulation cases? [yes/no/back, Enter = yes]" in result.output
+    assert "Returning to simulation data roots." in result.output
+    assert materialized == []
+    assert yaml.safe_load(output.read_text(encoding="utf-8"))["simulation"] == {
+        "MyLSM": {"model": "MyLSM", "root_dir": str(sim_root)}
+    }
 
 
 def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, monkeypatch):
@@ -3381,14 +3644,12 @@ def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, mon
         "",
         "",
         "",
-        "n",
-        "n",
     ]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -3396,7 +3657,11 @@ def test_init_back_moves_to_previous_field_within_project_settings(tmp_path, mon
     assert "Returning to: Start year" in result.output
 
 
-def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("first_choice", "revised_choice", "expected"),
+    [("1", "2", "LatentB"), ("1,2", "", ["LatentA", "LatentB"])],
+)
+def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch, first_choice, revised_choice, expected):
     refs = [
         _InitFakeReference(name="LatentA"),
         _InitFakeReference(name="LatentB"),
@@ -3409,17 +3674,17 @@ def test_init_back_moves_to_previous_reference_choice(tmp_path, monkeypatch):
     )
     _install_single_reference_registry(monkeypatch, refs=refs)
     output = tmp_path / "openbench.yaml"
-    answers = ["", "", "2004", "2004", "", "1", "back", "2", "2", "", "", "n", "n"]
+    answers = ["", "", "2004", "2004", "", first_choice, "back", revised_choice, "2", "", ""]
 
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n".join(answers) + "\n",
+        input="\n".join(answers) + "\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
     assert yaml.safe_load(output.read_text())["reference"] == {
-        "Latent_Heat": "LatentB",
+        "Latent_Heat": expected,
         "Runoff": "RunoffB",
     }
     assert "Returning to: Select for Latent_Heat" in result.output
@@ -3438,7 +3703,7 @@ def test_init_uses_timestamped_default_output(tmp_path, monkeypatch):
     )
     _install_single_reference_registry(monkeypatch)
 
-    result = runner.invoke(cli, ["init", "--no-ref-check"], input="\n\n\n\n\n\n\n\n\n")
+    result = runner.invoke(cli, ["init", "--no-ref-check"], input="\n" * 7 + _init_options_input("", ""))
 
     assert result.exit_code == 0
     assert (tmp_path / "openbench_init_20260501-140305.yaml").exists()
@@ -3524,7 +3789,7 @@ def test_init_scans_simulation_roots_into_generated_config(tmp_path, monkeypatch
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n1996\n1996\n\nn\nn\n",
+        input="\n\n1996\n1996\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3623,7 +3888,7 @@ def test_init_passes_explicit_sim_model_to_scan(tmp_path, monkeypatch):
             "-o",
             str(output),
         ],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3695,7 +3960,7 @@ def test_init_min_year_threshold_defaults_to_one(tmp_path, monkeypatch):
             "-o",
             str(output),
         ],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3770,7 +4035,7 @@ def test_init_sets_project_resolution_from_selected_reference_when_sim_scan_is_m
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n1996\n1996\n\nn\nn\n",
+        input="\n\n1996\n1996\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3853,7 +4118,7 @@ def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, mon
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2005\n1\n1\n\nn\n",
+        input="\n\n2004\n2005\n1\n1\n" + _init_options_input("", "n", scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -3866,7 +4131,10 @@ def test_init_writes_loadable_yaml_with_commented_template_options(tmp_path, mon
     assert cfg.scores == ["Overall_Score"]
     assert cfg.comparison.items == ["Taylor_Diagram", "HeatMap"]
 
-    assert "# lat_range: [-90.0, 90.0]" in text
+    assert "  lat_range: [-90.0, 90.0]" in text
+    assert "  time_alignment: intersection" in text
+    assert "  IGBP_groupby: false" in text
+    assert "  # num_cores: 4  # unset = all CPU cores (auto)" in text
     assert "# - Evapotranspiration" in text
     assert "# Latent_Heat: ERA5LAND_LowRes" in text
     assert "# - KGE" in text
@@ -3942,7 +4210,7 @@ def test_init_deduplicates_variables_that_appear_in_multiple_categories(tmp_path
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2005\n\nn\nn\n",
+        input="\n\n2004\n2005\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4012,7 +4280,7 @@ def test_init_accepts_variable_and_reference_names(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nlatent_heat\nera5land_lowres\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nlatent_heat\nera5land_lowres\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4021,6 +4289,155 @@ def test_init_accepts_variable_and_reference_names(tmp_path, monkeypatch):
     assert config["reference"]["Latent_Heat"] == "ERA5LAND_LowRes"
     assert "/refs/era5land" in result.output
     assert "1981-2022" in result.output
+
+
+@pytest.mark.parametrize("selection", ["1,2", "FirstRef, secondref", "1,2,firstref"])
+def test_init_accepts_multiple_references_and_uses_all_source_metadata(tmp_path, monkeypatch, selection):
+    import openbench.cli.init_cmd as init_module
+    from openbench.config import load_config
+
+    refs = [
+        _InitFakeReference(name="FirstRef", variable="Evapotranspiration", tim_res="Day", years=[2000, 2010]),
+        _InitFakeReference(name="SecondRef", variable="Evapotranspiration", tim_res="Month", years=[2015, 2020]),
+    ]
+    output = tmp_path / "openbench.yaml"
+    monkeypatch.setattr(init_module, "ensure_user_registry_overlays", lambda: tmp_path / "user")
+    _install_single_reference_registry(monkeypatch, refs=refs)
+
+    result = runner.invoke(
+        cli,
+        ["init", "--no-ref-check", "-o", str(output)],
+        input=f"\n\n2004\n2004\nEvapotranspiration\n{selection}\n\n\n" + _init_options_input(),
+    )
+
+    assert result.exit_code == 0, result.output
+    config = load_config(output)
+    assert config.reference.sources["Evapotranspiration"] == ["FirstRef", "SecondRef"]
+    assert config.project.tim_res == "Month"
+    assert "SecondRef for Evapotranspiration covers 2015-2020, outside project years 2004-2004" in result.output
+    assert "# Evapotranspiration: FirstRef" not in output.read_text()
+    assert "# Evapotranspiration: SecondRef" not in output.read_text()
+
+
+@pytest.mark.parametrize("selection", ["0,1", "1,0", "1,99", "1,unknown", "1,", ","])
+def test_init_rejects_invalid_multi_reference_selections(selection):
+    from openbench.cli.init_cmd import _parse_reference_selection
+
+    with pytest.raises(click.ClickException):
+        _parse_reference_selection(selection, [_InitFakeReference()], "Evapotranspiration")
+
+
+def test_init_validates_every_selected_reference(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+
+    ready = tmp_path / "ready"
+    ready.mkdir()
+    (ready / "data.nc").touch()
+    refs = [
+        _InitFakeReference(name="Ready", root_dir=str(ready)),
+        _InitFakeReference(name="Missing", root_dir=str(tmp_path / "missing")),
+    ]
+    with pytest.raises(click.ClickException, match="Latent_Heat / Missing"):
+        _validate_selected_reference_data({"Latent_Heat": refs})
+
+
+def test_init_reference_check_requires_files_named_by_the_catalog(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    data_dir = tmp_path / "Meteo" / "CN05.1"
+    data_dir.mkdir(parents=True)
+    (data_dir / "CN05.1_Tm_1961_2021_daily_0P25.nc").touch()
+
+    def reference(prefix):
+        var = VariableMapping(
+            varname="tm", varunit="", prefix=prefix, suffix="_2021_daily_0P25", sub_dir="Meteo/CN05.1"
+        )
+        return ReferenceDataset(
+            name="CN05.1_MidRes",
+            description="",
+            category="Meteorology",
+            data_type="grid",
+            tim_res="Day",
+            data_groupby="Single",
+            timezone=0,
+            years=[1961, 2021],
+            variables={"Surface_Air_Temperature": var},
+            root_dir=str(tmp_path),
+        )
+
+    with pytest.raises(click.ClickException, match=r"CN05\.1_Tm__2021_daily_0P25\.nc"):
+        _validate_selected_reference_data({"Surface_Air_Temperature": reference("CN05.1_Tm_")}, years=(2000, 2010))
+    _validate_selected_reference_data({"Surface_Air_Temperature": reference("CN05.1_Tm_1961")}, years=(2000, 2010))
+
+
+def test_init_reference_check_accepts_station_named_files(tmp_path, capsys):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    ref = ReferenceDataset(
+        name="StationRef",
+        description="",
+        category="Energy",
+        data_type="stn",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2010],
+        root_dir=str(tmp_path),
+        variables={"Latent_Heat": VariableMapping(varname="Qle", varunit="W m-2")},
+    )
+
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+    assert "no NetCDF files found" in capsys.readouterr().out
+    (tmp_path / "AU-Tum.nc").touch()
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+
+
+def test_init_reference_check_resolves_nested_grid_directory_without_sub_dir(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    data_dir = tmp_path / "0p25deg-daily"
+    data_dir.mkdir()
+    (data_dir / "reference.nc").touch()
+    ref = ReferenceDataset(
+        name="GridRef",
+        description="",
+        category="Energy",
+        data_type="grid",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[2000, 2010],
+        root_dir=str(tmp_path),
+        variables={"Latent_Heat": VariableMapping(varname="Qle", varunit="W m-2", prefix="reference", sub_dir="")},
+    )
+
+    _validate_selected_reference_data({"Latent_Heat": ref}, years=(2000, 2010))
+
+
+def test_init_reference_check_rejects_an_empty_grid_directory(tmp_path):
+    from openbench.cli.init_cmd import _validate_selected_reference_data
+    from openbench.data.registry.schema import ReferenceDataset, VariableMapping
+
+    (tmp_path / "Meteo" / "CN05.1").mkdir(parents=True)
+    var = VariableMapping(varname="tm", varunit="", prefix="CN05.1_Tm_1961", suffix="_2021", sub_dir="Meteo/CN05.1")
+    reference = ReferenceDataset(
+        name="CN05.1_MidRes",
+        description="",
+        category="Meteorology",
+        data_type="grid",
+        tim_res="Day",
+        data_groupby="Single",
+        timezone=0,
+        years=[1961, 2021],
+        variables={"Surface_Air_Temperature": var},
+        root_dir=str(tmp_path),
+    )
+
+    with pytest.raises(click.ClickException, match="no NetCDF files"):
+        _validate_selected_reference_data({"Surface_Air_Temperature": reference}, years=(2000, 2010))
 
 
 def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
@@ -4039,7 +4456,7 @@ def test_init_reference_choice_zero_skips_variable(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nall\n0\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nall\n0\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4098,11 +4515,11 @@ def test_init_reloads_reference_status_after_overlay_creation(tmp_path, monkeypa
     monkeypatch.setenv("USERPROFILE", str(home))
     monkeypatch.setattr(init_module, "ensure_user_registry_overlays", fake_ensure_user_registry_overlays)
     monkeypatch.setattr(init_module, "_init_reference_registry_preflight", fake_preflight)
-    monkeypatch.setattr(init_module, "_validate_selected_reference_data", lambda selected: None)
+    monkeypatch.setattr(init_module, "_validate_selected_reference_data", lambda selected, **kwargs: None)
     _install_single_reference_registry(monkeypatch)
 
     output = tmp_path / "openbench.yaml"
-    result = runner.invoke(cli, ["init", "-o", str(output)], input="\n\n2004\n2004\n\n\n\nn\nn\n")
+    result = runner.invoke(cli, ["init", "-o", str(output)], input="\n\n2004\n2004\n\n\n\n" + _init_options_input())
 
     assert result.exit_code == 0, result.output
     assert captured
@@ -4146,7 +4563,7 @@ def test_init_writes_default_statistics_items_when_enabled(tmp_path, monkeypatch
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\ny\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input("n", "y", scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4202,7 +4619,7 @@ def test_init_warns_when_reference_or_simulation_years_do_not_overlap_project_ye
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4256,7 +4673,7 @@ def test_init_no_ref_check_allows_template_when_reference_registry_has_no_variab
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\nLatent_Heat, Runoff\n\n\nn\nn\n",
+        input="\n\n2004\n2004\nLatent_Heat, Runoff\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4354,14 +4771,15 @@ def test_init_prompts_for_missing_grid_resolution_when_simulation_scan_is_mixed(
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n0.5\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True, domain=["", "", "", "0.25", "", "", "", "", ""]),
     )
 
     assert result.exit_code == 0, result.output
     project = yaml.safe_load(output.read_text(encoding="utf-8"))["project"]
     assert project["tim_res"] == "Month"
-    assert project["grid_res"] == 0.5
-    assert "Target grid_res" in result.output
+    assert project["grid_res"] == 0.25
+    assert "Simulations use mixed grid spacings (0.5, 0.25)" in result.output
+    assert "Target grid_res in degrees [0.5]" in result.output
 
 
 def test_init_metric_and_score_options_are_implemented():
@@ -4481,7 +4899,7 @@ def test_init_keeps_all_variables_in_template_when_some_are_skipped(tmp_path, mo
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "--sim-root", str(sim_root), "-o", str(output)],
-        input="\n\n2004\n2004\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n" + _init_options_input(scanned=True),
     )
 
     assert result.exit_code == 0, result.output
@@ -4591,6 +5009,31 @@ def test_selected_station_reference_requires_registered_dataset_file(tmp_path):
         init_module._validate_selected_reference_data({"Streamflow": ref})
 
     (tmp_path / "GRDD_monthly.nc").touch()
+    init_module._validate_selected_reference_data({"Streamflow": ref})
+
+
+def test_init_reference_validation_accepts_dist_subset_of_full_dataset(tmp_path):
+    import openbench.cli.init_cmd as init_module
+    from openbench.data.registry.schema import ReferenceDataset, StationMatchingConfig, VariableMapping
+
+    ref = ReferenceDataset(
+        name="OpenBench_Streamflow_Daily",
+        description="",
+        category="Water",
+        data_type="stn",
+        tim_res="Day",
+        data_groupby="single",
+        timezone=0,
+        years=[1900, 2020],
+        root_dir=str(tmp_path),
+        station_matching=StationMatchingConfig(dataset_file="OpenBench_Streamflow_Daily_full.nc"),
+        variables={"Streamflow": VariableMapping(varname="discharge", varunit="m3 s-1")},
+    )
+
+    with pytest.raises(click.ClickException, match="OpenBench_Streamflow_Daily_dist.nc"):
+        init_module._validate_selected_reference_data({"Streamflow": ref})
+
+    (tmp_path / "OpenBench_Streamflow_Daily_dist.nc").touch()
     init_module._validate_selected_reference_data({"Streamflow": ref})
 
 
@@ -4884,7 +5327,7 @@ def test_init_creates_output_parent_directory(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code == 0, result.output
@@ -4917,7 +5360,7 @@ def test_init_rejects_directory_output_without_traceback(tmp_path, monkeypatch):
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", str(output)],
-        input="y\n\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="y\n\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code != 0
@@ -4936,7 +5379,7 @@ def test_init_rejects_unresolved_environment_variable_in_output(tmp_path, monkey
     result = runner.invoke(
         cli,
         ["init", "--no-ref-check", "-o", "$OPENBENCH_MISSING_OUT/openbench.yaml"],
-        input="\n\n2004\n2004\n\n\n\nn\nn\n",
+        input="\n\n2004\n2004\n\n\n\n" + _init_options_input(),
     )
 
     assert result.exit_code != 0
@@ -4948,6 +5391,8 @@ def test_scan_simulation_config_prompts_for_model_when_auto_inference_is_unresol
     import openbench.cli.init_cmd as init_module
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
+
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
 
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
@@ -5000,6 +5445,8 @@ def test_scan_simulation_config_writes_absolute_station_fulllist(tmp_path, monke
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
 
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
+
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
     case_root.mkdir(parents=True)
@@ -5046,6 +5493,8 @@ def test_scan_simulation_config_aborts_on_partial_station_materialization(tmp_pa
     import openbench.cli.init_cmd as init_module
     import openbench.data.sim_scanner as sim_scanner
     from openbench.data.sim_scanner import SimulationCase, SimulationScanResult
+
+    monkeypatch.setattr(init_module, "_wizard_confirm", lambda *args, **kwargs: True)
 
     sim_root = tmp_path / "Simulation"
     case_root = sim_root / "Case01"
@@ -5382,7 +5831,7 @@ def test_check_fails_when_resolved_reference_root_is_missing(tmp_path, monkeypat
     assert "Ready to run" not in result.output
 
 
-def test_check_warns_when_resolved_reference_root_has_no_netcdf_files(tmp_path, monkeypatch):
+def test_check_rejects_resolved_grid_reference_root_without_netcdf_files(tmp_path, monkeypatch):
     from openbench.data.registry import manager as mgr_mod
 
     ref_root = tmp_path / "empty-reference"
@@ -5435,9 +5884,22 @@ def test_check_warns_when_resolved_reference_root_has_no_netcdf_files(tmp_path, 
 
     result = runner.invoke(cli, ["check", str(config_path)])
 
-    assert result.exit_code == 0, result.output
-    assert "no NetCDF files found" in result.output
-    assert "Ready to run" in result.output
+    # Gridded preprocessing reads files from this tree; with none, the run cannot start.
+    assert result.exit_code == 1, result.output
+    assert "Reference data path has no NetCDF files" in result.output
+
+
+def test_station_reference_root_without_netcdf_files_is_only_a_warning(tmp_path):
+    from types import SimpleNamespace
+
+    from openbench.cli.check import reference_data_findings
+
+    ref = SimpleNamespace(data_type="stn", station_matching=None)
+    var_map = SimpleNamespace(sub_dir="")
+    errors, warnings, _info = reference_data_findings(ref, var_map, str(tmp_path), str(tmp_path))
+
+    assert errors == []
+    assert any("no NetCDF files found" in message for message in warnings)
 
 
 def test_run_dry_run_fails_on_missing_simulation_root(tmp_path):
@@ -5488,7 +5950,7 @@ def test_run_comparison_only_skips_missing_simulation_root_preflight(tmp_path, m
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "success",
             "output_dir": str(tmp_path),
@@ -5551,7 +6013,7 @@ def test_run_variable_alias_matches_legacy_variables_option(tmp_path, monkeypatc
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append(list(cfg.evaluation.variables))
         return {
             "status": "success",
@@ -5592,7 +6054,7 @@ def test_run_force_option_bypasses_cache_without_editing_yaml(tmp_path, monkeypa
 
     seen_force = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen_force.append(force)
         return {
             "status": "success",
@@ -5607,6 +6069,47 @@ def test_run_force_option_bypasses_cache_without_editing_yaml(tmp_path, monkeypa
 
     assert result.exit_code == 0, result.output
     assert seen_force == [True]
+
+
+def test_run_resume_option_is_forwarded_and_conflicts_with_force(tmp_path, monkeypatch):
+    config_path = tmp_path / "resume.yaml"
+    config_path.write_text(
+        yaml.dump(
+            {
+                "project": {"name": "resume_case", "output_dir": str(tmp_path), "years": [2004, 2005]},
+                "evaluation": {"variables": ["Latent_Heat"]},
+                "reference": {"Latent_Heat": "FLUXCOM_LowRes"},
+                "simulation": {
+                    "MyModel": {
+                        "model": "MyModel",
+                        "root_dir": str(tmp_path),
+                        "variables": {"Latent_Heat": {"varname": "Latent_Heat"}},
+                    }
+                },
+            }
+        )
+    )
+
+    seen_resume = []
+
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
+        seen_resume.append(resume)
+        return {
+            "status": "success",
+            "output_dir": str(tmp_path),
+            "variables": cfg.evaluation.variables,
+            "simulations": list(cfg.simulation),
+        }
+
+    monkeypatch.setattr("openbench.runner.local.run_evaluation", fake_run_evaluation)
+
+    result = runner.invoke(cli, ["run", str(config_path), "--resume"])
+    conflict = runner.invoke(cli, ["run", str(config_path), "--resume", "--force"])
+
+    assert result.exit_code == 0, result.output
+    assert seen_resume == [True]
+    assert conflict.exit_code != 0
+    assert "--resume conflicts with --force" in conflict.output
 
 
 def test_run_rejects_unknown_variable_override_before_runner(tmp_path, monkeypatch):
@@ -5764,7 +6267,7 @@ def test_run_only_drawing_skips_missing_simulation_root_preflight(tmp_path, monk
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "success",
             "output_dir": str(case_dir),
@@ -5811,7 +6314,7 @@ def test_run_expands_env_paths_before_runner(tmp_path, monkeypatch):
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append((cfg.project.output_dir, cfg.simulation["MyModel"].root_dir))
         return {
             "status": "success",
@@ -5857,7 +6360,7 @@ def test_run_output_dir_option_overrides_yaml_before_runner(tmp_path, monkeypatc
 
     seen = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         seen.append(cfg.project.output_dir)
         return {
             "status": "success",
@@ -5927,7 +6430,7 @@ def test_run_writes_per_run_log_with_debug_records(tmp_path, monkeypatch):
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         logger = logging.getLogger("openbench.tests.run_log")
         logger.debug("debug marker for run.log")
         logger.info("info marker for run.log")
@@ -5960,12 +6463,10 @@ def test_run_log_suppresses_matplotlib_backend_probe_noise(tmp_path):
 
     with _run_file_logging(cfg):
         logger.debug("backend probe traceback: No module named '_macosx'")
-        logging.getLogger("xhtml2pdf.files").debug("noisy PDF internals")
         logging.getLogger("openbench.tests").debug("openbench debug remains visible")
 
     text = (tmp_path / "quiet_plot_log" / "run.log").read_text(encoding="utf-8")
     assert "_macosx" not in text
-    assert "noisy PDF internals" not in text
     assert "openbench debug remains visible" in text
 
 
@@ -6003,7 +6504,7 @@ def test_run_rejects_project_name_path_before_evaluation(tmp_path, monkeypatch):
     )
     called = []
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         called.append(cfg.project.name)
         return {
             "status": "success",
@@ -6232,7 +6733,7 @@ def test_run_exits_nonzero_when_runner_reports_errors(tmp_path, monkeypatch):
         )
     )
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "error",
             "output_dir": str(tmp_path),
@@ -6331,6 +6832,8 @@ def test_run_dry_run_dump_config_is_read_only(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(mgr_mod, "get_registry", lambda: MockRegistry())
+    for year in (2000, 2001):  # the dry run checks the data files preprocessing reads
+        (tmp_path / f"{year}.nc").touch()
 
     result = runner.invoke(cli, ["run", "--dump-config", "--dry-run", str(config_path)])
 
@@ -6388,7 +6891,7 @@ def test_run_dump_config_writes_runner_facing_debug_artifacts_for_real_run(tmp_p
     monkeypatch.setattr(
         local_runner,
         "run_evaluation",
-        lambda cfg, force=False, comparison_only=False: {
+        lambda cfg, force=False, comparison_only=False, resume=False: {
             "status": "success",
             "output_dir": str(tmp_path / "dump_case"),
             "variables": ["Runoff"],

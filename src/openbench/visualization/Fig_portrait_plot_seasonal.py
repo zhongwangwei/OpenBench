@@ -445,7 +445,15 @@ def make_scenarios_comparison_Portrait_Plot_seasonal(file, basedir, evaluation_i
                     vmin, vmax = option["vmin"], option["vmax"]
                 else:
                     finite = data_metric[np.isfinite(data_metric)]
-                    vmin, vmax = np.percentile(finite, [5, 95]) if finite.size else (0.0, 1.0)
+                    vmin, vmax = (
+                        finite_min_max(
+                            data_metric,
+                            label=f"Portrait Plot seasonal/{metric}",
+                            percentile=(5, 95),
+                        )
+                        if finite.size
+                        else (0.0, 1.0)
+                    )
                 fig, ax, cbar = portrait_plot(
                     data_metric,
                     xaxis_labels=xaxis_labels,

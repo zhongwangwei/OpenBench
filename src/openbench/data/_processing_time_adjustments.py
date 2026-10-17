@@ -70,19 +70,21 @@ class TimeAdjustmentMixin:
                     file_context = f"{current_dir}/{current_prefix}"
 
                     def _offset_from_resolution_group(group):
-                        """Resolve either a string or {item-pattern/default: offset} group."""
+                        """Resolve native variable > evaluation item > default offsets."""
                         if isinstance(group, str):
                             return group
                         if not isinstance(group, dict):
                             return None
 
+                        native_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(ds.data_vars), "")
                         item_name = str(getattr(self, "item", "")).strip().lower()
-                        for item_key, item_offset in group.items():
-                            if str(item_key).lower() == "default":
-                                continue
-                            item_names = [part.strip().lower() for part in str(item_key).split(",")]
-                            if item_name and item_name in item_names:
-                                return str(item_offset)
+                        for name in (str(native_name or "").strip().lower(), item_name):
+                            for item_key, item_offset in group.items():
+                                if str(item_key).lower() == "default":
+                                    continue
+                                item_names = [part.strip().lower() for part in str(item_key).split(",")]
+                                if name and name in item_names:
+                                    return str(item_offset)
                         if "default" in group:
                             return str(group["default"])
                         return None
@@ -101,6 +103,7 @@ class TimeAdjustmentMixin:
                     # 1. Per-resolution legacy/catalog:
                     #      Month: "-15 days"
                     #      Day: {default: "-1 days", Streamflow: "0"}
+                    #    Native variable keys override evaluation-item keys.
                     # 2. Pattern-grouped:
                     #      default: {Month: "-1 months", Day: "-1 days"}
                     #      _cama_: {Day: "-1 days"}

@@ -18,12 +18,20 @@ from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_v
 logger = logging.getLogger(__name__)
 
 
+def _normalize_path(path_value: object | None) -> str:
+    """Expand and normalize a configured path without turning an empty value into ``.``."""
+    if path_value is None or str(path_value) == "":
+        return ""
+    normalized = os.path.normpath(os.path.expanduser(os.path.expandvars(str(path_value))))
+    return normalized.replace("\\", "/")
+
+
 def _resolve_root_relative_path(path_value: str, root_dir: str | None) -> str:
     """Resolve relative catalog paths against their dataset root_dir."""
     expanded = os.path.expanduser(os.path.expandvars(str(path_value)))
     if os.path.isabs(expanded) or not root_dir:
-        return expanded
-    return os.path.join(root_dir, expanded)
+        return _normalize_path(expanded)
+    return _normalize_path(os.path.join(root_dir, expanded))
 
 
 LEGACY_GENERAL_KEYS = {
@@ -49,6 +57,7 @@ LEGACY_GENERAL_KEYS = {
     "time_alignment",
     "regrid_backend",
     "generate_report",
+    "station_plots",
     "weight",
     "compare_tim_res",
     "compare_tzone",
@@ -708,30 +717,117 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
     return primary, primary_unit, ""
 
 
-def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None) -> str:
+def _find_nc_dir(ref_dir: str, data_root: str, sub_dir: str | None, data_groupby: str | None = None) -> str:
     """Find directory containing NC files, with two fallback strategies.
 
-    1. If ref_dir has no NC files, check one level of subdirectories.
-    2. If still nothing and data_root is a resolution directory (MidRes/HigRes),
-       try the equivalent LowRes path.
+    If ref_dir has no NC files, check one level of non-temporal subdirectories.
+    Year/date directories that hold NetCDF files belong to the data layout and
+    keep the lookup at ref_dir, so later years below it are found too.
 
     Returns the best directory found, or the original ref_dir if nothing better.
     """
-    from openbench.data.coordinates import glob_nc
+    from openbench.data.file_lookup import has_netcdf, is_dated_directory
 
-    if os.path.isdir(ref_dir) and glob_nc(ref_dir):
+    if os.path.isdir(ref_dir) and has_netcdf(ref_dir):
         return ref_dir
 
     if os.path.isdir(ref_dir):
-        for child in sorted(os.listdir(ref_dir)):
+        children = [child for child in sorted(os.listdir(ref_dir)) if os.path.isdir(os.path.join(ref_dir, child))]
+        # A single-file dataset is read from exactly one directory, so a dated folder
+        # holding that file is where the lookup must go, not a layout to stay above.
+        single = str(data_groupby or "").strip().lower() == "single"
+        dated = [] if single else [child for child in children if is_dated_directory(child)]
+        if any(has_netcdf(os.path.join(ref_dir, child), recursive=True) for child in dated):
+            return ref_dir
+        for child in children:
             child_path = os.path.join(ref_dir, child)
-            if os.path.isdir(child_path) and glob_nc(child_path):
+            if child not in dated and has_netcdf(child_path):
                 logger.info("NC files found in subdirectory: %s", child_path)
                 return child_path
 
     # Do not silently substitute a different requested resolution.
 
     return ref_dir
+
+
+def reference_data_dir(
+    cfg: OpenBenchConfig, ref_ds, var_map, source_override: dict[str, Any] | None
+) -> tuple[str, str]:
+    """Return ``(data_root, data_dir)`` preprocessing reads a reference variable from."""
+    # Station data uses its own root_dir; grid data prefers data_root (shared
+    # grid directory) over registry root_dir.
+    data_type = getattr(ref_ds, "data_type", None)
+    root_dir = _normalize_path(getattr(ref_ds, "root_dir", None))
+    configured_data_root = _normalize_path(getattr(cfg.reference, "data_root", None))
+    sub_dir = getattr(var_map, "sub_dir", None)
+    if data_type == "stn":
+        data_root = root_dir or configured_data_root
+    else:
+        data_root = (
+            (root_dir if source_override and source_override.get("root_dir") else None)
+            or configured_data_root
+            or root_dir
+            or ""
+        )
+    ref_dir = data_root
+    if sub_dir:
+        ref_dir = os.path.join(ref_dir, str(sub_dir)) if ref_dir else str(sub_dir)
+        ref_dir = _normalize_path(ref_dir)
+
+    # If ref_dir has no NC files, search one level deeper (e.g., 0p25deg-daily/)
+    if ref_dir and data_type != "stn":
+        ref_dir = _find_nc_dir(ref_dir, data_root, sub_dir, getattr(ref_ds, "data_groupby", None))
+    if ref_dir:
+        ref_dir = _normalize_path(ref_dir)
+    return data_root, ref_dir
+
+
+def simulation_file_layout(sim_entry, model_profile, var_name: str) -> dict[str, Any]:
+    """Where preprocessing reads one simulation variable and how its files are named.
+
+    Inline ``simulation.<label>.variables`` settings win over entry-level ones,
+    which win over the model profile.
+    """
+    inline_key = get_mapping_key_case_insensitive(sim_entry.variables or {}, var_name)
+    inline_vars = (sim_entry.variables or {}).get(inline_key, {}) if inline_key is not None else {}
+    profile_variables = getattr(model_profile, "variables", None) or {}
+    profile_key = get_mapping_key_case_insensitive(profile_variables, var_name) if model_profile else None
+    profile_var = profile_variables[profile_key] if profile_key is not None else None
+
+    entry_prefix = sim_entry.prefix or ""
+    entry_suffix = sim_entry.suffix or ""
+    sim_dir = sim_entry.root_dir
+    sub_dir = inline_vars.get("sub_dir")
+    if sub_dir is None and profile_var is not None:
+        sub_dir = getattr(profile_var, "sub_dir", None)
+    if sub_dir:
+        sim_dir = os.path.join(sim_dir, str(sub_dir))
+
+    compute_expr = inline_vars.get("compute")
+    if compute_expr is None and profile_var is not None:
+        compute_expr = getattr(profile_var, "compute", None)
+    prefix_fallback = inline_vars.get("prefix_fallback")
+    if prefix_fallback is None and profile_var is not None:
+        prefix_fallback = getattr(profile_var, "prefix_fallback", None)
+    return {
+        "inline_vars": inline_vars,
+        "profile_var": profile_var,
+        "dir": sim_dir,
+        "prefix": inline_vars.get(
+            "prefix", entry_prefix or (getattr(profile_var, "prefix", "") if profile_var is not None else "")
+        ),
+        "suffix": inline_vars.get(
+            "suffix", entry_suffix or (getattr(profile_var, "suffix", "") if profile_var is not None else "")
+        ),
+        "data_type": (
+            inline_vars.get("data_type")
+            or sim_entry.data_type
+            or (getattr(model_profile, "data_type", "grid") if model_profile else "grid")
+        ),
+        "data_groupby": inline_vars.get("data_groupby", sim_entry.data_groupby or "Year"),
+        "compute": compute_expr,
+        "prefix_fallback": prefix_fallback,
+    }
 
 
 def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
@@ -780,6 +876,7 @@ def build_runner_config(cfg: OpenBenchConfig) -> RunnerConfig:
         "time_alignment": cfg.project.time_alignment,
         "regrid_backend": cfg.project.regrid_backend,
         "generate_report": cfg.project.generate_report,
+        "station_plots": cfg.project.station_plots,
         "weight": cfg.project.weight or "area",
         "compare_tim_res": target_ctx.tim_res or "Month",
         "compare_tzone": cfg.project.timezone or 0,
@@ -988,17 +1085,7 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             ref_ds, var_map = _apply_reference_override(ref_ds, var_map, var_name, source_override)
 
         if r.status == "ok":
-            # Construct directory: station data uses its own root_dir;
-            # grid data prefers data_root (shared grid directory) over registry root_dir
-            if ref_ds.data_type == "stn":
-                data_root = ref_ds.root_dir or cfg.reference.data_root or ""
-            else:
-                data_root = (
-                    (ref_ds.root_dir if source_override and source_override.get("root_dir") else None)
-                    or cfg.reference.data_root
-                    or ref_ds.root_dir
-                    or ""
-                )
+            data_root, ref_dir = reference_data_dir(cfg, ref_ds, var_map, source_override)
             if not data_root:
                 logger.warning(
                     "No data_root or root_dir for reference %s variable %s. "
@@ -1006,13 +1093,6 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                     resolved_name,
                     var_name,
                 )
-            ref_dir = data_root
-            if var_map.sub_dir:
-                ref_dir = os.path.join(ref_dir, var_map.sub_dir) if ref_dir else var_map.sub_dir
-
-            # If ref_dir has no NC files, search one level deeper (e.g., 0p25deg-daily/)
-            if ref_dir and ref_ds.data_type != "stn":
-                ref_dir = _find_nc_dir(ref_dir, data_root, var_map.sub_dir)
 
             ref_varname, ref_varunit, ref_convert = _resolve_varname(var_map, ref_dir)
             section[f"{prefix}_data_type"] = ref_ds.data_type
@@ -1020,6 +1100,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             section[f"{prefix}_varunit"] = ref_varunit
             if getattr(var_map, "compute", None):
                 section[f"{prefix}_compute"] = var_map.compute
+            if getattr(var_map, "accumulated", None):
+                section[f"{prefix}_accumulated"] = var_map.accumulated
             if ref_convert:
                 section[f"{prefix}_convert"] = ref_convert
                 setattr(r, "convert_expr", ref_convert)
@@ -1109,16 +1191,10 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             model_profile = registry.get_model(model_name)
 
             # Determine variable mapping: inline overrides > model profile > fallback
-            inline_key = get_mapping_key_case_insensitive(sim_entry.variables or {}, var_name)
-            inline_vars = (sim_entry.variables or {}).get(inline_key, {}) if inline_key is not None else {}
-
-            # Entry-level prefix/suffix (shared across all variables for this sim)
-            entry_prefix = sim_entry.prefix or ""
-            entry_suffix = sim_entry.suffix or ""
-
-            profile_key = get_mapping_key_case_insensitive(model_profile.variables, var_name) if model_profile else None
-            if model_profile and profile_key is not None:
-                profile_var = model_profile.variables[profile_key]
+            layout = simulation_file_layout(sim_entry, model_profile, var_name)
+            inline_vars = layout["inline_vars"]
+            profile_var = layout["profile_var"]
+            if profile_var is not None:
                 if "varname" in inline_vars:
                     # Inline override — no fallback resolution
                     varname = inline_vars["varname"]
@@ -1129,14 +1205,10 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                     varname, varunit, convert_expr = _resolve_varname(profile_var, sim_entry.root_dir)
                     varunit = inline_vars.get("varunit", varunit)
                     convert_expr = inline_vars.get("convert", convert_expr)
-                var_prefix = inline_vars.get("prefix", entry_prefix or profile_var.prefix)
-                var_suffix = inline_vars.get("suffix", entry_suffix or profile_var.suffix)
             elif inline_vars:
                 varname = inline_vars.get("varname", var_name)
                 varunit = inline_vars.get("varunit", "")
                 convert_expr = inline_vars.get("convert", "")
-                var_prefix = inline_vars.get("prefix", entry_prefix)
-                var_suffix = inline_vars.get("suffix", entry_suffix)
             else:
                 logger.warning(
                     "No variable mapping for %s in model %s (label %s); using variable name as varname",
@@ -1147,15 +1219,11 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 varname = var_name
                 varunit = ""
                 convert_expr = ""
-                var_prefix = entry_prefix
-                var_suffix = entry_suffix
+            var_prefix = layout["prefix"]
+            var_suffix = layout["suffix"]
 
             # Data type / resolution: inline override > sim_entry override > model profile > defaults
-            data_type = (
-                inline_vars.get("data_type")
-                or sim_entry.data_type
-                or (model_profile.data_type if model_profile else "grid")
-            )
+            data_type = layout["data_type"]
             if inline_vars.get("grid_res") is not None:
                 grid_res = inline_vars["grid_res"]
             elif sim_entry.grid_res is not None:
@@ -1166,13 +1234,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                 inline_vars.get("tim_res") or sim_entry.tim_res or (model_profile.tim_res if model_profile else "Month")
             )
 
-            # Construct sim directory: root_dir plus inline sub_dir (highest priority) or profile sub_dir.
-            sim_dir = sim_entry.root_dir
-            sub_dir = inline_vars.get("sub_dir")
-            if sub_dir is None and model_profile and profile_key is not None:
-                sub_dir = model_profile.variables[profile_key].sub_dir
-            if sub_dir:
-                sim_dir = os.path.join(sim_dir, str(sub_dir))
+            # Sim directory: root_dir plus inline sub_dir (highest priority) or profile sub_dir.
+            sim_dir = layout["dir"]
 
             prefix = sim_label
             var_section[f"{prefix}_model"] = model_name
@@ -1181,10 +1244,7 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_varunit"] = varunit
             if convert_expr:
                 var_section[f"{prefix}_convert"] = convert_expr
-            var_section[f"{prefix}_data_groupby"] = inline_vars.get(
-                "data_groupby",
-                sim_entry.data_groupby or "Year",
-            )
+            var_section[f"{prefix}_data_groupby"] = layout["data_groupby"]
             var_section[f"{prefix}_tim_res"] = tim_res
             var_section[f"{prefix}_grid_res"] = grid_res
             var_section[f"{prefix}_syear"] = cfg.project.years[0]
@@ -1194,21 +1254,22 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
             var_section[f"{prefix}_suffix"] = var_suffix
 
             # Pass inline/profile compute and fallbacks through to runtime.
-            compute_expr = inline_vars.get("compute")
-            if compute_expr is None and model_profile and profile_key is not None:
-                compute_expr = getattr(model_profile.variables[profile_key], "compute", None)
+            compute_expr = layout["compute"]
             if compute_expr:
                 var_section[f"{prefix}_compute"] = compute_expr
+            accumulated = inline_vars.get("accumulated")
+            if accumulated is None and profile_var is not None:
+                accumulated = getattr(profile_var, "accumulated", None)
+            if accumulated:
+                var_section[f"{prefix}_accumulated"] = accumulated
 
             fallback_dicts = inline_vars.get("fallbacks")
-            if fallback_dicts is None and model_profile and profile_key is not None:
-                fallback_dicts = _fallbacks_to_dicts(model_profile.variables[profile_key])
+            if fallback_dicts is None and profile_var is not None:
+                fallback_dicts = _fallbacks_to_dicts(profile_var)
             if fallback_dicts:
                 var_section[f"{prefix}_fallbacks"] = fallback_dicts
 
-            pf = inline_vars.get("prefix_fallback")
-            if pf is None and model_profile and profile_key is not None:
-                pf = model_profile.variables[profile_key].prefix_fallback
+            pf = layout["prefix_fallback"]
             if pf:
                 var_section[f"{prefix}_prefix_fallback"] = pf
             var_section[f"{prefix}_timezone"] = inline_vars.get("timezone", 0)

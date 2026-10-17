@@ -57,6 +57,14 @@ def station_outputs_missing_required_columns(output_dir: Path, task: dict[str, A
     )
 
 
+def station_preprocessed_inputs_ready(output_dir: Path, task: dict[str, Any]) -> tuple[bool, str]:
+    return preflight.station_preprocessed_inputs_ready(
+        output_dir,
+        task,
+        build_runtime_info_fn=_local_attr("_build_bridge_runtime_info"),
+    )
+
+
 def has_complete_outputs(output_dir: Path, task: dict[str, Any]) -> bool:
     return preflight.has_complete_outputs(
         output_dir,

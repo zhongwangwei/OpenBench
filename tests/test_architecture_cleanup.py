@@ -25,6 +25,11 @@ def test_runtime_dependencies_declare_direct_imports_without_unused_platformdirs
         assert package in conda_reqs
     assert "platformdirs" not in dependencies
     assert "platformdirs" not in conda_reqs
+    # Group-bys use xarray's own reductions; categorical regridding uses numpy.
+    assert "flox" not in dependencies
+    assert "flox" not in conda_reqs
+    for path in (ROOT / "src/openbench").rglob("*.py"):
+        assert "import flox" not in path.read_text(encoding="utf-8"), path
 
 
 def test_gui_and_dask_runtime_dependencies_are_installable_from_declared_extras():
@@ -205,3 +210,24 @@ def test_version_single_source_of_truth_and_conda_parity():
     assert conda_version == init_version, (
         f"conda/meta.yaml version {conda_version!r} != __init__ {init_version!r} — keep them in sync"
     )
+
+
+def test_per_station_and_per_year_helpers_do_not_force_garbage_collection():
+    # A full gc.collect() costs ~20 ms on a loaded heap; called per station it
+    # took about a third of a station run. Collect at stage boundaries instead.
+    per_item = {
+        "data/_processing_station_extract.py": {"_extract_stn_parallel", "save_extracted_data"},
+        "data/_processing_station_core.py": {"_make_stn_parallel", "save_station_data"},
+        "core/evaluation.py": {"make_evaluation_parallel"},
+        "core/_comparison_smpi.py": {"_process_station_data_parallel"},
+        "data/_processing_yearly.py": {"save_year", "combine_year"},
+        "data/_processing_grid_core.py": {"_make_grid_parallel"},
+        "data/_processing_grid_regrid.py": {"save_remapped_data"},
+    }
+    for relative, names in per_item.items():
+        tree = ast.parse((ROOT / "src/openbench" / relative).read_text(encoding="utf-8"))
+        found = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name in names}
+        assert found == names, relative
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in names:
+                assert "gc.collect" not in ast.unparse(node), f"{relative}:{node.name}"

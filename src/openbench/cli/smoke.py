@@ -133,7 +133,9 @@ def _write_reference_catalog(home: Path, reference_root: Path, station_lists: di
                 "  variables:",
                 "    Evapotranspiration:",
                 "      varname: E",
-                "      varunit: mm day-1",
+                # The fixture keeps GLEAM's monthly totals ("mm.month-1"),
+                # unlike the mm day-1 files in the full reference set.
+                "      varunit: mm month-1",
                 "      prefix: E_",
                 "      suffix: _GLEAM_v4.2a_MO",
                 "      sub_dir: GLEAM4.2a_monthly",

@@ -12,11 +12,70 @@ import xarray as xr
 
 from openbench.data._processing_config import USE_NEW_FREQ_ALIASES
 from openbench.data._processing_utils import performance_monitor
-from openbench.data.unit import UnitProcessing
+from openbench.data.unit import UnitProcessing, warn_if_file_unit_differs
 from openbench.util.names import get_mapping_key_case_insensitive, get_xarray_key_case_insensitive
+
+ACCUMULATION_MODES = ("year", "run")
+
+
+def deaccumulate(data, mode: str):
+    """Turn a running total into the amount added during each time step.
+
+    ``mode="year"``: the total restarts on 1 January (e.g. CoLM ``f_sum_irrig``),
+    so the first step of a year keeps its value when it falls in January and is
+    missing otherwise. ``mode="run"``: the total runs from the start of the
+    simulation (e.g. WRF ``RAINNC``), so the first step is missing. A step that
+    goes negative, from a restart or a bucket reset, is set to missing.
+    """
+    if mode not in ACCUMULATION_MODES:
+        raise ValueError(f"Unknown accumulation mode {mode!r}; expected one of {ACCUMULATION_MODES}")
+    if isinstance(data, xr.Dataset):
+        out = data.copy()
+        for name in data.data_vars:
+            if "time" in data[name].dims:
+                out[name] = deaccumulate(data[name], mode)
+        return out
+
+    time = data["time"]
+    step = data - data.shift(time=1)
+    if mode == "year":
+        year = time.dt.year
+        new_year = year != year.shift(time=1)
+        step = xr.where(new_year, data.where(time.dt.month == 1), step)
+    step = step.where(step >= 0)
+    step.name = data.name
+    step.attrs = dict(data.attrs)
+    return step.transpose(*data.dims)
 
 
 class ProcessingTransformMixin:
+    def _accumulation_mode(self, datasource: str) -> str:
+        """Accumulation mode of the current item for a datasource ('' when the data are not running totals)."""
+        # Config sections key per-variable fields by the source name (like fallbacks).
+        source_key = getattr(self, f"{datasource}_source", None)
+        mode = getattr(self, f"{source_key}_accumulated", "") if source_key else ""
+        if not mode:
+            from openbench.data.registry.manager import get_registry
+
+            item = getattr(self, "item", "")
+            if item and source_key:
+                source_name = getattr(self, f"{source_key}_model", source_key)
+                mgr = get_registry()
+                for profile in (mgr.get_model(source_name), mgr.get_reference(source_name)):
+                    key = get_mapping_key_case_insensitive(profile.variables, item) if profile else None
+                    if key is not None:
+                        mode = getattr(profile.variables[key], "accumulated", None) or ""
+                        break
+        return str(mode).strip().lower()
+
+    def _deaccumulate_if_configured(self, ds, datasource: str):
+        """Convert running totals to per-step amounts before resampling and unit conversion."""
+        mode = self._accumulation_mode(datasource)
+        if not mode:
+            return ds
+        logging.info("De-accumulating %s %s (accumulated: %s)", datasource, getattr(self, "item", ""), mode)
+        return deaccumulate(ds, mode)
+
     def _reduce_patch_dimension(self, data, source_ds=None):
         """Collapse CABLE-style patch output to grid cells when patch fractions exist."""
         patch_dims = [dim for dim in getattr(data, "dims", ()) if str(dim).lower() == "patch"]
@@ -38,7 +97,7 @@ class ProcessingTransformMixin:
     @staticmethod
     def _normalize_longitude_axis(ds: xr.Dataset) -> xr.Dataset:
         """Normalize 1-D longitude coordinates and remove duplicate seam cells."""
-        if "lon" not in ds.coords or ds["lon"].ndim != 1:
+        if "lon" not in ds.coords or ds["lon"].dims != ("lon",):
             return ds
 
         lon = ds["lon"]
@@ -63,7 +122,7 @@ class ProcessingTransformMixin:
             ds["lon"].attrs["valid_max"] = 180.0
         return ds
 
-    def _try_compute_from_profile(self, source_name: str, ds, datasource: str):
+    def _try_compute_from_profile(self, source_name: str, ds, datasource: str, *, fallback_var: str | None = None):
         """Try to compute a derived variable using a compute expression.
 
         Checks model profiles first, then reference datasets.
@@ -76,8 +135,12 @@ class ProcessingTransformMixin:
         if not item:
             return None
 
-        # Inline namelist compute wins over catalog profiles.
-        compute_expr = getattr(self, f"{datasource}_compute", "")
+        # Inline namelist compute wins over catalog profiles. Config sections key
+        # it by the source name (like fallbacks), not by "ref"/"sim".
+        source_key = getattr(self, f"{datasource}_source", "")
+        compute_expr = getattr(self, f"{datasource}_compute", "") or (
+            getattr(self, f"{source_key}_compute", "") if source_key else ""
+        )
         compute_unit = getattr(self, f"{datasource}_varunit", "")
 
         # Check model profile first, then reference dataset.
@@ -100,8 +163,18 @@ class ProcessingTransformMixin:
         if not compute_expr:
             return None
 
+        from openbench.data.compute import compute_dependency_names, compute_inputs_known, execute_compute
+
+        # Skip the compute only when its inputs are known: a step that does not
+        # parse, or a computed key such as ds[key], may read the fallback.
+        if (
+            fallback_var is not None
+            and compute_inputs_known(compute_expr)
+            and fallback_var.casefold() not in {name.casefold() for name in compute_dependency_names(compute_expr)}
+        ):
+            return None
+
         logging.info("Computing %s via compute expression", item)
-        from openbench.data.compute import execute_compute
 
         result = execute_compute(ds, compute_expr, item)
 
@@ -111,6 +184,8 @@ class ProcessingTransformMixin:
 
         setattr(self, f"{datasource}_varname", [item])
         setattr(self, f"{datasource}_varunit", compute_unit)
+        # The expression already produced the target quantity and units.
+        self.__dict__.pop(f"_fb_convert_{datasource}", None)
 
         return result
 
@@ -218,7 +293,7 @@ class ProcessingTransformMixin:
         return xr.merge([ds, orig_ds_reindexed]).drop_vars("data")
 
     @performance_monitor
-    def process_units(self, ds: xr.Dataset, varunit: str) -> Tuple[xr.Dataset, str]:
+    def process_units(self, ds: xr.Dataset, varunit: str, datasource: str | None = None) -> Tuple[xr.Dataset, str]:
         try:
             # Keep xarray objects intact where possible so calendar-aware unit
             # conversions can use coordinates such as ``time``.
@@ -237,8 +312,13 @@ class ProcessingTransformMixin:
                 # 如果已经是numpy数组，直接使用
                 data_array = ds
 
+            item = getattr(self, "item", None)
+            source = getattr(self, f"{datasource}_source", None) or datasource or "data"
+            warn_if_file_unit_differs(getattr(data_array, "attrs", {}).get("units"), varunit, item, source)
+
             # 进行单位转换
-            converted_data, new_unit = UnitProcessing.convert_unit(data_array, varunit.lower())
+            unit_key = UnitProcessing.lookup_key(varunit, item)
+            converted_data, new_unit = UnitProcessing.convert_unit(data_array, unit_key)
             # 创建新的数据集或更新现有数据集
             if isinstance(ds, xr.Dataset):
                 # Assign through xarray objects rather than mutating .values,
@@ -251,7 +331,11 @@ class ProcessingTransformMixin:
                 ds[var_name].attrs["units"] = new_unit
             elif isinstance(ds, xr.DataArray):
                 if isinstance(converted_data, xr.DataArray):
+                    name = ds.name
                     ds = converted_data.copy()
+                    # Calendar-aware conversions (mm month-1, mm year-1) divide
+                    # by a time-derived array, which makes xarray drop the name.
+                    ds.name = name
                 else:
                     ds = ds.copy(data=converted_data)
 

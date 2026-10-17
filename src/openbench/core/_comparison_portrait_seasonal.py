@@ -27,6 +27,9 @@ from openbench.util.converttype import Convert_Type
 from openbench.util.names import select_data_array
 
 
+_ANNUAL_CYCLE_SCORES = {"nPhaseScore", "nSeasonalityScore"}
+
+
 def _has_finite_pair(s, o) -> bool:
     return bool(np.isfinite(np.asarray(s)).any() and np.isfinite(np.asarray(o)).any())
 
@@ -74,6 +77,14 @@ class PortraitSeasonalComparisonMixin:
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
         try:
+            annual_cycle_scores = [score for score in scores if score in _ANNUAL_CYCLE_SCORES]
+            if annual_cycle_scores:
+                logging.warning(
+                    "Portrait Plot seasonal: annual-cycle score(s) %s require all 12 months and are undefined "
+                    "for three-month DJF/MAM/JJA/SON subsets; affected cells are written as N/A and shown in "
+                    "grey, not as zero scores.",
+                    ", ".join(annual_cycle_scores),
+                )
             dir_path = os.path.join(basedir, "comparisons", "Portrait_Plot_seasonal")
             os.makedirs(dir_path, exist_ok=True)
 
@@ -98,355 +109,334 @@ class PortraitSeasonalComparisonMixin:
                 output_file.write("\n")
 
                 for evaluation_item in evaluation_items:
-                    try:
-                        logging.info(f"now processing the evaluation item: {evaluation_item}")
-                        sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                        ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                        if isinstance(sim_sources, str):
-                            sim_sources = [sim_sources]
-                        if isinstance(ref_sources, str):
-                            ref_sources = [ref_sources]
+                    logging.info(f"now processing the evaluation item: {evaluation_item}")
+                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                    if isinstance(sim_sources, str):
+                        sim_sources = [sim_sources]
+                    if isinstance(ref_sources, str):
+                        ref_sources = [ref_sources]
 
-                        for ref_source in ref_sources:
+                    for ref_source in ref_sources:
+                        for i, sim_source in enumerate(sim_sources):
                             try:
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        output_file.write(f"{evaluation_item}\t")
-                                        output_file.write(f"{ref_source}\t")
-                                        output_file.write(f"{sim_source}\t")
-                                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                output_file.write(f"{evaluation_item}\t")
+                                output_file.write(f"{ref_source}\t")
+                                output_file.write(f"{sim_source}\t")
+                                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                        if ref_data_type == "stn" or sim_data_type == "stn":
-                                            ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                            sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                            if sim_varname is None or sim_varname == "":
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == "":
-                                                ref_varname = evaluation_item
+                                if ref_data_type == "stn" or sim_data_type == "stn":
+                                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                    if sim_varname is None or sim_varname == "":
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == "":
+                                        ref_varname = evaluation_item
 
-                                            station_list = _station_evaluation_frame(
-                                                basedir, evaluation_item, ref_source, sim_source, kind="metrics"
-                                            )
+                                    station_list = _station_evaluation_frame(
+                                        basedir, evaluation_item, ref_source, sim_source, kind="metrics"
+                                    )
 
-                                            def _process_station_data_parallel(
+                                    def _process_station_data_parallel(
+                                        casedir,
+                                        ref_source,
+                                        sim_source,
+                                        item,
+                                        sim_varname,
+                                        ref_varname,
+                                        station_row,
+                                        metric_or_score,
+                                        season,
+                                        metric=None,
+                                        score=None,
+                                    ):
+                                        try:
+                                            s, o = _load_station_pair(
+                                                self,
                                                 casedir,
+                                                item,
                                                 ref_source,
                                                 sim_source,
-                                                item,
-                                                sim_varname,
-                                                ref_varname,
                                                 station_row,
-                                                metric_or_score,
+                                                ref_varname,
+                                                sim_varname,
+                                            )
+                                            s_season, o_season = _select_season_pair(s, o, season)
+                                            if metric_or_score == "metric":
+                                                return process_portrait_metric(
+                                                    self,
+                                                    casedir,
+                                                    item,
+                                                    ref_source,
+                                                    sim_source,
+                                                    metric,
+                                                    s_season,
+                                                    o_season,
+                                                    allow_empty=True,
+                                                )
+                                            if metric_or_score == "score":
+                                                return process_portrait_score(
+                                                    self,
+                                                    casedir,
+                                                    item,
+                                                    ref_source,
+                                                    sim_source,
+                                                    score,
+                                                    s_season,
+                                                    o_season,
+                                                    allow_empty=True,
+                                                )
+                                            raise ValueError(f"Unsupported portrait statistic kind: {metric_or_score}")
+                                        except StationDataUnavailable as e:
+                                            logging.debug(
+                                                "Station %s has no Portrait seasonal value for %s/%s: %s",
+                                                station_row.get("ID", "<unknown>"),
+                                                metric or score,
                                                 season,
-                                                metric=None,
-                                                score=None,
-                                            ):
-                                                try:
-                                                    s, o = _load_station_pair(
-                                                        self,
-                                                        casedir,
-                                                        item,
-                                                        ref_source,
-                                                        sim_source,
-                                                        station_row,
-                                                        ref_varname,
-                                                        sim_varname,
-                                                    )
-                                                    s_season, o_season = _select_season_pair(s, o, season)
-                                                    if metric_or_score == "metric":
-                                                        return process_portrait_metric(
-                                                            self,
-                                                            casedir,
-                                                            item,
-                                                            ref_source,
-                                                            sim_source,
-                                                            metric,
-                                                            s_season,
-                                                            o_season,
-                                                            allow_empty=True,
-                                                        )
-                                                    if metric_or_score == "score":
-                                                        return process_portrait_score(
-                                                            self,
-                                                            casedir,
-                                                            item,
-                                                            ref_source,
-                                                            sim_source,
-                                                            score,
-                                                            s_season,
-                                                            o_season,
-                                                            allow_empty=True,
-                                                        )
-                                                    raise ValueError(
-                                                        f"Unsupported portrait statistic kind: {metric_or_score}"
-                                                    )
-                                                except StationDataUnavailable as e:
-                                                    logging.debug(
-                                                        "Station %s has no Portrait seasonal value for %s/%s: %s",
-                                                        station_row.get("ID", "<unknown>"),
-                                                        metric or score,
-                                                        season,
-                                                        e,
-                                                    )
-                                                    return np.nan
+                                                e,
+                                            )
+                                            return np.nan
 
-                                            station_rows = [row for _, row in station_list.iterrows()]
-                                            seasons = ["DJF", "MAM", "JJA", "SON"]
-                                            for metric in metrics:
-                                                try:
-                                                    if not hasattr(self, metric):
-                                                        raise ValueError(f"No such metric: {metric}")
-                                                    for season in seasons:
-                                                        results = self._run_parallel_or_serial(
-                                                            delayed(_process_station_data_parallel)(
-                                                                basedir,
-                                                                ref_source,
-                                                                sim_source,
-                                                                evaluation_item,
-                                                                sim_varname,
-                                                                ref_varname,
-                                                                station_row,
-                                                                "metric",
-                                                                season,
-                                                                metric=metric,
-                                                            )
-                                                            for station_row in station_rows
-                                                        )
-                                                        results = np.asarray(results, dtype=float)
-                                                        finite = results[np.isfinite(results)]
-                                                        if finite.size > 2:
-                                                            q1, q3 = np.percentile(finite, [5, 95])
-                                                            results = np.where(
-                                                                (results >= q1) & (results <= q3), results, np.nan
-                                                            )
-
-                                                        mean_value = _nan_or_reduced(
-                                                            results,
-                                                            reducer="median",
-                                                            plot="Portrait Plot seasonal",
-                                                            item=evaluation_item,
-                                                            ref_source=ref_source,
-                                                            sim_source=sim_source,
-                                                            variable=f"{metric}_{season}",
-                                                        )
-                                                        output_file.write(f"{_format_portrait_value(mean_value)}\t")
-                                                finally:
-                                                    gc.collect()  # Clean up memory after processing each metric
-
-                                            for score in scores:
-                                                try:
-                                                    if not hasattr(self, score):
-                                                        raise ValueError(f"No such score: {score}")
-                                                    for season in seasons:
-                                                        results = self._run_parallel_or_serial(
-                                                            delayed(_process_station_data_parallel)(
-                                                                basedir,
-                                                                ref_source,
-                                                                sim_source,
-                                                                evaluation_item,
-                                                                sim_varname,
-                                                                ref_varname,
-                                                                station_row,
-                                                                "score",
-                                                                season,
-                                                                score=score,
-                                                            )
-                                                            for station_row in station_rows
-                                                        )
-                                                        mean_value = _nan_or_reduced(
-                                                            results,
-                                                            reducer="mean",
-                                                            plot="Portrait Plot seasonal",
-                                                            item=evaluation_item,
-                                                            ref_source=ref_source,
-                                                            sim_source=sim_source,
-                                                            variable=f"{score}_{season}",
-                                                        )
-                                                        output_file.write(f"{_format_portrait_value(mean_value)}\t")
-                                                finally:
-                                                    gc.collect()  # Clean up memory after processing each score
-                                        else:
-                                            try:
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
-
-                                                ref_path = self._ref_data_path(
-                                                    basedir, evaluation_item, ref_source, ref_varname, sim_source
-                                                )
-                                                sim_path = os.path.join(
+                                    station_rows = [row for _, row in station_list.iterrows()]
+                                    seasons = ["DJF", "MAM", "JJA", "SON"]
+                                    for metric in metrics:
+                                        if not hasattr(self, metric):
+                                            raise ValueError(f"No such metric: {metric}")
+                                        for season in seasons:
+                                            results = self._run_parallel_or_serial(
+                                                delayed(_process_station_data_parallel)(
                                                     basedir,
-                                                    "data",
-                                                    f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc",
+                                                    ref_source,
+                                                    sim_source,
+                                                    evaluation_item,
+                                                    sim_varname,
+                                                    ref_varname,
+                                                    station_row,
+                                                    "metric",
+                                                    season,
+                                                    metric=metric,
                                                 )
+                                                for station_row in station_rows
+                                            )
+                                            results = np.asarray(results, dtype=float)
+                                            finite = results[np.isfinite(results)]
+                                            if finite.size > 2:
+                                                q1, q3 = np.percentile(finite, [5, 95])
+                                                results = np.where((results >= q1) & (results <= q3), results, np.nan)
 
-                                                with xr.open_dataset(ref_path) as ref_ds:
-                                                    o = select_data_array(ref_ds, ref_varname).load()
-                                                with xr.open_dataset(sim_path) as sim_ds:
-                                                    s = select_data_array(sim_ds, sim_varname).load()
-                                                o = Convert_Type.convert_nc(o)
-                                                s = Convert_Type.convert_nc(s)
+                                            mean_value = _nan_or_reduced(
+                                                results,
+                                                reducer="median",
+                                                plot="Portrait Plot seasonal",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=f"{metric}_{season}",
+                                            )
+                                            output_file.write(f"{_format_portrait_value(mean_value)}\t")
 
-                                                o = o.where(np.isfinite(o), np.nan)
-                                                s = s.where(np.isfinite(s), np.nan)
-                                                # Align time axes safely. The previous code did an unconditional
-                                                # s["time"] = o["time"], which (a) raises when lengths differ and
-                                                # (b) silently pairs values against wrong timestamps when lengths
-                                                # match but coords are offset. Use inner-join intersect instead.
-                                                if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(
-                                                    s["time"].values, o["time"].values
-                                                ):
-                                                    s, o = xr.align(s, o, join="inner")
+                                    for score in scores:
+                                        if not hasattr(self, score):
+                                            raise ValueError(f"No such score: {score}")
+                                        for season in seasons:
+                                            results = self._run_parallel_or_serial(
+                                                delayed(_process_station_data_parallel)(
+                                                    basedir,
+                                                    ref_source,
+                                                    sim_source,
+                                                    evaluation_item,
+                                                    sim_varname,
+                                                    ref_varname,
+                                                    station_row,
+                                                    "score",
+                                                    season,
+                                                    score=score,
+                                                )
+                                                for station_row in station_rows
+                                            )
+                                            mean_value = _nan_or_reduced(
+                                                results,
+                                                reducer="mean",
+                                                plot="Portrait Plot seasonal",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=f"{score}_{season}",
+                                            )
+                                            output_file.write(f"{_format_portrait_value(mean_value)}\t")
+                                else:
+                                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                    if sim_varname is None or sim_varname == "":
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == "":
+                                        ref_varname = evaluation_item
 
-                                                s, o = _apply_pairwise_valid_mask(s, o)
+                                    ref_path = self._ref_data_path(
+                                        basedir, evaluation_item, ref_source, ref_varname, sim_source
+                                    )
+                                    sim_path = os.path.join(
+                                        basedir,
+                                        "data",
+                                        f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc",
+                                    )
 
-                                                s_DJF = s.sel(time=s["time.season"] == "DJF")
-                                                o_DJF = o.sel(time=o["time.season"] == "DJF")
-                                                s_MAM = s.sel(time=s["time.season"] == "MAM")
-                                                o_MAM = o.sel(time=o["time.season"] == "MAM")
-                                                s_JJA = s.sel(time=s["time.season"] == "JJA")
-                                                o_JJA = o.sel(time=o["time.season"] == "JJA")
-                                                s_SON = s.sel(time=s["time.season"] == "SON")
-                                                o_SON = o.sel(time=o["time.season"] == "SON")
+                                    with xr.open_dataset(ref_path) as ref_ds:
+                                        o = select_data_array(ref_ds, ref_varname).load()
+                                    with xr.open_dataset(sim_path) as sim_ds:
+                                        s = select_data_array(sim_ds, sim_varname).load()
+                                    o = Convert_Type.convert_nc(o)
+                                    s = Convert_Type.convert_nc(s)
 
-                                                for metric in metrics:
-                                                    try:
-                                                        if hasattr(self, metric):
-                                                            k = process_portrait_metric(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                metric,
-                                                                s_DJF,
-                                                                o_DJF,
-                                                                vkey="_DJF",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                    o = o.where(np.isfinite(o), np.nan)
+                                    s = s.where(np.isfinite(s), np.nan)
+                                    # Align time axes safely. The previous code did an unconditional
+                                    # s["time"] = o["time"], which (a) raises when lengths differ and
+                                    # (b) silently pairs values against wrong timestamps when lengths
+                                    # match but coords are offset. Use inner-join intersect instead.
+                                    if s.sizes.get("time") != o.sizes.get("time") or not np.array_equal(
+                                        s["time"].values, o["time"].values
+                                    ):
+                                        s, o = xr.align(s, o, join="inner")
 
-                                                            k = process_portrait_metric(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                metric,
-                                                                s_MAM,
-                                                                o_MAM,
-                                                                vkey="_MAM",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                    s, o = _apply_pairwise_valid_mask(s, o)
 
-                                                            k = process_portrait_metric(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                metric,
-                                                                s_JJA,
-                                                                o_JJA,
-                                                                vkey="_JJA",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                    s_DJF = s.sel(time=s["time.season"] == "DJF")
+                                    o_DJF = o.sel(time=o["time.season"] == "DJF")
+                                    s_MAM = s.sel(time=s["time.season"] == "MAM")
+                                    o_MAM = o.sel(time=o["time.season"] == "MAM")
+                                    s_JJA = s.sel(time=s["time.season"] == "JJA")
+                                    o_JJA = o.sel(time=o["time.season"] == "JJA")
+                                    s_SON = s.sel(time=s["time.season"] == "SON")
+                                    o_SON = o.sel(time=o["time.season"] == "SON")
 
-                                                            k = process_portrait_metric(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                metric,
-                                                                s_SON,
-                                                                o_SON,
-                                                                vkey="_SON",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-                                                        else:
-                                                            raise ValueError(f"No such metric: {metric}")
-                                                    finally:
-                                                        gc.collect()  # Clean up memory after processing each metric
+                                    for metric in metrics:
+                                        if hasattr(self, metric):
+                                            k = process_portrait_metric(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                metric,
+                                                s_DJF,
+                                                o_DJF,
+                                                vkey="_DJF",
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
 
-                                                for score in scores:
-                                                    try:
-                                                        if hasattr(self, score):
-                                                            k = process_portrait_score(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                score,
-                                                                s_DJF,
-                                                                o_DJF,
-                                                                vkey="_DJF",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                            k = process_portrait_metric(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                metric,
+                                                s_MAM,
+                                                o_MAM,
+                                                vkey="_MAM",
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
 
-                                                            k = process_portrait_score(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                score,
-                                                                s_MAM,
-                                                                o_MAM,
-                                                                vkey="_MAM",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                            k = process_portrait_metric(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                metric,
+                                                s_JJA,
+                                                o_JJA,
+                                                vkey="_JJA",
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
 
-                                                            k = process_portrait_score(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                score,
-                                                                s_JJA,
-                                                                o_JJA,
-                                                                vkey="_JJA",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
+                                            k = process_portrait_metric(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                metric,
+                                                s_SON,
+                                                o_SON,
+                                                vkey="_SON",
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
+                                        else:
+                                            raise ValueError(f"No such metric: {metric}")
 
-                                                            k = process_portrait_score(
-                                                                self,
-                                                                basedir,
-                                                                evaluation_item,
-                                                                ref_source,
-                                                                sim_source,
-                                                                score,
-                                                                s_SON,
-                                                                o_SON,
-                                                                vkey="_SON",
-                                                            )
-                                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
-                                                            output_file.write(f"{kk_str}\t")
-                                                        else:
-                                                            raise ValueError(f"No such score: {score}")
-                                                    finally:
-                                                        gc.collect()  # Clean up memory after processing each score
-                                            finally:
-                                                gc.collect()  # Clean up memory after processing grid data
-                                        output_file.write("\n")
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
+                                    for score in scores:
+                                        if hasattr(self, score):
+                                            k = process_portrait_score(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                score,
+                                                s_DJF,
+                                                o_DJF,
+                                                vkey="_DJF",
+                                                allow_empty=True,
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
+
+                                            k = process_portrait_score(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                score,
+                                                s_MAM,
+                                                o_MAM,
+                                                vkey="_MAM",
+                                                allow_empty=True,
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
+
+                                            k = process_portrait_score(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                score,
+                                                s_JJA,
+                                                o_JJA,
+                                                vkey="_JJA",
+                                                allow_empty=True,
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
+
+                                            k = process_portrait_score(
+                                                self,
+                                                basedir,
+                                                evaluation_item,
+                                                ref_source,
+                                                sim_source,
+                                                score,
+                                                s_SON,
+                                                o_SON,
+                                                vkey="_SON",
+                                                allow_empty=True,
+                                            )
+                                            kk_str = f"{k:.2f}" if not np.isnan(k) else "N/A"
+                                            output_file.write(f"{kk_str}\t")
+                                        else:
+                                            raise ValueError(f"No such score: {score}")
+                                output_file.write("\n")
                             finally:
-                                gc.collect()  # Clean up memory after processing each reference source
-                    finally:
-                        gc.collect()  # Clean up memory after processing each evaluation item
+                                pass  # Memory cleanup handled at method level
 
             _comparison_callable("make_scenarios_comparison_Portrait_Plot_seasonal")(
                 output_file_path, self.casedir, evaluation_items, scores, metrics, option

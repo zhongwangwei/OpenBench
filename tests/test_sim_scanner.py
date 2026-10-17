@@ -499,6 +499,18 @@ def test_infer_time_coverage_samples_large_single_step_monthly_files(
     assert coverage["years"] == [2000, 2009]
 
 
+def test_infer_time_coverage_reads_headers_in_parallel(tmp_path: Path):
+    import openbench.data.sim_scanner as sim_scanner
+
+    for year in range(2001, 2004):
+        _write_grid_nc(tmp_path / f"Case_hist_{year}-01.nc", periods=1, start=f"{year}-01-01")
+
+    coverage = sim_scanner._infer_time_coverage(tmp_path, max_workers=2)
+
+    assert coverage["years"] == [2001, 2003]
+    assert coverage["time_count"] == 3
+
+
 def test_scan_simulation_roots_infers_daily_tim_res_from_monthly_files(tmp_path: Path):
     from openbench.data.sim_scanner import scan_simulation_roots
 

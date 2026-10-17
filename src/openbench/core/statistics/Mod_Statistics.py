@@ -10,6 +10,7 @@ import xarray as xr
 from joblib import Parallel, delayed
 
 from openbench.util.converttype import Convert_Type
+from openbench.util.groupby import without_flox
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 
 from openbench.core.statistics import statistics_calculate
@@ -172,7 +173,8 @@ class BasicProcessing(statistics_calculate, BaseDatasetProcessing):
             # Skip resampling for climatology mode
             compare_tim_res_lower = str(self.compare_tim_res).strip().lower()
             if compare_tim_res_lower not in ["climatology-year", "climatology-month"]:
-                remapped = remapped.resample(time=self.compare_tim_res).mean()
+                with without_flox():
+                    remapped = remapped.resample(time=self.compare_tim_res).mean()
             remapped_data.append(remapped)
         return remapped_data
 

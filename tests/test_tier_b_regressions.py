@@ -290,6 +290,20 @@ def test_longitude_normalization_removes_duplicate_seam_cells():
     assert out["lon"].values.tolist() == [0.0]
 
 
+def test_longitude_normalization_ignores_station_location_coordinate():
+    from openbench.data.processing import DatasetProcessing
+
+    processor = object.__new__(DatasetProcessing)
+    ds = xr.Dataset(
+        {"v": (("n_stations", "time"), [[1.0], [2.0]])},
+        coords={"lon": ("n_stations", [10.0, 10.0]), "time": [0]},
+    )
+
+    out = processor._normalize_longitude_axis(ds)
+
+    assert out.identical(ds)
+
+
 def test_process_extracted_data_rejects_monthly_to_daily_upsampling():
     import openbench.data.processing as processing
 

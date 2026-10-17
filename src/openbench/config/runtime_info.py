@@ -17,6 +17,7 @@ from copy import deepcopy
 from typing import Any, Dict, Tuple
 
 from openbench.util.exceptions import ConfigurationError
+from openbench.util.station_ids import merge_on_station_id, read_station_csv
 
 # Heavy dependencies for data processing
 try:
@@ -239,11 +240,13 @@ class GeneralInfoReader:
                         setattr(self, f"{source_type}_fulllist", str(nml["general"][f"{source}_fulllist"]))
                     except (KeyError, TypeError) as e2:
                         setattr(self, f"{source_type}_fulllist", "")
-                        item_is_streamflow = str(self.item).casefold() == "streamflow"
+                        from openbench.data.station_matcher import is_station_matched_item
+
+                        item_is_matched = is_station_matched_item(self.item)
                         ref_has_filter = (
-                            not item_is_streamflow and source_type == "ref" and self._get_custom_filter() is not None
+                            not item_is_matched and source_type == "ref" and self._get_custom_filter() is not None
                         )
-                        if not (item_is_streamflow or ref_has_filter):
+                        if not (item_is_matched or ref_has_filter):
                             logging.error("read %s_fulllist namelist error: %s", source_type, e2)
 
             # Handle uparea attributes for station data
@@ -390,8 +393,8 @@ class GeneralInfoReader:
         if self.ref_data_type == "stn" and self.sim_data_type == "stn":
             # Both ref and sim are station data
             if self.sim_fulllist and self.ref_fulllist:
-                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
-                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self.sim_stn_list = read_station_csv(self.sim_fulllist, header=0)
+                self.ref_stn_list = read_station_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns()
                 sim_root = getattr(self, "sim_dir", "")
                 ref_root = getattr(self, "ref_dir", "")
@@ -405,7 +408,7 @@ class GeneralInfoReader:
         elif self.sim_data_type == "stn":
             # Only sim is station data
             if self.sim_fulllist:
-                self.sim_stn_list = pd.read_csv(self.sim_fulllist, header=0)
+                self.sim_stn_list = read_station_csv(self.sim_fulllist, header=0)
                 self._rename_station_columns(sim_only=True)
                 sim_root = getattr(self, "sim_dir", "")
                 self._resolve_relative_paths(self.sim_stn_list, "sim_dir", self.sim_fulllist, sim_root)
@@ -416,7 +419,7 @@ class GeneralInfoReader:
         elif self.ref_data_type == "stn":
             # Only ref is station data (stn×grid case)
             if self.ref_fulllist:
-                self.ref_stn_list = pd.read_csv(self.ref_fulllist, header=0)
+                self.ref_stn_list = read_station_csv(self.ref_fulllist, header=0)
                 self._rename_station_columns(ref_only=True)
                 ref_root = getattr(self, "ref_dir", "")
                 self._resolve_relative_paths(self.ref_stn_list, "ref_dir", self.ref_fulllist, ref_root)
@@ -436,14 +439,14 @@ class GeneralInfoReader:
         """Match two station lists for stn×stn evaluation.
 
         Strategy:
-        1. Inner join on ID (exact match) — standard, fast
+        1. Inner join on ID (zero padding ignored, e.g. "0009463" == "9463")
         2. If ID match yields nothing, fall back to nearest-neighbor spatial matching
            within `spatial_threshold_deg` (~1 km at equator)
 
         Returns merged DataFrame with both sim and ref columns.
         """
         # 1. Try ID match
-        merged = pd.merge(sim_stn, ref_stn, how="inner", on="ID")
+        merged = merge_on_station_id(sim_stn, ref_stn)
         if len(merged) > 0:
             n_sim = len(sim_stn)
             n_ref = len(ref_stn)
@@ -644,6 +647,11 @@ class GeneralInfoReader:
             try:
                 custom_filter(self)
             except Exception as e:
+                # The built-in station matcher enforces fixed upstream-area and
+                # allocation-error limits; falling back would evaluate stations
+                # it rejected (or a station list it never vetted).
+                if getattr(custom_filter, "is_station_matcher", False):
+                    raise
                 logging.error(f"Custom filter failed: {e}")
                 self._apply_default_filter()
         else:
@@ -681,24 +689,38 @@ class GeneralInfoReader:
             mgr = get_registry()
             ref = mgr.get_reference(self.ref_source)
             if ref and ref.station_matching:
-                if not any(str(name).casefold() == "streamflow" for name in ref.variables):
+                from openbench.data.station_matcher import is_station_matched_item
+
+                matched_items = [name for name in ref.variables if is_station_matched_item(name)]
+                if not matched_items:
                     logging.warning(
-                        "Ignoring station_matching for non-Streamflow reference %s; "
-                        "rescan the reference catalog to generate a station list.",
+                        "Ignoring station_matching for reference %s, which has no Streamflow or sediment "
+                        "variable; rescan the reference catalog to generate a station list.",
                         self.ref_source,
                     )
                 else:
                     sm = ref.station_matching
+                    # One dataset serving several items (discharge, SSC and SSL at
+                    # sediment gauges) gets per-item station files.
+                    per_item_scratch = len(matched_items) > 1
 
                     def _station_matcher_filter(info):
-                        from pathlib import Path
+                        from openbench.data.station_matcher import (
+                            resolve_station_dataset,
+                            run_station_matching,
+                            station_dataset_candidates,
+                        )
 
-                        from openbench.data.station_matcher import run_station_matching
-
-                        dataset_path = str(Path(info.ref_dir) / sm.dataset_file)
+                        dataset_path = resolve_station_dataset(info.ref_dir, sm.dataset_file)
+                        if dataset_path is None:
+                            tried = ", ".join(str(p) for p in station_dataset_candidates(info.ref_dir, sm.dataset_file))
+                            raise FileNotFoundError(f"Station dataset not found; tried {tried}")
+                        varname = getattr(info, "ref_varname", None)
+                        if isinstance(varname, (list, tuple)):
+                            varname = varname[0] if varname else ""
                         run_station_matching(
                             info,
-                            dataset_path,
+                            str(dataset_path),
                             method=sm.method,
                             station_id_var=sm.station_id_var,
                             lon_var=sm.lon_var,
@@ -706,12 +728,14 @@ class GeneralInfoReader:
                             area_var=sm.area_var,
                             discharge_var=sm.discharge_var,
                             time_var=sm.time_var,
-                            area_error_threshold=sm.area_error_threshold,
-                            min_uparea=sm.min_uparea,
                             max_uparea=sm.max_uparea,
                             time_format=sm.time_format,
+                            scratch_subdir=f"{dataset_path.stem}_{info.item}" if per_item_scratch else None,
+                            varname=varname or None,
+                            varname_falls_back=str(info.item).casefold() == "streamflow",
                         )
 
+                    _station_matcher_filter.is_station_matcher = True
                     return _station_matcher_filter
         except Exception as e:
             logging.debug("station_matching lookup failed for %s: %s", self.ref_source, e)
@@ -792,13 +816,13 @@ class GeneralInfoReader:
         self.stn_list["Flag"] = valid_time_range
 
         lon_col = None
-        for col in ["lon", "LON", "longitude", "Longitude"]:
+        for col in ["ref_lon", "sim_lon", "lon", "LON", "longitude", "Longitude"]:
             if col in self.stn_list.columns:
                 lon_col = col
                 break
 
         lat_col = None
-        for col in ["lat", "LAT", "latitude", "Latitude"]:
+        for col in ["ref_lat", "sim_lat", "lat", "LAT", "latitude", "Latitude"]:
             if col in self.stn_list.columns:
                 lat_col = col
                 break

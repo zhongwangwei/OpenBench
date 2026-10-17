@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from fnmatch import fnmatch
 from hashlib import blake2s
+from multiprocessing import get_context
 from pathlib import Path
 import re
 import unicodedata
 from typing import Any
 
+from openbench.data.compute import compute_dependency_names
 from openbench.data.coordinates import glob_nc
 from openbench.data.registry.scanner import (
     filename_split_match,
@@ -288,6 +291,7 @@ def _infer_time_coverage(
     *,
     files: list[Path] | None = None,
     data_groupby: str | None = None,
+    max_workers: int | None = None,
 ) -> dict:
     files = files if files is not None else _glob_nc(nc_dir)
     if not files:
@@ -303,8 +307,17 @@ def _infer_time_coverage(
     raw_time_units = []
     readable_count = 0
     no_time_count = 0
-    for file_path in sample_files:
-        info = _time_info_from_file(file_path)
+    workers = max(1, int(max_workers or 1))
+    if workers > 1 and len(sample_files) > 1:
+        with ProcessPoolExecutor(
+            max_workers=min(workers, len(sample_files)),
+            mp_context=get_context("spawn"),
+        ) as executor:
+            time_infos = list(executor.map(_time_info_from_file, sample_files))
+    else:
+        time_infos = [_time_info_from_file(file_path) for file_path in sample_files]
+
+    for info in time_infos:
         if not info.get("readable"):
             continue
         readable_count += 1
@@ -673,7 +686,7 @@ def _filename_pattern_for_file(file_path: Path) -> tuple[str, str]:
 
 
 def _compute_dependencies_span_file_patterns(files: list[Path], mapping) -> bool:
-    deps = re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(getattr(mapping, "compute", "")))
+    deps = compute_dependency_names(getattr(mapping, "compute", ""))
     if len(deps) < 2:
         return False
     patterns = set()
@@ -712,7 +725,7 @@ def _mapping_candidate_varnames(mapping) -> list[str]:
 
     compute = getattr(mapping, "compute", None)
     if compute:
-        candidates.extend(re.findall(r"ds\[['\"]([^'\"]+)['\"]\]", str(compute)))
+        candidates.extend(compute_dependency_names(compute))
 
     seen: set[str] = set()
     unique = []

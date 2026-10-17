@@ -30,15 +30,25 @@ def _fixture_with_existing_sim_roots(tmp_path: Path, fixture_name: str) -> Path:
     return config_path
 
 
-def test_check_valid_config(tmp_path):
+def _minimal_config_with_data(tmp_path):
     config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
     data = yaml.safe_load(config.read_text(encoding="utf-8"))
     ref_root = tmp_path / "ref"
     ref_dir = ref_root / "Water" / "Evapotranspiration" / "GLEAM_v4.2a"
     ref_dir.mkdir(parents=True)
-    (ref_dir / "E_2004.nc").touch()
+    # The preflight requires every year preprocessing will read: GLEAM files are
+    # E_<year>_GLEAM_v4.2a.nc, CoLM2024 output <year>*.nc (empty prefix/suffix).
+    for year in range(data["project"]["years"][0], data["project"]["years"][1] + 1):
+        (ref_dir / f"E_{year}_GLEAM_v4.2a.nc").touch()
+        for label in data["simulation"]:
+            (tmp_path / "sim" / label / f"{year}.nc").touch()
     data["reference"]["data_root"] = str(ref_root)
     config.write_text(yaml.safe_dump(data, sort_keys=False))
+    return config
+
+
+def test_check_valid_config(tmp_path):
+    config = _minimal_config_with_data(tmp_path)
 
     result = runner.invoke(cli, ["check", str(config)])
     assert result.exit_code == 0
@@ -51,18 +61,36 @@ def test_check_invalid_config():
 
 
 def test_run_dry_run(tmp_path):
-    config = _fixture_with_existing_sim_roots(tmp_path, "full.yaml")
+    config = _minimal_config_with_data(tmp_path)
     result = runner.invoke(cli, ["run", str(config), "--dry-run"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "Dry run" in result.output
-    assert "test-full" in result.output
+    assert "test-minimal" in result.output
+
+
+def test_run_dry_run_fails_on_missing_data_files_like_check(tmp_path):
+    config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    ref_dir = tmp_path / "ref" / "Water" / "Evapotranspiration" / "GLEAM_v4.2a"
+    ref_dir.mkdir(parents=True)
+    (ref_dir / "E_2004_GLEAM_v4.2a.nc").touch()  # later years missing; the simulation folder is empty
+    data["reference"]["data_root"] = str(tmp_path / "ref")
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    check = runner.invoke(cli, ["check", str(config)])
+    dry_run = runner.invoke(cli, ["run", str(config), "--dry-run"])
+
+    assert check.exit_code == 1
+    assert dry_run.exit_code == 1
+    assert "Data files" in dry_run.output and "Dry run" not in dry_run.output
+    assert "2005" in dry_run.output and "CoLM2024" in dry_run.output
 
 
 @pytest.mark.parametrize("partial_stations", [False, True])
 def test_run_actual(tmp_path, partial_stations):
     import openbench.runner.local as local_runner
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "partial" if partial_stations else "success",
             "output_dir": "/tmp/openbench-out",
@@ -104,7 +132,7 @@ def test_run_actual(tmp_path, partial_stations):
 def test_run_only_drawing_fail_fast_errors_exit_nonzero(tmp_path):
     import openbench.runner.local as local_runner
 
-    def fake_run_evaluation(cfg, force=False, comparison_only=False):
+    def fake_run_evaluation(cfg, force=False, comparison_only=False, resume=False):
         return {
             "status": "error",
             "output_dir": str(tmp_path / "output" / "test"),
@@ -214,16 +242,18 @@ def test_model_register_interactive_comma_separated_varnames_write_fallbacks(tmp
     monkeypatch.setattr(registry_manager, "get_writable_model_catalog_path", lambda: catalog_path)
     monkeypatch.setattr(cli_model, "get_writable_model_catalog_path", lambda: catalog_path, raising=False)
 
+    # New profile: description and time offset first, then one variable
+    # (name, NetCDF names, unit, sub_dir, prefix, suffix) and an empty name.
     result = runner.invoke(
         cli,
         ["model", "register", "InteractiveModel", "--data-type", "grid", "--grid-res", "0.5", "--tim-res", "Month"],
-        input="Runoff\nrunoff_primary,runoff_fallback\nmm day-1\n\n",
+        input="\n\nRunoff\nrunoff_primary,runoff_fallback\nmm day-1\n\n\n\n\n",
     )
 
+    assert result.exit_code == 0, result.output
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     runoff = catalog["InteractiveModel"]["variables"]["Runoff"]
 
-    assert result.exit_code == 0
     assert runoff["varname"] == "runoff_primary"
     assert runoff["fallbacks"] == [{"varname": "runoff_fallback", "varunit": "mm day-1"}]
 
@@ -283,3 +313,27 @@ def test_init_output_is_loadable(tmp_path, monkeypatch):
     # Reference entries must be strings (var -> source_name)
     for var, src in cfg.reference.sources.items():
         assert isinstance(src, str), f"reference[{var!r}] should be a string source name, got {type(src).__name__}"
+
+
+@pytest.mark.parametrize(
+    ("standalone", "mplbackend", "expected"),
+    [(True, None, ["Agg"]), (False, None, []), (True, "TkAgg", [])],
+)
+def test_run_uses_agg_only_in_standalone_process_without_explicit_backend(
+    monkeypatch, standalone, mplbackend, expected
+):
+    import matplotlib
+
+    from openbench.cli import run as run_module
+
+    calls = []
+    monkeypatch.setattr(matplotlib, "use", lambda backend, *args, **kwargs: calls.append(backend))
+    monkeypatch.setattr(run_module, "_is_standalone_cli_process", lambda: standalone)
+    if mplbackend is None:
+        monkeypatch.delenv("MPLBACKEND", raising=False)
+    else:
+        monkeypatch.setenv("MPLBACKEND", mplbackend)
+
+    run_module._use_file_only_matplotlib_backend()
+
+    assert calls == expected

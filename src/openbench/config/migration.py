@@ -276,6 +276,8 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
         options["unified_mask"] = general["unified_mask"]
     if general.get("generate_report") is not None:
         options["generate_report"] = general["generate_report"]
+    if general.get("station_plots") is not None:
+        options["station_plots"] = general["station_plots"]
     general_ci = {str(k).lower(): v for k, v in general.items()}
     if general_ci.get("igbp_groupby"):
         options["IGBP_groupby"] = True

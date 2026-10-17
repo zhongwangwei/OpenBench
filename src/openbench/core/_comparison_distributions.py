@@ -37,148 +37,127 @@ class DistributionComparisonMixin:
 
             # fixme: add the Kernel Density Estimate
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for score in scores:
+                for score in scores:
+                    # Skip nSpatialScore since it's a constant value
+                    if score == "nSpatialScore":
+                        logging.info(f"Skipping {score} for Kernel Density Estimate - it's a constant value")
+                        continue
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
+
+                                data = _station_summary_values(
+                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
+                                )
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                )
+                                with xr.open_dataset(file_path) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
+                                data = ds[score].values
+                            datasets_filtered.append(
+                                _finite_distribution_values(
+                                    data,
+                                    plot="Kernel Density Estimate",
+                                    item=evaluation_item,
+                                    ref_source=ref_source,
+                                    sim_source=sim_source,
+                                    variable=score,
+                                )
+                            )
+
                         try:
-                            # Skip nSpatialScore since it's a constant value
-                            if score == "nSpatialScore":
-                                logging.info(f"Skipping {score} for Kernel Density Estimate - it's a constant value")
-                                continue
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                            _comparison_callable("make_scenarios_comparison_Kernel_Density_Estimate")(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                score,
+                                datasets_filtered,
+                                option,
+                            )
+                        except (ValueError, RuntimeError, IOError, OSError) as e:
+                            logging.error(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed: {e}"
+                            )
+                            raise
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                for metric in metrics:
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                                data = _station_summary_values(
-                                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
-                                                )
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
-                                                )
-                                                with xr.open_dataset(file_path) as ds_file:
-                                                    ds = Convert_Type.convert_nc(ds_file.load())
-                                                data = ds[score].values
-                                            datasets_filtered.append(
-                                                _finite_distribution_values(
-                                                    data,
-                                                    plot="Kernel Density Estimate",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=score,
-                                                )
-                                            )
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
 
-                                    try:
-                                        _comparison_callable("make_scenarios_comparison_Kernel_Density_Estimate")(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            score,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except (ValueError, RuntimeError, IOError, OSError) as e:
-                                        logging.error(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed: {e}"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each score
+                                data = _station_summary_values(
+                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
+                                )
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
+                                )
+                                with xr.open_dataset(file_path) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
+                                data = ds[metric].values
 
-                    for metric in metrics:
+                            if metric == "percent_bias":
+                                data = data[(data >= -100) & (data <= 100)]
+                            datasets_filtered.append(
+                                _finite_distribution_values(
+                                    data,
+                                    plot="Kernel Density Estimate",
+                                    item=evaluation_item,
+                                    ref_source=ref_source,
+                                    sim_source=sim_source,
+                                    variable=metric,
+                                )
+                            )
+
                         try:
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
-
-                                                data = _station_summary_values(
-                                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
-                                                )
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
-                                                )
-                                                with xr.open_dataset(file_path) as ds_file:
-                                                    ds = Convert_Type.convert_nc(ds_file.load())
-                                                data = ds[metric].values
-
-                                            if metric == "percent_bias":
-                                                data = data[(data >= -100) & (data <= 100)]
-                                            datasets_filtered.append(
-                                                _finite_distribution_values(
-                                                    data,
-                                                    plot="Kernel Density Estimate",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=metric,
-                                                )
-                                            )
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
-
-                                    try:
-                                        _comparison_callable("make_scenarios_comparison_Kernel_Density_Estimate")(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            metric,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except (ValueError, RuntimeError, IOError, OSError) as e:
-                                        logging.error(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed: {e}"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each metric
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                            _comparison_callable("make_scenarios_comparison_Kernel_Density_Estimate")(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                metric,
+                                datasets_filtered,
+                                option,
+                            )
+                        except (ValueError, RuntimeError, IOError, OSError) as e:
+                            logging.error(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed: {e}"
+                            )
+                            raise
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -188,148 +167,127 @@ class DistributionComparisonMixin:
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for score in scores:
+                for score in scores:
+                    # Skip nSpatialScore since it's a constant value
+                    if score == "nSpatialScore":
+                        logging.info(f"Skipping {score} for Whisker Plot - it's a constant value")
+                        continue
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
+
+                                data = _station_summary_values(
+                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
+                                )
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                )
+                                with xr.open_dataset(file_path) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
+                                data = ds[score].values
+                            datasets_filtered.append(
+                                _finite_distribution_values(
+                                    data,
+                                    plot="Whisker Plot",
+                                    item=evaluation_item,
+                                    ref_source=ref_source,
+                                    sim_source=sim_source,
+                                    variable=score,
+                                )
+                            )
+
                         try:
-                            # Skip nSpatialScore since it's a constant value
-                            if score == "nSpatialScore":
-                                logging.info(f"Skipping {score} for Whisker Plot - it's a constant value")
-                                continue
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                            _comparison_callable("make_scenarios_comparison_Whisker_Plot")(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                score,
+                                datasets_filtered,
+                                option,
+                            )
+                        except (ValueError, RuntimeError, IOError, OSError) as e:
+                            logging.error(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed: {e}"
+                            )
+                            raise
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                for metric in metrics:
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                                data = _station_summary_values(
-                                                    basedir, evaluation_item, ref_source, sim_source, "scores", score
-                                                )
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
-                                                )
-                                                with xr.open_dataset(file_path) as ds_file:
-                                                    ds = Convert_Type.convert_nc(ds_file.load())
-                                                data = ds[score].values
-                                            datasets_filtered.append(
-                                                _finite_distribution_values(
-                                                    data,
-                                                    plot="Whisker Plot",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=score,
-                                                )
-                                            )
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
 
-                                    try:
-                                        _comparison_callable("make_scenarios_comparison_Whisker_Plot")(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            score,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except (ValueError, RuntimeError, IOError, OSError) as e:
-                                        logging.error(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed: {e}"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each score
+                                data = _station_summary_values(
+                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
+                                )
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
+                                )
+                                with xr.open_dataset(file_path) as ds_file:
+                                    ds = Convert_Type.convert_nc(ds_file.load())
+                                data = ds[metric].values
 
-                    for metric in metrics:
+                            if metric == "percent_bias":
+                                data = data[(data >= -100) & (data <= 100)]
+                            datasets_filtered.append(
+                                _finite_distribution_values(
+                                    data,
+                                    plot="Whisker Plot",
+                                    item=evaluation_item,
+                                    ref_source=ref_source,
+                                    sim_source=sim_source,
+                                    variable=metric,
+                                )
+                            )
+
                         try:
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
-
-                                                data = _station_summary_values(
-                                                    basedir, evaluation_item, ref_source, sim_source, "metrics", metric
-                                                )
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
-                                                )
-                                                with xr.open_dataset(file_path) as ds_file:
-                                                    ds = Convert_Type.convert_nc(ds_file.load())
-                                                data = ds[metric].values
-
-                                            if metric == "percent_bias":
-                                                data = data[(data >= -100) & (data <= 100)]
-                                            datasets_filtered.append(
-                                                _finite_distribution_values(
-                                                    data,
-                                                    plot="Whisker Plot",
-                                                    item=evaluation_item,
-                                                    ref_source=ref_source,
-                                                    sim_source=sim_source,
-                                                    variable=metric,
-                                                )
-                                            )
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
-
-                                    try:
-                                        _comparison_callable("make_scenarios_comparison_Whisker_Plot")(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            metric,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except (ValueError, RuntimeError, IOError, OSError) as e:
-                                        logging.error(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed: {e}"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each metric
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                            _comparison_callable("make_scenarios_comparison_Whisker_Plot")(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                metric,
+                                datasets_filtered,
+                                option,
+                            )
+                        except (ValueError, RuntimeError, IOError, OSError) as e:
+                            logging.error(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed: {e}"
+                            )
+                            raise
         finally:
             gc.collect()  # Final cleanup for the entire method
 

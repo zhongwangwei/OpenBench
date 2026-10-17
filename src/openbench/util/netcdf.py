@@ -137,6 +137,34 @@ def _compression_encoding(
     return encoding
 
 
+_INHERITED_COMPRESSION_KEYS = ("zlib", "compression", "complevel", "shuffle", "szip_coding", "szip_pixels_per_block")
+
+
+def _without_inherited_compression(data: Any) -> Any:
+    """Drop compression settings a variable carried over from its source file.
+
+    xarray writes with each variable's ``encoding``, so data read from a zlib
+    file was silently recompressed even where the compression policy is off;
+    for yearly scratch files that doubled the preprocessing time. The copy is
+    shallow, so the caller's object and its encodings are untouched.
+    """
+    if not isinstance(data, (xr.Dataset, xr.DataArray)):
+        return data
+
+    def _variables(obj):
+        if isinstance(obj, xr.Dataset):
+            return list(obj.variables.values())
+        return [obj.variable, *obj.coords.variables.values()]
+
+    if not any(key in variable.encoding for variable in _variables(data) for key in _INHERITED_COMPRESSION_KEYS):
+        return data
+    stripped = data.copy(deep=False)
+    for variable in _variables(stripped):
+        for key in _INHERITED_COMPRESSION_KEYS:
+            variable.encoding.pop(key, None)
+    return stripped
+
+
 def _netcdf_kwargs_with_default_compression(
     data: Any,
     kwargs: dict[str, Any],
@@ -219,7 +247,9 @@ def write_netcdf_atomic(
     When ``OPENBENCH_NETCDF_COMPRESSION=1`` is set, numeric data variables are
     written with zlib compression. ``OPENBENCH_NETCDF_COMP_LEVEL`` controls the
     zlib level and defaults to 1 to reduce IO without spending much extra CPU.
-    Explicit per-variable ``encoding`` entries are preserved.
+    Explicit per-variable ``encoding`` entries are preserved. Otherwise data
+    are written uncompressed, even when their variables carry zlib settings
+    inherited from the file they were read from.
 
     ``compression=False`` is for scratch/intermediate files that are written
     only to be reopened by the same run. It bypasses the env default so a
@@ -227,6 +257,8 @@ def write_netcdf_atomic(
     files or mfdataset batch shards.
     """
     nc_kwargs = _netcdf_kwargs_with_default_compression(data, kwargs, compression=compression)
+    if not _compression_enabled(compression):
+        data = _without_inherited_compression(data)
 
     def _locked_write(tmp_path: Path) -> None:
         # Serialize HDF5 writes across threads (netCDF4/HDF5 is not thread-safe).

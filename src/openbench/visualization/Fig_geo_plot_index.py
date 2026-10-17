@@ -12,6 +12,7 @@ from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index, tick_length
 from ._downsample import downsample_for_plot, lat_lon_plot_args
+from ._geo_axes import configure_geo_axis
 from ._validation import finite_min_max
 
 
@@ -19,7 +20,6 @@ from ._validation import finite_min_max
 def make_geo_plot_index(file, method_name, main_nml, option):
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
-    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
     from matplotlib import rcParams
 
     with xr.open_dataset(f"{file}") as _ds:
@@ -69,36 +69,16 @@ def make_geo_plot_index(file, method_name, main_nml, option):
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
     ax.add_feature(rivers, linewidth=0.5)
-    ax.gridlines(
-        draw_labels=False,
-        linestyle=":",
-        linewidth=0.5,
-        color="grey",
-        alpha=0.8,
-        xlocs=np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1],
-        ylocs=np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1],
+    configure_geo_axis(
+        ax,
+        option,
+        (main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]),
+        gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
     )
-
-    if not option["set_lat_lon"]:
-        ax.set_extent(
-            [main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(main_nml["max_lon"], main_nml["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(main_nml["max_lat"], main_nml["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
-    else:
-        ax.set_extent(
-            [option["min_lon"], option["max_lon"], option["min_lat"], option["max_lat"]], crs=ccrs.PlateCarree()
-        )
-        ax.set_xticks(np.arange(option["max_lon"], option["min_lon"], -60)[:0:-1], crs=ccrs.PlateCarree())
-        ax.set_yticks(np.arange(option["max_lat"], option["min_lat"], -30)[:0:-1], crs=ccrs.PlateCarree())
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
     ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")
     ax.set_adjustable("datalim")
     ax.set_aspect("equal", adjustable="box")
-    lon_formatter = LongitudeFormatter()
-    lat_formatter = LatitudeFormatter()
-    ax.xaxis.set_major_formatter(lon_formatter)
-    ax.yaxis.set_major_formatter(lat_formatter)
 
     if not option["colorbar_position_set"]:
         pos = ax.get_position()

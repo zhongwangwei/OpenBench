@@ -229,7 +229,8 @@ def test_annual_climatology_rejects_overall_score():
 def test_r2_metrics_are_clipped(monkeypatch):
     monkeypatch.setattr("xarray.corr", lambda *_args, **_kwargs: xr.DataArray([1.0000001, -1.0000001], dims=["x"]))
     m = metrics()
-    arr = xr.DataArray(np.ones((2, 2)), dims=["time", "x"])
+    # Varying in time: correlation is undefined, hence NaN, for a constant series.
+    arr = xr.DataArray(np.arange(4.0).reshape(2, 2), dims=["time", "x"])
 
     out = m.correlation_R2(arr, arr)
 
@@ -378,6 +379,38 @@ def test_station_evaluation_reuses_shared_mfm_components(tmp_path, monkeypatch):
     assert float(row["MFM"]) == pytest.approx(expected_mfm)
 
 
+@pytest.mark.parametrize("station_plots", [True, False])
+def test_station_plots_switch_skips_only_the_figure(tmp_path, monkeypatch, station_plots):
+    plotted = []
+    monkeypatch.setattr("openbench.core.evaluation.plot_stn", lambda *args, **kwargs: plotted.append(args[3]))
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir = str(tmp_path)
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.ref_varname = ["v"]
+    ev.sim_varname = ["v"]
+    ev.metrics = ["RMSE", "KGESS", "correlation"]
+    ev.scores = []
+    ev.compare_tim_res = ""
+    ev.station_plots = station_plots
+    data_dir = tmp_path / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    time = pd.date_range("2001-01-01", periods=4)
+    xr.Dataset({"v": ("time", np.arange(4.0) + 1)}, coords={"time": time}).to_netcdf(
+        data_dir / "Runoff_sim_S1_2001_2001.nc"
+    )
+    xr.Dataset({"v": ("time", np.arange(4.0) + 2)}, coords={"time": time}).to_netcdf(
+        data_dir / "Runoff_ref_S1_2001_2001.nc"
+    )
+    station_list = {"ID": ["S1"], "use_syear": [2001], "use_eyear": [2001], "ref_lat": [0.0], "ref_lon": [0.0]}
+
+    row = ev.make_evaluation_parallel(station_list, 0)
+
+    assert plotted == (["S1"] if station_plots else [])
+    assert float(row["RMSE"]) == pytest.approx(1.0)
+
+
 def test_parallel_metric_keeps_parallel_map_with_shared_mfm(monkeypatch):
     calls = []
     counts = {"omega": 0, "varphi": 0, "eta": 0, "mfm": 0, "other": 0}
@@ -430,3 +463,122 @@ def test_parallel_metric_keeps_parallel_map_with_shared_mfm(monkeypatch):
     assert calls and calls[0][0] == ev.metrics
     assert calls[0][1]["backend"] == "threading"
     assert counts == {"omega": 1, "varphi": 1, "eta": 1, "mfm": 0, "other": 1}
+
+
+def _reference_constant_in_time(dtype, climatology=False):
+    """A varying simulation against a reference that repeats one value per cell, or one seasonal cycle."""
+    rng = np.random.default_rng(0)
+    times = pd.date_range("2000-01-01", periods=120, freq="MS")
+    level = rng.uniform(1e-3, 0.5, 50)
+    if climatology:
+        o = np.tile(rng.uniform(0.5, 1.5, (12, 50)) * level, (10, 1))
+    else:
+        o = np.repeat(level[None], 120, axis=0)
+    s = o * rng.uniform(0.5, 1.5, o.shape)
+
+    def wrap(values):
+        return xr.DataArray(values.astype(dtype), coords={"time": times}, dims=["time", "cell"])
+
+    return wrap(s), wrap(o)
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+@pytest.mark.parametrize(
+    ("owner", "name"),
+    [
+        ("scores", "nBiasScore"),
+        ("scores", "nRMSEScore"),
+        ("scores", "nIavScore"),
+        ("metrics", "rSD"),
+        ("metrics", "KGE"),
+        ("metrics", "KGEln"),
+        ("metrics", "NSE"),
+        ("metrics", "correlation"),
+    ],
+)
+def test_reference_constant_in_time_gives_nan(owner, name, dtype):
+    """Rounding in the time mean must not let a static reference pass the zero-spread guards."""
+    s, o = _reference_constant_in_time(dtype)
+    func = getattr(scores() if owner == "scores" else metrics(), name)
+
+    assert np.isnan(func(s, o).values).all()
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_repeated_climatology_has_no_iav_score(dtype):
+    s, o = _reference_constant_in_time(dtype, climatology=True)
+
+    assert np.isnan(scores().nIavScore(s, o).values).all()
+
+
+@pytest.mark.parametrize(
+    ("owner", "name"),
+    [
+        ("metrics", "RSR"),
+        ("metrics", "L"),
+        ("metrics", "NSE"),
+        ("metrics", "rv"),
+        ("metrics", "ubNSE"),
+        ("metrics", "rSD"),
+        ("scores", "nBiasScore"),
+        ("scores", "nRMSEScore"),
+        ("scores", "nIavScore"),
+    ],
+)
+def test_varying_reference_with_underflowed_spread_gives_nan(owner, name):
+    times = pd.date_range("2000-01-01", periods=3, freq="YS")
+    o = xr.DataArray(np.array([1e-200, 2e-200, 3e-200]), coords={"time": times}, dims="time")
+    s = xr.DataArray(np.array([1e-12, 2e-12, 3e-12]), coords={"time": times}, dims="time")
+    assert float(o.max()) > float(o.min())
+    assert float(o.std()) == 0
+
+    func = getattr(scores() if owner == "scores" else metrics(), name)
+    assert np.isnan(func(s, o).values).all()
+
+
+def test_underflowed_spread_masks_kge_component_weighted_nse_and_smpi():
+    o = xr.DataArray(np.array([1e-200, 2e-200, 3e-200]), dims="time")
+    s = xr.DataArray(np.array([1e-12, 2e-12, 3e-12]), dims="time")
+    m = metrics()
+
+    assert np.isnan(m._kge_components(s, o)[1]).all()
+    assert np.isnan(m.wNSE(s, o, weights=xr.ones_like(o))).all()
+    assert np.isnan(m.smpi(s, o, n_bootstrap=3, seed=0)).all()
+
+
+@pytest.mark.parametrize("name", ["rSD", "rv"])
+def test_float32_underflowed_std_gives_nan(name):
+    o = xr.DataArray(np.array([1e-24, 2e-24, 3e-24], dtype="float32"), dims="time")
+    s = xr.DataArray(np.array([1e-12, 2e-12, 3e-12], dtype="float32"), dims="time")
+
+    assert float(o.std()) == 0
+    assert np.isnan(getattr(metrics(), name)(s, o)).all()
+
+
+def test_validated_pair_is_computed_once_per_live_pair_and_read_only():
+    import gc
+    import importlib
+
+    # openbench.core re-exports the metrics class under the module's name.
+    metrics_module = importlib.import_module("openbench.core.metrics")
+
+    times = pd.date_range("2001-01-01", periods=4, freq="D")
+    s = xr.DataArray([1.0, np.nan, 3.0, np.inf], dims="time", coords={"time": times})
+    o = xr.DataArray([2.0, 2.0, np.nan, 4.0], dims="time", coords={"time": times})
+
+    first = metrics_module.validated_pair(s, o)
+    second = metrics_module.validated_pair(s, o)
+
+    assert first[0] is second[0] and first[1] is second[1]
+    np.testing.assert_array_equal(first[0].values, [1.0, np.nan, np.nan, np.nan])
+    np.testing.assert_array_equal(first[1].values, [2.0, np.nan, np.nan, np.nan])
+    with pytest.raises(ValueError, match="read-only"):
+        first[0].values[0] = 5.0
+    # Equal values in new objects are a new pair.
+    assert metrics_module.validated_pair(s.copy(), o.copy())[0] is not first[0]
+
+    key = (id(s), id(o))
+    assert key in metrics_module._VALIDATED_PAIRS
+    del s, o, first, second
+    gc.collect()
+    assert key not in metrics_module._VALIDATED_PAIRS

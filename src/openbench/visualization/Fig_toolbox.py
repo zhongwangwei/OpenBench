@@ -49,6 +49,7 @@ def process_unit(ref_unit, sim_unit, metric):
         "gof": "Unitless",  # Numerical Goodness-of-fit measures
         "KGEkm": "Unitless",  # Kling-Gupta Efficiency with knowable-moments
         "KGElf": "Unitless",  # Kling-Gupta Efficiency for low values
+        "KGEln": "Unitless",  # Kling-Gupta Efficiency with log ratios
         "KGEnp": "Unitless",  # Non-parametric version of the Kling-Gupta Efficiency
         "md": "Unitless",  # Modified Index of Agreement
         "mNSE": "Unitless",  # Modified Nash-Sutcliffe efficiency
@@ -71,6 +72,13 @@ def process_unit(ref_unit, sim_unit, metric):
         "wsNSE": "Unitless",  # Weighted seasonal Nash-Sutcliffe Efficiency
         "index_agreement": "Unitless",  # Index of agreement
         "MFM": "Unitless",  # Model Fidelity Metric
+        "MFM_omega": "Unitless",  # MFM phase component
+        "MFM_varphi": "Unitless",  # MFM variability component
+        "MFM_eta": "Unitless",  # MFM distribution component
+        "APFB": "Unitless",  # Annual Peak Flow Bias (fraction of the observed peak)
+        "br2": "Unitless",  # R2 weighted by the regression slope
+        "cp": "Unitless",  # Coefficient of Persistence
+        "dr": "Unitless",  # Refined Index of Agreement
     }
 
     unit = all_metrics_units.get(metric)
@@ -208,7 +216,7 @@ def get_colormap(cmap_name):
 def get_index(vmin, vmax, colormap="Spectral", varname=""):
     def get_ticks(vmin, vmax):
         diff = vmax - vmin
-        small_value = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+        small_value = [0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
         large_value = sorted(
             set(
                 [
@@ -222,6 +230,9 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
         ALLOWED_TICKS = small_value + large_value
         TARGET_NUM_TICKS = 4
         ideal_tick = diff / TARGET_NUM_TICKS
+        if 0 < ideal_tick < ALLOWED_TICKS[0]:
+            scale = 10.0 ** math.floor(math.log10(ideal_tick))
+            return next(multiplier * scale for multiplier in (1, 2, 5, 10) if multiplier * scale >= ideal_tick)
         for tick in ALLOWED_TICKS:
             if tick >= ideal_tick:
                 return tick
@@ -235,7 +246,7 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     # list5: [-1,1]
     # list6: uncertain
 
-    list2 = ["NSE", "KGE", "KGESS", "ubNSE", "dr", "br2", "cp"]
+    list2 = ["NSE", "KGE", "KGESS", "KGEln", "ubNSE", "dr", "br2", "cp"]
     list3 = [
         "absolute_percent_bias",
         "mean_absolute_error",
@@ -243,9 +254,8 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
         "ubRMSE",
         "CRMSD",
         "smpi",
-        "APFB",
     ]
-    list4 = ["correlation_R2", "index_agreement", "L"]
+    list4 = ["correlation_R2", "index_agreement", "L", "MFM_omega", "MFM_varphi", "MFM_eta"]
     score_list = list(IMPLEMENTED_SCORE_NAMES)
     list5 = ["correlation", "ubcorrelation", "ubcorrelation_R2"]
 
@@ -253,9 +263,9 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     colorbar_ticks = get_ticks(vmin, vmax)
     ticks = matplotlib.ticker.MultipleLocator(base=colorbar_ticks)
     mticks = ticks.tick_values(vmin=vmin, vmax=vmax)
-    mticks = [
-        round(tick, 2) if isinstance(tick, float) and len(str(tick).split(".")[1]) > 2 else tick for tick in mticks
-    ]
+    # Two decimals, or as many as a tick spacing below 0.01 needs.
+    decimals = max(2, -math.floor(math.log10(colorbar_ticks)))
+    mticks = [round(tick, decimals) if isinstance(tick, float) else tick for tick in mticks]
 
     # if (varname in list1) or (varname in list3):
     if max((vmin - mticks[0]), (mticks[-1] - vmax)) <= (colorbar_ticks / 2):
@@ -280,14 +290,15 @@ def get_index(vmin, vmax, colormap="Spectral", varname=""):
     elif (varname in list4) or (varname in score_list):
         mticks = [x for x in mticks if 1 >= x >= 0]
     else:
-        if (mticks[0] < 0) & (mticks[-1] > 0):
+        # Centre on zero whenever the data range spans it, also when trimming the
+        # outer ticks above has left zero as an end tick.
+        if (vmin < 0 < vmax) or ((mticks[0] < 0) & (mticks[-1] > 0)):
             max_num = max(-mticks[0], mticks[-1])
             mticks = np.linspace(-max_num, max_num, 3)
 
     if mticks[0] == mticks[-1]:
-        n = get_least_significant_digit(mticks[-1])
-        mticks[-1] = mticks[-1] + n
-        mticks[0] = mticks[0] - n
+        n = get_least_significant_digit(mticks[-1]) or colorbar_ticks
+        mticks = [mticks[0] - n, mticks[-1] + n]
 
     cmap = get_colormap(colormap)
 

@@ -9,6 +9,7 @@ OpenBench registry.
 """
 
 import logging
+from dataclasses import replace
 from typing import Dict
 
 from PySide6.QtWidgets import (
@@ -34,7 +35,7 @@ from PySide6.QtCore import Qt
 
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.path_utils import browse_directory
-from openbench.util.names import get_mapping_key_case_insensitive
+from openbench.util.names import canonical_variable_name, get_mapping_key_case_insensitive
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,56 @@ def _get_row_fallbacks(table, row) -> list:
         return []
     raw = item.data(FALLBACKS_ROLE)
     return list(raw) if isinstance(raw, list) else []
+
+
+def _confirm_replace(parent, kind: str, name: str) -> bool:
+    """A new entry typed with an existing name replaces that entry; ask first."""
+    reply = QMessageBox.question(
+        parent,
+        "Replace Existing Entry",
+        f"A {kind} named '{name}' already exists. Saving this new entry replaces it "
+        "(variables not listed here are removed). Replace it?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No,
+    )
+    return reply == QMessageBox.Yes
+
+
+def _forget_current_item(list_widget) -> None:
+    """Leave no current item, so a new entry is not saved over the last one shown.
+
+    ``clearSelection()`` keeps ``currentItem()``, and saving merges the editor
+    onto that item's stored profile (hidden time offsets, prefix fallbacks,
+    years, ...). Signals stay blocked so the editor is not repopulated.
+    """
+    blocked = list_widget.blockSignals(True)
+    try:
+        list_widget.setCurrentRow(-1)
+        list_widget.clearSelection()
+    finally:
+        list_widget.blockSignals(blocked)
+
+
+def _merge_model_editor_profile(existing, edited):
+    """Keep metadata absent from the model editor while applying its rows."""
+    if existing is None:
+        return edited
+    variables = {}
+    for name, mapping in edited.variables.items():
+        key = get_mapping_key_case_insensitive(existing.variables, canonical_variable_name(name))
+        original = existing.variables.get(key) if key is not None else None
+        variables[name] = (
+            replace(
+                original,
+                varname=mapping.varname,
+                varunit=mapping.varunit,
+                compute=mapping.compute,
+                fallbacks=mapping.fallbacks,
+            )
+            if original is not None
+            else mapping
+        )
+    return replace(edited, tim_res=existing.tim_res, time_offset=existing.time_offset, variables=variables)
 
 
 def _merge_reference_editor_dataset(existing, edited):
@@ -185,6 +236,15 @@ class PageRegistry(BasePage):
     # ------------------------------------------------------------------
 
     def _setup_content(self):
+        # Overrides that may hide bundled fixes; the CLI prints the same hints.
+        self.overlay_hint_label = QLabel()
+        self.overlay_hint_label.setWordWrap(True)
+        self.overlay_hint_label.setStyleSheet(
+            "QLabel { background: #fff4ce; color: #5c4400; border: 1px solid #e0c060; padding: 6px; }"
+        )
+        self.overlay_hint_label.setVisible(False)
+        self.content_layout.addWidget(self.overlay_hint_label)
+
         self.tabs = QTabWidget()
         self.tabs.tabBar().setExpanding(False)
         self.tabs.setStyleSheet("QTabWidget::tab-bar { alignment: left; }")
@@ -203,6 +263,33 @@ class PageRegistry(BasePage):
         # Initial population
         self._refresh_model_list()
         self._refresh_dataset_list()
+
+    def _overlay_hints(self) -> list[str]:
+        registry = self._registry()
+        hints = getattr(registry, "overlay_hints", None)
+        if isinstance(hints, list):  # remote snapshot: computed on the server
+            return hints
+        from openbench.data.registry.overlay_audit import overlay_hints
+
+        return overlay_hints()
+
+    def _refresh_overlay_hints(self) -> None:
+        label = getattr(self, "overlay_hint_label", None)
+        if label is None:
+            return
+        try:
+            hints = self._overlay_hints()
+        except Exception as exc:
+            logger.debug("Registry overlay hints unavailable: %s", exc)
+            hints = []
+        # A legacy copy can produce dozens of hints; keep the tabs on screen.
+        shown = hints[:3]
+        text = "⚠ " + "\n⚠ ".join(shown) if shown else ""
+        if len(hints) > len(shown):
+            text += f"\n… and {len(hints) - len(shown)} more (hover for all, or run `openbench registry diff`)."
+        label.setText(text)
+        label.setToolTip("\n".join(hints))
+        label.setVisible(bool(hints))
 
     # ==================================================================
     # MODELS TAB
@@ -331,6 +418,7 @@ class PageRegistry(BasePage):
                 self.model_list.addItem(item)
         except Exception as exc:
             logger.warning("Failed to list models: %s", exc)
+        self._refresh_overlay_hints()
 
     def _on_model_selected(self, row: int):
         if row < 0:
@@ -376,7 +464,7 @@ class PageRegistry(BasePage):
         self.model_data_type.setCurrentIndex(0)
         self.model_grid_res.clear()
         self.model_var_table.setRowCount(0)
-        self.model_list.clearSelection()
+        _forget_current_item(self.model_list)
 
     def _import_model_from_nc(self):
         from openbench.gui.path_utils import remote_exec_context
@@ -543,7 +631,17 @@ class PageRegistry(BasePage):
         )
 
         try:
-            self._registry().save_model(name, profile)
+            registry = self._registry()
+            item = self.model_list.currentItem()
+            if (
+                item is None
+                and registry.get_model(name) is not None
+                and not _confirm_replace(self, "model profile", name)
+            ):
+                return
+            original_name = item.data(Qt.UserRole) if item is not None else name
+            profile = _merge_model_editor_profile(registry.get_model(original_name), profile)
+            registry.save_model(name, profile)
             self._clear_registry_cache(remote=False)
             self._refresh_model_list()
             QMessageBox.information(self, "Saved", f"Model '{name}' saved to registry.")
@@ -755,6 +853,8 @@ class PageRegistry(BasePage):
         except Exception as exc:
             logger.warning("Failed to list references: %s", exc)
             QMessageBox.critical(self, "Registry Error", f"Failed to load reference registry:\n{exc}")
+            return
+        self._refresh_overlay_hints()
 
     def _on_dataset_selected(self, row: int):
         if row < 0:
@@ -788,6 +888,9 @@ class PageRegistry(BasePage):
         ref = self._registry().get_reference(name)
         if ref is None:
             return
+        # The list item stores the group's first variant; saving must merge onto
+        # the variant actually loaded, not copy another resolution's hidden fields.
+        self._editing_dataset_name = ref.name
         self._populate_dataset_editor(ref)
 
     def _populate_dataset_editor(self, ref):
@@ -857,7 +960,8 @@ class PageRegistry(BasePage):
         self.ds_data_groupby.setCurrentIndex(0)
         self.ds_timezone.setText("0")
         self.ds_var_table.setRowCount(0)
-        self.dataset_list.clearSelection()
+        self._editing_dataset_name = None
+        _forget_current_item(self.dataset_list)
 
     def _scan_directory(self):
         if getattr(self, "_scan_worker", None) is not None:
@@ -1281,8 +1385,14 @@ class PageRegistry(BasePage):
             existing_name = name
             item = self.dataset_list.currentItem() if getattr(self, "dataset_list", None) is not None else None
             if item is not None:
-                existing_name = item.data(Qt.UserRole) or name
+                existing_name = getattr(self, "_editing_dataset_name", None) or item.data(Qt.UserRole) or name
             registry = self._registry()
+            if (
+                item is None
+                and registry.get_reference(name) is not None
+                and not _confirm_replace(self, "dataset", name)
+            ):
+                return
             dataset = _merge_reference_editor_dataset(registry.get_reference(existing_name), dataset)
             registry.save_reference(name, dataset)
             self._clear_registry_cache(remote=False)

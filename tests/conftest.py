@@ -1,11 +1,33 @@
 """Shared fixtures for the test suite."""
 
 import os
+import sys
 
 # Must be set before any test module imports PySide6.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_user_config(monkeypatch, tmp_path):
+    """Tests must never read, compact, or overwrite the developer's catalog."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("OPENBENCH_HOME", raising=False)
+    _clear_loaded_registry_cache()
+    yield
+    _clear_loaded_registry_cache()
+
+
+def _clear_loaded_registry_cache():
+    # Only a loaded registry holds a cache. Importing it here would make every
+    # test need PyYAML; the wheel smoke job installs only build and pytest.
+    manager = sys.modules.get("openbench.data.registry.manager")
+    if manager is not None:
+        manager.clear_registry_cache()
 
 
 @pytest.fixture
@@ -34,7 +56,7 @@ def qapp():
 
 
 @pytest.fixture(autouse=True)
-def _fast_credential_manager(monkeypatch):
+def _fast_credential_manager(monkeypatch, _isolated_user_config):
     """Keep RemoteConfigWidget construction cheap and out of the real home dir.
 
     The production CredentialManager runs 100k PBKDF2 iterations and reads/

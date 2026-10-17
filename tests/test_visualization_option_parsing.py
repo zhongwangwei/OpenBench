@@ -100,6 +100,38 @@ def test_fig_toolbox_get_index_honors_requested_builtin_colormap():
     assert cmap.name == "viridis"
 
 
+def test_fig_toolbox_get_index_keeps_negative_apfb_ticks():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(-1.0, 1.0, colormap="viridis", varname="APFB")
+
+    assert min(mticks) < 0 < max(mticks)
+
+
+def test_fig_toolbox_get_index_caps_mfm_components_at_one():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, *_ = get_index(0.0, 1.4, colormap="viridis", varname="MFM_eta")
+
+    assert max(mticks) <= 1
+
+
+@pytest.mark.parametrize(
+    ("data_range", "expected"),
+    [
+        ((-1.0, 2.0), "max"),
+        ((-2.0, 1.0), "min"),
+        ((-2.0, 2.0), "both"),
+        ((-1.0, 1.0), "neither"),
+        ((-0.5, 0.5), "neither"),
+    ],
+)
+def test_basic_plot_colorbar_extend_checks_each_end(data_range, expected):
+    from openbench.visualization.Fig_Basic_Plot import colorbar_extend
+
+    assert colorbar_extend(*data_range, -1.0, 1.0) == expected
+
+
 def test_special_stat_figures_do_not_use_removed_cm_get_cmap_api():
     files = [
         "Fig_ANOVA.py",
@@ -147,3 +179,67 @@ def test_all_nan_sensitive_map_renderers_use_finite_validation_helpers():
 
     assert "math.ceil(data.max().values)" not in (_VIZ_DIR / "Fig_Standard_Deviation.py").read_text(encoding="utf-8")
     assert "np.nanmin(data), np.nanmax(data)" not in (_VIZ_DIR / "Fig_geo_plot_index.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("low", "high", "expected"),
+    [
+        (-2.3, 5.1, (-3, 6)),
+        (-0.0031, 0.012, (-0.01, 0.02)),
+        (0.0, 0.034, (0.0, 0.04)),
+        (0.0, 0.0, (0, 0)),
+    ],
+)
+def test_basic_plot_rounded_limits_keep_sub_unit_ranges(low, high, expected):
+    from openbench.visualization.Fig_Basic_Plot import rounded_limits
+
+    assert rounded_limits(low, high) == pytest.approx(expected)
+
+
+def test_get_index_ticks_resolve_ranges_below_one_hundredth():
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, _norm, _bnd, _extend = get_index(0.0, 0.004, "viridis", "RMSE")
+
+    assert list(mticks) == pytest.approx([0.0, 0.001, 0.002, 0.003, 0.004])
+
+
+@pytest.mark.parametrize(("vmin", "vmax"), [(-0.004, 0.001), (-4, 1), (-1, 4)])
+def test_get_index_centres_on_zero_when_range_spans_it(vmin, vmax):
+    from openbench.visualization.Fig_toolbox import get_index
+
+    _cmap, mticks, _norm, _bnd, _extend = get_index(vmin, vmax, "viridis", "bias")
+
+    assert mticks[0] == pytest.approx(-mticks[-1])
+    assert 0 in list(mticks)
+
+
+@pytest.mark.parametrize(
+    ("low", "high", "metric"),
+    [
+        (0.0, 4e-5, "RMSE"),
+        (-4e-5, 1e-5, "bias"),
+        (-3e-5, 3e-5, "bias"),
+        (1.2e-9, 1.8e-9, "RMSE"),
+        (0.0, 4e-24, "RMSE"),
+        (0.0, 0.0, "RMSE"),
+    ],
+)
+def test_tiny_automatic_colorbar_ranges_render_contours(low, high, metric):
+    import matplotlib.pyplot as plt
+
+    from openbench.visualization.Fig_Basic_Plot import rounded_limits
+    from openbench.visualization.Fig_toolbox import get_index
+
+    cmap, ticks, norm, levels, extend = get_index(*rounded_limits(low, high), "viridis", metric)
+
+    assert len(ticks) >= 2
+    assert np.all(np.diff(levels) > 0)
+    assert norm.vmin < norm.vmax
+    if low < high:
+        assert norm(low) < norm(high)
+    fig, ax = plt.subplots()
+    try:
+        ax.contourf(np.linspace(low, high, 4).reshape(2, 2), levels=levels, cmap=cmap, norm=norm, extend=extend)
+    finally:
+        plt.close(fig)

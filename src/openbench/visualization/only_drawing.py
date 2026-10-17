@@ -16,6 +16,7 @@ from openbench.core._comparison_helpers import (
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 from openbench.core.statistics import statistics_calculate
+from openbench.data.time_utils import comparison_time_freq
 from openbench.util.converttype import Convert_Type
 from openbench.util.filenames import (
     diff_grid_anomaly_filename,
@@ -671,20 +672,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                 f"ComparisonProcessing_only_drawing: Climatology mode detected ({self.compare_tim_res}), skipping frequency conversion"
             )
         else:
-            match = re.match(r"(\d*)\s*([a-zA-Z]+)", self.compare_tim_res)
-            if not match:
-                logging.error("Invalid time resolution format. Use '3month', '6hr', etc.")
-                raise ValueError("Invalid time resolution format. Use '3month', '6hr', etc.")
-
-            value, unit = match.groups()
-            if not value:
-                value = 1
-            else:
-                value = int(value)  # Convert the numerical value to an integer
-            freq = self.freq_map.get(unit.lower())
-            if not freq:
-                raise ValueError(f"Unsupported time unit: {unit}")
-            self.compare_tim_res = f"{value}{freq}E"
+            self.compare_tim_res = comparison_time_freq(self.compare_tim_res)
 
         self.metrics = metrics
         self.scores = scores
@@ -720,48 +708,42 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for ref_source in ref_sources:
-                        try:
-                            output_file_path = os.path.join(
-                                dir_path,
-                                f"{join_filename_components('taylor_diagram', evaluation_item, ref_source)}.csv",
-                            )
-                            legacy_output_file_path = os.path.join(
-                                dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.csv"
-                            )
-                            output_file_path = _require_only_drawing_file(
-                                output_file_path,
-                                producer="comparison",
-                                fallback_ext=".txt",
-                                fallback_paths=[legacy_output_file_path],
-                            )
-                            stds = np.zeros(len(sim_sources) + 1)
-                            cors = np.zeros(len(sim_sources) + 1)
-                            RMSs = np.zeros(len(sim_sources) + 1)
-                            summary = pd.read_csv(output_file_path, sep=None, engine="python").iloc[0]
-                            if "Reference_std" in summary and pd.notna(summary["Reference_std"]):
-                                stds[0] = float(summary["Reference_std"])
-                            else:
-                                stds[0] = float(summary[f"{sim_sources[0]}_std_ref"])
-                            for i, sim_source in enumerate(sim_sources):
-                                stds[i + 1] = float(summary[f"{sim_source}_std"])
-                                cors[i + 1] = float(summary[f"{sim_source}_COR"])
-                                RMSs[i + 1] = float(summary[f"{sim_source}_RMS"])
-                            make_scenarios_comparison_Taylor_Diagram(
-                                casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option
-                            )
-                        finally:
-                            gc.collect()  # Clean up memory after processing each reference source
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                for ref_source in ref_sources:
+                    output_file_path = os.path.join(
+                        dir_path,
+                        f"{join_filename_components('taylor_diagram', evaluation_item, ref_source)}.csv",
+                    )
+                    legacy_output_file_path = os.path.join(
+                        dir_path, f"taylor_diagram_{evaluation_item}_{ref_source}.csv"
+                    )
+                    output_file_path = _require_only_drawing_file(
+                        output_file_path,
+                        producer="comparison",
+                        fallback_ext=".txt",
+                        fallback_paths=[legacy_output_file_path],
+                    )
+                    stds = np.zeros(len(sim_sources) + 1)
+                    cors = np.zeros(len(sim_sources) + 1)
+                    RMSs = np.zeros(len(sim_sources) + 1)
+                    summary = pd.read_csv(output_file_path, sep=None, engine="python").iloc[0]
+                    if "Reference_std" in summary and pd.notna(summary["Reference_std"]):
+                        stds[0] = float(summary["Reference_std"])
+                    else:
+                        stds[0] = float(summary[f"{sim_sources[0]}_std_ref"])
+                    for i, sim_source in enumerate(sim_sources):
+                        stds[i + 1] = float(summary[f"{sim_source}_std"])
+                        cors[i + 1] = float(summary[f"{sim_source}_COR"])
+                        RMSs[i + 1] = float(summary[f"{sim_source}_RMS"])
+                    make_scenarios_comparison_Taylor_Diagram(
+                        casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option
+                    )
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -771,50 +753,44 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for ref_source in ref_sources:
-                        try:
-                            output_file_path = os.path.join(
-                                dir_path,
-                                f"{join_filename_components('target_diagram', evaluation_item, ref_source)}.csv",
-                            )
-                            legacy_output_file_path = os.path.join(
-                                dir_path, f"target_diagram_{evaluation_item}_{ref_source}.csv"
-                            )
-                            output_file_path = _require_only_drawing_file(
-                                output_file_path,
-                                producer="comparison",
-                                fallback_ext=".txt",
-                                fallback_paths=[legacy_output_file_path],
-                            )
-                            biases = np.zeros(len(sim_sources))
-                            rmses = np.zeros(len(sim_sources))
-                            crmsds = np.zeros(len(sim_sources))
-                            with open(output_file_path, "r") as file:
-                                lines = file.readlines()
-                            second_row = lines[1].strip().split("\t")
-                            values = [float(x) for x in second_row[2:] if x]
-                            for i, sim_source in enumerate(sim_sources):
-                                biases[i] = values[i * 3]
-                                rmses[i] = values[i * 3 + 1]
-                                crmsds[i] = values[i * 3 + 2]
+                for ref_source in ref_sources:
+                    output_file_path = os.path.join(
+                        dir_path,
+                        f"{join_filename_components('target_diagram', evaluation_item, ref_source)}.csv",
+                    )
+                    legacy_output_file_path = os.path.join(
+                        dir_path, f"target_diagram_{evaluation_item}_{ref_source}.csv"
+                    )
+                    output_file_path = _require_only_drawing_file(
+                        output_file_path,
+                        producer="comparison",
+                        fallback_ext=".txt",
+                        fallback_paths=[legacy_output_file_path],
+                    )
+                    biases = np.zeros(len(sim_sources))
+                    rmses = np.zeros(len(sim_sources))
+                    crmsds = np.zeros(len(sim_sources))
+                    with open(output_file_path, "r") as file:
+                        lines = file.readlines()
+                    second_row = lines[1].strip().split("\t")
+                    values = [float(x) for x in second_row[2:] if x]
+                    for i, sim_source in enumerate(sim_sources):
+                        biases[i] = values[i * 3]
+                        rmses[i] = values[i * 3 + 1]
+                        crmsds[i] = values[i * 3 + 2]
 
-                            # Target diagram expects (bias, crmsd, rmsd): centered CRMSD in the
-                            # crmsd slot (x-axis uRMSD), total RMSD in the rmsd slot. Do NOT swap.
-                            make_scenarios_comparison_Target_Diagram(
-                                dir_path, evaluation_item, biases, crmsds, rmses, ref_source, sim_sources, option
-                            )
-                        finally:
-                            gc.collect()  # Clean up memory after processing each reference source
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                    # Target diagram expects (bias, crmsd, rmsd): centered CRMSD in the
+                    # crmsd slot (x-axis uRMSD), total RMSD in the rmsd slot. Do NOT swap.
+                    make_scenarios_comparison_Target_Diagram(
+                        dir_path, evaluation_item, biases, crmsds, rmses, ref_source, sim_sources, option
+                    )
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -827,158 +803,133 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
 
             # fixme: add the Kernel Density Estimate
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for score in scores:
-                        try:
-                            # Skip nSpatialScore since it's a constant value
-                            if score == "nSpatialScore":
-                                _skip_optional_only_drawing(
-                                    figure="Kernel Density Estimate", reason=f"{score} is a constant value"
+                for score in scores:
+                    # Skip nSpatialScore since it's a constant value
+                    if score == "nSpatialScore":
+                        _skip_optional_only_drawing(
+                            figure="Kernel Density Estimate", reason=f"{score} is a constant value"
+                        )
+                        continue
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
+
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                 )
-                                continue
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                df = _station_evaluation_frame(
+                                    basedir, evaluation_item, ref_source, sim_source, "scores"
+                                )
+                                df = Convert_Type.convert_Frame(df)
+                                data = df[score].values
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                )
+                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
+                                with xr.open_dataset(file_path) as _ds:
+                                    ds = _ds.load()
+                                ds = Convert_Type.convert_nc(ds)
+                                data = ds[score].values
+                            datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
-
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = _station_evaluation_frame(
-                                                    basedir, evaluation_item, ref_source, sim_source, "scores"
-                                                )
-                                                df = Convert_Type.convert_Frame(df)
-                                                data = df[score].values
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
-                                                )
-                                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
-                                                with xr.open_dataset(file_path) as _ds:
-                                                    ds = _ds.load()
-                                                ds = Convert_Type.convert_nc(ds)
-                                                data = ds[score].values
-                                            datasets_filtered.append(
-                                                data[np.isfinite(data)]
-                                            )  # Filter out NaNs and append
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
-
-                                    try:
-                                        make_scenarios_comparison_Kernel_Density_Estimate(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            score,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each score
-
-                    for metric in metrics:
                         try:
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                            make_scenarios_comparison_Kernel_Density_Estimate(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                score,
+                                datasets_filtered,
+                                option,
+                            )
+                        except Exception:
+                            logging.exception(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Kernel Density Estimate failed!"
+                            )
+                            raise
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                for metric in metrics:
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = _station_evaluation_frame(
-                                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
-                                                )
-                                                data = df[metric].values
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
-                                                )
-                                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
-                                                with xr.open_dataset(file_path) as _ds:
-                                                    ds = _ds.load()
-                                                ds = Convert_Type.convert_nc(ds)
-                                                data = ds[metric].values
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
 
-                                            data = data[~np.isinf(data)]
-                                            if metric == "percent_bias":
-                                                data = data[(data >= -100) & (data <= 100)]
-                                            datasets_filtered.append(
-                                                data[np.isfinite(data)]
-                                            )  # Filter out NaNs and append
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                )
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                df = _station_evaluation_frame(
+                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
+                                )
+                                data = df[metric].values
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
+                                )
+                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
+                                with xr.open_dataset(file_path) as _ds:
+                                    ds = _ds.load()
+                                ds = Convert_Type.convert_nc(ds)
+                                data = ds[metric].values
 
-                                    try:
-                                        make_scenarios_comparison_Kernel_Density_Estimate(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            metric,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each metric
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                            data = data[~np.isinf(data)]
+                            if metric == "percent_bias":
+                                data = data[(data >= -100) & (data <= 100)]
+                            datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
+
+                        try:
+                            make_scenarios_comparison_Kernel_Density_Estimate(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                metric,
+                                datasets_filtered,
+                                option,
+                            )
+                        except Exception:
+                            logging.exception(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Kernel Density Estimate failed!"
+                            )
+                            raise
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -1060,162 +1011,135 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for score in scores:
-                        try:
-                            # Skip nSpatialScore since it's a constant value
-                            if score == "nSpatialScore":
-                                _skip_optional_only_drawing(
-                                    figure="Whisker Plot", reason=f"{score} is a constant value"
+                for score in scores:
+                    # Skip nSpatialScore since it's a constant value
+                    if score == "nSpatialScore":
+                        _skip_optional_only_drawing(figure="Whisker Plot", reason=f"{score} is a constant value")
+                        continue
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
+
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
                                 )
-                                continue
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                df = _station_evaluation_frame(
+                                    basedir, evaluation_item, ref_source, sim_source, "scores"
+                                )
+                                df = Convert_Type.convert_Frame(df)
+                                data = df[score].values
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "scores",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                )
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
+                                with xr.open_dataset(file_path) as _ds:
+                                    ds = _ds.load()
+                                ds = Convert_Type.convert_nc(ds)
+                                data = ds[score].values
+                            datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
-
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = _station_evaluation_frame(
-                                                    basedir, evaluation_item, ref_source, sim_source, "scores"
-                                                )
-                                                df = Convert_Type.convert_Frame(df)
-                                                data = df[score].values
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "scores",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
-                                                with xr.open_dataset(file_path) as _ds:
-                                                    ds = _ds.load()
-                                                ds = Convert_Type.convert_nc(ds)
-                                                data = ds[score].values
-                                            datasets_filtered.append(
-                                                data[np.isfinite(data)]
-                                            )  # Filter out NaNs and append
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
-
-                                    try:
-                                        make_scenarios_comparison_Whisker_Plot(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            score,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each score
-
-                    for metric in metrics:
                         try:
-                            for ref_source in ref_sources:
-                                try:
-                                    datasets_filtered = []
-                                    for sim_source in sim_sources:
-                                        try:
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                            make_scenarios_comparison_Whisker_Plot(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                score,
+                                datasets_filtered,
+                                option,
+                            )
+                        except Exception:
+                            logging.exception(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {score} Whisker Plot failed!"
+                            )
+                            raise
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                for metric in metrics:
+                    for ref_source in ref_sources:
+                        datasets_filtered = []
+                        for sim_source in sim_sources:
+                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                df = _station_evaluation_frame(
-                                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
-                                                )
-                                                data = df[metric].values
-                                            else:
-                                                file_path = os.path.join(
-                                                    basedir,
-                                                    "metrics",
-                                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
-                                                )
-                                                if not os.path.exists(file_path):
-                                                    _require_only_drawing_file(file_path, producer="evaluation")
-                                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
-                                                with xr.open_dataset(file_path) as _ds:
-                                                    ds = _ds.load()
-                                                ds = Convert_Type.convert_nc(ds)
-                                                data = ds[metric].values
+                            if ref_data_type == "stn" or sim_data_type == "stn":
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
 
-                                            data = data[~np.isinf(data)]
-                                            if metric == "percent_bias":
-                                                data = data[(data >= -100) & (data <= 100)]
-                                            datasets_filtered.append(
-                                                data[np.isfinite(data)]
-                                            )  # Filter out NaNs and append
-                                        finally:
-                                            gc.collect()  # Clean up memory after processing each simulation source
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_stn_{ref_source}_{sim_source}_evaluations.csv",
+                                )
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                df = _station_evaluation_frame(
+                                    basedir, evaluation_item, ref_source, sim_source, "metrics"
+                                )
+                                data = df[metric].values
+                            else:
+                                file_path = os.path.join(
+                                    basedir,
+                                    "metrics",
+                                    f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
+                                )
+                                if not os.path.exists(file_path):
+                                    _require_only_drawing_file(file_path, producer="evaluation")
+                                file_path = _require_only_drawing_file(file_path, producer="evaluation")
+                                with xr.open_dataset(file_path) as _ds:
+                                    ds = _ds.load()
+                                ds = Convert_Type.convert_nc(ds)
+                                data = ds[metric].values
 
-                                    try:
-                                        make_scenarios_comparison_Whisker_Plot(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_sources,
-                                            metric,
-                                            datasets_filtered,
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception(
-                                            f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!"
-                                        )
-                                        raise
-                                finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each metric
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                            data = data[~np.isinf(data)]
+                            if metric == "percent_bias":
+                                data = data[(data >= -100) & (data <= 100)]
+                            datasets_filtered.append(data[np.isfinite(data)])  # Filter out NaNs and append
+
+                        try:
+                            make_scenarios_comparison_Whisker_Plot(
+                                dir_path,
+                                evaluation_item,
+                                ref_source,
+                                sim_sources,
+                                metric,
+                                datasets_filtered,
+                                option,
+                            )
+                        except Exception:
+                            logging.exception(
+                                f"Error: {evaluation_item} {ref_source} {sim_sources} {metric} Whisker Plot failed!"
+                            )
+                            raise
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -1225,86 +1149,76 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
 
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for ref_source in ref_sources:
-                        for sim_source in sim_sources:
-                            try:
-                                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                                if ref_data_type == "stn" or sim_data_type == "stn":
-                                    relative_file = _require_only_drawing_file(
-                                        _relative_station_scores_path(
-                                            dir_path, evaluation_item, ref_source, sim_source
-                                        ),
-                                        producer="comparison",
-                                        fallback_paths=[
-                                            _legacy_relative_station_scores_path(
-                                                dir_path, evaluation_item, ref_source, sim_source
-                                            )
-                                        ],
+                for ref_source in ref_sources:
+                    for sim_source in sim_sources:
+                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                        if ref_data_type == "stn" or sim_data_type == "stn":
+                            relative_file = _require_only_drawing_file(
+                                _relative_station_scores_path(dir_path, evaluation_item, ref_source, sim_source),
+                                producer="comparison",
+                                fallback_paths=[
+                                    _legacy_relative_station_scores_path(
+                                        dir_path, evaluation_item, ref_source, sim_source
                                     )
-                                    for score in scores:
-                                        _require_station_csv_values(
-                                            relative_file,
-                                            f"relative_{score}_{sim_source}",
-                                            required_columns=["ID"],
+                                ],
+                            )
+                            for score in scores:
+                                _require_station_csv_values(
+                                    relative_file,
+                                    f"relative_{score}_{sim_source}",
+                                    required_columns=["ID"],
+                                )
+                            try:
+                                make_scenarios_comparison_Relative_Score(
+                                    dir_path,
+                                    evaluation_item,
+                                    ref_source,
+                                    sim_source,
+                                    scores,
+                                    "stn",
+                                    self.main_nml["general"],
+                                    option,
+                                )
+                            except Exception:
+                                logging.exception("Relative Score only_drawing renderer failed")
+                                raise
+                        else:
+                            relative_files = {}
+                            for score in scores:
+                                relative_files[score] = _require_only_drawing_file(
+                                    _relative_grid_score_path(dir_path, evaluation_item, ref_source, sim_source, score),
+                                    producer="comparison",
+                                    fallback_paths=[
+                                        _legacy_relative_grid_score_path(
+                                            dir_path, evaluation_item, ref_source, sim_source, score
                                         )
-                                    try:
-                                        make_scenarios_comparison_Relative_Score(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_source,
-                                            scores,
-                                            "stn",
-                                            self.main_nml["general"],
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception("Relative Score only_drawing renderer failed")
-                                        raise
-                                else:
-                                    relative_files = {}
-                                    for score in scores:
-                                        relative_files[score] = _require_only_drawing_file(
-                                            _relative_grid_score_path(
-                                                dir_path, evaluation_item, ref_source, sim_source, score
-                                            ),
-                                            producer="comparison",
-                                            fallback_paths=[
-                                                _legacy_relative_grid_score_path(
-                                                    dir_path, evaluation_item, ref_source, sim_source, score
-                                                )
-                                            ],
-                                        )
-                                    for score, relative_file in relative_files.items():
-                                        _require_netcdf_finite(relative_file, f"relative_{score}")
-                                    try:
-                                        make_scenarios_comparison_Relative_Score(
-                                            dir_path,
-                                            evaluation_item,
-                                            ref_source,
-                                            sim_source,
-                                            scores,
-                                            "grid",
-                                            self.main_nml["general"],
-                                            option,
-                                        )
-                                    except Exception:
-                                        logging.exception("Relative Score only_drawing renderer failed")
-                                        raise
-                            finally:
-                                gc.collect()  # Clean up memory after processing each simulation source
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                                    ],
+                                )
+                            for score, relative_file in relative_files.items():
+                                _require_netcdf_finite(relative_file, f"relative_{score}")
+                            try:
+                                make_scenarios_comparison_Relative_Score(
+                                    dir_path,
+                                    evaluation_item,
+                                    ref_source,
+                                    sim_source,
+                                    scores,
+                                    "grid",
+                                    self.main_nml["general"],
+                                    option,
+                                )
+                            except Exception:
+                                logging.exception("Relative Score only_drawing renderer failed")
+                                raise
         finally:
             gc.collect()  # Final cleanup for the entire method
 
@@ -1438,26 +1352,6 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     from openbench.data.coordinates import COORDINATE_MAP_WITH_VERTICAL
 
     coordinate_map = dict(COORDINATE_MAP_WITH_VERTICAL)
-
-    freq_map = {
-        "month": "M",
-        "mon": "M",
-        "monthly": "M",
-        "day": "D",
-        "daily": "D",
-        "hour": "H",
-        "Hour": "H",
-        "hr": "H",
-        "Hr": "H",
-        "h": "H",
-        "hourly": "H",
-        "year": "Y",
-        "yr": "Y",
-        "yearly": "Y",
-        "week": "W",
-        "wk": "W",
-        "weekly": "W",
-    }
 
     def scenarios_Diff_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         """

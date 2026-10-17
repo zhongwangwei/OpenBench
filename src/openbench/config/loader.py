@@ -95,6 +95,7 @@ _PROJECT_KEYS = {
     "regrid_backend",
     "unified_mask",
     "generate_report",
+    "station_plots",
     "IGBP_groupby",
     "PFT_groupby",
     "climate_zone_groupby",
@@ -134,6 +135,7 @@ _VARIABLE_OVERRIDE_KEYS = {
     "sub_dir",
     "fallbacks",
     "compute",
+    "accumulated",
     "prefix_fallback",
 }
 
@@ -551,6 +553,9 @@ def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any
         if not isinstance(override, dict):
             raise ConfigError(f"{path}.{var_name} must be a mapping")
         _reject_unknown_keys(override, _VARIABLE_OVERRIDE_KEYS, f"{path}.{var_name}")
+        accumulated = override.get("accumulated")
+        if accumulated is not None and str(accumulated).strip().lower() not in ("year", "run"):
+            raise ConfigError(f"{path}.{var_name}.accumulated must be 'year' or 'run', got {accumulated!r}")
         fallbacks = override.get("fallbacks")
         if fallbacks is not None:
             if not isinstance(fallbacks, list):
@@ -940,6 +945,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         or "openbench_conservative",
         unified_mask=_validated_optional_bool(raw.get("unified_mask"), "project.unified_mask", default=True),
         generate_report=_validated_optional_bool(raw.get("generate_report"), "project.generate_report", default=True),
+        station_plots=_validated_optional_bool(raw.get("station_plots"), "project.station_plots", default=True),
         # Groupby
         IGBP_groupby=_validated_optional_bool(raw.get("IGBP_groupby"), "project.IGBP_groupby", default=False),
         PFT_groupby=_validated_optional_bool(raw.get("PFT_groupby"), "project.PFT_groupby", default=False),

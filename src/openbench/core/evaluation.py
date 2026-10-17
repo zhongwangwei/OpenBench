@@ -61,6 +61,7 @@ except ImportError:
 from openbench.util.converttype import Convert_Type
 from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
+from openbench.util.station_ids import read_station_csv
 from openbench.core._visualization_bridge import visualization_callable
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
@@ -705,21 +706,24 @@ class Evaluation_stn(metrics, scores):
                 else:
                     raise ValueError(f"No such score: {score}")
 
-            if "ref_lat" in station_list:
-                lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
-            else:
-                lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
-            plot_stn(
-                self,
-                s,
-                o,
-                station_list["ID"][iik],
-                self.ref_varname,
-                _scalar_plot_value(row["RMSE"], label="RMSE", station_id=station_list["ID"][iik]),
-                _scalar_plot_value(row["KGESS"], label="KGESS", station_id=station_list["ID"][iik]),
-                _scalar_plot_value(row["correlation"], label="correlation", station_id=station_list["ID"][iik]),
-                lat_lon,
-            )
+            # One high-resolution figure per station is most of a large station
+            # run; project.station_plots: false keeps the metrics and skips it.
+            if getattr(self, "station_plots", True):
+                if "ref_lat" in station_list:
+                    lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
+                else:
+                    lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
+                plot_stn(
+                    self,
+                    s,
+                    o,
+                    station_list["ID"][iik],
+                    self.ref_varname,
+                    _scalar_plot_value(row["RMSE"], label="RMSE", station_id=station_list["ID"][iik]),
+                    _scalar_plot_value(row["KGESS"], label="KGESS", station_id=station_list["ID"][iik]),
+                    _scalar_plot_value(row["correlation"], label="correlation", station_id=station_list["ID"][iik]),
+                    lat_lon,
+                )
             return row
         except StationDataUnavailable as exc:
             return {"_skip_reason": str(exc)}
@@ -728,7 +732,6 @@ class Evaluation_stn(metrics, scores):
                 sim_ds.close()
             if ref_ds is not None:
                 ref_ds.close()
-            gc.collect()  # Clean up memory after processing each station
 
     def make_evaluation_P(self):
         try:
@@ -736,7 +739,7 @@ class Evaluation_stn(metrics, scores):
                 stnlist = self.ref_fulllist
             else:
                 stnlist = os.path.join(self.casedir, f"stn_{self.ref_source}_{self.sim_source}_list.txt")
-            station_list = Convert_Type.convert_Frame(pd.read_csv(stnlist, header=0))
+            station_list = Convert_Type.convert_Frame(read_station_csv(stnlist, header=0))
 
             station_indices = list(range(len(station_list["ID"])))
             n_jobs = getattr(self, "num_cores", -1)

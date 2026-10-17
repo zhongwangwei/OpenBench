@@ -47,183 +47,175 @@ class ParallelCoordinatesComparisonMixin:
                     output_file.write("\n")
 
                     for evaluation_item in evaluation_items:
-                        try:
-                            sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                            ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                            if isinstance(sim_sources, str):
-                                sim_sources = [sim_sources]
-                            if isinstance(ref_sources, str):
-                                ref_sources = [ref_sources]
+                        sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                        ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                        if isinstance(sim_sources, str):
+                            sim_sources = [sim_sources]
+                        if isinstance(ref_sources, str):
+                            ref_sources = [ref_sources]
 
-                            for ref_source in ref_sources:
+                        for ref_source in ref_sources:
+                            for i, sim_source in enumerate(sim_sources):
                                 try:
-                                    for i, sim_source in enumerate(sim_sources):
-                                        try:
-                                            output_file.write(f"{evaluation_item}\t")
-                                            output_file.write(f"{ref_source}\t")
-                                            output_file.write(f"{sim_source}\t")
-                                            ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                    output_file.write(f"{evaluation_item}\t")
+                                    output_file.write(f"{ref_source}\t")
+                                    output_file.write(f"{sim_source}\t")
+                                    ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                                    sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
 
-                                            if ref_data_type == "stn" or sim_data_type == "stn":
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                                    if ref_data_type == "stn" or sim_data_type == "stn":
+                                        ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                        sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                        if sim_varname is None or sim_varname == "":
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == "":
+                                            ref_varname = evaluation_item
 
-                                                score_df = (
-                                                    _station_evaluation_frame(
-                                                        basedir, evaluation_item, ref_source, sim_source, kind="scores"
-                                                    )
-                                                    if scores
-                                                    else None
+                                        score_df = (
+                                            _station_evaluation_frame(
+                                                basedir, evaluation_item, ref_source, sim_source, kind="scores"
+                                            )
+                                            if scores
+                                            else None
+                                        )
+                                        metric_df = (
+                                            _station_evaluation_frame(
+                                                basedir, evaluation_item, ref_source, sim_source, kind="metrics"
+                                            )
+                                            if metrics
+                                            else None
+                                        )
+
+                                        for score in scores:
+                                            kk = _finite_reduced_value(
+                                                score_df[score].values,
+                                                reducer="mean",
+                                                plot="Parallel Coordinates",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=score,
+                                            )
+                                            kk_str = f"{kk:.2f}"
+                                            output_file.write(f"{kk_str}\t")
+
+                                        for metric in metrics:
+                                            metric_values = metric_df[metric].replace([np.inf, -np.inf], np.nan)
+                                            finite_count = np.isfinite(metric_values).sum()
+                                            if finite_count > 2:
+                                                q_low, q_high = metric_values.quantile([0.05, 0.95])
+                                                metric_values = metric_values.where(
+                                                    (metric_values >= q_low) & (metric_values <= q_high), np.nan
                                                 )
-                                                metric_df = (
-                                                    _station_evaluation_frame(
-                                                        basedir, evaluation_item, ref_source, sim_source, kind="metrics"
-                                                    )
-                                                    if metrics
-                                                    else None
+
+                                            kk = _finite_reduced_value(
+                                                metric_values.values,
+                                                reducer="median",
+                                                plot="Parallel Coordinates",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=metric,
+                                            )
+                                            kk_str = f"{kk:.2f}"
+                                            output_file.write(f"{kk_str}\t")
+
+                                        output_file.write("\n")
+                                    else:
+                                        ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                        sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                        if sim_varname is None or sim_varname == "":
+                                            sim_varname = evaluation_item
+                                        if ref_varname is None or ref_varname == "":
+                                            ref_varname = evaluation_item
+
+                                        ref_path = self._ref_data_path(
+                                            basedir, evaluation_item, ref_source, ref_varname, sim_source
+                                        )
+                                        sim_path = os.path.join(
+                                            basedir,
+                                            "data",
+                                            f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc",
+                                        )
+
+                                        with xr.open_dataset(ref_path) as ref_ds:
+                                            reffile = select_data_array(ref_ds, ref_varname).load()
+                                        with xr.open_dataset(sim_path) as sim_ds:
+                                            simfile = select_data_array(sim_ds, sim_varname).load()
+                                        reffile = Convert_Type.convert_nc(reffile)
+                                        simfile = Convert_Type.convert_nc(simfile)
+
+                                        for score in scores:
+                                            score_path = os.path.join(
+                                                self.casedir,
+                                                "scores",
+                                                f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
+                                            )
+                                            with xr.open_dataset(score_path) as ds_file:
+                                                ds = Convert_Type.convert_nc(ds_file.load())
+
+                                            if self.weight.lower() == "area":
+                                                weights = np.cos(np.deg2rad(reffile.lat))
+                                                kk = (
+                                                    ds[score]
+                                                    .where(np.isfinite(ds[score]), np.nan)
+                                                    .weighted(weights)
+                                                    .mean(skipna=True)
+                                                    .values
                                                 )
-
-                                                for score in scores:
-                                                    kk = _finite_reduced_value(
-                                                        score_df[score].values,
-                                                        reducer="mean",
-                                                        plot="Parallel Coordinates",
-                                                        item=evaluation_item,
-                                                        ref_source=ref_source,
-                                                        sim_source=sim_source,
-                                                        variable=score,
-                                                    )
-                                                    kk_str = f"{kk:.2f}"
-                                                    output_file.write(f"{kk_str}\t")
-
-                                                for metric in metrics:
-                                                    metric_values = metric_df[metric].replace([np.inf, -np.inf], np.nan)
-                                                    finite_count = np.isfinite(metric_values).sum()
-                                                    if finite_count > 2:
-                                                        q_low, q_high = metric_values.quantile([0.05, 0.95])
-                                                        metric_values = metric_values.where(
-                                                            (metric_values >= q_low) & (metric_values <= q_high), np.nan
-                                                        )
-
-                                                    kk = _finite_reduced_value(
-                                                        metric_values.values,
-                                                        reducer="median",
-                                                        plot="Parallel Coordinates",
-                                                        item=evaluation_item,
-                                                        ref_source=ref_source,
-                                                        sim_source=sim_source,
-                                                        variable=metric,
-                                                    )
-                                                    kk_str = f"{kk:.2f}"
-                                                    output_file.write(f"{kk_str}\t")
-
-                                                output_file.write("\n")
+                                            elif self.weight.lower() == "mass":
+                                                area_weights = np.cos(np.deg2rad(reffile.lat))
+                                                flux_weights = np.abs(reffile.mean("time"))
+                                                combined_weights = area_weights * flux_weights
+                                                normalized_weights = combined_weights / combined_weights.sum()
+                                                kk = (
+                                                    ds[score]
+                                                    .where(np.isfinite(ds[score]), np.nan)
+                                                    .weighted(normalized_weights.fillna(0))
+                                                    .mean(skipna=True)
+                                                    .values
+                                                )
                                             else:
-                                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                                if sim_varname is None or sim_varname == "":
-                                                    sim_varname = evaluation_item
-                                                if ref_varname is None or ref_varname == "":
-                                                    ref_varname = evaluation_item
+                                                kk = ds[score].mean(skipna=True).values
 
-                                                ref_path = self._ref_data_path(
-                                                    basedir, evaluation_item, ref_source, ref_varname, sim_source
-                                                )
-                                                sim_path = os.path.join(
-                                                    basedir,
-                                                    "data",
-                                                    f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc",
-                                                )
+                                            kk = _finite_reduced_value(
+                                                [kk],
+                                                reducer="mean",
+                                                plot="Parallel Coordinates",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=score,
+                                            )
+                                            kk_str = f"{kk:.2f}"
+                                            output_file.write(f"{kk_str}\t")
 
-                                                with xr.open_dataset(ref_path) as ref_ds:
-                                                    reffile = select_data_array(ref_ds, ref_varname).load()
-                                                with xr.open_dataset(sim_path) as sim_ds:
-                                                    simfile = select_data_array(sim_ds, sim_varname).load()
-                                                reffile = Convert_Type.convert_nc(reffile)
-                                                simfile = Convert_Type.convert_nc(simfile)
+                                        for metric in metrics:
+                                            metric_path = os.path.join(
+                                                self.casedir,
+                                                "metrics",
+                                                f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
+                                            )
+                                            with xr.open_dataset(metric_path) as ds_file:
+                                                ds = Convert_Type.convert_nc(ds_file.load())
+                                            ds = ds.where(np.isfinite(ds), np.nan)
+                                            q_value = ds[metric].quantile([0.05, 0.95], dim=["lat", "lon"], skipna=True)
+                                            ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
+                                            kk = _finite_reduced_value(
+                                                [ds[metric].median(skipna=True).values],
+                                                reducer="median",
+                                                plot="Parallel Coordinates",
+                                                item=evaluation_item,
+                                                ref_source=ref_source,
+                                                sim_source=sim_source,
+                                                variable=metric,
+                                            )
+                                            kk_str = f"{kk:.2f}"
+                                            output_file.write(f"{kk_str}\t")
 
-                                                for score in scores:
-                                                    score_path = os.path.join(
-                                                        self.casedir,
-                                                        "scores",
-                                                        f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{score}.nc",
-                                                    )
-                                                    with xr.open_dataset(score_path) as ds_file:
-                                                        ds = Convert_Type.convert_nc(ds_file.load())
-
-                                                    if self.weight.lower() == "area":
-                                                        weights = np.cos(np.deg2rad(reffile.lat))
-                                                        kk = (
-                                                            ds[score]
-                                                            .where(np.isfinite(ds[score]), np.nan)
-                                                            .weighted(weights)
-                                                            .mean(skipna=True)
-                                                            .values
-                                                        )
-                                                    elif self.weight.lower() == "mass":
-                                                        area_weights = np.cos(np.deg2rad(reffile.lat))
-                                                        flux_weights = np.abs(reffile.mean("time"))
-                                                        combined_weights = area_weights * flux_weights
-                                                        normalized_weights = combined_weights / combined_weights.sum()
-                                                        kk = (
-                                                            ds[score]
-                                                            .where(np.isfinite(ds[score]), np.nan)
-                                                            .weighted(normalized_weights.fillna(0))
-                                                            .mean(skipna=True)
-                                                            .values
-                                                        )
-                                                    else:
-                                                        kk = ds[score].mean(skipna=True).values
-
-                                                    kk = _finite_reduced_value(
-                                                        [kk],
-                                                        reducer="mean",
-                                                        plot="Parallel Coordinates",
-                                                        item=evaluation_item,
-                                                        ref_source=ref_source,
-                                                        sim_source=sim_source,
-                                                        variable=score,
-                                                    )
-                                                    kk_str = f"{kk:.2f}"
-                                                    output_file.write(f"{kk_str}\t")
-
-                                                for metric in metrics:
-                                                    metric_path = os.path.join(
-                                                        self.casedir,
-                                                        "metrics",
-                                                        f"{evaluation_item}_ref_{ref_source}_sim_{sim_source}_{metric}.nc",
-                                                    )
-                                                    with xr.open_dataset(metric_path) as ds_file:
-                                                        ds = Convert_Type.convert_nc(ds_file.load())
-                                                    ds = ds.where(np.isfinite(ds), np.nan)
-                                                    q_value = ds[metric].quantile(
-                                                        [0.05, 0.95], dim=["lat", "lon"], skipna=True
-                                                    )
-                                                    ds = ds.where((ds >= q_value[0]) & (ds <= q_value[1]), np.nan)
-                                                    kk = _finite_reduced_value(
-                                                        [ds[metric].median(skipna=True).values],
-                                                        reducer="median",
-                                                        plot="Parallel Coordinates",
-                                                        item=evaluation_item,
-                                                        ref_source=ref_source,
-                                                        sim_source=sim_source,
-                                                        variable=metric,
-                                                    )
-                                                    kk_str = f"{kk:.2f}"
-                                                    output_file.write(f"{kk_str}\t")
-
-                                                output_file.write("\n")
-                                        finally:
-                                            pass  # Memory cleanup handled at method level
+                                        output_file.write("\n")
                                 finally:
-                                    gc.collect()  # Clean up memory after processing each reference source
-                        finally:
-                            gc.collect()  # Clean up memory after processing each evaluation item
+                                    pass  # Memory cleanup handled at method level
 
             _write_file_atomic(output_file_path, _write_evaluations_csv, suffix=".tmp.csv")
 

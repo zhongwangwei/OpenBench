@@ -57,6 +57,9 @@ EVALUATION_VARIABLES = [
     "Root_Zone_Soil_Moisture",
     "Surface_Soil_Temperature",
     "Streamflow",
+    "Discharge_For_Sediment",
+    "Suspended_Sediment_Concentration",
+    "Suspended_Sediment_Load",
     "Water_Table_Depth",
     "Terrestrial_Water_Storage_Change",
 ]

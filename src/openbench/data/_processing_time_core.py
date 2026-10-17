@@ -9,8 +9,62 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.util.groupby import without_flox
+
 
 logger = logging.getLogger(__name__)
+_TEMPORAL_RESOLUTION_ATTR = "_openbench_temporal_resolution"
+
+
+def _resample(data: xr.Dataset | xr.DataArray, freq: str, how: str) -> xr.Dataset | xr.DataArray:
+    """``data.resample(time=freq)`` reduced with ``how`` ("mean" or "sum")."""
+    relabeled = _relabel_single_value_periods(data, freq, how)
+    if relabeled is not None:
+        return relabeled
+    with without_flox():
+        return getattr(data.resample(time=freq), how)()
+
+
+def _relabel_single_value_periods(data: xr.Dataset | xr.DataArray, freq: str, how: str):
+    """Resample result when every period holds exactly one time step, else None.
+
+    Same-frequency inputs (e.g. daily to daily) only need the period labels;
+    reducing one value per group cost about a third of a year's regridding.
+    The result matches ``resample().mean()`` / ``.sum()``: dtype, attributes and
+    encodings come from resampling the first two steps, and a lone NaN sums to
+    0 as it does there. Gaps, repeated periods, unsorted time, coordinates along
+    time or variables without a numeric time axis take the regular path.
+    """
+    if "time" not in data.dims or data.sizes["time"] < 2:
+        return None
+    index = data.indexes.get("time")
+    if index is None or not index.is_monotonic_increasing:
+        return None
+    variables = dict(data.data_vars) if isinstance(data, xr.Dataset) else {data.name: data}
+    if any("time" not in var.dims or var.dtype.kind not in "biuf" for var in variables.values()):
+        return None
+    if any(name != "time" and "time" in coord.dims for name, coord in data.coords.items()):
+        return None
+    with without_flox():
+        counts = data["time"].resample(time=freq).count()
+        if counts.sizes["time"] != data.sizes["time"] or not bool((counts == 1).all()):
+            return None
+        probe = getattr(data.isel(time=slice(0, 2)).resample(time=freq), how)()
+    result = data.assign_coords(time=counts["time"].values)
+    result["time"].attrs = dict(probe["time"].attrs)
+    result["time"].encoding = dict(probe["time"].encoding)
+    if how == "sum":
+        result = result.fillna(0)
+    if isinstance(result, xr.Dataset):
+        for name in variables:
+            result[name] = result[name].astype(probe[name].dtype, copy=False)
+            result[name].attrs = dict(probe[name].attrs)
+            result[name].encoding = dict(probe[name].encoding)
+    else:
+        result = result.astype(probe.dtype, copy=False)
+        result.encoding = dict(probe.encoding)
+    result.attrs = dict(probe.attrs)
+    return result
 
 
 class TimeCoreMixin:
@@ -74,6 +128,16 @@ class TimeCoreMixin:
             )
 
     def _resample_to_compare_resolution(self, data: xr.Dataset | xr.DataArray, context: str):
+        target_freq = str(self.compare_tim_res)
+        if "time" in getattr(data, "coords", {}):
+            completed_freq = str(data["time"].attrs.get(_TEMPORAL_RESOLUTION_ATTR, ""))
+            if completed_freq == target_freq:
+                logger.debug("%s: temporal resolution already %s; skipping resample", context, target_freq)
+                return data
+
+        # Same-frequency inputs are still resampled: resample() puts both sides on
+        # the same period anchor (e.g. month-end), which grid evaluation relies on
+        # for exact timestamp alignment.
         self._guard_against_temporal_upsampling(data, self.compare_tim_res, context)
         item = re.sub(r"[\s-]+", "_", str(getattr(self, "item", "") or "").lower())
         units = str(getattr(data, "attrs", {}).get("units", "") or "").lower().strip()
@@ -126,13 +190,17 @@ class TimeCoreMixin:
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)
-            return data.resample(time=self.compare_tim_res).sum()
+            result = _resample(data, self.compare_tim_res, "sum")
+            result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
+            return result
         if units in accumulation_units and item not in accumulation_items | state_items:
             raise ValueError(
                 f"{context}: units {units!r} are ambiguous for item {item!r}; use a canonical "
                 "accumulation/state item name or an explicit rate unit"
             )
-        return data.resample(time=self.compare_tim_res).mean()
+        result = _resample(data, self.compare_tim_res, "mean")
+        result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
+        return result
 
     def check_coordinate(self, ds: xr.Dataset) -> xr.Dataset:
         # Rename both coordinates and dimensions (e.g., WRF south_north → lat).

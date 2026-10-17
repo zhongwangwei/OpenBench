@@ -23,7 +23,7 @@ def _processor(tmp_path):
     proc._resample_to_compare_resolution = lambda ds, *args: ds
     proc.check_coordinate = lambda ds: ds
     proc.check_dataset_time_integrity = lambda ds, *args: ds
-    proc.process_units = lambda ds, unit: (ds, unit)
+    proc.process_units = lambda ds, unit, datasource=None: (ds, unit)
     proc.select_timerange = lambda ds, *args: ds
     return proc
 
@@ -241,3 +241,38 @@ def test_runner_propagates_station_summary_and_only_caches_complete_data(tmp_pat
     )
     assert result["status"] == "success" and result["station_summary"] == summary
     assert EvaluationCache(tmp_path).is_cached("key", "hash") is not partial
+
+
+def test_runner_fails_a_pair_whose_sources_convert_to_different_units(tmp_path, monkeypatch):
+    from openbench.runner.task_execution import evaluate_single
+
+    def unexpected_evaluator(*args):
+        raise AssertionError("evaluation must not run")
+
+    monkeypatch.setattr("openbench.core.evaluation.Evaluation_stn", unexpected_evaluator)
+    bindings = SimpleNamespace(build_evaluation_fig_nml=lambda: SimpleNamespace(to_fig_nml=lambda: {}))
+    result = evaluate_single(
+        {
+            "var_name": "Latent_Heat",
+            "sim_source": "Sim",
+            "ref_source": "Ref",
+            "cache_key": "key",
+            "config_hash": "hash",
+            "use_cache": False,
+            "cache_dir": tmp_path,
+            "bindings": bindings,
+            "ref_preprocessed": True,
+        },
+        build_bridge_runtime_info_fn=lambda task: {
+            "ref_data_type": "stn",
+            "casedir": str(tmp_path),
+            "ref_varunit": "W/m2",
+            "sim_varunit": "mm day-1",
+        },
+        bindings_only_drawing_fn=lambda bindings: False,
+        task_output_requirement_fn=lambda *args: [],
+        missing_expected_outputs_fn=lambda *args: [],
+    )
+
+    assert result["status"] == "error"
+    assert "reference unit 'W/m2' converts to 'w m-2'" in result["error"]

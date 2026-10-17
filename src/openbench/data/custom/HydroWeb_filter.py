@@ -5,6 +5,8 @@ import os
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+from openbench.util.station_ids import read_station_csv, station_id_key
 from joblib import Parallel, delayed
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,10 @@ def _canonical_sim_grid_res(value):
         if math.isclose(float(value), resolution, rel_tol=1e-6, abs_tol=1e-8):
             return resolution
     raise ValueError(f"HydroWeb filter: sim_grid_res {value} not in valid set {valid_resolutions}")
+
+
+def _unique_ids(ids):
+    return list(dict.fromkeys(ids))
 
 
 def process_station(station, info):
@@ -33,14 +39,17 @@ def process_station(station, info):
     # matched — caused all stations to fall through to Flag=False and the
     # initialization mode then sys.exit on "No stations selected".
     if info.compare_tim_res.lower() == "d":
-        file_path = f"{info.ref_dir}/output/river/hydroprd_river_{station['ID']}.nc"
+        # IDs are read as text; older layouts name files by the unpadded integer ID.
+        candidates = _unique_ids([str(station["ID"]).strip(), station_id_key(station["ID"])])
+        paths = [f"{info.ref_dir}/output/river/hydroprd_river_{station_id}.nc" for station_id in candidates]
+        file_path = next((path for path in paths if os.path.exists(path)), paths[0])
     else:
         return result
     if os.path.exists(file_path):
         result["ref_dir"] = file_path
         with xr.open_dataset(file_path) as df:
             if info.debug_mode:
-                logger.info("Processing station %s...", int(station["ID"]))
+                logger.info("Processing station %s...", station["ID"])
             years = pd.to_datetime(df["time"].values).year
             result["obs_syear"] = int(years[0])
             result["obs_eyear"] = int(years[-1])
@@ -55,7 +64,7 @@ def process_station(station, info):
             ):
                 result["Flag"] = True
                 if info.debug_mode:
-                    logger.info("Station %s is selected", int(station["ID"]))
+                    logger.info("Station %s is selected", station["ID"])
     return result
 
 
@@ -113,7 +122,7 @@ def filter_HydroWeb(info, ds=None):
         info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_6min.txt"
     elif info.sim_grid_res == 0.05:
         info.ref_fulllist = f"{info.ref_dir}/list/HydroWeb_alloc_3min.txt"
-    station_list = pd.read_csv(f"{info.ref_fulllist}", delimiter=r"\s+", header=0)
+    station_list = read_station_csv(f"{info.ref_fulllist}", delimiter=r"\s+", header=0)
 
     results = Parallel(n_jobs=-1)(delayed(process_station)(row, info) for _, row in station_list.iterrows())
     for i, result in enumerate(results):

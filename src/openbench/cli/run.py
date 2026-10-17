@@ -33,9 +33,14 @@ from openbench.cli._simulation_validation import simulation_root_errors
 )
 @click.option("--dump-config", is_flag=True, help="Write intermediate runner/debug configs to output dir.")
 @click.option("--comparison-only", is_flag=True, help="Skip evaluation, only run comparisons on existing results.")
+@click.option(
+    "--resume",
+    is_flag=True,
+    help="Reuse compatible preprocessed station data and continue evaluation.",
+)
 @click.option("--force", is_flag=True, help="Bypass incremental cache and re-run evaluations.")
 @click.option("--output-dir", type=click.Path(file_okay=False), default=None, help="Override project.output_dir.")
-def run(config, dry_run, cores, variables, remote, dump_config, comparison_only, force, output_dir):
+def run(config, dry_run, cores, variables, remote, dump_config, comparison_only, resume, force, output_dir):
     """Run evaluation from a config file.
 
     Performance settings live in ``project.io`` and ``project.dask``:
@@ -44,6 +49,7 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     such as OPENBENCH_NETCDF_COMPRESSION, OPENBENCH_MFDATASET_BATCH_SIZE, and
     OPENBENCH_DASK override YAML for temporary benchmarking.
     """
+    _use_file_only_matplotlib_backend()
     from openbench.config import ConfigError, load_config
 
     try:
@@ -75,6 +81,15 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     if comparison_only and cfg.project.only_drawing:
         raise click.ClickException("--comparison-only conflicts with project.only_drawing=true; choose one mode")
 
+    if resume and comparison_only:
+        raise click.ClickException("--resume conflicts with --comparison-only; resume already continues evaluation")
+    if resume and cfg.project.only_drawing:
+        raise click.ClickException("--resume conflicts with project.only_drawing=true")
+    if resume and (force or cfg.project.force):
+        raise click.ClickException(
+            "--resume conflicts with --force/project.force because force rebuilds evaluation inputs"
+        )
+
     _run_static_preflight(cfg)
 
     output_only = comparison_only or cfg.project.only_drawing
@@ -95,6 +110,8 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         _validate_comparison_only_dry_run(cfg)
     elif dry_run and cfg.project.only_drawing:
         _validate_existing_outputs_dry_run(cfg)
+    elif dry_run:
+        _validate_data_files_dry_run(cfg, resolved)
 
     if dry_run:
         click.secho("Dry run — config valid, would evaluate:", bold=True)
@@ -103,6 +120,7 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
         click.echo(f"  Simulations: {', '.join(cfg.simulation.keys())}")
         click.echo(f"  Metrics: {cfg.metrics or 'all'}")
         click.echo(f"  Force: {force or cfg.project.force}")
+        click.echo(f"  Resume: {resume}")
         click.echo(f"  Time alignment: {cfg.project.time_alignment}")
         click.echo(f"  Unified mask: {cfg.project.unified_mask}")
         for r in resolved or []:
@@ -121,11 +139,13 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
 
     if comparison_only:
         click.secho(f"Running comparisons only: {cfg.project.name}", bold=True)
+    elif resume:
+        click.secho(f"Resuming evaluation from compatible preprocessed data: {cfg.project.name}", bold=True)
     else:
         click.secho(f"Running evaluation: {cfg.project.name}", bold=True)
     with _run_file_logging(cfg):
         try:
-            results = run_evaluation(cfg, force=force, comparison_only=comparison_only)
+            results = run_evaluation(cfg, force=force, comparison_only=comparison_only, resume=resume)
         except Exception as e:
             logging.getLogger(__name__).exception("Evaluation failed")
             _release_worker_pools()
@@ -218,6 +238,21 @@ def _is_standalone_cli_process() -> bool:
         return True
     argv0 = os.path.basename(sys.argv[0] or "")
     return argv0 in {"openbench", "openbench.exe"}
+
+
+def _use_file_only_matplotlib_backend() -> None:
+    """Render figures with Agg in a standalone ``openbench run`` process.
+
+    A run only saves figures, many of them from worker threads. Interactive
+    backends (macosx, TkAgg, QtAgg) create a native canvas per figure, which is
+    slower and unsafe off the main thread. Embedders keep their backend, and an
+    explicit MPLBACKEND still wins.
+    """
+    if not _is_standalone_cli_process() or os.environ.get("MPLBACKEND"):
+        return
+    import matplotlib
+
+    matplotlib.use("Agg")
 
 
 def _arm_exit_watchdog(exit_code: int, timeout: float = 20.0) -> None:
@@ -324,6 +359,17 @@ def _simulation_fulllist_errors(cfg):
     return errors
 
 
+def _validate_data_files_dry_run(cfg, resolved) -> None:
+    """Fail a dry run on the raw-data errors ``openbench check`` reports."""
+    from openbench.cli.check import data_file_errors
+    from openbench.data.registry.manager import get_registry
+
+    errors = data_file_errors(cfg, resolved, get_registry())
+    if errors:
+        details = "\n  ".join(errors)
+        raise click.ClickException(f"Data files:\n  {details}\nRun `openbench check` for details.")
+
+
 def _resolve_references_for_run(cfg):
     """Run the resolver path used by real execution and format failures for CLI."""
     from openbench.config.resolver import resolve_all_references
@@ -384,10 +430,8 @@ def _run_file_logging(cfg):
 
     root_logger = logging.getLogger()
     matplotlib_logger = logging.getLogger("matplotlib")
-    xhtml2pdf_logger = logging.getLogger("xhtml2pdf")
     previous_root_level = root_logger.level
     previous_matplotlib_level = matplotlib_logger.level
-    previous_xhtml2pdf_level = xhtml2pdf_logger.level
     previous_handler_levels = {handler: handler.level for handler in root_logger.handlers}
 
     handler = None
@@ -404,7 +448,6 @@ def _run_file_logging(cfg):
                 existing.setLevel(previous_root_level or logging.INFO)
         root_logger.setLevel(logging.DEBUG)
         matplotlib_logger.setLevel(logging.WARNING)
-        xhtml2pdf_logger.setLevel(logging.WARNING)
         root_logger.addHandler(handler)
         handler_added = True
         logging.getLogger(__name__).debug("Run log started: %s", log_path)
@@ -416,7 +459,6 @@ def _run_file_logging(cfg):
             handler.close()
         root_logger.setLevel(previous_root_level)
         matplotlib_logger.setLevel(previous_matplotlib_level)
-        xhtml2pdf_logger.setLevel(previous_xhtml2pdf_level)
         for existing, level in previous_handler_levels.items():
             existing.setLevel(level)
 
