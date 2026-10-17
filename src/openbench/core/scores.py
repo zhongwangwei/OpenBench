@@ -1,9 +1,7 @@
-import logging
-
 import numpy as np
 import xarray as xr
 
-from openbench.core.metrics import varies_along
+from openbench.core.metrics import validated_pair, varies_along
 from openbench.util.groupby import without_flox
 
 
@@ -36,13 +34,7 @@ class scores:
         a missing model value can be excluded from the numerator but still
         influence the observed variance/mean denominator.
         """
-        if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
-            logging.error("Inputs must be xarray DataArrays")
-            raise TypeError("Inputs must be xarray DataArrays")
-
-        s, o = xr.align(s, o, join="inner")
-        mask = np.isfinite(s) & np.isfinite(o)
-        return s.where(mask), o.where(mask)
+        return validated_pair(s, o)
 
     def _calculate_mean_and_anomalies(self, data):
         """

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import weakref
 from collections.abc import Mapping
 
 import numpy as np
@@ -35,6 +36,46 @@ def varies_along(x, dim="time"):
     return x.max(dim=dim) > x.min(dim=dim)
 
 
+# Single dict operations are atomic, so no lock: a finalizer below can run in
+# the middle of any allocation, including one made while a lock is held.
+_VALIDATED_PAIRS: dict[tuple[int, int], tuple] = {}
+
+
+def _forget_validated_pair(key):
+    _VALIDATED_PAIRS.pop(key, None)
+
+
+def validated_pair(s, o):
+    """Align sim/obs and mask them to their shared finite pairs, once per pair.
+
+    Every metric and score starts with this step on the same sim/obs objects;
+    on gridded data it took over half of a simple metric's time. The result is
+    cached by input identity while both inputs are alive and is read-only, so a
+    metric that modified it in place would raise instead of corrupting the
+    others.
+    """
+    if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
+        logging.error("Inputs must be xarray DataArrays")
+        raise TypeError("Inputs must be xarray DataArrays")
+
+    key = (id(s), id(o))
+    entry = _VALIDATED_PAIRS.get(key)
+    if entry is not None and entry[0]() is s and entry[1]() is o:
+        return entry[2], entry[3]
+
+    s_aligned, o_aligned = xr.align(s, o, join="inner")
+    mask = np.isfinite(s_aligned) & np.isfinite(o_aligned)
+    result = (s_aligned.where(mask), o_aligned.where(mask))
+    for array in result:
+        if isinstance(array.data, np.ndarray):
+            array.data.flags.writeable = False
+
+    _VALIDATED_PAIRS[key] = (weakref.ref(s), weakref.ref(o), *result)
+    weakref.finalize(s, _forget_validated_pair, key)
+    weakref.finalize(o, _forget_validated_pair, key)
+    return result
+
+
 class metrics:
     """
     A class for calculating various statistical metrics for model evaluation.
@@ -68,16 +109,7 @@ class metrics:
         Returns:
             tuple: Aligned and validated DataArrays
         """
-        # Ensure inputs are xarray DataArrays
-        if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
-            logging.error("Inputs must be xarray DataArrays")
-            raise TypeError("Inputs must be xarray DataArrays")
-
-        # Align time dimensions
-        s, o = xr.align(s, o, join="inner")
-
-        mask = np.isfinite(s) & np.isfinite(o)
-        return s.where(mask), o.where(mask)
+        return validated_pair(s, o)
 
     def percent_bias(self, s, o):
         """

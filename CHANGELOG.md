@@ -25,6 +25,8 @@
 - `openbench run` renders figures with Matplotlib's Agg backend instead of the
   platform's interactive one (macOS, Tk or Qt), so worker threads no longer
   create GUI canvases. An explicit `MPLBACKEND` is still honoured.
+- Metrics and scores align and pairwise-mask a sim/obs pair once instead of
+  once per metric: about 20% faster on gridded evaluation, identical results.
 
 ### Removed
 - The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which

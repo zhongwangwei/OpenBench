@@ -521,3 +521,32 @@ def test_float32_underflowed_std_gives_nan(name):
 
     assert float(o.std()) == 0
     assert np.isnan(getattr(metrics(), name)(s, o)).all()
+
+
+def test_validated_pair_is_computed_once_per_live_pair_and_read_only():
+    import gc
+    import importlib
+
+    # openbench.core re-exports the metrics class under the module's name.
+    metrics_module = importlib.import_module("openbench.core.metrics")
+
+    times = pd.date_range("2001-01-01", periods=4, freq="D")
+    s = xr.DataArray([1.0, np.nan, 3.0, np.inf], dims="time", coords={"time": times})
+    o = xr.DataArray([2.0, 2.0, np.nan, 4.0], dims="time", coords={"time": times})
+
+    first = metrics_module.validated_pair(s, o)
+    second = metrics_module.validated_pair(s, o)
+
+    assert first[0] is second[0] and first[1] is second[1]
+    np.testing.assert_array_equal(first[0].values, [1.0, np.nan, np.nan, np.nan])
+    np.testing.assert_array_equal(first[1].values, [2.0, np.nan, np.nan, np.nan])
+    with pytest.raises(ValueError, match="read-only"):
+        first[0].values[0] = 5.0
+    # Equal values in new objects are a new pair.
+    assert metrics_module.validated_pair(s.copy(), o.copy())[0] is not first[0]
+
+    key = (id(s), id(o))
+    assert key in metrics_module._VALIDATED_PAIRS
+    del s, o, first, second
+    gc.collect()
+    assert key not in metrics_module._VALIDATED_PAIRS
