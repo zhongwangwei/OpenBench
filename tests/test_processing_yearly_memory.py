@@ -136,4 +136,5 @@ def test_large_dataset_auto_chunking_uses_native_file_chunks(tmp_path, monkeypat
 
     loader.open_dataset(str(path))
 
-    assert seen["chunks"] == {}
+    # Native chunk boundaries are kept; small time chunks merge only in whole multiples.
+    assert seen["chunks"] == {"time": 24}

@@ -139,6 +139,9 @@ DEFAULT_CHUNKS = {
 # Files smaller than this are loaded directly into memory
 CHUNK_SIZE_THRESHOLD = 100 * 1024 * 1024  # 100 MB
 
+# Upper bound for a Dask block built by merging small native time chunks.
+NATIVE_TIME_CHUNK_TARGET_BYTES = 128 * 1024 * 1024
+
 # Explicit batch size for large multi-file combines. If unset, OpenBench uses a
 # lightweight resource plan to batch only very large file lists.
 MFDATASET_BATCH_SIZE_ENV = "OPENBENCH_MFDATASET_BATCH_SIZE"
@@ -247,7 +250,7 @@ def open_dataset(
         Path to the NetCDF file
     chunks : dict, str, or None
         Chunk sizes for each dimension. Options:
-        - "auto": Use native chunks when available, bounded defaults otherwise
+        - "auto": Use native chunks (small time chunks merged) when available, bounded defaults otherwise
         - dict: Explicit chunk sizes, e.g., {"time": 12, "lat": 500, "lon": 500}
         - None: No chunking (load entirely into memory)
     use_chunking : bool
@@ -285,6 +288,50 @@ def open_dataset(
     return _open_dataset_with_fallback(path, chunks=chunks, **kwargs)
 
 
+def _merged_native_time_chunks(ds: xr.Dataset) -> Dict[str, int]:
+    """Merge small native time chunks into larger Dask blocks.
+
+    Reference files are commonly stored one time step per chunk (ERA5-Land,
+    GLEAM). Using those chunks directly yields one Dask task per step, and that
+    per-task overhead dominated yearly resampling. Time blocks are whole
+    multiples of the native time chunk and every other dimension keeps its
+    native size, so each stored chunk is still decompressed exactly once.
+    Returns ``{}`` (plain native chunks) when the layout is ambiguous or
+    already coarse enough.
+    """
+    time_dims = [dim for dim in ds.dims if str(dim).lower() in ("time", "t")]
+    if len(time_dims) != 1:
+        return {}
+    time_dim = time_dims[0]
+
+    native: Dict[str, int] = {}
+    step_bytes = 0
+    for var in ds.data_vars.values():
+        chunksizes = var.encoding.get("chunksizes")
+        if not chunksizes or len(chunksizes) != var.ndim:
+            continue
+        var_chunks = dict(zip(var.dims, (int(size) for size in chunksizes)))
+        for dim, size in var_chunks.items():
+            if native.setdefault(dim, size) != size:
+                return {}
+        if time_dim not in var.dims:
+            continue
+        var_step_bytes = var.dtype.itemsize
+        for dim, size in var_chunks.items():
+            if dim != time_dim:
+                var_step_bytes *= size
+        step_bytes = max(step_bytes, var_step_bytes)
+
+    native_time = native.get(time_dim)
+    if not native_time or step_bytes <= 0:
+        return {}
+    factor = NATIVE_TIME_CHUNK_TARGET_BYTES // (step_bytes * native_time)
+    if factor <= 1:
+        return {}
+    native[time_dim] = min(int(ds.sizes[time_dim]), native_time * int(factor))
+    return native
+
+
 def _get_auto_chunks(path: str) -> Dict[str, int]:
     """
     Determine optimal chunk sizes based on file metadata.
@@ -303,14 +350,14 @@ def _get_auto_chunks(path: str) -> Dict[str, int]:
         with xr.open_dataset(path) as ds:
             dims = ds.sizes
             if any(ds[name].encoding.get("chunksizes") for name in ds.data_vars):
-                return {}
+                return _merged_native_time_chunks(ds)
     except Exception:
         # Try with decode_times=False
         try:
             with xr.open_dataset(path, decode_times=False) as ds:
                 dims = ds.sizes
                 if any(ds[name].encoding.get("chunksizes") for name in ds.data_vars):
-                    return {}
+                    return _merged_native_time_chunks(ds)
         except Exception as e:
             logging.warning(f"Could not inspect file for auto-chunking: {e}")
             return DEFAULT_CHUNKS.copy()

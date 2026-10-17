@@ -274,7 +274,10 @@ def _apply_weights_dense(
     weight_arrays = list(weights.values())
 
     if skipna:
-        valid_frac = xr.dot(da.notnull(), *weight_arrays, dim=list(weights.keys()), optimize=True)
+        valid = _shared_valid_mask(da, coords)
+        if valid is None:
+            valid = da.notnull()
+        valid_frac = xr.dot(valid, *weight_arrays, dim=list(weights.keys()), optimize=True)
 
     da_regrid: xr.DataArray = xr.dot(da.fillna(0), *weight_arrays, dim=list(weights.keys()), optimize=True)
 
@@ -286,6 +289,25 @@ def _apply_weights_dense(
     da_regrid = da_regrid.rename(coord_map).transpose(*da.dims)
 
     return da_regrid
+
+
+def _shared_valid_mask(da: xr.DataArray, regrid_dims: list[Hashable]) -> xr.DataArray | None:
+    """Return the validity mask once when it is the same for every time step.
+
+    Land/ocean masks are usually static, so contracting one 2-D mask instead of
+    one per step halves the dense work with identical results. Dask inputs are
+    skipped because the check would force an eager compute.
+    """
+    if da.chunks is not None:
+        return None
+    other_dims = [dim for dim in da.dims if dim not in regrid_dims]
+    if not other_dims or all(da.sizes[dim] == 1 for dim in other_dims):
+        return None
+    valid = da.notnull()
+    first = valid.isel({dim: 0 for dim in other_dims}, drop=True)
+    if not bool((valid == first).all()):
+        return None
+    return first
 
 
 def _sparse_contract_axis(da: xr.DataArray, weight: xr.DataArray, coord: Hashable, matrix) -> xr.DataArray:

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- Faster temporal resampling of grid data: resampling to the comparison
+  resolution no longer goes through flox, and files stored one time step per
+  chunk (e.g. ERA5-Land, GLEAM) are read in larger time blocks. A year of
+  0.25° daily data resampled to monthly took about 12 s and now takes about
+  3 s; results differ only by float32 rounding.
+- Conservative regridding weights a static land/ocean mask once instead of at
+  every time step, which speeds up daily and hourly comparisons with identical
+  results.
+
 ## [3.0.8] - 2026-10-13
 
 ### Fixed

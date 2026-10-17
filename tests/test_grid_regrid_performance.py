@@ -143,6 +143,44 @@ def test_same_frequency_input_is_resampled_to_shared_time_labels():
     np.testing.assert_allclose(ref.values, monthly.values)
 
 
+@pytest.mark.parametrize(
+    ("item", "units", "chunked"),
+    [("Sensible_Heat", "W m-2", False), ("Precipitation", "mm", False), ("Sensible_Heat", "W m-2", True)],
+)
+def test_compare_resolution_resample_bypasses_flox_with_same_values(monkeypatch, item, units, chunked):
+    flox_xarray = pytest.importorskip("flox.xarray")
+    from openbench.data._processing_time_core import TimeCoreMixin
+
+    class Processor(TimeCoreMixin):
+        compare_tim_res = "ME"
+
+    Processor.item = item
+    values = np.random.default_rng(0).random((59, 2, 2))
+    values[:, 0, 0] = np.nan  # cell with no valid input
+    values[3, 1, 1] = np.nan  # partial gap
+    data = xr.DataArray(
+        values,
+        dims=("time", "lat", "lon"),
+        coords={"time": pd.date_range("2001-01-01", periods=59, freq="D")},
+        attrs={"units": units},
+    )
+    reducer = "sum" if units == "mm" else "mean"
+    expected = getattr(data.resample(time="ME"), reducer)()
+    if chunked:
+        data = data.chunk({"time": 10})
+    use_flox = xr.get_options()["use_flox"]
+
+    def fail_flox(*_args, **_kwargs):
+        raise AssertionError("flox used for compare-resolution resample")
+
+    monkeypatch.setattr(flox_xarray, "xarray_reduce", fail_flox)
+
+    result = Processor()._resample_to_compare_resolution(data, "test").compute()
+
+    assert xr.get_options()["use_flox"] == use_flox
+    np.testing.assert_allclose(result.values, expected.values, rtol=1e-12, equal_nan=True)
+
+
 def test_regrid_worker_budget_is_bounded_and_small_workloads_parallelize():
     from openbench.data._processing_grid_core import _regrid_worker_budget
 
@@ -241,6 +279,37 @@ def test_sparse_conservative_matches_dense_with_nan_and_multiple_times(nan_thres
     optimized = conservative.apply_weights(data, weights, True, nan_threshold, use_sparse=True)
 
     xr.testing.assert_allclose(optimized, dense)
+
+
+@pytest.mark.parametrize("time_varying", [False, True])
+def test_static_valid_mask_shortcut_matches_per_step_mask(monkeypatch, time_varying):
+    from openbench.data.regrid.methods import conservative
+    from openbench.data.regrid.utils import create_dot_dataarray
+
+    source = np.array([-1.5, -0.5, 0.5, 1.5])
+    target = np.array([-1.0, 1.0])
+    values = np.random.default_rng(1).random((3, 4, 4))
+    values[:, 0, 1] = np.nan
+    if time_varying:
+        values[1, 2, 2] = np.nan
+    data = xr.DataArray(
+        values,
+        dims=("time", "lat", "lon"),
+        coords={"time": [0, 1, 2], "lat": source, "lon": source},
+    )
+    weights = {
+        coord: create_dot_dataarray(
+            conservative.get_weights(source, target, spherical=coord == "lat"), coord, target, source
+        )
+        for coord in ("lat", "lon")
+    }
+
+    assert (conservative._shared_valid_mask(data, ["lat", "lon"]) is None) == time_varying
+    shortcut = conservative.apply_weights(data, weights, True, 0.0)
+    monkeypatch.setattr(conservative, "_shared_valid_mask", lambda *_args: None)
+    per_step = conservative.apply_weights(data, weights, True, 0.0)
+
+    xr.testing.assert_identical(shortcut, per_step)
 
 
 def test_sparse_conservative_falls_back_to_dense(caplog, monkeypatch):

@@ -574,3 +574,49 @@ def test_write_mfdataset_zarr_auto_batches_when_plan_requires_it(monkeypatch, tm
     write_calls = [call for call in calls if call[0] == "write"]
     assert [call[2].get("compression") for call in write_calls] == [False, False, False]
     assert calls[-1] == ("zarr", str(tmp_path / "combined.zarr"), {"mode": "w"})
+
+
+def _write_per_step_chunked(path, encoding):
+    import pandas as pd
+
+    data_vars = {
+        name: (("time", "bnds"), np.zeros((50, 2)))
+        if name == "time_bnds"
+        else (("time", "lat", "lon"), np.zeros((50, 4, 6), dtype="float32"))
+        for name in encoding
+    }
+    xr.Dataset(
+        data_vars,
+        coords={
+            "time": pd.date_range("2001-01-01", periods=50, freq="D"),
+            "lat": np.arange(4.0),
+            "lon": np.arange(6.0),
+        },
+    ).to_netcdf(path, encoding={name: {"chunksizes": chunks} for name, chunks in encoding.items()})
+
+
+def test_auto_chunks_merge_per_step_native_time_chunks(monkeypatch, tmp_path):
+    import openbench.util.dataset_loader as loader
+
+    path = tmp_path / "per_step.nc"
+    _write_per_step_chunked(path, {"et": (1, 4, 6), "time_bnds": (1, 2)})
+    # One native step of ``et`` is 4 * 6 * 4 bytes; allow ten steps per block.
+    monkeypatch.setattr(loader, "NATIVE_TIME_CHUNK_TARGET_BYTES", 960)
+
+    assert loader._get_auto_chunks(str(path)) == {"time": 10, "lat": 4, "lon": 6, "bnds": 2}
+    with loader.open_dataset(str(path), size_threshold=0) as ds:
+        assert ds["et"].chunks == ((10,) * 5, (4,), (6,))
+
+
+def test_auto_chunks_keep_native_layout_when_merge_is_ambiguous_or_unneeded(monkeypatch, tmp_path):
+    import openbench.util.dataset_loader as loader
+
+    mixed = tmp_path / "mixed.nc"
+    _write_per_step_chunked(mixed, {"a": (1, 4, 6), "b": (1, 2, 6)})
+    monkeypatch.setattr(loader, "NATIVE_TIME_CHUNK_TARGET_BYTES", 960)
+    assert loader._get_auto_chunks(str(mixed)) == {}
+
+    coarse = tmp_path / "coarse.nc"
+    _write_per_step_chunked(coarse, {"a": (1, 4, 6)})
+    monkeypatch.setattr(loader, "NATIVE_TIME_CHUNK_TARGET_BYTES", 96)
+    assert loader._get_auto_chunks(str(coarse)) == {}
