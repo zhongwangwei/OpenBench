@@ -201,6 +201,12 @@ class PageGeneral(BasePage):
         self.cb_unified_mask.stateChanged.connect(self._on_toggle_changed)
         toggle_layout.addWidget(self.cb_unified_mask, 2, 0)
 
+        self.cb_station_plots = QCheckBox("Station Plots")
+        self.cb_station_plots.setChecked(True)
+        self.cb_station_plots.setToolTip("One time-series figure per station; turn off for large station sets")
+        self.cb_station_plots.stateChanged.connect(self._on_toggle_changed)
+        toggle_layout.addWidget(self.cb_station_plots, 2, 1)
+
         self.content_layout.addWidget(toggle_group)
 
         groupby_group = QGroupBox("Groupby Options")
@@ -568,6 +574,7 @@ class PageGeneral(BasePage):
             self.cb_report,
             self.cb_only_drawing,
             self.cb_unified_mask,
+            self.cb_station_plots,
             self.cb_igbp,
             self.cb_pft,
             self.cb_climate,
@@ -662,6 +669,7 @@ class PageGeneral(BasePage):
             self.cb_pft.setChecked(general.get("PFT_groupby", True))
             self.cb_climate.setChecked(general.get("Climate_zone_groupby", True))
             self.cb_unified_mask.setChecked(general.get("unified_mask", True))
+            self.cb_station_plots.setChecked(general.get("station_plots", True))
 
             self.num_cores_spin.setValue(general.get("num_cores", DEFAULT_NUM_CORES))
             self._load_performance_settings(general)
@@ -827,6 +835,7 @@ class PageGeneral(BasePage):
             "PFT_groupby": self.cb_pft.isChecked(),
             "Climate_zone_groupby": self.cb_climate.isChecked(),
             "unified_mask": self.cb_unified_mask.isChecked(),
+            "station_plots": self.cb_station_plots.isChecked(),
             "num_cores": self.num_cores_spin.value(),
             "weight": self.weight_combo.currentText().lower(),
             # Preserve runtime settings from PageRuntime

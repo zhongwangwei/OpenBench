@@ -175,6 +175,7 @@ def test_adapter_declares_legacy_general_key_contract():
         "unified_mask",
         "time_alignment",
         "generate_report",
+        "station_plots",
         "weight",
         "compare_tim_res",
         "compare_tzone",

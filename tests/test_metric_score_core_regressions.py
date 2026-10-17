@@ -379,6 +379,38 @@ def test_station_evaluation_reuses_shared_mfm_components(tmp_path, monkeypatch):
     assert float(row["MFM"]) == pytest.approx(expected_mfm)
 
 
+@pytest.mark.parametrize("station_plots", [True, False])
+def test_station_plots_switch_skips_only_the_figure(tmp_path, monkeypatch, station_plots):
+    plotted = []
+    monkeypatch.setattr("openbench.core.evaluation.plot_stn", lambda *args, **kwargs: plotted.append(args[3]))
+    ev = Evaluation_stn.__new__(Evaluation_stn)
+    ev.casedir = str(tmp_path)
+    ev.item = "Runoff"
+    ev.ref_source = "Ref"
+    ev.sim_source = "Sim"
+    ev.ref_varname = ["v"]
+    ev.sim_varname = ["v"]
+    ev.metrics = ["RMSE", "KGESS", "correlation"]
+    ev.scores = []
+    ev.compare_tim_res = ""
+    ev.station_plots = station_plots
+    data_dir = tmp_path / "data" / "stn_Ref_Sim"
+    data_dir.mkdir(parents=True)
+    time = pd.date_range("2001-01-01", periods=4)
+    xr.Dataset({"v": ("time", np.arange(4.0) + 1)}, coords={"time": time}).to_netcdf(
+        data_dir / "Runoff_sim_S1_2001_2001.nc"
+    )
+    xr.Dataset({"v": ("time", np.arange(4.0) + 2)}, coords={"time": time}).to_netcdf(
+        data_dir / "Runoff_ref_S1_2001_2001.nc"
+    )
+    station_list = {"ID": ["S1"], "use_syear": [2001], "use_eyear": [2001], "ref_lat": [0.0], "ref_lon": [0.0]}
+
+    row = ev.make_evaluation_parallel(station_list, 0)
+
+    assert plotted == (["S1"] if station_plots else [])
+    assert float(row["RMSE"]) == pytest.approx(1.0)
+
+
 def test_parallel_metric_keeps_parallel_map_with_shared_mfm(monkeypatch):
     calls = []
     counts = {"omega": 0, "varphi": 0, "eta": 0, "mfm": 0, "other": 0}

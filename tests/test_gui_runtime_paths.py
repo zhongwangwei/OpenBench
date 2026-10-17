@@ -373,6 +373,7 @@ def test_general_load_from_config_does_not_write_stale_defaults(qapp, tmp_path):
             "PFT_groupby": False,
             "Climate_zone_groupby": False,
             "unified_mask": False,
+            "station_plots": False,
             "num_cores": 7,
             "weight": "area",
             "io": {"netcdf_compression": True, "mfdataset_batch_size": 0},

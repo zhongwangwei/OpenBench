@@ -69,6 +69,7 @@ def test_project_config_options_defaults():
     assert p.time_alignment == "intersection"
     assert p.unified_mask is True
     assert p.generate_report is True
+    assert p.station_plots is True
     assert p.IGBP_groupby is False
     assert p.PFT_groupby is False
     assert p.climate_zone_groupby is False

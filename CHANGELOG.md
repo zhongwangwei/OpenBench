@@ -28,6 +28,11 @@
 - Metrics and scores align and pairwise-mask a sim/obs pair once instead of
   once per metric: about 20% faster on gridded evaluation, identical results.
 
+### Added
+- `project.station_plots` (default `true`; "Station Plots" in the GUI) can turn
+  off the per-station time-series figures, which take most of the time of a
+  large station evaluation. Metrics, scores and station maps are unchanged.
+
 ### Removed
 - The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which
   could only be implemented through flox.

@@ -1609,6 +1609,7 @@ def _render_project_section(lines: list[str], project: dict) -> None:
         "time_alignment": "intersection",
         "unified_mask": True,
         "generate_report": True,
+        "station_plots": True,
         "IGBP_groupby": False,
         "PFT_groupby": False,
         "climate_zone_groupby": False,

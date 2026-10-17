@@ -517,6 +517,7 @@ def task_hash_payload(
         "time_alignment",
         "regrid_backend",
         "only_drawing",
+        "station_plots",
     )
 
     sim_entry = cfg.simulation.get(sim_source)

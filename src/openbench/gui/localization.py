@@ -154,6 +154,7 @@ ZH_CN = {
     "Generate Report": "生成报告",
     "Only Drawing": "仅绘图",
     "Unified Mask": "统一掩膜",
+    "Station Plots": "逐站点时序图",
     "Groupby Options": "分组选项",
     "IGBP Groupby": "按 IGBP 分组",
     "PFT Groupby": "按 PFT 分组",

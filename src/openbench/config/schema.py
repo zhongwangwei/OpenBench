@@ -88,6 +88,7 @@ class ProjectConfig:
     regrid_backend: str = "openbench_conservative"
     unified_mask: bool = True  # Cumulative NaN mask across sims (cross-sim fairness)
     generate_report: bool = True  # Generate HTML summary report
+    station_plots: bool = True  # Per-station time-series figures; turn off for large station sets
 
     # --- Groupby analysis ---
     IGBP_groupby: bool = False  # Per-IGBP-class aggregation (loads dataset/IGBP.nc)

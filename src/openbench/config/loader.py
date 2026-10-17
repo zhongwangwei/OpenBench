@@ -92,6 +92,7 @@ _PROJECT_KEYS = {
     "regrid_backend",
     "unified_mask",
     "generate_report",
+    "station_plots",
     "IGBP_groupby",
     "PFT_groupby",
     "climate_zone_groupby",
@@ -924,6 +925,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         or "openbench_conservative",
         unified_mask=_validated_optional_bool(raw.get("unified_mask"), "project.unified_mask", default=True),
         generate_report=_validated_optional_bool(raw.get("generate_report"), "project.generate_report", default=True),
+        station_plots=_validated_optional_bool(raw.get("station_plots"), "project.station_plots", default=True),
         # Groupby
         IGBP_groupby=_validated_optional_bool(raw.get("IGBP_groupby"), "project.IGBP_groupby", default=False),
         PFT_groupby=_validated_optional_bool(raw.get("PFT_groupby"), "project.PFT_groupby", default=False),

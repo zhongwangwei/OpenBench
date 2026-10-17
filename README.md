@@ -340,6 +340,7 @@ statistics:
 | `weight` | `area` (default when omitted) / `mass` / `none` | Spatial aggregation weighting |
 | `IGBP_groupby` / `PFT_groupby` / `climate_zone_groupby` | `false` | Per-class aggregation (see below) |
 | `generate_report` | `true` | Emit HTML report |
+| `station_plots` | `true` | One time-series figure per station; set `false` for large station sets |
 
 ### Advanced config helpers
 

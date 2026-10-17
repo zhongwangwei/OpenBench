@@ -706,21 +706,24 @@ class Evaluation_stn(metrics, scores):
                 else:
                     raise ValueError(f"No such score: {score}")
 
-            if "ref_lat" in station_list:
-                lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
-            else:
-                lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
-            plot_stn(
-                self,
-                s,
-                o,
-                station_list["ID"][iik],
-                self.ref_varname,
-                _scalar_plot_value(row["RMSE"], label="RMSE", station_id=station_list["ID"][iik]),
-                _scalar_plot_value(row["KGESS"], label="KGESS", station_id=station_list["ID"][iik]),
-                _scalar_plot_value(row["correlation"], label="correlation", station_id=station_list["ID"][iik]),
-                lat_lon,
-            )
+            # One high-resolution figure per station is most of a large station
+            # run; project.station_plots: false keeps the metrics and skips it.
+            if getattr(self, "station_plots", True):
+                if "ref_lat" in station_list:
+                    lat_lon = [station_list["ref_lat"][iik], station_list["ref_lon"][iik]]
+                else:
+                    lat_lon = [station_list["sim_lat"][iik], station_list["sim_lon"][iik]]
+                plot_stn(
+                    self,
+                    s,
+                    o,
+                    station_list["ID"][iik],
+                    self.ref_varname,
+                    _scalar_plot_value(row["RMSE"], label="RMSE", station_id=station_list["ID"][iik]),
+                    _scalar_plot_value(row["KGESS"], label="KGESS", station_id=station_list["ID"][iik]),
+                    _scalar_plot_value(row["correlation"], label="correlation", station_id=station_list["ID"][iik]),
+                    lat_lon,
+                )
             return row
         except StationDataUnavailable as exc:
             return {"_skip_reason": str(exc)}

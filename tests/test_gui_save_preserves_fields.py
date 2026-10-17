@@ -438,6 +438,7 @@ def test_general_save_preserves_runtime_local_openbench_path():
     page.cb_pft = FakeCheck(True)
     page.cb_climate = FakeCheck(True)
     page.cb_unified_mask = FakeCheck(True)
+    page.cb_station_plots = FakeCheck(True)
     page.num_cores_spin = FakeSpin(4)
     page.weight_combo = FakeCombo("None")
 
@@ -484,6 +485,7 @@ def test_general_save_includes_visible_performance_settings():
     page.cb_pft = FakeCheck(True)
     page.cb_climate = FakeCheck(True)
     page.cb_unified_mask = FakeCheck(True)
+    page.cb_station_plots = FakeCheck(True)
     page.num_cores_spin = FakeSpin(4)
     page.weight_combo = FakeCombo("None")
     page.cb_netcdf_compression = FakeCheck(True)

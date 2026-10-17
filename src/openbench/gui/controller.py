@@ -142,6 +142,7 @@ class WizardController(QObject):
                 "only_drawing": False,
                 "unified_mask": True,
                 "generate_report": True,
+                "station_plots": True,
                 "IGBP_groupby": True,
                 "PFT_groupby": True,
                 "Climate_zone_groupby": True,
