@@ -7,6 +7,8 @@ import pandas as pd
 import xarray as xr
 from scipy.stats import linregress  # used by br2 metric
 
+from openbench.util.groupby import without_flox
+
 # Import CacheSystem - CacheSystem is mandatory for metrics calculation
 try:
     from openbench.data.cache import cached, get_cache_manager  # noqa: F401  feature detection
@@ -716,8 +718,9 @@ class metrics:
             coords={dim: o[dim]},
             dims=[dim],
         )
-        season_mean = o.groupby(seasons).mean(dim=dim)
-        centered = o.groupby(seasons) - season_mean
+        with without_flox():
+            season_mean = o.groupby(seasons).mean(dim=dim)
+            centered = o.groupby(seasons) - season_mean
         denom = (weights * centered**2).sum(dim=dim)
         numer = (weights * (s - o) ** 2).sum(dim=dim)
         o_varies = varies_along(o.where(weights > 0), dim)

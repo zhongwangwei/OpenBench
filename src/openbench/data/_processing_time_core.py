@@ -2,39 +2,18 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import re
-import threading
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from openbench.util.groupby import without_flox
+
 
 logger = logging.getLogger(__name__)
 _TEMPORAL_RESOLUTION_ATTR = "_openbench_temporal_resolution"
-_NO_FLOX_LOCK = threading.Lock()
-
-
-@contextlib.contextmanager
-def _resample_without_flox():
-    """Use xarray's slice-based resample reductions instead of flox.
-
-    Resample bins are contiguous along time; flox's generic group-by moves the
-    time axis last and builds per-chunk intermediates, which measured 3-10x
-    slower on gridded data (and no faster on station series). ``set_options``
-    is process-global, so the lock keeps concurrent callers from restoring
-    each other's state out of order. Dask graphs are built inside the block,
-    so the choice also holds when they are computed later.
-    """
-    with _NO_FLOX_LOCK:
-        try:
-            options = xr.set_options(use_flox=False)
-        except ValueError:  # xarray without flox integration
-            options = contextlib.nullcontext()
-        with options:
-            yield
 
 
 class TimeCoreMixin:
@@ -160,7 +139,7 @@ class TimeCoreMixin:
         accumulation_units = {"mm", "kg m-2", "kg/m2", "kg m**-2"}
         if item in accumulation_items and units in accumulation_units:
             logger.info("Resampling accumulated %s with sum over %s", item, self.compare_tim_res)
-            with _resample_without_flox():
+            with without_flox():
                 result = data.resample(time=self.compare_tim_res).sum()
             result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
             return result
@@ -169,7 +148,7 @@ class TimeCoreMixin:
                 f"{context}: units {units!r} are ambiguous for item {item!r}; use a canonical "
                 "accumulation/state item name or an explicit rate unit"
             )
-        with _resample_without_flox():
+        with without_flox():
             result = data.resample(time=self.compare_tim_res).mean()
         result["time"].attrs[_TEMPORAL_RESOLUTION_ATTR] = target_freq
         return result

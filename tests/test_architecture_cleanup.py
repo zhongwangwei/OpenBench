@@ -25,6 +25,11 @@ def test_runtime_dependencies_declare_direct_imports_without_unused_platformdirs
         assert package in conda_reqs
     assert "platformdirs" not in dependencies
     assert "platformdirs" not in conda_reqs
+    # Group-bys use xarray's own reductions; categorical regridding uses numpy.
+    assert "flox" not in dependencies
+    assert "flox" not in conda_reqs
+    for path in (ROOT / "src/openbench").rglob("*.py"):
+        assert "import flox" not in path.read_text(encoding="utf-8"), path
 
 
 def test_gui_and_dask_runtime_dependencies_are_installable_from_declared_extras():

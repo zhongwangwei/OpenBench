@@ -640,7 +640,7 @@ old and new result sets.
 
 - Python 3.10 or newer
 - Core dependencies: xarray, numpy, scipy, pandas, netCDF4, matplotlib,
-  cartopy, dask, joblib, flox, PyYAML, Jinja2, click, tqdm, packaging
+  cartopy, dask, joblib, PyYAML, Jinja2, click, tqdm, packaging
 - Optional extras: `gui` (PySide6, psutil, and remote SSH dependencies), `remote` (paramiko)
 - See [`pyproject.toml`](pyproject.toml) for the full pinned dependency list
 

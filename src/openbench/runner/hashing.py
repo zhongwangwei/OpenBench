@@ -89,6 +89,7 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.data._processing_yearly",
     "openbench.data.time_utils",
     "openbench.data.unit",
+    "openbench.util.groupby",
 )
 
 GRID_ALGORITHM_SOURCE_MODULES = (
@@ -98,7 +99,7 @@ GRID_ALGORITHM_SOURCE_MODULES = (
     "openbench.data.regrid.utils",
     "openbench.data.regrid.methods._shared",
     "openbench.data.regrid.methods.conservative",
-    "openbench.data.regrid.methods.flox_reduce",
+    "openbench.data.regrid.methods.categorical",
     "openbench.data.regrid.methods.interp",
     "openbench.data._processing_grid",
     "openbench.data._processing_grid_core",

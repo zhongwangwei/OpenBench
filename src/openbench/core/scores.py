@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 
 from openbench.core.metrics import varies_along
+from openbench.util.groupby import without_flox
 
 
 class scores:
@@ -54,7 +55,8 @@ class scores:
             tuple: (mean, anomalies)
         """
         mean = data.mean(dim="time")
-        anomalies = data.groupby("time.month") - data.groupby("time.month").mean("time")
+        with without_flox():
+            anomalies = data.groupby("time.month") - data.groupby("time.month").mean("time")
         return mean, anomalies
 
     def index_agreement(self, s, o):
@@ -122,8 +124,9 @@ class scores:
             xarray.DataArray: Normalized Phase Score (0 to 1, 1 being best)
         """
         s, o = self._validate_inputs(s, o)
-        ref_monthly = o.groupby("time.month").mean("time")
-        sim_monthly = s.groupby("time.month").mean("time")
+        with without_flox():
+            ref_monthly = o.groupby("time.month").mean("time")
+            sim_monthly = s.groupby("time.month").mean("time")
         ref_amplitude = ref_monthly.max("month") - ref_monthly.min("month")
         sim_amplitude = sim_monthly.max("month") - sim_monthly.min("month")
         complete_cycle = (np.isfinite(ref_monthly) & np.isfinite(sim_monthly)).sum("month") == 12
@@ -156,8 +159,9 @@ class scores:
         # also fail the np.isnan(...).all() check in Overall_Score and would
         # silently pollute the aggregate. A repeated climatology has no IAV either:
         # each calendar month then takes a single value over the years.
-        month = o.groupby("time.month")
-        o_has_iav = (month.max("time") > month.min("time")).any("month")
+        with without_flox():
+            month = o.groupby("time.month")
+            o_has_iav = (month.max("time") > month.min("time")).any("month")
         return xr.where(o_has_iav & (o_iav != 0), np.exp(-np.abs(s_iav - o_iav) / o_iav), np.nan)
 
     def nSpatialScore(self, s, o):
@@ -248,8 +252,9 @@ class scores:
             xarray.DataArray: Normalized Seasonality Score (0 to 1, 1 being best)
         """
         s, o = self._validate_inputs(s, o)
-        s_cycle = s.groupby("time.month").mean("time")
-        o_cycle = o.groupby("time.month").mean("time")
+        with without_flox():
+            s_cycle = s.groupby("time.month").mean("time")
+            o_cycle = o.groupby("time.month").mean("time")
         s_amp = s_cycle.max("month") - s_cycle.min("month")
         o_amp = o_cycle.max("month") - o_cycle.min("month")
         complete_cycle = (np.isfinite(s_cycle) & np.isfinite(o_cycle)).sum("month") == 12

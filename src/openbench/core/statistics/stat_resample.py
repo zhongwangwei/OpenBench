@@ -2,6 +2,8 @@
 
 import xarray as xr
 
+from openbench.util.groupby import without_flox
+
 
 def stat_resample(self, data, time):
     """
@@ -23,4 +25,5 @@ def stat_resample(self, data, time):
                 f"stat_resample expects a single-variable Dataset, got {len(data.data_vars)}: {list(data.data_vars)}"
             )
         data = next(iter(data.data_vars.values()))
-    return data.resample(time=time).mean()
+    with without_flox():
+        return data.resample(time=time).mean()

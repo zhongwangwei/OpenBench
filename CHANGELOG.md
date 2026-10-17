@@ -11,6 +11,20 @@
 - Conservative regridding weights a static land/ocean mask once instead of at
   every time step, which speeds up daily and hourly comparisons with identical
   results.
+- Monthly and seasonal group-bys in the phase, IAV and seasonality scores, the
+  wsNSE metric and statistics resampling use xarray's own reductions, 5–10x
+  faster on gridded and multi-station data. Environments that still have flox
+  installed bypass it as well.
+- Land-cover and climate-zone most-common regridding is computed with numpy:
+  identical class maps, 2–6x faster.
+
+### Removed
+- The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which
+  could only be implemented through flox.
+
+### Packaging
+- flox is no longer a dependency of the pip package or the Conda recipe; it is
+  only listed in the `dev` extra so tests can check that it is bypassed.
 
 ### Fixed
 - Conservative regridding no longer blends the polar rows of grids whose cells
