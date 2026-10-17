@@ -33,6 +33,10 @@
   preprocess about twice as fast; while they exist the scratch files are about
   5x larger. Set `OPENBENCH_NETCDF_COMPRESSION=1` or
   `project.io.netcdf_compression: true` to compress them.
+- Resampling to the comparison resolution only relabels the time axis when every
+  period already holds exactly one time step (e.g. daily to daily), instead of
+  averaging single values; results are identical and same-frequency regridding
+  runs about 20% faster.
 
 ### Added
 - `project.station_plots` (default `true`; "Station Plots" in the GUI) can turn

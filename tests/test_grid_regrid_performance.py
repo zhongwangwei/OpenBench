@@ -402,3 +402,82 @@ def test_process_grid_data_removes_yearly_preprocessing_scratch(tmp_path, fails)
         Processor().process_grid_data(params)
 
     assert sorted(path.name for path in scratch.iterdir()) == [kept.name]
+
+
+def _single_value_cases():
+    import cftime
+
+    rng = np.random.default_rng(5)
+    grid = rng.random((6, 2, 3)).astype("float32")
+    grid[1, 0, 0], grid[2, 1, 2] = np.nan, np.inf
+    noon = pd.date_range("2001-01-01T12:00", periods=6, freq="D")
+    grid_da = xr.DataArray(
+        grid, dims=("time", "lat", "lon"), coords={"time": noon, "lat": [0.5, 1.5]}, name="et", attrs={"units": "mm"}
+    )
+    grid_da["time"].attrs["axis"] = "T"
+    grid_da.encoding = {"zlib": True, "dtype": "int16", "scale_factor": 0.01}
+    hourly = xr.DataArray(
+        rng.random(5), dims="time", coords={"time": pd.date_range("2001-01-01T00:30", periods=5, freq="h")}
+    )
+    monthly = xr.DataArray(
+        rng.random(4),
+        dims="time",
+        coords={"time": pd.date_range("2001-01-01", periods=4, freq="MS") + pd.Timedelta(days=14)},
+    )
+    yearly = xr.DataArray(
+        rng.random(3), dims="time", coords={"time": pd.date_range("2001-01-01", periods=3, freq="YS")}
+    )
+    noleap = xr.DataArray(
+        rng.random(4), dims="time", coords={"time": [cftime.DatetimeNoLeap(2001, 2, d, 12) for d in range(25, 29)]}
+    )
+    station = xr.DataArray(np.array([1.0, np.nan, 3.0], dtype="float32"), dims="time", coords={"time": noon[:3]})
+    ints = xr.DataArray(np.arange(4), dims="time", coords={"time": noon[:4]})
+    dataset = xr.Dataset({"a": grid_da, "b": grid_da * 2}, attrs={"source": "x"})
+    return [
+        ("grid daily noon", grid_da, "1D"),
+        ("hourly", hourly, "1h"),
+        ("monthly mid-month", monthly, "1ME"),
+        ("yearly", yearly, "1YE"),
+        ("noleap daily", noleap, "1D"),
+        ("station 1-D", station, "1D"),
+        ("integers", ints, "1D"),
+        ("dataset", dataset, "1D"),
+        ("dask", grid_da.chunk({"time": 2}), "1D"),
+    ]
+
+
+@pytest.mark.parametrize("how", ["mean", "sum"])
+@pytest.mark.parametrize("case", range(9))
+def test_single_value_period_relabel_matches_resample(case, how):
+    from openbench.data._processing_time_core import _relabel_single_value_periods, _resample
+    from openbench.util.groupby import without_flox
+
+    _label, data, freq = _single_value_cases()[case]
+    with without_flox():
+        expected = getattr(data.resample(time=freq), how)().compute()
+
+    assert _relabel_single_value_periods(data, freq, how) is not None
+    result = _resample(data, freq, how).compute()
+
+    xr.testing.assert_identical(result, expected)
+
+    def encodings(obj):
+        variables = obj.variables if isinstance(obj, xr.Dataset) else {None: obj.variable, **obj.coords.variables}
+        return {name: dict(variable.encoding) for name, variable in variables.items()}
+
+    assert encodings(result) == encodings(expected)
+
+
+def test_single_value_relabel_falls_back_for_gaps_repeats_unsorted_and_static_vars():
+    from openbench.data._processing_time_core import _relabel_single_value_periods
+
+    t = pd.date_range("2001-01-01T12:00", periods=4, freq="D")
+    da = xr.DataArray(np.arange(4.0), dims="time", coords={"time": t})
+    repeated = xr.DataArray(np.arange(2.0), dims="time", coords={"time": [t[0], t[0] + pd.Timedelta(hours=6)]})
+    static = xr.Dataset({"v": da, "mask": ("x", [1.0, 0.0])})
+
+    assert _relabel_single_value_periods(da.isel(time=[0, 2, 3]), "1D", "mean") is None  # missing day
+    assert _relabel_single_value_periods(repeated, "1D", "mean") is None
+    assert _relabel_single_value_periods(da.isel(time=[1, 0, 2, 3]), "1D", "mean") is None
+    assert _relabel_single_value_periods(static, "1D", "mean") is None
+    assert _relabel_single_value_periods(da, "1ME", "mean") is None  # several days per month
