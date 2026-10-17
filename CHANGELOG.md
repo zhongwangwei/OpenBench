@@ -17,6 +17,11 @@
   installed bypass it as well.
 - Land-cover and climate-zone most-common regridding is computed with numpy:
   identical class maps, 2–6x faster.
+- Station extraction, preprocessing and evaluation, yearly scratch files and
+  comparison plots no longer force a full garbage collection for every station,
+  file or plot (about 20 ms each); garbage is still collected at stage
+  boundaries. The bundled smoke evaluation runs about 35% faster with identical
+  outputs.
 
 ### Removed
 - The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which

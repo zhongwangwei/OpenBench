@@ -450,87 +450,82 @@ class GridProcessingCoreMixin:
         regrid_workers: int | None = None,
     ) -> None:
         total_start = time.perf_counter()
-        try:
-            if data_source not in ["ref", "sim"]:
-                logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
-                raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
+        if data_source not in ["ref", "sim"]:
+            logging.error(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
+            raise ValueError(f"Invalid data_source: {data_source}. Expected 'ref' or 'sim'.")
 
-            var_file = os.path.join(dirx, f"{data_source}_{prefix}{year}{suffix}.nc")
-            if self.debug_mode:
-                logging.debug(f"Processing {var_file} for year {year}")
-                logging.debug(f"Processing {data_source} data for year {year}")
+        var_file = os.path.join(dirx, f"{data_source}_{prefix}{year}{suffix}.nc")
+        if self.debug_mode:
+            logging.debug(f"Processing {var_file} for year {year}")
+            logging.debug(f"Processing {data_source} data for year {year}")
 
-            with xr.open_dataset(var_file) as data:
-                data = Convert_Type.convert_nc(data)
-                data = self.preprocess_grid_data(data)
-                read_seconds = time.perf_counter() - total_start
-                source_shape = (int(data.sizes.get("lat", 0)), int(data.sizes.get("lon", 0)))
-                # 1. Clip to evaluation region to reduce memory
-                crop_start = time.perf_counter()
-                from openbench.data.coordinates import find_lat_name, find_lon_name
+        with xr.open_dataset(var_file) as data:
+            data = Convert_Type.convert_nc(data)
+            data = self.preprocess_grid_data(data)
+            read_seconds = time.perf_counter() - total_start
+            source_shape = (int(data.sizes.get("lat", 0)), int(data.sizes.get("lon", 0)))
+            # 1. Clip to evaluation region to reduce memory
+            crop_start = time.perf_counter()
+            from openbench.data.coordinates import find_lat_name, find_lon_name
 
-                lat_name = find_lat_name(data.dims) or find_lat_name(data.coords) or "lat"
-                lon_name = find_lon_name(data.dims) or find_lon_name(data.coords) or "lon"
-                if lat_name in data and len(data[lat_name]) > 1:
-                    lat_vals = data[lat_name].values
-                    if lat_vals[0] > lat_vals[-1]:
-                        data = data.sel({lat_name: slice(self.max_lat + 1, self.min_lat - 1)})
-                    else:
-                        data = data.sel({lat_name: slice(self.min_lat - 1, self.max_lat + 1)})
-                if lon_name in data:
-                    data = data.sel({lon_name: slice(self.min_lon - 1, self.max_lon + 1)})
-                crop_seconds = time.perf_counter() - crop_start
-                # 2. Resample BEFORE remap: e.g. daily→monthly first, then remap
-                #    much cheaper than remap daily then resample
-                resample_start = time.perf_counter()
-                if not self._is_climatology_mode():
-                    data = self._resample_to_compare_resolution(data, f"{data_source} grid data")
-                resample_seconds = time.perf_counter() - resample_start
+            lat_name = find_lat_name(data.dims) or find_lat_name(data.coords) or "lat"
+            lon_name = find_lon_name(data.dims) or find_lon_name(data.coords) or "lon"
+            if lat_name in data and len(data[lat_name]) > 1:
+                lat_vals = data[lat_name].values
+                if lat_vals[0] > lat_vals[-1]:
+                    data = data.sel({lat_name: slice(self.max_lat + 1, self.min_lat - 1)})
+                else:
+                    data = data.sel({lat_name: slice(self.min_lat - 1, self.max_lat + 1)})
+            if lon_name in data:
+                data = data.sel({lon_name: slice(self.min_lon - 1, self.max_lon + 1)})
+            crop_seconds = time.perf_counter() - crop_start
+            # 2. Resample BEFORE remap: e.g. daily→monthly first, then remap
+            #    much cheaper than remap daily then resample
+            resample_start = time.perf_counter()
+            if not self._is_climatology_mode():
+                data = self._resample_to_compare_resolution(data, f"{data_source} grid data")
+            resample_seconds = time.perf_counter() - resample_start
 
-                target_grid = self.create_target_grid()
-                target_shape = (int(target_grid.sizes.get("lat", 0)), int(target_grid.sizes.get("lon", 0)))
-                backend = str(
-                    getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative"
-                ).lower()
-                same_grid = backend == "openbench_conservative" and self._grids_match(data, target_grid)
-                conservative = None
-                if not same_grid and backend == "openbench_conservative":
-                    from openbench.data.regrid.methods import conservative
+            target_grid = self.create_target_grid()
+            target_shape = (int(target_grid.sizes.get("lat", 0)), int(target_grid.sizes.get("lon", 0)))
+            backend = str(getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative").lower()
+            same_grid = backend == "openbench_conservative" and self._grids_match(data, target_grid)
+            conservative = None
+            if not same_grid and backend == "openbench_conservative":
+                from openbench.data.regrid.methods import conservative
 
-                    conservative.reset_weight_cache_activity()
-                regrid_start = time.perf_counter()
-                remapped_data = self.remap_data(data)
-                regrid_seconds = time.perf_counter() - regrid_start
-                weight_cache = conservative.consume_weight_cache_activity() if conservative is not None else "n/a"
-                write_start = time.perf_counter()
-                self.save_remapped_data(remapped_data, data_source, year)
-                write_seconds = time.perf_counter() - write_start
-                logging.info(
-                    "[REGRID_PERF] source=%s year=%d backend=%s read=%.3fs crop=%.3fs "
-                    "resample=%.3fs regrid=%.3fs write=%.3fs total=%.3fs "
-                    "source_grid=%dx%d target_grid=%dx%d time=%d num_cores=%d "
-                    "regrid_workers=%d same_grid_bypass=%s weight_cache=%s",
-                    data_source,
-                    year,
-                    backend,
-                    read_seconds,
-                    crop_seconds,
-                    resample_seconds,
-                    regrid_seconds,
-                    write_seconds,
-                    time.perf_counter() - total_start,
-                    source_shape[0],
-                    source_shape[1],
-                    target_shape[0],
-                    target_shape[1],
-                    int(data.sizes.get("time", 0)),
-                    int(getattr(self, "num_cores", 1)),
-                    int(regrid_workers or 1),
-                    str(same_grid).lower(),
-                    weight_cache,
-                )
-        finally:
-            gc.collect()
+                conservative.reset_weight_cache_activity()
+            regrid_start = time.perf_counter()
+            remapped_data = self.remap_data(data)
+            regrid_seconds = time.perf_counter() - regrid_start
+            weight_cache = conservative.consume_weight_cache_activity() if conservative is not None else "n/a"
+            write_start = time.perf_counter()
+            self.save_remapped_data(remapped_data, data_source, year)
+            write_seconds = time.perf_counter() - write_start
+            logging.info(
+                "[REGRID_PERF] source=%s year=%d backend=%s read=%.3fs crop=%.3fs "
+                "resample=%.3fs regrid=%.3fs write=%.3fs total=%.3fs "
+                "source_grid=%dx%d target_grid=%dx%d time=%d num_cores=%d "
+                "regrid_workers=%d same_grid_bypass=%s weight_cache=%s",
+                data_source,
+                year,
+                backend,
+                read_seconds,
+                crop_seconds,
+                resample_seconds,
+                regrid_seconds,
+                write_seconds,
+                time.perf_counter() - total_start,
+                source_shape[0],
+                source_shape[1],
+                target_shape[0],
+                target_shape[1],
+                int(data.sizes.get("time", 0)),
+                int(getattr(self, "num_cores", 1)),
+                int(regrid_workers or 1),
+                str(same_grid).lower(),
+                weight_cache,
+            )
 
     def preprocess_grid_data(self, data: xr.Dataset) -> xr.Dataset:
         data = self.check_coordinate(data)

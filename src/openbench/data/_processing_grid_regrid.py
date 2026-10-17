@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import glob
 import logging
 import os
@@ -263,4 +262,3 @@ class GridRegridMixin:
         finally:
             if hasattr(data, "close"):
                 data.close()
-            gc.collect()

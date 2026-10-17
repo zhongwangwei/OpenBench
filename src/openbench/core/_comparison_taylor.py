@@ -163,214 +163,204 @@ class TaylorDiagramComparisonMixin:
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for ref_source in ref_sources:
-                        try:
-                            output_file_path = os.path.join(
-                                dir_path,
-                                f"{join_filename_components('taylor_diagram', evaluation_item, ref_source)}.csv",
+                for ref_source in ref_sources:
+                    output_file_path = os.path.join(
+                        dir_path,
+                        f"{join_filename_components('taylor_diagram', evaluation_item, ref_source)}.csv",
+                    )
+                    with _atomic_text_writer(output_file_path) as output_file:
+                        header = ["Item", "Reference"]
+                        for sim_source in sim_sources:
+                            header.extend(
+                                [
+                                    f"{sim_source}_std",
+                                    f"{sim_source}_COR",
+                                    f"{sim_source}_RMS",
+                                    f"{sim_source}_RMS_mean",
+                                    f"{sim_source}_std_ref",
+                                ]
                             )
-                            with _atomic_text_writer(output_file_path) as output_file:
-                                header = ["Item", "Reference"]
-                                for sim_source in sim_sources:
-                                    header.extend(
-                                        [
-                                            f"{sim_source}_std",
-                                            f"{sim_source}_COR",
-                                            f"{sim_source}_RMS",
-                                            f"{sim_source}_RMS_mean",
-                                            f"{sim_source}_std_ref",
-                                        ]
+                        header.append("Reference_std")
+                        row = [evaluation_item, ref_source]
+                        stds = np.zeros(len(sim_sources) + 1)
+                        cors = np.zeros(len(sim_sources) + 1)
+                        RMSs = np.zeros(len(sim_sources) + 1)
+                        stds[0] = np.nan
+                        for i, sim_source in enumerate(sim_sources):
+                            try:
+                                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_varname is None or sim_varname == "":
+                                    sim_varname = evaluation_item
+                                if ref_varname is None or ref_varname == "":
+                                    ref_varname = evaluation_item
+                                if ref_data_type == "stn" or sim_data_type == "stn":
+                                    station_list = _station_evaluation_frame(
+                                        casedir, evaluation_item, ref_source, sim_source, kind="metrics"
                                     )
-                                header.append("Reference_std")
-                                row = [evaluation_item, ref_source]
-                                stds = np.zeros(len(sim_sources) + 1)
-                                cors = np.zeros(len(sim_sources) + 1)
-                                RMSs = np.zeros(len(sim_sources) + 1)
-                                stds[0] = np.nan
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                                        ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                        sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                        if sim_varname is None or sim_varname == "":
-                                            sim_varname = evaluation_item
-                                        if ref_varname is None or ref_varname == "":
-                                            ref_varname = evaluation_item
-                                        if ref_data_type == "stn" or sim_data_type == "stn":
-                                            station_list = _station_evaluation_frame(
-                                                casedir, evaluation_item, ref_source, sim_source, kind="metrics"
-                                            )
-                                            if ref_source.lower() == "grdc" and {"lon", "lat"}.issubset(
-                                                station_list.columns
-                                            ):
-                                                station_list["ref_lon"] = station_list["lon"]
-                                                station_list["ref_lat"] = station_list["lat"]
+                                    if ref_source.lower() == "grdc" and {"lon", "lat"}.issubset(station_list.columns):
+                                        station_list["ref_lon"] = station_list["lon"]
+                                        station_list["ref_lat"] = station_list["lat"]
 
-                                            def _make_validation_parallel(
+                                    def _make_validation_parallel(
+                                        casedir,
+                                        ref_source,
+                                        sim_source,
+                                        item,
+                                        sim_varname,
+                                        ref_varname,
+                                        station_row,
+                                    ):
+                                        try:
+                                            s, o = _load_station_pair(
+                                                self,
                                                 casedir,
+                                                item,
                                                 ref_source,
                                                 sim_source,
-                                                item,
-                                                sim_varname,
-                                                ref_varname,
                                                 station_row,
-                                            ):
-                                                try:
-                                                    s, o = _load_station_pair(
-                                                        self,
-                                                        casedir,
-                                                        item,
-                                                        ref_source,
-                                                        sim_source,
-                                                        station_row,
-                                                        ref_varname,
-                                                        sim_varname,
-                                                    )
-                                                    result = {
-                                                        "std_s": _to_scalar_float(_taylor_standard_deviation(s)),
-                                                        "std_o": _to_scalar_float(_taylor_standard_deviation(o)),
-                                                        "CRMSD": _to_scalar_float(self.CRMSD(s, o)),
-                                                        "correlation": _to_scalar_float(self.correlation(s, o)),
-                                                    }
-                                                    if not np.isfinite(list(result.values())).any():
-                                                        result.update(
-                                                            {
-                                                                "status": "unavailable",
-                                                                "reason": "computed Taylor metrics are undefined",
-                                                            }
-                                                        )
-                                                    else:
-                                                        result.update({"status": "ok", "reason": ""})
-                                                    return result
-                                                except StationDataUnavailable as exc:
-                                                    return {
-                                                        "std_s": np.nan,
-                                                        "std_o": np.nan,
-                                                        "CRMSD": np.nan,
-                                                        "correlation": np.nan,
+                                                ref_varname,
+                                                sim_varname,
+                                            )
+                                            result = {
+                                                "std_s": _to_scalar_float(_taylor_standard_deviation(s)),
+                                                "std_o": _to_scalar_float(_taylor_standard_deviation(o)),
+                                                "CRMSD": _to_scalar_float(self.CRMSD(s, o)),
+                                                "correlation": _to_scalar_float(self.correlation(s, o)),
+                                            }
+                                            if not np.isfinite(list(result.values())).any():
+                                                result.update(
+                                                    {
                                                         "status": "unavailable",
-                                                        "reason": str(exc),
+                                                        "reason": "computed Taylor metrics are undefined",
                                                     }
-
-                                            results = self._run_parallel_or_serial(
-                                                delayed(_make_validation_parallel)(
-                                                    casedir,
-                                                    ref_source,
-                                                    sim_source,
-                                                    evaluation_item,
-                                                    sim_varname,
-                                                    ref_varname,
-                                                    station_row,
                                                 )
-                                                for _, station_row in station_list.iterrows()
-                                            )
+                                            else:
+                                                result.update({"status": "ok", "reason": ""})
+                                            return result
+                                        except StationDataUnavailable as exc:
+                                            return {
+                                                "std_s": np.nan,
+                                                "std_o": np.nan,
+                                                "CRMSD": np.nan,
+                                                "correlation": np.nan,
+                                                "status": "unavailable",
+                                                "reason": str(exc),
+                                            }
 
-                                            result_frame = pd.DataFrame(results)
-                                            station_list = pd.concat(
-                                                [
-                                                    _station_metadata_for_results(station_list, result_frame),
-                                                    result_frame,
-                                                ],
-                                                axis=1,
-                                            )
-                                            station_list = Convert_Type.convert_Frame(station_list)
+                                    results = self._run_parallel_or_serial(
+                                        delayed(_make_validation_parallel)(
+                                            casedir,
+                                            ref_source,
+                                            sim_source,
+                                            evaluation_item,
+                                            sim_varname,
+                                            ref_varname,
+                                            station_row,
+                                        )
+                                        for _, station_row in station_list.iterrows()
+                                    )
 
-                                            output_stn_path = os.path.join(
-                                                dir_path,
-                                                f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
-                                            )
-                                            _write_csv_atomic(station_list, output_stn_path, index=False)
+                                    result_frame = pd.DataFrame(results)
+                                    station_list = pd.concat(
+                                        [
+                                            _station_metadata_for_results(station_list, result_frame),
+                                            result_frame,
+                                        ],
+                                        axis=1,
+                                    )
+                                    station_list = Convert_Type.convert_Frame(station_list)
 
-                                            std_sim = station_list["std_s"].mean(skipna=True)
-                                            cor_sim = station_list["correlation"].mean(skipna=True)
-                                            std_ref = station_list["std_o"].mean(skipna=True)
-                                            mean_crmsd = station_list["CRMSD"].mean(skipna=True)
-                                            summary = _taylor_summary_statistics(
-                                                std_sim=std_sim,
-                                                cor_sim=cor_sim,
-                                                mean_crmsd=mean_crmsd,
-                                                std_ref=std_ref,
-                                            )
-                                        else:
-                                            ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                            sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                            if sim_varname is None or sim_varname == "":
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == "":
-                                                ref_varname = evaluation_item
+                                    output_stn_path = os.path.join(
+                                        dir_path,
+                                        f"taylor_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
+                                    )
+                                    _write_csv_atomic(station_list, output_stn_path, index=False)
 
-                                            ref_path = self._ref_data_path(
-                                                casedir, evaluation_item, ref_source, ref_varname, sim_source
-                                            )
-                                            sim_path = os.path.join(
-                                                casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
-                                            )
+                                    std_sim = station_list["std_s"].mean(skipna=True)
+                                    cor_sim = station_list["correlation"].mean(skipna=True)
+                                    std_ref = station_list["std_o"].mean(skipna=True)
+                                    mean_crmsd = station_list["CRMSD"].mean(skipna=True)
+                                    summary = _taylor_summary_statistics(
+                                        std_sim=std_sim,
+                                        cor_sim=cor_sim,
+                                        mean_crmsd=mean_crmsd,
+                                        std_ref=std_ref,
+                                    )
+                                else:
+                                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                    if sim_varname is None or sim_varname == "":
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == "":
+                                        ref_varname = evaluation_item
 
-                                            with xr.open_dataset(ref_path) as ref_ds:
-                                                reffile = select_data_array(ref_ds, ref_varname).load()
-                                            with xr.open_dataset(sim_path) as sim_ds:
-                                                simfile = select_data_array(sim_ds, sim_varname).load()
-                                            reffile = Convert_Type.convert_nc(reffile)
-                                            simfile = Convert_Type.convert_nc(simfile)
+                                    ref_path = self._ref_data_path(
+                                        casedir, evaluation_item, ref_source, ref_varname, sim_source
+                                    )
+                                    sim_path = os.path.join(
+                                        casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
+                                    )
 
-                                            summary = _taylor_grid_summary_statistics(
-                                                simfile,
-                                                reffile,
-                                                metric_handler=self,
-                                                weight=self.weight,
-                                            )
+                                    with xr.open_dataset(ref_path) as ref_ds:
+                                        reffile = select_data_array(ref_ds, ref_varname).load()
+                                    with xr.open_dataset(sim_path) as sim_ds:
+                                        simfile = select_data_array(sim_ds, sim_varname).load()
+                                    reffile = Convert_Type.convert_nc(reffile)
+                                    simfile = Convert_Type.convert_nc(simfile)
 
-                                        if not np.isfinite(stds[0]) and np.isfinite(summary.std_ref):
-                                            stds[0] = summary.std_ref
-                                        elif (
-                                            np.isfinite(stds[0])
-                                            and np.isfinite(summary.std_ref)
-                                            and not np.isclose(stds[0], summary.std_ref)
-                                        ):
-                                            logging.warning(
-                                                "Taylor reference std differs across simulations for %s/%s: "
-                                                "using first reference std %.6g for the diagram reference, "
-                                                "current pair std_ref is %.6g",
-                                                evaluation_item,
-                                                ref_source,
-                                                stds[0],
-                                                summary.std_ref,
-                                            )
-                                            summary = summary._replace(
-                                                std_ref=stds[0],
-                                                diagram_crmsd=_taylor_implied_crmsd(
-                                                    summary.std_sim,
-                                                    summary.cor_sim,
-                                                    stds[0],
-                                                ),
-                                            )
-                                        _write_taylor_summary(row, stds, cors, RMSs, i + 1, summary)
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
-                                row.append(stds[0])
-                                writer = csv.writer(output_file, lineterminator="\n")
-                                writer.writerow(header)
-                                writer.writerow(row)
-                            try:
-                                _comparison_callable("make_scenarios_comparison_Taylor_Diagram")(
-                                    casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option
-                                )
-                            except (ValueError, RuntimeError, IOError, OSError) as e:
-                                logging.error(
-                                    f"Error: {evaluation_item} {ref_source} Taylor diagram generation failed: {e}"
-                                )
-                        finally:
-                            gc.collect()  # Clean up memory after processing each reference source
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                                    summary = _taylor_grid_summary_statistics(
+                                        simfile,
+                                        reffile,
+                                        metric_handler=self,
+                                        weight=self.weight,
+                                    )
+
+                                if not np.isfinite(stds[0]) and np.isfinite(summary.std_ref):
+                                    stds[0] = summary.std_ref
+                                elif (
+                                    np.isfinite(stds[0])
+                                    and np.isfinite(summary.std_ref)
+                                    and not np.isclose(stds[0], summary.std_ref)
+                                ):
+                                    logging.warning(
+                                        "Taylor reference std differs across simulations for %s/%s: "
+                                        "using first reference std %.6g for the diagram reference, "
+                                        "current pair std_ref is %.6g",
+                                        evaluation_item,
+                                        ref_source,
+                                        stds[0],
+                                        summary.std_ref,
+                                    )
+                                    summary = summary._replace(
+                                        std_ref=stds[0],
+                                        diagram_crmsd=_taylor_implied_crmsd(
+                                            summary.std_sim,
+                                            summary.cor_sim,
+                                            stds[0],
+                                        ),
+                                    )
+                                _write_taylor_summary(row, stds, cors, RMSs, i + 1, summary)
+                            finally:
+                                pass  # Memory cleanup handled at method level
+                        row.append(stds[0])
+                        writer = csv.writer(output_file, lineterminator="\n")
+                        writer.writerow(header)
+                        writer.writerow(row)
+                    try:
+                        _comparison_callable("make_scenarios_comparison_Taylor_Diagram")(
+                            casedir, evaluation_item, stds, RMSs, cors, ref_source, sim_sources, option
+                        )
+                    except (ValueError, RuntimeError, IOError, OSError) as e:
+                        logging.error(f"Error: {evaluation_item} {ref_source} Taylor diagram generation failed: {e}")
         finally:
             gc.collect()

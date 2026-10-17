@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import logging
 import os
 import sys
@@ -70,8 +69,6 @@ class StationExtractionMixin:
             )
             record_station_skip(output, str(exc))
             logging.warning("Skipping station %s (%s): %s", station["ID"], datasource, exc)
-        finally:
-            gc.collect()
 
     def extract_single_station_data(self, dataset: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
         if dataset is None:
@@ -173,4 +170,3 @@ class StationExtractionMixin:
         finally:
             if hasattr(data, "close"):
                 data.close()
-            gc.collect()

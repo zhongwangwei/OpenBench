@@ -41,7 +41,6 @@ class YearlyPreprocessingMixin:
                 # Clean up memory
                 if ds_year is not None and hasattr(ds_year, "close"):
                     ds_year.close()
-                gc.collect()
 
         try:
             dataset_size_gb = ds.nbytes / (1024**3)
@@ -94,7 +93,6 @@ class YearlyPreprocessingMixin:
             for ds in datasets:
                 if hasattr(ds, "close"):
                     ds.close()
-            gc.collect()
 
     def check_file_exist(self, file: str) -> str:
         if not os.path.exists(file):

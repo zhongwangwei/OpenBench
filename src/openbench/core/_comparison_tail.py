@@ -301,8 +301,6 @@ class TailComparisonMixin:
                             f"Error processing {method_name} calculations for {evaluation_item} {sim_source}: {e}"
                         )
                         raise
-                    finally:
-                        gc.collect()
 
                 for ref_source in ref_sources:
                     try:
@@ -353,8 +351,6 @@ class TailComparisonMixin:
                             f"Error processing {method_name} calculations for {evaluation_item} {ref_source}: {e}"
                         )
                         raise
-                    finally:
-                        gc.collect()
 
                     for sim_source in sim_sources:
                         sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
@@ -427,93 +423,88 @@ class TailComparisonMixin:
                     ref_sources = [ref_sources]
 
                 for ref_source in ref_sources:
-                    try:
-                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                        ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                    ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                    for sim_source in sim_sources:
+                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                        if ref_data_type != "stn" and sim_data_type != "stn":
+                            continue
+                        sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                        station_list, output = _load_station_rows(basedir, evaluation_item, ref_source, sim_source)
+                        output["functional_response_score"] = np.nan
+                        for index, row in station_list.iterrows():
+                            try:
+                                s, o = _load_station_pair(
+                                    self,
+                                    basedir,
+                                    evaluation_item,
+                                    ref_source,
+                                    sim_source,
+                                    row,
+                                    ref_varname,
+                                    sim_varname,
+                                )
+                                value = _scalar(method_function(o, s)["functional_response_score"])
+                                output.loc[index, "functional_response_score"] = value
+                                if np.isfinite(value):
+                                    output.loc[index, ["status", "reason"]] = ["ok", ""]
+                                else:
+                                    output.loc[index, ["status", "reason"]] = [
+                                        "unavailable",
+                                        f"{method_name} is undefined for available samples",
+                                    ]
+                            except StationDataUnavailable as exc:
+                                output.loc[index, ["status", "reason"]] = ["unavailable", str(exc)]
+                        _write_csv_atomic(
+                            output,
+                            _station_tail_path(dir_path, method_name, evaluation_item, ref_source, sim_source),
+                            index=False,
+                        )
+                        columns = _STATION_STATISTIC_COLUMNS[method_name]
+                        _comparison_callable("make_stn_plot_index")(
+                            _station_tail_path(dir_path, method_name, evaluation_item, ref_source, sim_source),
+                            method_name,
+                            self.main_nml["general"],
+                            _station_statistic_sources(columns, ref_source, sim_source),
+                            option,
+                            value_columns=columns,
+                        )
+
+                    if ref_data_type != "stn":
                         for sim_source in sim_sources:
-                            sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                            if ref_data_type != "stn" and sim_data_type != "stn":
-                                continue
-                            sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                            station_list, output = _load_station_rows(basedir, evaluation_item, ref_source, sim_source)
-                            output["functional_response_score"] = np.nan
-                            for index, row in station_list.iterrows():
-                                try:
-                                    s, o = _load_station_pair(
-                                        self,
-                                        basedir,
-                                        evaluation_item,
-                                        ref_source,
-                                        sim_source,
-                                        row,
-                                        ref_varname,
-                                        sim_varname,
+                            try:
+                                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
+                                sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                if sim_data_type != "stn":
+                                    ref_path = self._ref_data_path(
+                                        basedir, evaluation_item, ref_source, ref_varname, sim_source
                                     )
-                                    value = _scalar(method_function(o, s)["functional_response_score"])
-                                    output.loc[index, "functional_response_score"] = value
-                                    if np.isfinite(value):
-                                        output.loc[index, ["status", "reason"]] = ["ok", ""]
-                                    else:
-                                        output.loc[index, ["status", "reason"]] = [
-                                            "unavailable",
-                                            f"{method_name} is undefined for available samples",
-                                        ]
-                                except StationDataUnavailable as exc:
-                                    output.loc[index, ["status", "reason"]] = ["unavailable", str(exc)]
-                            _write_csv_atomic(
-                                output,
-                                _station_tail_path(dir_path, method_name, evaluation_item, ref_source, sim_source),
-                                index=False,
-                            )
-                            columns = _STATION_STATISTIC_COLUMNS[method_name]
-                            _comparison_callable("make_stn_plot_index")(
-                                _station_tail_path(dir_path, method_name, evaluation_item, ref_source, sim_source),
-                                method_name,
-                                self.main_nml["general"],
-                                _station_statistic_sources(columns, ref_source, sim_source),
-                                option,
-                                value_columns=columns,
-                            )
-
-                        if ref_data_type != "stn":
-                            for sim_source in sim_sources:
-                                try:
-                                    sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                    if sim_data_type != "stn":
-                                        ref_path = self._ref_data_path(
-                                            basedir, evaluation_item, ref_source, ref_varname, sim_source
-                                        )
-                                        with xr.open_dataset(ref_path) as ref_ds:
-                                            ref = select_data_array(ref_ds, ref_varname).load()
-                                        ref = Convert_Type.convert_nc(ref)
-                                        sim_path = os.path.join(
-                                            basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
-                                        )
-                                        with xr.open_dataset(sim_path) as sim_ds:
-                                            sim = select_data_array(sim_ds, sim_varname).load()
-                                        sim = Convert_Type.convert_nc(sim)
-
-                                        result = method_function(*[ref, sim])
-
-                                        output_file = os.path.join(
-                                            dir_path,
-                                            f"{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc",
-                                        )
-
-                                        self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
-                                        _comparison_callable("make_Functional_Response")(
-                                            output_file, method_name, sim_source, self.main_nml["general"], option
-                                        )
-                                except Exception as e:
-                                    logging.error(
-                                        f"Error processing {method_name} calculations for {evaluation_item} {ref_source} {sim_source}: {e}"
+                                    with xr.open_dataset(ref_path) as ref_ds:
+                                        ref = select_data_array(ref_ds, ref_varname).load()
+                                    ref = Convert_Type.convert_nc(ref)
+                                    sim_path = os.path.join(
+                                        basedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
                                     )
-                                    raise
-                                finally:
-                                    gc.collect()
-                    finally:
-                        gc.collect()
+                                    with xr.open_dataset(sim_path) as sim_ds:
+                                        sim = select_data_array(sim_ds, sim_varname).load()
+                                    sim = Convert_Type.convert_nc(sim)
+
+                                    result = method_function(*[ref, sim])
+
+                                    output_file = os.path.join(
+                                        dir_path,
+                                        f"{method_name}_{evaluation_item}_ref_{ref_source}_sim_{sim_source}.nc",
+                                    )
+
+                                    self.save_result(output_file, method_name, Convert_Type.convert_nc(result))
+                                    _comparison_callable("make_Functional_Response")(
+                                        output_file, method_name, sim_source, self.main_nml["general"], option
+                                    )
+                            except Exception as e:
+                                logging.error(
+                                    f"Error processing {method_name} calculations for {evaluation_item} {ref_source} {sim_source}: {e}"
+                                )
+                                raise
         finally:
             gc.collect()
 
@@ -787,7 +778,5 @@ class TailComparisonMixin:
                                 f"Error processing {method_name} calculations for {evaluation_item} {sim1} and {sim2}: {e}"
                             )
                             raise
-                        finally:
-                            gc.collect()
         finally:
             gc.collect()

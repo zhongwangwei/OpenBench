@@ -405,8 +405,6 @@ class StationProcessingCoreMixin:
             if station is not None:
                 e.args = (f"Station {station['ID']}: {e}", *e.args[1:])
             raise
-        finally:
-            gc.collect()
 
     def _select_merged_station_data(self, stn_data: xr.Dataset, station: pd.Series, datasource: str) -> xr.Dataset:
         """Select one station from a merged station-time dataset when needed."""
@@ -509,4 +507,3 @@ class StationProcessingCoreMixin:
                 data_to_save.close()
             if hasattr(data, "close"):
                 data.close()
-            gc.collect()

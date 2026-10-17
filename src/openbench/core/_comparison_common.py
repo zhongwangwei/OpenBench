@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import logging
 import os
 import sys
@@ -76,25 +75,22 @@ class CommonComparisonMixin:
         )
 
     def save_result(self, output_file, method_name, result):
-        try:
-            if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
-                if isinstance(result, xr.DataArray):
-                    result = result.to_dataset(name=f"{method_name}")
-                result["lat"].attrs["standard_name"] = "latitude"
-                result["lat"].attrs["long_name"] = "latitude"
-                result["lat"].attrs["units"] = "degrees_north"
-                result["lat"].attrs["axis"] = "Y"
-                result["lon"].attrs["standard_name"] = "longitude"
-                result["lon"].attrs["long_name"] = "longitude"
-                result["lon"].attrs["units"] = "degrees_east"
-                result["lon"].attrs["axis"] = "X"
+        if isinstance(result, xr.DataArray) or isinstance(result, xr.Dataset):
+            if isinstance(result, xr.DataArray):
+                result = result.to_dataset(name=f"{method_name}")
+            result["lat"].attrs["standard_name"] = "latitude"
+            result["lat"].attrs["long_name"] = "latitude"
+            result["lat"].attrs["units"] = "degrees_north"
+            result["lat"].attrs["axis"] = "Y"
+            result["lon"].attrs["standard_name"] = "longitude"
+            result["lon"].attrs["long_name"] = "longitude"
+            result["lon"].attrs["units"] = "degrees_east"
+            result["lon"].attrs["axis"] = "X"
 
-                output_dir = os.path.dirname(output_file)
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
+            output_dir = os.path.dirname(output_file)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
 
-                _write_netcdf_atomic(result, output_file)
-            else:
-                logging.info(f"Result of {method_name}: {result}")
-        finally:
-            gc.collect()
+            _write_netcdf_atomic(result, output_file)
+        else:
+            logging.info(f"Result of {method_name}: {result}")

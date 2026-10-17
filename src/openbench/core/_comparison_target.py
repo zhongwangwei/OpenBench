@@ -78,200 +78,194 @@ class TargetDiagramComparisonMixin:
             os.makedirs(dir_path, exist_ok=True)
 
             for evaluation_item in evaluation_items:
-                try:
-                    sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
-                    ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
-                    if isinstance(sim_sources, str):
-                        sim_sources = [sim_sources]
-                    if isinstance(ref_sources, str):
-                        ref_sources = [ref_sources]
+                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                ref_sources = ref_nml["general"][f"{evaluation_item}_ref_source"]
+                if isinstance(sim_sources, str):
+                    sim_sources = [sim_sources]
+                if isinstance(ref_sources, str):
+                    ref_sources = [ref_sources]
 
-                    for ref_source in ref_sources:
-                        try:
-                            output_file_path = os.path.join(
-                                dir_path,
-                                f"{join_filename_components('target_diagram', evaluation_item, ref_source)}.csv",
-                            )
+                for ref_source in ref_sources:
+                    output_file_path = os.path.join(
+                        dir_path,
+                        f"{join_filename_components('target_diagram', evaluation_item, ref_source)}.csv",
+                    )
 
-                            with _atomic_text_writer(output_file_path) as output_file:
-                                output_file.write("Item\t")
-                                output_file.write("Reference\t")
-                                sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                    with _atomic_text_writer(output_file_path) as output_file:
+                        output_file.write("Item\t")
+                        output_file.write("Reference\t")
+                        sim_sources = sim_nml["general"][f"{evaluation_item}_sim_source"]
+                        if isinstance(sim_sources, str):
+                            sim_sources = [sim_sources]
+                        for sim_source in sim_sources:
+                            # Column order must match the values written below:
+                            # bias, then total RMSE (=RMSD), then centered CRMSD.
+                            output_file.write(f"{sim_source}_bias\t")
+                            output_file.write(f"{sim_source}_rmsd\t")
+                            output_file.write(f"{sim_source}_crmsd\t")
+
+                        output_file.write("\n")  # Move "All" to the first line
+                        output_file.write(f"{evaluation_item}\t")
+                        output_file.write(f"{ref_source}\t")
+                        biases = np.zeros(len(sim_sources))
+                        rmses = np.zeros(len(sim_sources))
+                        crmsds = np.zeros(len(sim_sources))
+                        for i, sim_source in enumerate(sim_sources):
+                            try:
+                                ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
+                                sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
                                 if isinstance(sim_sources, str):
                                     sim_sources = [sim_sources]
-                                for sim_source in sim_sources:
-                                    # Column order must match the values written below:
-                                    # bias, then total RMSE (=RMSD), then centered CRMSD.
-                                    output_file.write(f"{sim_source}_bias\t")
-                                    output_file.write(f"{sim_source}_rmsd\t")
-                                    output_file.write(f"{sim_source}_crmsd\t")
+                                if isinstance(ref_sources, str):
+                                    ref_sources = [ref_sources]
+                                if ref_data_type == "stn" or sim_data_type == "stn":
+                                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                    if sim_varname is None or sim_varname == "":
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == "":
+                                        ref_varname = evaluation_item
+                                    station_list = _station_evaluation_frame(
+                                        casedir, evaluation_item, ref_source, sim_source, kind="metrics"
+                                    )
 
-                                output_file.write("\n")  # Move "All" to the first line
-                                output_file.write(f"{evaluation_item}\t")
-                                output_file.write(f"{ref_source}\t")
-                                biases = np.zeros(len(sim_sources))
-                                rmses = np.zeros(len(sim_sources))
-                                crmsds = np.zeros(len(sim_sources))
-                                for i, sim_source in enumerate(sim_sources):
-                                    try:
-                                        ref_data_type = ref_nml[f"{evaluation_item}"][f"{ref_source}_data_type"]
-                                        sim_data_type = sim_nml[f"{evaluation_item}"][f"{sim_source}_data_type"]
-                                        if isinstance(sim_sources, str):
-                                            sim_sources = [sim_sources]
-                                        if isinstance(ref_sources, str):
-                                            ref_sources = [ref_sources]
-                                        if ref_data_type == "stn" or sim_data_type == "stn":
-                                            ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                            sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                            if sim_varname is None or sim_varname == "":
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == "":
-                                                ref_varname = evaluation_item
-                                            station_list = _station_evaluation_frame(
-                                                casedir, evaluation_item, ref_source, sim_source, kind="metrics"
-                                            )
-
-                                            def _make_validation_parallel(
+                                    def _make_validation_parallel(
+                                        casedir,
+                                        ref_source,
+                                        sim_source,
+                                        item,
+                                        sim_varname,
+                                        ref_varname,
+                                        station_row,
+                                    ):
+                                        try:
+                                            s, o = _load_station_pair(
+                                                self,
                                                 casedir,
+                                                item,
                                                 ref_source,
                                                 sim_source,
-                                                item,
-                                                sim_varname,
-                                                ref_varname,
                                                 station_row,
-                                            ):
-                                                try:
-                                                    s, o = _load_station_pair(
-                                                        self,
-                                                        casedir,
-                                                        item,
-                                                        ref_source,
-                                                        sim_source,
-                                                        station_row,
-                                                        ref_varname,
-                                                        sim_varname,
-                                                    )
-                                                    s = s.astype("float64")
-                                                    o = o.astype("float64")
-                                                    result = {
-                                                        "CRMSD": _to_float(self.ubRMSE(s, o)),
-                                                        "bias": _to_float(self.bias(s, o)),
-                                                        "rmse": _to_float(self.RMSE(s, o)),
-                                                    }
-                                                    if not np.isfinite(list(result.values())).any():
-                                                        result.update(
-                                                            {
-                                                                "status": "unavailable",
-                                                                "reason": "computed target metrics are undefined",
-                                                            }
-                                                        )
-                                                    else:
-                                                        result.update({"status": "ok", "reason": ""})
-                                                    return result
-                                                except StationDataUnavailable as exc:
-                                                    return {
-                                                        "CRMSD": np.nan,
-                                                        "bias": np.nan,
-                                                        "rmse": np.nan,
+                                                ref_varname,
+                                                sim_varname,
+                                            )
+                                            s = s.astype("float64")
+                                            o = o.astype("float64")
+                                            result = {
+                                                "CRMSD": _to_float(self.ubRMSE(s, o)),
+                                                "bias": _to_float(self.bias(s, o)),
+                                                "rmse": _to_float(self.RMSE(s, o)),
+                                            }
+                                            if not np.isfinite(list(result.values())).any():
+                                                result.update(
+                                                    {
                                                         "status": "unavailable",
-                                                        "reason": str(exc),
+                                                        "reason": "computed target metrics are undefined",
                                                     }
-
-                                            results = self._run_parallel_or_serial(
-                                                delayed(_make_validation_parallel)(
-                                                    casedir,
-                                                    ref_source,
-                                                    sim_source,
-                                                    evaluation_item,
-                                                    sim_varname,
-                                                    ref_varname,
-                                                    station_row,
                                                 )
-                                                for _, station_row in station_list.iterrows()
-                                            )
+                                            else:
+                                                result.update({"status": "ok", "reason": ""})
+                                            return result
+                                        except StationDataUnavailable as exc:
+                                            return {
+                                                "CRMSD": np.nan,
+                                                "bias": np.nan,
+                                                "rmse": np.nan,
+                                                "status": "unavailable",
+                                                "reason": str(exc),
+                                            }
 
-                                            result_frame = pd.DataFrame(results)
-                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
-                                                result_frame["bias"], result_frame["CRMSD"]
-                                            )
-                                            station_list = pd.concat(
-                                                [
-                                                    _station_metadata_for_results(station_list, result_frame),
-                                                    result_frame,
-                                                ],
-                                                axis=1,
-                                            )
-                                            station_list = Convert_Type.convert_Frame(station_list)
+                                    results = self._run_parallel_or_serial(
+                                        delayed(_make_validation_parallel)(
+                                            casedir,
+                                            ref_source,
+                                            sim_source,
+                                            evaluation_item,
+                                            sim_varname,
+                                            ref_varname,
+                                            station_row,
+                                        )
+                                        for _, station_row in station_list.iterrows()
+                                    )
 
-                                            output_stn_path = os.path.join(
-                                                dir_path,
-                                                f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
-                                            )
-                                            _write_csv_atomic(station_list, output_stn_path, index=False)
+                                    result_frame = pd.DataFrame(results)
+                                    bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                        result_frame["bias"], result_frame["CRMSD"]
+                                    )
+                                    station_list = pd.concat(
+                                        [
+                                            _station_metadata_for_results(station_list, result_frame),
+                                            result_frame,
+                                        ],
+                                        axis=1,
+                                    )
+                                    station_list = Convert_Type.convert_Frame(station_list)
 
-                                            output_file.write(f"{bias_sim}\t")
-                                            biases[i] = bias_sim
-                                            output_file.write(f"{rmse_sim}\t")
-                                            rmses[i] = rmse_sim
-                                            output_file.write(f"{crmsd_sim}\t")
-                                            crmsds[i] = crmsd_sim
-                                        else:
-                                            ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
-                                            sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
-                                            if sim_varname is None or sim_varname == "":
-                                                sim_varname = evaluation_item
-                                            if ref_varname is None or ref_varname == "":
-                                                ref_varname = evaluation_item
-
-                                            ref_path = self._ref_data_path(
-                                                casedir, evaluation_item, ref_source, ref_varname, sim_source
-                                            )
-                                            sim_path = os.path.join(
-                                                casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
-                                            )
-
-                                            with xr.open_dataset(ref_path) as ref_ds:
-                                                reffile = select_data_array(ref_ds, ref_varname).load()
-                                            with xr.open_dataset(sim_path) as sim_ds:
-                                                simfile = select_data_array(sim_ds, sim_varname).load()
-                                            reffile = Convert_Type.convert_nc(reffile).astype("float64")
-                                            simfile = Convert_Type.convert_nc(simfile).astype("float64")
-
-                                            bias_sim, rmse_sim, crmsd_sim = _target_point(
-                                                self.bias(simfile, reffile).values,
-                                                self.ubRMSE(simfile, reffile).values,
-                                            )
-                                            output_file.write(f"{bias_sim}\t")
-                                            biases[i] = bias_sim
-                                            output_file.write(f"{rmse_sim}\t")
-                                            rmses[i] = rmse_sim
-                                            output_file.write(f"{crmsd_sim}\t")
-                                            crmsds[i] = crmsd_sim
-                                    finally:
-                                        pass  # Memory cleanup handled at method level
-
-                                output_file.write("\n")
-                                try:
-                                    _comparison_callable("make_scenarios_comparison_Target_Diagram")(
+                                    output_stn_path = os.path.join(
                                         dir_path,
-                                        evaluation_item,
-                                        biases,
-                                        # Target diagram expects (bias, crmsd, rmsd):
-                                        # crmsd slot = centered/unbiased RMSD (x-axis uRMSD),
-                                        # rmsd slot = total RMSD. Do NOT swap these.
-                                        crmsds,
-                                        rmses,
-                                        ref_source,
-                                        sim_sources,
-                                        option,
+                                        f"target_diagram_{evaluation_item}_stn_{ref_source}_{sim_source}.csv",
                                     )
-                                except (ValueError, RuntimeError, IOError, OSError) as e:
-                                    logging.error(
-                                        f"Error: {evaluation_item} {ref_source} Target diagram generation failed: {e}"
+                                    _write_csv_atomic(station_list, output_stn_path, index=False)
+
+                                    output_file.write(f"{bias_sim}\t")
+                                    biases[i] = bias_sim
+                                    output_file.write(f"{rmse_sim}\t")
+                                    rmses[i] = rmse_sim
+                                    output_file.write(f"{crmsd_sim}\t")
+                                    crmsds[i] = crmsd_sim
+                                else:
+                                    ref_varname = ref_nml[f"{evaluation_item}"][f"{ref_source}_varname"]
+                                    sim_varname = sim_nml[f"{evaluation_item}"][f"{sim_source}_varname"]
+                                    if sim_varname is None or sim_varname == "":
+                                        sim_varname = evaluation_item
+                                    if ref_varname is None or ref_varname == "":
+                                        ref_varname = evaluation_item
+
+                                    ref_path = self._ref_data_path(
+                                        casedir, evaluation_item, ref_source, ref_varname, sim_source
                                     )
-                        finally:
-                            gc.collect()  # Clean up memory after processing each reference source
-                finally:
-                    gc.collect()  # Clean up memory after processing each evaluation item
+                                    sim_path = os.path.join(
+                                        casedir, "data", f"{evaluation_item}_sim_{sim_source}_{sim_varname}.nc"
+                                    )
+
+                                    with xr.open_dataset(ref_path) as ref_ds:
+                                        reffile = select_data_array(ref_ds, ref_varname).load()
+                                    with xr.open_dataset(sim_path) as sim_ds:
+                                        simfile = select_data_array(sim_ds, sim_varname).load()
+                                    reffile = Convert_Type.convert_nc(reffile).astype("float64")
+                                    simfile = Convert_Type.convert_nc(simfile).astype("float64")
+
+                                    bias_sim, rmse_sim, crmsd_sim = _target_point(
+                                        self.bias(simfile, reffile).values,
+                                        self.ubRMSE(simfile, reffile).values,
+                                    )
+                                    output_file.write(f"{bias_sim}\t")
+                                    biases[i] = bias_sim
+                                    output_file.write(f"{rmse_sim}\t")
+                                    rmses[i] = rmse_sim
+                                    output_file.write(f"{crmsd_sim}\t")
+                                    crmsds[i] = crmsd_sim
+                            finally:
+                                pass  # Memory cleanup handled at method level
+
+                        output_file.write("\n")
+                        try:
+                            _comparison_callable("make_scenarios_comparison_Target_Diagram")(
+                                dir_path,
+                                evaluation_item,
+                                biases,
+                                # Target diagram expects (bias, crmsd, rmsd):
+                                # crmsd slot = centered/unbiased RMSD (x-axis uRMSD),
+                                # rmsd slot = total RMSD. Do NOT swap these.
+                                crmsds,
+                                rmses,
+                                ref_source,
+                                sim_sources,
+                                option,
+                            )
+                        except (ValueError, RuntimeError, IOError, OSError) as e:
+                            logging.error(
+                                f"Error: {evaluation_item} {ref_source} Target diagram generation failed: {e}"
+                            )
         finally:
             gc.collect()

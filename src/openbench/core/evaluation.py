@@ -729,7 +729,6 @@ class Evaluation_stn(metrics, scores):
                 sim_ds.close()
             if ref_ds is not None:
                 ref_ds.close()
-            gc.collect()  # Clean up memory after processing each station
 
     def make_evaluation_P(self):
         try:
