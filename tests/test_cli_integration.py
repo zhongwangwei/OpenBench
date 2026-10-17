@@ -313,3 +313,27 @@ def test_init_output_is_loadable(tmp_path, monkeypatch):
     # Reference entries must be strings (var -> source_name)
     for var, src in cfg.reference.sources.items():
         assert isinstance(src, str), f"reference[{var!r}] should be a string source name, got {type(src).__name__}"
+
+
+@pytest.mark.parametrize(
+    ("standalone", "mplbackend", "expected"),
+    [(True, None, ["Agg"]), (False, None, []), (True, "TkAgg", [])],
+)
+def test_run_uses_agg_only_in_standalone_process_without_explicit_backend(
+    monkeypatch, standalone, mplbackend, expected
+):
+    import matplotlib
+
+    from openbench.cli import run as run_module
+
+    calls = []
+    monkeypatch.setattr(matplotlib, "use", lambda backend, *args, **kwargs: calls.append(backend))
+    monkeypatch.setattr(run_module, "_is_standalone_cli_process", lambda: standalone)
+    if mplbackend is None:
+        monkeypatch.delenv("MPLBACKEND", raising=False)
+    else:
+        monkeypatch.setenv("MPLBACKEND", mplbackend)
+
+    run_module._use_file_only_matplotlib_backend()
+
+    assert calls == expected

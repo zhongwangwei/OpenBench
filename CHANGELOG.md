@@ -22,6 +22,9 @@
   file or plot (about 20 ms each); garbage is still collected at stage
   boundaries. The bundled smoke evaluation runs about 35% faster with identical
   outputs.
+- `openbench run` renders figures with Matplotlib's Agg backend instead of the
+  platform's interactive one (macOS, Tk or Qt), so worker threads no longer
+  create GUI canvases. An explicit `MPLBACKEND` is still honoured.
 
 ### Removed
 - The unused `.regrid.least_common()` and `.regrid.stat()` accessors, which

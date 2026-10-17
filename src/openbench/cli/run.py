@@ -49,6 +49,7 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
     such as OPENBENCH_NETCDF_COMPRESSION, OPENBENCH_MFDATASET_BATCH_SIZE, and
     OPENBENCH_DASK override YAML for temporary benchmarking.
     """
+    _use_file_only_matplotlib_backend()
     from openbench.config import ConfigError, load_config
 
     try:
@@ -237,6 +238,21 @@ def _is_standalone_cli_process() -> bool:
         return True
     argv0 = os.path.basename(sys.argv[0] or "")
     return argv0 in {"openbench", "openbench.exe"}
+
+
+def _use_file_only_matplotlib_backend() -> None:
+    """Render figures with Agg in a standalone ``openbench run`` process.
+
+    A run only saves figures, many of them from worker threads. Interactive
+    backends (macosx, TkAgg, QtAgg) create a native canvas per figure, which is
+    slower and unsafe off the main thread. Embedders keep their backend, and an
+    explicit MPLBACKEND still wins.
+    """
+    if not _is_standalone_cli_process() or os.environ.get("MPLBACKEND"):
+        return
+    import matplotlib
+
+    matplotlib.use("Agg")
 
 
 def _arm_exit_watchdog(exit_code: int, timeout: float = 20.0) -> None:
