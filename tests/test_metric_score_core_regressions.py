@@ -555,30 +555,77 @@ def test_float32_underflowed_std_gives_nan(name):
     assert np.isnan(getattr(metrics(), name)(s, o)).all()
 
 
-def test_validated_pair_is_computed_once_per_live_pair_and_read_only():
-    import gc
-    import importlib
+def test_validated_pair_preserves_mask_and_read_only_results():
+    from openbench.core.metrics import validated_pair
 
-    # openbench.core re-exports the metrics class under the module's name.
-    metrics_module = importlib.import_module("openbench.core.metrics")
-
-    times = pd.date_range("2001-01-01", periods=4, freq="D")
-    s = xr.DataArray([1.0, np.nan, 3.0, np.inf], dims="time", coords={"time": times})
-    o = xr.DataArray([2.0, 2.0, np.nan, 4.0], dims="time", coords={"time": times})
-
-    first = metrics_module.validated_pair(s, o)
-    second = metrics_module.validated_pair(s, o)
-
-    assert first[0] is second[0] and first[1] is second[1]
-    np.testing.assert_array_equal(first[0].values, [1.0, np.nan, np.nan, np.nan])
-    np.testing.assert_array_equal(first[1].values, [2.0, np.nan, np.nan, np.nan])
+    s = xr.DataArray([1.0, np.nan, 3.0, np.inf], dims="time")
+    o = xr.DataArray([2.0, 2.0, np.nan, 4.0], dims="time")
+    first = validated_pair(s, o)
+    np.testing.assert_array_equal(first[0], [1.0, np.nan, np.nan, np.nan])
+    np.testing.assert_array_equal(first[1], [2.0, np.nan, np.nan, np.nan])
     with pytest.raises(ValueError, match="read-only"):
         first[0].values[0] = 5.0
-    # Equal values in new objects are a new pair.
-    assert metrics_module.validated_pair(s.copy(), o.copy())[0] is not first[0]
+    assert s.data.flags.writeable and o.data.flags.writeable
 
-    key = (id(s), id(o))
-    assert key in metrics_module._VALIDATED_PAIRS
-    del s, o, first, second
+
+@pytest.mark.parametrize("side", ["sim", "obs"])
+def test_validated_pair_observes_in_place_data_changes(side):
+    s = xr.DataArray([1.0, 2.0, 3.0], dims="time")
+    o = s.copy()
+    assert float(metrics().RMSE(s, o)) == 0.0
+    changed = s if side == "sim" else o
+    changed.data[0] = 100.0
+    assert float(metrics().RMSE(s, o)) == pytest.approx(np.sqrt(99.0**2 / 3))
+    changed.data[0] = np.nan
+    assert float(metrics().RMSE(s, o)) == 0.0
+
+
+def test_validated_pair_observes_changed_coordinates():
+    from openbench.core.metrics import validated_pair
+
+    times = pd.date_range("2001-01-01", periods=3)
+    s = xr.DataArray([1.0, 2.0, 3.0], dims="time", coords={"time": times})
+    o = s.copy()
+    validated_pair(s, o)
+    s["time"] = times[::-1]
+    actual = validated_pair(s, o)
+    expected = xr.align(s, o, join="inner")
+    for got, want in zip(actual, expected):
+        xr.testing.assert_identical(got, want)
+
+
+def test_validated_pair_does_not_accumulate_finalizers():
+    import gc
+    import weakref
+
+    from openbench.core.metrics import validated_pair
+
     gc.collect()
-    assert key not in metrics_module._VALIDATED_PAIRS
+    before = set(weakref.finalize._registry)
+    o = xr.DataArray(np.arange(10.0), dims="time")
+    for i in range(100):
+        validated_pair(xr.DataArray(np.full(10, float(i)), dims="time"), o)
+    gc.collect()
+    assert not set(weakref.finalize._registry).difference(before)
+
+
+@pytest.mark.parametrize("name", ["nPhaseScore", "nIavScore", "nSeasonalityScore"])
+def test_scores_observe_changed_data_and_time(name):
+    times = pd.date_range("2001-01-01", periods=36, freq="MS")
+    o = xr.DataArray(np.arange(36.0) + np.sin(np.arange(36.0)), dims="time", coords={"time": times})
+    s = o.copy()
+    score = getattr(scores(), name)
+    score(s, o)
+    s.data[0] = 100.0
+    s["time"] = times[::-1]
+    xr.testing.assert_identical(score(s, o), score(s.copy(deep=True), o.copy(deep=True)))
+
+
+def test_validated_pair_observes_dask_data_replacement():
+    from openbench.core.metrics import validated_pair
+
+    s = xr.DataArray([1.0, 2.0, 3.0], dims="time").chunk({"time": 2})
+    o = s.copy()
+    validated_pair(s, o)
+    s.data = s.data + 1
+    assert float(metrics().RMSE(s, o).compute()) == 1.0

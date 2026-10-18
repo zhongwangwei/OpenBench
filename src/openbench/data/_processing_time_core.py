@@ -50,14 +50,14 @@ def _relabel_single_value_periods(data: xr.Dataset | xr.DataArray, freq: str, ho
         if counts.sizes["time"] != data.sizes["time"] or not bool((counts == 1).all()):
             return None
         probe = getattr(data.isel(time=slice(0, 2)).resample(time=freq), how)()
-    result = data.assign_coords(time=counts["time"].values)
+    result = data.assign_coords(time=counts["time"])
     result["time"].attrs = dict(probe["time"].attrs)
     result["time"].encoding = dict(probe["time"].encoding)
     if how == "sum":
         result = result.fillna(0)
     if isinstance(result, xr.Dataset):
         for name in variables:
-            result[name] = result[name].astype(probe[name].dtype, copy=False)
+            result[name] = result[name].transpose(*probe[name].dims).astype(probe[name].dtype, copy=False)
             result[name].attrs = dict(probe[name].attrs)
             result[name].encoding = dict(probe[name].encoding)
     else:

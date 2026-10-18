@@ -481,3 +481,27 @@ def test_single_value_relabel_falls_back_for_gaps_repeats_unsorted_and_static_va
     assert _relabel_single_value_periods(da.isel(time=[1, 0, 2, 3]), "1D", "mean") is None
     assert _relabel_single_value_periods(static, "1D", "mean") is None
     assert _relabel_single_value_periods(da, "1ME", "mean") is None  # several days per month
+
+
+@pytest.mark.parametrize("how", ["mean", "sum"])
+@pytest.mark.parametrize("dataset", [False, True])
+@pytest.mark.parametrize("timezone", [None, "Europe/Berlin"])
+def test_single_value_resample_preserves_timezone_and_dimension_order(how, dataset, timezone):
+    from openbench.data._processing_time_core import _resample
+    from openbench.util.groupby import without_flox
+
+    times = pd.date_range("2001-03-24", periods=5, freq="D", tz=timezone)
+    data = xr.DataArray(
+        np.arange(10.0).reshape(2, 5),
+        dims=("lat", "time"),
+        coords={"time": times, "lat": [1, 2]},
+        name="a",
+    )
+    if dataset:
+        data = xr.Dataset({"a": data, "b": data.transpose("time", "lat")})
+    with without_flox():
+        expected = getattr(data.resample(time="1D"), how)()
+    actual = _resample(data, "1D", how)
+    xr.testing.assert_identical(actual, expected)
+    assert actual.indexes["time"].equals(expected.indexes["time"])
+    xr.testing.assert_identical(actual.sel(time="2001-03-25"), expected.sel(time="2001-03-25"))
