@@ -36,7 +36,10 @@ def varies_along(x, dim="time"):
 
 
 def validated_pair(s, o):
-    """Align and mask the current inputs; callers may mutate them between metrics."""
+    """Align and mask inputs afresh so mutations between metric calls are respected.
+
+    Returned NumPy-backed data are read-only; the inputs remain unchanged.
+    """
     if not isinstance(s, xr.DataArray) or not isinstance(o, xr.DataArray):
         logging.error("Inputs must be xarray DataArrays")
         raise TypeError("Inputs must be xarray DataArrays")

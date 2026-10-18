@@ -505,3 +505,21 @@ def test_single_value_resample_preserves_timezone_and_dimension_order(how, datas
     xr.testing.assert_identical(actual, expected)
     assert actual.indexes["time"].equals(expected.indexes["time"])
     xr.testing.assert_identical(actual.sel(time="2001-03-25"), expected.sel(time="2001-03-25"))
+
+
+@pytest.mark.parametrize("how", ["mean", "sum"])
+def test_single_value_resample_preserves_3d_dataset_dimension_order(how):
+    from openbench.data._processing_time_core import _relabel_single_value_periods, _resample
+    from openbench.util.groupby import without_flox
+
+    data = xr.DataArray(
+        np.arange(30.0).reshape(2, 5, 3),
+        dims=("lat", "time", "lon"),
+        coords={"time": pd.date_range("2001-01-01", periods=5), "lat": [1, 2], "lon": [3, 4, 5]},
+    )
+    dataset = xr.Dataset({"middle": data, "last": data.transpose("lat", "lon", "time")})
+    with without_flox():
+        expected = getattr(dataset.resample(time="1D"), how)()
+
+    assert _relabel_single_value_periods(dataset, "1D", how) is not None
+    xr.testing.assert_identical(_resample(dataset, "1D", how), expected)
