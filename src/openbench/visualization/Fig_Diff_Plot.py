@@ -107,9 +107,9 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     # Extract variables after plot-only downsampling.
     ilat = data.lat.values
     ilon = data.lon.values
-    lat, lon = np.meshgrid(ilat[::-1], ilon)
+    lat, lon = np.meshgrid(ilat, ilon)
 
-    var = data.transpose("lon", "lat")[:, ::-1].values
+    var = data.transpose("lon", "lat")[:, :].values
     if not option["vmin_max_on"]:
         if metric in [
             "bias",
