@@ -7,7 +7,7 @@ Walks a reference data directory tree with the structure:
     <root>/Station/<category>/<variable>/<dataset>/
 
 Groups datasets by base name across resolutions so the GUI can offer
-resolution choices (e.g., GLEAM_v4.2a → LowRes / MidRes / HigRes).
+resolution choices (e.g., GLEAM_v4.3a → LowRes / MidRes / HigRes).
 """
 
 from __future__ import annotations
@@ -445,8 +445,8 @@ def get_reference_profile(dataset_name: str) -> dict | None:
     """Look up a reference profile by exact name or base name (without resolution suffix).
 
     Matching order:
-    1. Exact match: "GLEAM_v4.2a_LowRes" → profile["GLEAM_v4.2a_LowRes"]
-    2. Base name:   "GLEAM_v4.2a_LowRes" → strip "_LowRes" → profile["GLEAM_v4.2a"]
+    1. Exact match: "GLEAM_v4.3a_LowRes" → profile["GLEAM_v4.3a_LowRes"]
+    2. Base name:   "GLEAM_v4.3a_LowRes" → strip "_LowRes" → profile["GLEAM_v4.3a"]
 
     Returns profile dict or None.
     """
@@ -525,7 +525,7 @@ def _has_custom_station_filter(dataset_name: str) -> bool:
 class ScannedDataset:
     """A discovered dataset with its location and resolution info."""
 
-    name: str  # e.g., "GLEAM_v4.2a"
+    name: str  # e.g., "GLEAM_v4.3a"
     resolution: str  # "LowRes", "MidRes", "HigRes", or "Station"
     category: str  # "Water", "Energy", etc.
     data_type: str  # "grid" or "stn"
@@ -544,7 +544,7 @@ class ScannedDataset:
 
     @property
     def registry_name(self) -> str:
-        """Name for registry entry: 'GLEAM_v4.2a_LowRes'."""
+        """Name for registry entry: 'GLEAM_v4.3a_LowRes'."""
         if self.data_type == "stn":
             return self.name
         return f"{self.name}_{self.resolution}"
@@ -554,7 +554,7 @@ class ScannedDataset:
 class DatasetGroup:
     """A dataset that may exist at multiple resolutions."""
 
-    base_name: str  # e.g., "GLEAM_v4.2a"
+    base_name: str  # e.g., "GLEAM_v4.3a"
     variants: dict[str, ScannedDataset] = field(default_factory=dict)  # resolution -> ScannedDataset
 
     @property

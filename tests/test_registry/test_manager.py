@@ -858,7 +858,54 @@ def test_list_references():
     assert isinstance(refs, list)
     assert len(refs) >= 1
     names = [r.name for r in refs]
-    assert "GLEAM_v4.2a_LowRes" in names
+    assert {
+        f"GLEAM_v{version}_{resolution}" for version in ("4.2a", "4.3a", "4.3b") for resolution in ("LowRes", "MidRes")
+    } <= set(names)
+
+
+@pytest.mark.parametrize("resolution,grid_res,tim_res", [("LowRes", 0.5, "Month"), ("MidRes", 0.25, "Day")])
+@pytest.mark.parametrize("version,years", [("4.3a", [1980, 2025]), ("4.3b", [2003, 2025])])
+def test_gleam_v43_catalog_and_candidates(tmp_path, resolution, grid_res, tim_res, version, years):
+    mgr = RegistryManager(user_dir=tmp_path)
+    name = f"GLEAM_v{version}_{resolution}"
+    ref = mgr.get_reference(name)
+    assert ref is not None
+    assert ref.category == "Water"
+    assert ref.data_type == "grid"
+    assert list(ref.years) == years
+    assert ref.grid_res == grid_res
+    assert ref.tim_res == tim_res
+    assert ref.data_groupby == "Year"
+    catalog = _load_builtin_yaml("reference_catalog.yaml")
+    assert catalog[name]["root_dir"] == f"${{OPENBENCH_REF_ROOT}}/Grid/{resolution}"
+    expected = {
+        "Bare_Soil_Evaporation": ("Eb", "mm day-1"),
+        "Canopy_Evaporation": ("Ei", "mm day-1"),
+        "Canopy_Transpiration": ("Et", "mm day-1"),
+        "Evapotranspiration": ("E", "mm day-1"),
+        "Open_Water_Evaporation": ("Ew", "mm day-1"),
+        "Root_Zone_Soil_Moisture": ("SMrz", "m3 m-3"),
+        "Surface_Soil_Moisture": ("SMs", "m3 m-3"),
+        "Transpiration": ("Et", "mm day-1"),
+        "Sensible_Heat": ("H", "W m-2"),
+    }
+    assert set(ref.variables) == (set(expected) - {"Bare_Soil_Evaporation"}) | {"Soil_Evaporation"}
+    profile = _load_builtin_yaml("reference_profiles.yaml")[f"GLEAM_v{version}"]
+    assert "scan" not in profile
+    for variable, (varname, unit) in expected.items():
+        canonical = "Soil_Evaporation" if variable == "Bare_Soil_Evaporation" else variable
+        mapping = ref.variables[canonical]
+        category = "Heat" if variable == "Sensible_Heat" else "Water"
+        assert mapping.sub_dir == f"{category}/{variable}/GLEAM_v{version}"
+        assert mapping.varname == varname
+        assert mapping.varunit == unit
+        assert mapping.prefix == f"{varname}_"
+        assert mapping.suffix == f"_GLEAM_v{version}"
+        assert profile["variables"][variable] == {"varname": varname, "varunit": unit}
+        assert name in {candidate.name for candidate in mgr.references_for_variable(canonical)}
+    assert name in {candidate.name for candidate in mgr.list_references()}
+    assert mgr.get_resolution_variants(f"GLEAM_v{version}")[resolution].name == name
+    assert mgr.get_reference(f"GLEAM_v{version}", sim_tim_res=tim_res, sim_grid_res=grid_res).name == name
 
 
 def test_get_reference_exact():

@@ -108,7 +108,9 @@ jobs:
           from openbench.visualization import cmaps
 
           assert build_fig_nml()
-          assert get_reference_profile("GLEAM_v4.2a")
+          assert get_reference_profile("GLEAM_v4.3a")
+          assert get_reference_profile("GLEAM_v4.3b")
+          assert get_reference_profile("GLEAM_v4.2a")  # Explicit older-version compatibility
           assert cmaps.N3gauss.name == "N3gauss"
           assert _has_custom_station_filter("GEBA")
           with tempfile.TemporaryDirectory() as tmpdir:

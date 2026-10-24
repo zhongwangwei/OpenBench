@@ -193,8 +193,8 @@ def register_profile(
 ):
     """Register a reference profile (variable mappings for a dataset type).
 
-    Profiles are shared across resolutions. E.g., registering 'GLEAM_v4.2a'
-    applies to GLEAM_v4.2a_LowRes, GLEAM_v4.2a_MidRes, etc.
+    Profiles are shared across resolutions. E.g., registering 'GLEAM_v4.3a'
+    applies to GLEAM_v4.3a_LowRes, GLEAM_v4.3a_MidRes, etc.
 
 
 Examples:
@@ -228,8 +228,8 @@ def show(name, fmt):
     """Show details of a dataset. Supports base name to show all resolutions.
 
     Examples:
-        openbench ref show GLEAM_v4.2a          # shows all resolutions
-        openbench ref show GLEAM_v4.2a_LowRes   # shows specific one
+        openbench ref show GLEAM_v4.3a          # shows all resolutions
+        openbench ref show GLEAM_v4.3a_LowRes   # shows specific one
     """
     return _display.show_reference(name, fmt, reference_to_dict_fn=_reference_to_dict)
 

@@ -859,7 +859,7 @@ class GeneralInfoReader:
             except (ValueError, AttributeError):
                 pass
 
-        # For grid reference data (like GLEAM4.2a) used with station simulation data,
+        # For grid reference data (like GLEAM) used with station simulation data,
         # apply additional validation to ensure data availability
         if self.ref_data_type == "grid" and self.sim_data_type == "stn":
             # Check reference coverage; this is more conservative than flagging all stations as True.

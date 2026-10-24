@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.0.9] - 2026-10-24
+
 ### Changed
 - Faster temporal resampling of grid data: resampling to the comparison
   resolution no longer goes through flox, and files stored one time step per
@@ -40,6 +42,10 @@
   runs about 20% faster.
 
 ### Added
+- Built-in GLEAM v4.3a (1980–2025) and v4.3b (2003–2025) reference families,
+  with 0.25° daily MidRes and 0.5° monthly-mean LowRes descriptors, variable
+  mappings and scanner profiles. Monthly means retain the original rate units.
+  Existing GLEAM v4.2a entries remain supported; current examples use v4.3a.
 - `project.station_plots` (default `true`; "Station Plots" in the GUI) can turn
   off the per-station time-series figures, which take most of the time of a
   large station evaluation. Metrics, scores and station maps are unchanged.

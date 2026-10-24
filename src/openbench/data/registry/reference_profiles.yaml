@@ -1018,6 +1018,74 @@ GLEAM_v4.2a:
       varunit: mm day-1
       prefix: Et_
       suffix: _GLEAM_v4.2a
+GLEAM_v4.3a:
+  description: GLEAM v4.3a global evaporation and soil moisture
+  category: Water
+  tim_res: Day
+  data_groupby: Year
+  variables:
+    Bare_Soil_Evaporation:
+      varname: Eb
+      varunit: mm day-1
+    Canopy_Evaporation:
+      varname: Ei
+      varunit: mm day-1
+    Evapotranspiration:
+      varname: E
+      varunit: mm day-1
+    Open_Water_Evaporation:
+      varname: Ew
+      varunit: mm day-1
+    Sensible_Heat:
+      varname: H
+      varunit: W m-2
+    Root_Zone_Soil_Moisture:
+      varname: SMrz
+      varunit: m3 m-3
+    Surface_Soil_Moisture:
+      varname: SMs
+      varunit: m3 m-3
+    Transpiration:
+      varname: Et
+      varunit: mm day-1
+    Canopy_Transpiration:
+      varname: Et
+      varunit: mm day-1
+
+GLEAM_v4.3b:
+  description: GLEAM v4.3b global evaporation and soil moisture
+  category: Water
+  tim_res: Day
+  data_groupby: Year
+  variables:
+    Bare_Soil_Evaporation:
+      varname: Eb
+      varunit: mm day-1
+    Canopy_Evaporation:
+      varname: Ei
+      varunit: mm day-1
+    Evapotranspiration:
+      varname: E
+      varunit: mm day-1
+    Open_Water_Evaporation:
+      varname: Ew
+      varunit: mm day-1
+    Sensible_Heat:
+      varname: H
+      varunit: W m-2
+    Root_Zone_Soil_Moisture:
+      varname: SMrz
+      varunit: m3 m-3
+    Surface_Soil_Moisture:
+      varname: SMs
+      varunit: m3 m-3
+    Transpiration:
+      varname: Et
+      varunit: mm day-1
+    Canopy_Transpiration:
+      varname: Et
+      varunit: mm day-1
+
 Rn-Xu2022_0p25:
   scan:
     layout: grid_dataset_choice

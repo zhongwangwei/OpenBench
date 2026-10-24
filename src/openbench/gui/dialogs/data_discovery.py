@@ -176,7 +176,7 @@ class ResolutionPickerDialog(QDialog):
     def __init__(self, base_name, variants, compatible=None, parent=None):
         """
         Args:
-            base_name: Dataset base name (e.g., "GLEAM_v4.2a")
+            base_name: Dataset base name (e.g., "GLEAM_v4.3a")
             variants: Dict[resolution_name -> ScannedDataset or registry entry]
             compatible: Optional list of compatible resolution names.
                 If provided, incompatible resolutions are shown as disabled.

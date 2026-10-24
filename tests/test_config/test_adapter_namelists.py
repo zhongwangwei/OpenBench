@@ -200,7 +200,7 @@ def test_build_legacy_namelists():
     cfg = OpenBenchConfig(
         project=ProjectConfig(name="test", output_dir="./output", years=[2004, 2010]),
         evaluation=EvaluationConfig(variables=["Evapotranspiration"]),
-        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.2a_LowRes"}),
+        reference=ReferenceConfig(sources={"Evapotranspiration": "GLEAM_v4.3a_LowRes"}),
         simulation={"CoLM2024": SimulationEntry(model="CoLM2024", root_dir="/data/CoLM2024")},
     )
 
@@ -211,19 +211,19 @@ def test_build_legacy_namelists():
     assert "Evapotranspiration" in main_nl["evaluation_items"]
 
     # Check ref_nml
-    assert ref_nml["general"]["Evapotranspiration_ref_source"] == "GLEAM_v4.2a_LowRes"
+    assert ref_nml["general"]["Evapotranspiration_ref_source"] == "GLEAM_v4.3a_LowRes"
     assert "Evapotranspiration" in ref_nml
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_varname"] == "E"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_data_type"] == "grid"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_varunit"] == "mm day-1"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_prefix"] == "E_"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_suffix"] == "_GLEAM_v4.2a"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_tim_res"] == "Month"
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_grid_res"] in (0.25, 0.5)
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_varname"] == "E"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_data_type"] == "grid"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_varunit"] == "mm day-1"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_prefix"] == "E_"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_suffix"] == "_GLEAM_v4.3a"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_tim_res"] == "Month"
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_grid_res"] == 0.5
     # years come from registry (may be auto-detected or config fallback)
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_syear"] >= 1980
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_eyear"] >= 2005
-    assert ref_nml["Evapotranspiration"]["GLEAM_v4.2a_LowRes_timezone"] == 0
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_syear"] == 1980
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_eyear"] == 2025
+    assert ref_nml["Evapotranspiration"]["GLEAM_v4.3a_LowRes_timezone"] == 0
 
     # Check sim_nml
     assert "Evapotranspiration_sim_source" in sim_nml["general"]
@@ -652,9 +652,9 @@ def test_integration_fixture_uses_lowres_registry_root_without_duplicate_categor
 
     source = ref_nml["general"]["Evapotranspiration_ref_source"]
     ref_dir = ref_nml["Evapotranspiration"][f"{source}_dir"].replace("\\", "/")
-    assert source == "GLEAM_v4.2a_LowRes"
+    assert source == "GLEAM_v4.3a_LowRes"
     assert "/Water/Water/" not in ref_dir
-    assert ref_dir.endswith("OpenBench-wei/dataset/Reference/Grid/LowRes/Water/Evapotranspiration/GLEAM_v4.2a")
+    assert ref_dir.endswith("OpenBench-wei/dataset/Reference/Grid/LowRes/Water/Evapotranspiration/GLEAM_v4.3a")
 
 
 def test_sediment_reference_matches_each_item_from_its_own_variable(monkeypatch, tmp_path):

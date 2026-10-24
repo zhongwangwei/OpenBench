@@ -34,12 +34,12 @@ def _minimal_config_with_data(tmp_path):
     config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
     data = yaml.safe_load(config.read_text(encoding="utf-8"))
     ref_root = tmp_path / "ref"
-    ref_dir = ref_root / "Water" / "Evapotranspiration" / "GLEAM_v4.2a"
+    ref_dir = ref_root / "Water" / "Evapotranspiration" / "GLEAM_v4.3a"
     ref_dir.mkdir(parents=True)
     # The preflight requires every year preprocessing will read: GLEAM files are
-    # E_<year>_GLEAM_v4.2a.nc, CoLM2024 output <year>*.nc (empty prefix/suffix).
+    # E_<year>_GLEAM_v4.3a.nc, CoLM2024 output <year>*.nc (empty prefix/suffix).
     for year in range(data["project"]["years"][0], data["project"]["years"][1] + 1):
-        (ref_dir / f"E_{year}_GLEAM_v4.2a.nc").touch()
+        (ref_dir / f"E_{year}_GLEAM_v4.3a.nc").touch()
         for label in data["simulation"]:
             (tmp_path / "sim" / label / f"{year}.nc").touch()
     data["reference"]["data_root"] = str(ref_root)
@@ -71,9 +71,9 @@ def test_run_dry_run(tmp_path):
 def test_run_dry_run_fails_on_missing_data_files_like_check(tmp_path):
     config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
     data = yaml.safe_load(config.read_text(encoding="utf-8"))
-    ref_dir = tmp_path / "ref" / "Water" / "Evapotranspiration" / "GLEAM_v4.2a"
+    ref_dir = tmp_path / "ref" / "Water" / "Evapotranspiration" / "GLEAM_v4.3a"
     ref_dir.mkdir(parents=True)
-    (ref_dir / "E_2004_GLEAM_v4.2a.nc").touch()  # later years missing; the simulation folder is empty
+    (ref_dir / "E_2004_GLEAM_v4.3a.nc").touch()  # later years missing; the simulation folder is empty
     data["reference"]["data_root"] = str(tmp_path / "ref")
     config.write_text(yaml.safe_dump(data, sort_keys=False))
 
@@ -175,6 +175,8 @@ def test_ref_list_filter():
     result = runner.invoke(cli, ["ref", "list", "--variable", "Evapotranspiration"])
     assert result.exit_code == 0
     assert "GLEAM" in result.output
+    assert "GLEAM_v4.3b_LowRes" in result.output
+    assert "GLEAM_v4.3b_MidRes" in result.output
 
 
 def test_model_list():

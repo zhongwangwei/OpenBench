@@ -100,7 +100,7 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 ```
 
-The current release is **3.0.8**.
+The current release is **3.0.9**.
 
 Install from PyPI:
 
@@ -122,7 +122,7 @@ pip install "colm-openbench[all]"
 Upgrade an existing installation to the latest release:
 
 ```bash
-python -m pip install --upgrade "colm-openbench==3.0.8"
+python -m pip install --upgrade "colm-openbench==3.0.9"
 openbench --version
 openbench smoke-test
 ```
@@ -160,14 +160,14 @@ Conda updates into an existing pip installation. Avoid installing into `base`.
 #### Build a native Conda package locally
 
 The versioned recipe in `conda/meta.yaml` builds a `noarch: python` CLI package
-from the checksummed GitHub Release source archive. This is a local build, not a claim of
+from the checksummed PyPI source archive. This is a local build, not a claim of
 conda-forge publication. Use an up-to-date checkout so the recipe includes any
 post-release compatibility patches:
 
 ```bash
 conda create -n openbench-build --override-channels -c conda-forge python=3.12 conda-build
 conda run -n openbench-build conda build conda/ --python 3.12 --override-channels -c conda-forge --no-anaconda-upload --output-folder ./dist/conda
-conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.8
+conda create -n openbench-conda --override-channels -c ./dist/conda -c conda-forge colm-openbench=3.0.9
 conda run -n openbench-conda openbench smoke-test
 ```
 
@@ -502,7 +502,7 @@ Per-class results appear under
 openbench ref list
 
 # Inspect a single dataset (a base name resolves to its resolution family)
-openbench ref show GLEAM_v4.2a
+openbench ref show GLEAM_v4.3a
 
 # Scan a directory and auto-register reference datasets you already have
 openbench ref scan /Volumes/work/Reference
@@ -523,8 +523,9 @@ Total: 101 datasets
 ```
 
 Many datasets come in multiple resolutions (`_LowRes`, `_MidRes`); a base name
-like `GLEAM_v4.2a` resolves to its family, or you can pin a specific one such as
-`ET_Xu_etal_2025_LowRes`.
+like `GLEAM_v4.3a` resolves to its family, or you can pin a specific one such as
+`ET_Xu_etal_2025_LowRes`. GLEAM examples use v4.3a (1980–2025); v4.2a
+remains available under its original names for existing configurations.
 
 ## Model Profiles
 

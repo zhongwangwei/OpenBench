@@ -738,7 +738,7 @@ class DataValidator:
 
         Args:
             var_name: Variable name (e.g., "Evapotranspiration")
-            source_name: Source name (e.g., "GLEAM_v4.2a")
+            source_name: Source name (e.g., "GLEAM_v4.3a")
             source_config: Source configuration dict
             general_config: General settings (syear, eyear, lat/lon range)
 

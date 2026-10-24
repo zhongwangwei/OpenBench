@@ -7,7 +7,7 @@ evaluation:
   variables: [Evapotranspiration]
 
 reference:
-  Evapotranspiration: GLEAM_v4.2a
+  Evapotranspiration: GLEAM_v4.3a
 
 simulation:
   _defaults:

@@ -36,8 +36,8 @@
 ## Resolution Suffixes
 
 Registry datasets use resolution suffixes:
-- `GLEAM_v4.2a_LowRes`
-- `GLEAM_v4.2a_MidRes`
-- `GLEAM_v4.2a_HigRes`
+- `GLEAM_v4.3a_LowRes`
+- `GLEAM_v4.3a_MidRes`
+- `GLEAM_v4.3a_HigRes`
 
 Base name (without suffix) is used for auto-resolution only.

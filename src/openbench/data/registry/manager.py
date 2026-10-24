@@ -511,9 +511,9 @@ class RegistryManager:
     ) -> Optional[ReferenceDataset]:
         """Get a reference dataset by name, with optional auto-resolve.
 
-        Exact name (e.g., 'GLEAM_v4.2a_LowRes') always returns directly.
+        Exact name (e.g., 'GLEAM_v4.3a_LowRes') always returns directly.
 
-        Base name (e.g., 'GLEAM_v4.2a') with resolution variants:
+        Base name (e.g., 'GLEAM_v4.3a') with resolution variants:
           - If sim_tim_res/sim_grid_res provided: picks the best match
           - Otherwise: returns None (use get_resolution_variants to see options)
 
@@ -555,7 +555,7 @@ class RegistryManager:
         """Find all resolution variants of a dataset.
 
         Args:
-            base_name: Base dataset name without resolution suffix (e.g., 'GLEAM_v4.2a')
+            base_name: Base dataset name without resolution suffix (e.g., 'GLEAM_v4.3a')
 
         Returns:
             Dict mapping resolution label to ReferenceDataset.

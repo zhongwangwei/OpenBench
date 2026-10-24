@@ -14,7 +14,7 @@ def test_load_minimal():
     assert cfg.project.name == "test-minimal"
     assert cfg.project.years == [2004, 2010]
     assert cfg.evaluation.variables == ["Evapotranspiration"]
-    assert cfg.reference.sources["Evapotranspiration"] == "GLEAM_v4.2a_LowRes"
+    assert cfg.reference.sources["Evapotranspiration"] == "GLEAM_v4.3a_LowRes"
     assert "CoLM2024" in cfg.simulation
     assert cfg.simulation["CoLM2024"].model == "CoLM2024"
     # Defaults applied
@@ -60,7 +60,7 @@ def test_load_with_defaults_deep_merges_variable_overrides():
         "project": {"name": "t", "output_dir": ".", "years": [2000, 2010]},
         "evaluation": {"variables": ["Evapotranspiration", "Runoff"]},
         "reference": {
-            "Evapotranspiration": "GLEAM_v4.2a_LowRes",
+            "Evapotranspiration": "GLEAM_v4.3a_LowRes",
             "Runoff": "GRDC_Monthly",
         },
         "simulation": {

@@ -18,7 +18,7 @@ evaluation:
     - Latent_Heat
 
 reference:
-  Evapotranspiration: GLEAM_v4.2a
+  Evapotranspiration: GLEAM_v4.3a
   Gross_Primary_Productivity: FLUXCOM-X-BASE
   Latent_Heat: FLUXCOM
 
