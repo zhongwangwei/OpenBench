@@ -416,7 +416,7 @@ def test_unified_config_round_trips_strict_reference_and_uncertainty():
     assert gui_config["general"]["strict_reference"] is True
     assert gui_config["uncertainty"] == unified["uncertainty"]
     assert exported["project"]["strict_reference"] is True
-    assert exported["reference"]["Runoff"] == ["RefA", "RefB"]
+    assert exported["reference"]["Total_Runoff"] == ["RefA", "RefB"]
     assert exported["uncertainty"] == unified["uncertainty"]
 
 
@@ -452,12 +452,12 @@ def test_generate_config_yaml_exports_reference_overrides_for_runtime(tmp_path):
 
     data = yaml.safe_load(ConfigManager().generate_config_yaml(config, path_transform=lambda p: f"/remote/{p}"))
 
-    assert data["reference"]["Runoff"] == ["RefA", "RefB"]
+    assert data["reference"]["Total_Runoff"] == ["RefA", "RefB"]
     assert data["reference"]["overrides"]["RefA"]["root_dir"] == "/remote/ref/a"
     assert data["reference"]["overrides"]["RefA"]["years"] == [2000, 2002]
-    assert data["reference"]["overrides"]["RefA"]["variables"]["Runoff"]["varname"] == "manual_q_a"
+    assert data["reference"]["overrides"]["RefA"]["variables"]["Total_Runoff"]["varname"] == "manual_q_a"
     assert data["reference"]["overrides"]["RefB"]["root_dir"] == "/remote/ref/b"
-    assert data["reference"]["overrides"]["RefB"]["variables"]["Runoff"]["varname"] == "manual_q_b"
+    assert data["reference"]["overrides"]["RefB"]["variables"]["Total_Runoff"]["varname"] == "manual_q_b"
 
 
 def test_unified_config_imports_reference_overrides_into_gui_source_configs():
@@ -477,11 +477,11 @@ def test_unified_config_imports_reference_overrides_into_gui_source_configs():
 
     gui_config = ConfigManager().unified_to_gui_config(unified)
 
-    ref_a = gui_config["ref_data"]["source_configs"]["Runoff::RefA"]
+    ref_a = gui_config["ref_data"]["source_configs"]["Total_Runoff::RefA"]
     assert ref_a["general"] == {}
     assert ref_a["varname"] == "manual_q_a"
     assert ref_a["_explicit_override"] is True
-    assert "Runoff::RefB" not in gui_config["ref_data"]["source_configs"]
+    assert "Total_Runoff::RefB" not in gui_config["ref_data"]["source_configs"]
 
 
 def test_generate_config_yaml_preserves_simulation_variables_and_fulllist(tmp_path):
@@ -502,7 +502,7 @@ def test_generate_config_yaml_preserves_simulation_variables_and_fulllist(tmp_pa
     data = yaml.safe_load(ConfigManager().generate_config_yaml(config))
 
     assert data["simulation"]["CaseA"]["fulllist"] == "/sim/list.csv"
-    assert data["simulation"]["CaseA"]["variables"] == {"Runoff": {"varname": "q", "varunit": "m3 s-1"}}
+    assert data["simulation"]["CaseA"]["variables"] == {"Total_Runoff": {"varname": "q", "varunit": "m3 s-1"}}
 
 
 def test_generate_and_load_config_yaml_preserves_project_dask(tmp_path):
@@ -627,7 +627,7 @@ def test_unified_to_gui_deep_merges_simulation_variable_defaults():
 
     gui_config = ConfigManager().unified_to_gui_config(unified)
 
-    assert gui_config["sim_data"]["source_configs"]["CaseA"]["variables"]["Runoff"] == {
+    assert gui_config["sim_data"]["source_configs"]["CaseA"]["variables"]["Total_Runoff"] == {
         "varname": "q",
         "varunit": "mm day-1",
         "prefix": "hist_",

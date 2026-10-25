@@ -385,8 +385,9 @@ def test_model_register_var_attr_can_create_new_profile_noninteractively(tmp_pat
     )
 
     assert result.exit_code == 0, result.output
-    mapping = _load_model(home, "ComputedModel").variables["Runoff"]
-    assert mapping.varname == "Runoff"
+    mapping = _load_model(home, "ComputedModel").variables["Total_Runoff"]
+    # No native field was supplied: compute-only mappings default to the logical name.
+    assert mapping.varname == "Total_Runoff"
     assert mapping.varunit == ""
     assert mapping.compute == "ds['rain'] + ds['snow']"
 
@@ -533,7 +534,7 @@ def test_model_import_preserves_existing_catalog_key_case(tmp_path, monkeypatch)
     # The overlay of a bundled profile stores only changed fields; the name
     # comes from the catalog key, so the import must not rename it to "clm5".
     assert descriptor["CLM5"].get("name", "CLM5") == "CLM5"
-    assert descriptor["CLM5"]["variables"]["Runoff"] == {"varname": "runoff", "varunit": "mm day-1"}
+    assert descriptor["CLM5"]["variables"]["Total_Runoff"] == {"varname": "runoff", "varunit": "mm day-1"}
 
 
 def test_model_status_supports_json(tmp_path, monkeypatch):

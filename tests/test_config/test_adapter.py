@@ -1088,3 +1088,57 @@ def test_build_namelists_preserves_inline_sim_variable_runtime_fields():
     assert section["CaseA_accumulated"] == "run"
     assert section["CaseA_fallbacks"] == [{"varname": "q_alt", "varunit": "mm"}]
     assert section["CaseA_prefix_fallback"] == ["_hydro_"]
+
+
+@pytest.mark.parametrize(
+    "legacy,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("legacy_keys", [False, True])
+def test_programmatic_simulation_layout_preserves_alias_mapping_fields(legacy, canonical, legacy_keys):
+    from copy import deepcopy
+
+    from openbench.data.registry.schema import ModelProfile, VariableMapping
+
+    key = legacy if legacy_keys else canonical
+    native = VariableMapping(varname=legacy, varunit="mm s-1", sub_dir="profile")
+    profile = ModelProfile(name="Demo", description="", variables={key: native})
+    entry = SimulationEntry(
+        model="Demo",
+        root_dir="/sim",
+        variables={key: {"varname": legacy, "sub_dir": "inline", "compute": f"ds['{legacy}']", "prefix": legacy}},
+    )
+    before = deepcopy(entry.variables)
+
+    for requested in [legacy, canonical]:
+        layout = adapter_module.simulation_file_layout(entry, profile, requested)
+        assert layout["dir"].replace("\\", "/") == "/sim/inline"
+        assert layout["inline_vars"] == before[key]
+        assert layout["profile_var"] is native
+        assert layout["compute"] == f"ds['{legacy}']"
+        assert layout["prefix"] == legacy
+
+    assert entry.variables == before
+    assert set(profile.variables) == {key}
+
+
+@pytest.mark.parametrize("conflicting_source", ["inline", "profile"])
+def test_programmatic_simulation_layout_rejects_conflicting_aliases(conflicting_source):
+    from openbench.data.registry.schema import ModelProfile, VariableMapping
+
+    mappings = {"Runoff": {"varname": "surface"}, "Total_Runoff": {"varname": "total"}}
+    entry = SimulationEntry(model="Demo", root_dir="/sim", variables=mappings if conflicting_source == "inline" else {})
+    profile = ModelProfile(
+        name="Demo",
+        description="",
+        variables={key: VariableMapping(value["varname"], "mm s-1") for key, value in mappings.items()}
+        if conflicting_source == "profile"
+        else {},
+    )
+
+    with pytest.raises(ValueError, match="Conflicting variable alias definitions"):
+        adapter_module.simulation_file_layout(entry, profile, "Runoff")

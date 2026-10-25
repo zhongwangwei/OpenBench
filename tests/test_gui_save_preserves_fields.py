@@ -109,7 +109,7 @@ def test_sim_data_save_preserves_unknown_top_level_metadata():
 
     assert controller.config["sim_data"]["_manual_note"] == "keep me"
     assert controller.config["sim_data"]["_schema_version"] == 2
-    assert controller.config["sim_data"]["general"] == {"Runoff_sim_source": ["CaseA"]}
+    assert controller.config["sim_data"]["general"] == {"Total_Runoff_sim_source": ["CaseA"]}
 
 
 def test_sim_data_save_removes_cleared_variable_pattern_overrides():
@@ -221,7 +221,7 @@ def test_sim_data_save_keeps_unchecked_scan_rows_out_of_runtime_sources():
 
     sim_data = controller.config["sim_data"]
     assert list(sim_data["source_configs"]) == ["CaseA"]
-    assert sim_data["general"]["Runoff_sim_source"] == ["CaseA"]
+    assert sim_data["general"]["Total_Runoff_sim_source"] == ["CaseA"]
     assert [(case["label"], case["checked"]) for case in sim_data["_scanned_cases"]] == [
         ("CaseA", True),
         ("CaseB", False),
@@ -807,9 +807,9 @@ def test_registry_autofill_does_not_export_reference_overrides_when_data_root_is
     page.load_from_config()
     exported = yaml.safe_load(ConfigManager().generate_config_yaml(controller.config))
 
-    assert controller.config["ref_data"]["source_configs"]["Runoff::RefA"]["_explicit_override"] is False
+    assert controller.config["ref_data"]["source_configs"]["Total_Runoff::RefA"]["_explicit_override"] is False
     assert exported["reference"]["data_root"] == "/explicit/data_root"
-    assert exported["reference"]["Runoff"] == "RefA"
+    assert exported["reference"]["Total_Runoff"] == "RefA"
     assert "overrides" not in exported["reference"]
 
 

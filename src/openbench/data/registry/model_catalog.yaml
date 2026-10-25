@@ -407,7 +407,9 @@ CLM5:
     Surface_Net_LW_Radiation: *id009
     Surface_Soil_Moisture: *id010
     Surface_Soil_Temperature: *id011
-    Total_Runoff: *id012
+    Total_Runoff:
+      varname: QRUNOFF
+      varunit: mm s-1
     Leaf_Sensible_Heat:
       varname: FSH_V
       varunit: w m-2
@@ -576,18 +578,12 @@ CLM5:
     Net_Primary_Production:
       varname: NPP
       varunit: gC m-2 s-1
-    Transpiration:
-      varname: QVEGT
-      varunit: mm s-1
     Surface_Pressure:
       varname: PBOT
       varunit: Pa
     Surface_Wind_Speed:
       varname: WIND
       varunit: m s-1
-    Canopy_Interception:
-      varname: QINTR
-      varunit: mm s-1
     Soil_Moisture_Lev2:
       compute: ds['H2OSOI'].isel(levsoi=1)
       varname: Soil_Moisture_Lev2
@@ -600,9 +596,6 @@ CLM5:
       varunit: W m-2
     Snowfall:
       varname: SNOW
-      varunit: mm s-1
-    Runoff:
-      varname: QRUNOFF
       varunit: mm s-1
     Snow_Cover_Extent:
       varname: FSNO_EFF
@@ -1344,6 +1337,13 @@ CoLM2024:
     Sensible_Heat:
       varname: f_fsena
       varunit: W m-2
+    Root_Zone_Soil_Temperature:
+      # Standard native CoLM2024.1 f_t_soisno: 5 snow + 10 soil layers (soilsnow length 15).
+      # Fixed CoLM soil-grid thickness mean over 0–1 m, including partial soil layer 8.
+      # Reject other profile lengths; ignore snow/deep soil, but propagate missing used layers.
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0.017512817916255204, 0.027578969259676255, 0.045470033242413194, 0.07496741098620857, 0.12360036510228051, 0.20378255101043175, 0.3359806264484327, 0.17110722603430184, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[5, 6, 7, 8, 9, 10, 11, 12]).sum('soilsnow', skipna=False)
+      varname: Root_Zone_Soil_Temperature
+      varunit: K
     Snow_Depth:
       varname: f_snowdp
       varunit: m
@@ -1438,11 +1438,7 @@ CoLM2024:
     Water_Table_Depth:
       varname: f_zwt
       varunit: m
-    Canopy_Interception:
-      compute: ds['f_fevpl'] - ds['f_etr']
-      varname: Canopy_Interception
-      varunit: mm s-1
-    Runoff:
+    Surface_Runoff:
       varname: f_rsur
       varunit: mm s-1
     Snowfall:
@@ -1470,9 +1466,6 @@ CoLM2024:
     Surface_Wind_Speed_V10:
       varname: f_vs10m
       varunit: m s-1
-    Transpiration:
-      varname: f_etr
-      varunit: mm s-1
     Urban_Latent_Heat_Flux:
       varname: f_lfevpa
       varunit: w m-2
@@ -1616,12 +1609,10 @@ GLDAS:
       varname: Surface_Upward_SW_Radiation
       varunit: W m-2
     Total_Runoff:
-      compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
+      # Qsm_acc is internal snowmelt, not an additional runoff component.
+      compute: ds['Qs_acc'] + ds['Qsb_acc']
       varname: Total_Runoff
       varunit: mm 3hour-1
-    Transpiration:
-      varname: Tveg_tavg
-      varunit: W m-2 heat
     Precipitation:
       varname: Rainf_f_tavg
       varunit: kg m-2 s-1
@@ -1680,10 +1671,6 @@ GLDAS:
     Snowfall:
       varname: Snowf_tavg
       varunit: kg m-2 s-1
-    Runoff:
-      compute: ds['Qs_acc'] + ds['Qsb_acc'] + ds['Qsm_acc']
-      varname: Runoff
-      varunit: mm 3h-1
 JRA3Q:
   data_type: grid
   description: JRA-3Q Reanalysis Forcing
@@ -2745,14 +2732,8 @@ TE:
     Snow_Evaporation:
       varname: ''
       varunit: ''
-    Transpiration:
-      varname: ETFLX
-      varunit: kg m-2 s-1
     Canopy_Transpiration:
       varname: ETFLX
-      varunit: kg m-2 s-1
-    Runoff:
-      varname: RUNOFF
       varunit: kg m-2 s-1
     Surface_Runoff:
       varname: ''

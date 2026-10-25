@@ -113,7 +113,7 @@ def test_remote_snapshot_does_not_call_local_registry_or_write_paths(monkeypatch
     assert registry.get_reference("RemoteRef_LowRes").root_dir == "/remote/ref"
     assert registry.references_for_variable("runoff")[0].name == "RemoteRef_LowRes"
     assert registry.get_resolution_variants("RemoteRef") == {"LowRes": registry.get_reference("RemoteRef_LowRes")}
-    assert registry.get_model("RemoteModel").variables["Runoff"].varname == "mrro"
+    assert registry.get_model("RemoteModel").variables["Total_Runoff"].varname == "mrro"
     assert calls[0][0] is ssh
     assert calls[0][2] == {"python_path": "~/venv/bin/python", "conda_env": "ob"}
     assert "sys.path.insert" in calls[0][1]

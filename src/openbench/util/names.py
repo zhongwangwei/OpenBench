@@ -41,6 +41,12 @@ def canonical_variable_name(name: str) -> str:
         "soil_evaporation": "Soil_Evaporation",
         "water_evaporation": "Open_Water_Evaporation",
         "open_water_evaporation": "Open_Water_Evaporation",
+        "canopy_interception": "Canopy_Evaporation",
+        "canopy_evaporation": "Canopy_Evaporation",
+        "transpiration": "Canopy_Transpiration",
+        "canopy_transpiration": "Canopy_Transpiration",
+        "runoff": "Total_Runoff",
+        "total_runoff": "Total_Runoff",
     }.get(normalize_name(name), name)
 
 

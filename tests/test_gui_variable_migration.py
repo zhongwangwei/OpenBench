@@ -85,7 +85,7 @@ def test_migrate_gui_variable_config_updates_all_logical_variable_slots_without_
     case_cfg = migrated["sim_data"]["source_configs"]["CaseA"]
     assert set(case_cfg["variables"]) == {"Open_Water_Evaporation", "Soil_Evaporation"}
     scanned = migrated["sim_data"]["_scanned_cases"][0]
-    assert scanned["variables"] == ["Open_Water_Evaporation", "Soil_Evaporation", "Runoff"]
+    assert scanned["variables"] == ["Open_Water_Evaporation", "Soil_Evaporation", "Total_Runoff"]
     assert set(scanned["variable_overrides"]) == {"Soil_Evaporation"}
     assert scanned["metadata"]["variables"] == ["Soil_Evaporation"]
     assert set(scanned["metadata"]["variable_overrides"]) == {"Open_Water_Evaporation"}
@@ -174,3 +174,45 @@ def test_migrated_config_stays_idempotent_after_yaml_save_load(tmp_path):
     loaded = manager.load_from_yaml(str(path))
 
     assert migrate_gui_variable_config(loaded) == migrated
+
+
+@pytest.mark.parametrize(
+    "old,canonical",
+    [
+        ("Runoff", "Total_Runoff"),
+        ("runoff", "Total_Runoff"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("TRANSPIRATION", "Canopy_Transpiration"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+        ("canopy_interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("section", ["ref_data", "sim_data"])
+def test_legacy_top_level_water_sections_migrate_and_merge_without_changing_native_names(old, canonical, section):
+    original = {
+        section: {
+            "general": {"custom": "keep"},
+            old: {"varname": "native_field", "prefix": "original_"},
+            canonical: {"varunit": "original_unit"},
+        }
+    }
+    before = copy.deepcopy(original)
+    migrated = migrate_gui_variable_config(original)
+    assert original == before
+    assert old not in migrated[section]
+    assert migrated[section][canonical] == {
+        "varname": "native_field",
+        "prefix": "original_",
+        "varunit": "original_unit",
+    }
+    assert migrated[section]["general"] == original[section]["general"]
+    assert migrate_gui_variable_config(migrated) == migrated
+
+
+@pytest.mark.parametrize("section", ["ref_data", "sim_data"])
+def test_legacy_top_level_water_sections_reject_conflicts_without_mutating_input(section):
+    original = {section: {"Runoff": {"varname": "a"}, "Total_Runoff": {"varname": "b"}}}
+    before = copy.deepcopy(original)
+    with pytest.raises(ValueError, match="Conflicting values"):
+        migrate_gui_variable_config(original)
+    assert original == before

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from openbench.config.provenance import PROVENANCE_FIELDS
 from openbench.config.schema import OpenBenchConfig
-from openbench.util.names import get_mapping_key_case_insensitive
+from openbench.util.names import canonical_variable_name, get_mapping_key_case_insensitive
 
 if TYPE_CHECKING:
     from openbench.data.registry.schema import ReferenceDataset, VariableMapping
@@ -75,8 +75,11 @@ def _model_profile_for_entry(entry, registry) -> Any | None:
 def _inline_variable_overrides(entry, var_name: str | None) -> dict[str, Any]:
     if var_name is None or not entry.variables:
         return {}
-    key = get_mapping_key_case_insensitive(entry.variables, var_name)
-    inline = entry.variables.get(key) if key is not None else {}
+    from openbench.data.registry.manager import _canonical_variable_overlays
+
+    variables = _canonical_variable_overlays(entry.variables)
+    key = get_mapping_key_case_insensitive(variables, canonical_variable_name(var_name))
+    inline = variables.get(key) if key is not None else {}
     return inline if isinstance(inline, dict) else {}
 
 
@@ -214,8 +217,11 @@ def resolve_reference(
 
     var_map = None
     if hasattr(ref_ds, "variables"):
-        var_key = get_mapping_key_case_insensitive(ref_ds.variables, var_name)
-        var_map = ref_ds.variables.get(var_key) if var_key is not None else None
+        from openbench.data.registry.manager import _canonical_variable_overlays
+
+        variables = _canonical_variable_overlays(ref_ds.variables)
+        var_key = get_mapping_key_case_insensitive(variables, canonical_variable_name(var_name))
+        var_map = variables.get(var_key) if var_key is not None else None
     if var_map is None:
         available = list(ref_ds.variables.keys())[:10] if hasattr(ref_ds, "variables") else []
         return ResolvedReference(
@@ -327,6 +333,7 @@ def resolve_all_references(
         strict = getattr(cfg.project, "strict_reference", False)
 
     from openbench.config import ConfigError
+    from openbench.data.registry.manager import _canonical_variable_overlays
 
     # Derive the target once with registry-backed model profiles. Exact
     # reference names still need a coherent comparison context because the
@@ -336,9 +343,10 @@ def resolve_all_references(
     results = []
     errors = []
     ctx_cache: dict[str, TargetResolutionContext] = {}
+    reference_sources = _canonical_variable_overlays(cfg.reference.sources)
 
     for var_name in cfg.evaluation.variables:
-        source_value = cfg.reference.sources.get(var_name)
+        source_value = reference_sources.get(canonical_variable_name(var_name))
         if not source_value:
             r = ResolvedReference(
                 var_name=var_name,

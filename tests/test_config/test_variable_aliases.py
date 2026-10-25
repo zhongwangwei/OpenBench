@@ -9,7 +9,17 @@ from openbench.config.loader import ConfigError, _build_config
 
 @pytest.mark.parametrize(
     ("old", "canonical"),
-    [("Bare_Soil_Evaporation", "Soil_Evaporation"), ("Water_Evaporation", "Open_Water_Evaporation")],
+    [
+        ("Bare_Soil_Evaporation", "Soil_Evaporation"),
+        ("Water_Evaporation", "Open_Water_Evaporation"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+        ("transpiration", "Canopy_Transpiration"),
+        ("RUNOFF", "Total_Runoff"),
+        ("CANOPY_INTERCEPTION", "Canopy_Evaporation"),
+        ("canopy_interception", "Canopy_Evaporation"),
+    ],
 )
 def test_loader_migrates_aliases_and_preserves_native_fields(old, canonical):
     raw = {
@@ -37,18 +47,27 @@ def test_loader_migrates_aliases_and_preserves_native_fields(old, canonical):
     assert raw == original
 
 
-def test_loader_rejects_conflicting_alias_overrides():
+@pytest.mark.parametrize(
+    ("old", "canonical"),
+    [
+        ("Bare_Soil_Evaporation", "Soil_Evaporation"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+def test_loader_rejects_conflicting_alias_overrides(old, canonical):
     raw = {
         "project": {"name": "aliases", "output_dir": ".", "years": [2000, 2001]},
-        "evaluation": {"variables": ["Soil_Evaporation"]},
-        "reference": {"Soil_Evaporation": "Ref"},
+        "evaluation": {"variables": [canonical]},
+        "reference": {canonical: "Ref"},
         "simulation": {
             "Case": {
                 "model": "CoLM2024",
                 "root_dir": "/sim",
                 "variables": {
-                    "Bare_Soil_Evaporation": {"varname": "old"},
-                    "Soil_Evaporation": {"varname": "new"},
+                    old: {"varname": "old"},
+                    canonical: {"varname": "new"},
                 },
             }
         },
@@ -57,8 +76,20 @@ def test_loader_rejects_conflicting_alias_overrides():
         _build_config(raw)
 
 
-@pytest.mark.parametrize("variable", ["Soil_Evaporation", "Bare_Soil_Evaporation"])
-def test_alias_config_binds_real_reference_and_model(variable, monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("variable", "canonical", "reference", "ref_var", "sim_var"),
+    [
+        ("Soil_Evaporation", "Soil_Evaporation", "GLEAM_v4.2a_LowRes", "Eb", "f_fevpg"),
+        ("Bare_Soil_Evaporation", "Soil_Evaporation", "GLEAM_v4.2a_LowRes", "Eb", "f_fevpg"),
+        ("Transpiration", "Canopy_Transpiration", "GLEAM_v4.3a_LowRes", "Et", "f_etr"),
+        ("Canopy_Transpiration", "Canopy_Transpiration", "GLEAM_v4.3a_LowRes", "Et", "f_etr"),
+        ("Runoff", "Total_Runoff", "GRFR_LowRes", "ro", "f_rnof"),
+        ("Total_Runoff", "Total_Runoff", "GRFR_LowRes", "ro", "f_rnof"),
+    ],
+)
+def test_alias_config_binds_real_reference_and_model(
+    variable, canonical, reference, ref_var, sim_var, monkeypatch, tmp_path
+):
     from openbench.config.adapter import build_legacy_namelists
     from openbench.data.registry.manager import RegistryManager
     from openbench.gui.config_manager import model_definition_from_registry
@@ -69,24 +100,32 @@ def test_alias_config_binds_real_reference_and_model(variable, monkeypatch, tmp_
         {
             "project": {"name": "aliases", "output_dir": ".", "years": [2000, 2001]},
             "evaluation": {"variables": [variable]},
-            "reference": {variable: "GLEAM_v4.2a_LowRes"},
+            "reference": {variable: reference},
             "simulation": {"Case": {"model": "CoLM2024", "root_dir": "/sim"}},
         }
     )
     main, ref, sim = build_legacy_namelists(cfg)
-    assert main["evaluation_items"] == {"Soil_Evaporation": True}
-    assert ref["Soil_Evaporation"]["GLEAM_v4.2a_LowRes_varname"] == "Eb"
-    assert sim["Soil_Evaporation"]["Case_varname"] == "f_fevpg"
-    model_def = model_definition_from_registry("CoLM2024", ["Soil_Evaporation"], registry=registry)
-    assert model_def["Soil_Evaporation"]["varname"] == "f_fevpg"
+    assert main["evaluation_items"] == {canonical: True}
+    assert ref[canonical][f"{reference}_varname"] == ref_var
+    assert sim[canonical]["Case_varname"] == sim_var
+    model_def = model_definition_from_registry("CoLM2024", [canonical], registry=registry)
+    assert model_def[canonical]["varname"] == sim_var
 
 
-def test_gui_migration_round_trip_preserves_explicit_reference_fields():
+@pytest.mark.parametrize(
+    ("old", "canonical"),
+    [
+        ("Bare_Soil_Evaporation", "Soil_Evaporation"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+def test_gui_migration_round_trip_preserves_explicit_reference_fields(old, canonical):
     import yaml
 
     from openbench.gui.config_manager import ConfigManager
 
-    old = "Bare_Soil_Evaporation"
     manager = ConfigManager()
     gui_config = {
         "general": {"basename": "aliases", "basedir": "/out"},
@@ -109,7 +148,7 @@ def test_gui_migration_round_trip_preserves_explicit_reference_fields():
     override = exported["reference"]["overrides"]["GLEAM"]
     assert override == {
         "root_dir": f"/ref/{old}",
-        "variables": {"Soil_Evaporation": {"varname": old, "prefix": old, "sub_dir": old}},
+        "variables": {canonical: {"varname": old, "prefix": old, "sub_dir": old}},
     }
     restored = manager.unified_to_gui_config(exported)
     reexported = yaml.safe_load(manager.generate_config_yaml(restored))

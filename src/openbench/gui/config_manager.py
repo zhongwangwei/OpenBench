@@ -15,8 +15,6 @@ from openbench.util.names import canonical_variable_name
 
 _BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
 
-LEGACY_GUI_VARIABLE_NAMES = ("Water_Evaporation", "Bare_Soil_Evaporation")
-
 
 def migrate_gui_variable_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """Copy *config* and migrate only legacy GUI logical variable keys."""
@@ -134,23 +132,11 @@ def migrate_gui_variable_config(config: Dict[str, Any]) -> Dict[str, Any]:
     ref_data = migrated.get("ref_data") if isinstance(migrated.get("ref_data"), dict) else {}
     rename_source_general(ref_data.get("general"), "_ref_source", "ref_data.general")
     rename_compound_source_configs(ref_data.get("source_configs"), "ref_data.source_configs")
-    for old_name in LEGACY_GUI_VARIABLE_NAMES:
-        new_name = canonical_variable_name(old_name)
-        if old_name in ref_data:
-            value = ref_data.pop(old_name)
-            ref_data[new_name] = (
-                merge_values(value, ref_data[new_name], f"ref_data.{new_name}") if new_name in ref_data else value
-            )
+    rename_mapping_keys(ref_data, "ref_data")
 
     sim_data = migrated.get("sim_data") if isinstance(migrated.get("sim_data"), dict) else {}
     rename_source_general(sim_data.get("general"), "_sim_source", "sim_data.general")
-    for old_name in LEGACY_GUI_VARIABLE_NAMES:
-        new_name = canonical_variable_name(old_name)
-        if old_name in sim_data:
-            value = sim_data.pop(old_name)
-            sim_data[new_name] = (
-                merge_values(value, sim_data[new_name], f"sim_data.{new_name}") if new_name in sim_data else value
-            )
+    rename_mapping_keys(sim_data, "sim_data")
     for source_name, source_cfg in (sim_data.get("source_configs") or {}).items():
         if isinstance(source_cfg, dict):
             rename_mapping_keys(source_cfg.get("variables"), f"sim_data.source_configs.{source_name}.variables")

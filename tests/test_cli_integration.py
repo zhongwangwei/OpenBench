@@ -254,7 +254,7 @@ def test_model_register_interactive_comma_separated_varnames_write_fallbacks(tmp
 
     assert result.exit_code == 0, result.output
     catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
-    runoff = catalog["InteractiveModel"]["variables"]["Runoff"]
+    runoff = catalog["InteractiveModel"]["variables"]["Total_Runoff"]
 
     assert runoff["varname"] == "runoff_primary"
     assert runoff["fallbacks"] == [{"varname": "runoff_fallback", "varunit": "mm day-1"}]

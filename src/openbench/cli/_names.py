@@ -7,6 +7,7 @@ import click
 from openbench.util.names import (
     AmbiguousNameError,
     NameResolutionError,
+    canonical_variable_name,
     normalize_name,
     resolve_name_case_insensitive,
 )
@@ -18,6 +19,7 @@ def resolve_variable_filters(
 ) -> list[str]:
     """Resolve ``--variable`` filters ignoring case while preserving CLI errors."""
 
+    configured_variables = [canonical_variable_name(name) for name in configured_variables]
     resolved: list[str] = []
     unknown: list[str] = []
     for var in variables:
@@ -25,7 +27,7 @@ def resolve_variable_filters(
             resolved.append(
                 str(
                     resolve_name_case_insensitive(
-                        var,
+                        canonical_variable_name(var),
                         configured_variables,
                         label="--variable value",
                     )

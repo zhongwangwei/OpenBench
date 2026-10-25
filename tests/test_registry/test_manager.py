@@ -20,6 +20,7 @@ from openbench.config.schema import (
 )
 from openbench.data.registry.manager import RegistryManager, _auto_resolve_variant
 from openbench.data.registry.schema import ModelProfile, ReferenceDataset, VariableMapping
+from openbench.util.names import canonical_variable_name
 
 
 def _load_builtin_yaml(filename: str) -> dict:
@@ -56,11 +57,11 @@ def _canonical_variable_name(name: str) -> str:
     renamed = {
         legacy_canopy_name: "Canopy_Evaporation",
     }
-    return renamed.get(name, name)
+    return canonical_variable_name(renamed.get(name, name))
 
 
 def _catalog_variable_names(data: dict) -> set[str]:
-    return {name for name in data.get("variables", {})}
+    return {_canonical_variable_name(name) for name in data.get("variables", {})}
 
 
 def _reference_entry_for_legacy_lowres(catalog: dict, legacy_name: str) -> str | None:
@@ -96,11 +97,8 @@ def test_builtin_reference_catalog_includes_legacy_lowres_variable_definitions()
     assert missing_variables == {}
 
 
-def test_legacy_lowres_aliases_use_current_reference_tree_subdirs():
+def test_lowres_aliases_use_current_reference_tree_subdirs():
     catalog = _load_builtin_yaml("reference_catalog.yaml")
-    data_root = _legacy_openbench_wei_root() / "dataset" / "Reference" / "Grid" / "LowRes"
-    if not data_root.exists():
-        pytest.skip(f"legacy reference data tree not available: {data_root}")
 
     expected_subdirs = {
         ("AH4GUC_LowRes", "Urban_Anthropogenic_Heat_Flux"): "Anth/Urban/AH4GUC",
@@ -108,8 +106,8 @@ def test_legacy_lowres_aliases_use_current_reference_tree_subdirs():
         ("ETMonitor_LowRes", "Urban_Latent_Heat_Flux"): "Anth/Urban/ETMonitor",
         ("GGMSEUD_LowRes", "Total_Irrigation_Amount"): "Anth/Crop/GGMSEUD",
         ("GIWUED_LowRes", "Total_Irrigation_Amount"): "Anth/Crop/GIWUED",
-        ("GLEAM_v4.2a_LowRes", "Canopy_Transpiration"): "Water/Transpiration/GLEAM_v4.2a",
-        ("GRFR_LowRes", "Runoff"): "Water/Total_Runoff/GRFR",
+        ("GLEAM_v4.2a_LowRes", "Canopy_Transpiration"): "Water/Canopy_Transpiration/GLEAM_v4.2a",
+        ("GRFR_LowRes", "Total_Runoff"): "Water/Total_Runoff/GRFR",
         ("MCD43A3_LowRes", "Urban_Albedo"): "Anth/Urban/MCD43A3",
         ("MODIS_LST_LowRes", "Urban_Surface_Temperature"): "Anth/Urban/MODIS_LST",
         ("TEMP_Zhang_etal_2022_LowRes", "Urban_Air_Temperature_Max"): "Anth/Urban/TEMP_Zhang_etal_2022",
@@ -120,7 +118,7 @@ def test_legacy_lowres_aliases_use_current_reference_tree_subdirs():
     mismatches = {}
     for (entry_name, variable_name), expected in expected_subdirs.items():
         actual = catalog[entry_name]["variables"][variable_name].get("sub_dir")
-        if actual != expected or not (data_root / expected).exists():
+        if actual != expected:
             mismatches[f"{entry_name}.{variable_name}"] = actual
 
     assert mismatches == {}
@@ -133,7 +131,7 @@ def test_builtin_reference_catalog_omits_scanner_placeholder_variables():
         "ETMonitor_LowRes": {"Urban"},
         "GGMSEUD_LowRes": {"Crop"},
         "GIWUED_LowRes": {"Crop"},
-        "GRFR_LowRes": {"Total_Runoff"},
+        "GRFR_LowRes": {"Runoff"},
         "MCD43A3_LowRes": {"Urban"},
         "MODIS_LST_LowRes": {"Urban"},
         "ResOpsUS": {"Dam"},
@@ -689,14 +687,14 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             "Day",
             "${OPENBENCH_REF_ROOT}/Station/Water/Transpiration",
             "Station/Water/Transpiration",
-            ["Canopy_Transpiration", "Transpiration"],
+            ["Canopy_Transpiration"],
         ),
         "Transpiration_SAPFLUXNET_Daily": (
             "stn",
             "Day",
             "${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET",
             "Station/Water/Transpiration/SAPFLUXNET",
-            ["Canopy_Transpiration", "Transpiration"],
+            ["Canopy_Transpiration"],
         ),
         "Rodai2025_NPP": (
             "stn",
@@ -730,7 +728,7 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             "grid",
             "Day",
             "${OPENBENCH_REF_ROOT}/Grid/MidRes",
-            "Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022_0p25",
+            "Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022",
             ["Net_Radiation"],
         ),
     }
@@ -769,16 +767,17 @@ def test_gleam_midres_raw_composite_is_ignored_because_standardized_entry_exists
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
 
-    raw_profile = profiles["GLEAM_v4.2a_MidRes_RawComposite"]
-    assert raw_profile["scan"] == {
+    # Ignore hints are not registrations and remain useful if old originals still exist.
+    assert profiles["GLEAM_v4.2a_MidRes_RawComposite"]["scan"] == {
         "layout": "ignore",
         "root_sub_dir": "Grid/MidRes/Composite/GLEAM_v4.2",
     }
+    assert "GLEAM_v4.2a_MidRes_RawComposite" not in catalog
 
     entry = catalog["GLEAM_v4.2a_MidRes"]
     assert entry["root_dir"] == "${OPENBENCH_REF_ROOT}/Grid/MidRes"
     assert entry["variables"]["Evapotranspiration"]["sub_dir"] == "Water/Evapotranspiration/GLEAM_v4.2a"
-    assert entry["variables"]["Transpiration"]["sub_dir"] == "Water/Transpiration/GLEAM_v4.2a"
+    assert entry["variables"]["Canopy_Transpiration"]["sub_dir"] == "Water/Canopy_Transpiration/GLEAM_v4.2a"
 
 
 def test_expand_env_path_uses_persisted_reference_root_when_env_unset(
@@ -886,7 +885,6 @@ def test_gleam_v43_catalog_and_candidates(tmp_path, resolution, grid_res, tim_re
         "Open_Water_Evaporation": ("Ew", "mm day-1"),
         "Root_Zone_Soil_Moisture": ("SMrz", "m3 m-3"),
         "Surface_Soil_Moisture": ("SMs", "m3 m-3"),
-        "Transpiration": ("Et", "mm day-1"),
         "Sensible_Heat": ("H", "W m-2"),
     }
     assert set(ref.variables) == (set(expected) - {"Bare_Soil_Evaporation"}) | {"Soil_Evaporation"}
@@ -1273,10 +1271,10 @@ LegacyModel:
     model = mgr.get_model("LegacyModel")
 
     assert model is not None
-    assert model.variables["Runoff"].varname == "runoff_primary"
-    assert model.variables["Runoff"].fallbacks is not None
-    assert [fb.varname for fb in model.variables["Runoff"].fallbacks] == ["runoff_fallback"]
-    assert model.variables["Runoff"].fallbacks[0].varunit == "mm day-1"
+    assert model.variables["Total_Runoff"].varname == "runoff_primary"
+    assert model.variables["Total_Runoff"].fallbacks is not None
+    assert [fb.varname for fb in model.variables["Total_Runoff"].fallbacks] == ["runoff_fallback"]
+    assert model.variables["Total_Runoff"].fallbacks[0].varunit == "mm day-1"
 
 
 def test_clm5_model_preserves_legacy_carbon_flux_mappings():

@@ -111,7 +111,7 @@ def test_load_with_defaults_deep_merges_variable_overrides():
             "convert": "value * 86400",
         }
     ]
-    assert case_vars["Runoff"] == {
+    assert case_vars["Total_Runoff"] == {
         "varname": "QRUNOFF",
         "varunit": "mm day-1",
     }
@@ -788,7 +788,7 @@ simulation:
     )
     loaded = load_config(cfg)
     assert loaded.reference.overrides["RefA"]["root_dir"] == "/specific/ref"
-    assert loaded.reference.overrides["RefA"]["variables"]["Runoff"]["varname"] == "q"
+    assert loaded.reference.overrides["RefA"]["variables"]["Total_Runoff"]["varname"] == "q"
 
 
 def test_simulation_label_rejects_surrounding_space(tmp_path):

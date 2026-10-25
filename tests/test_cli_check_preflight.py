@@ -7,6 +7,7 @@ import yaml
 from click.testing import CliRunner
 
 from openbench.cli.main import cli
+from openbench.util.names import canonical_variable_name
 
 runner = CliRunner()
 
@@ -59,7 +60,7 @@ def _ref(
         years=years if years is not None else [2000, 2010],
         root_dir=root_dir,
         fulllist=fulllist,
-        variables={variable: var_map or _var()},
+        variables={canonical_variable_name(variable): var_map or _var()},
         station_matching=station_matching,
         _provenance=provenance or {},
     )
@@ -79,7 +80,7 @@ def _model(
         data_type=data_type,
         tim_res=tim_res,
         grid_res=grid_res,
-        variables={} if variables is None else variables,
+        variables={canonical_variable_name(key): value for key, value in (variables or {}).items()},
     )
 
 
@@ -208,7 +209,7 @@ def test_check_rejects_unknown_model_and_missing_model_variable(tmp_path, monkey
 
     assert result.exit_code == 1
     assert "Model 'MissingModel' is not registered" in result.output
-    assert "Variable 'Runoff' is not defined in model profile 'KnownModel'" in result.output
+    assert "Variable 'Total_Runoff' is not defined in model profile 'KnownModel'" in result.output
 
 
 def test_check_variable_filters_validation_scope(tmp_path, monkeypatch):
@@ -303,7 +304,7 @@ def test_run_variable_filter_uses_canonical_config_spelling(tmp_path, monkeypatc
     result = runner.invoke(cli, ["run", "--dry-run", "--variable", "RUNOFF", str(path)])
 
     assert result.exit_code == 0, result.output
-    assert "Variables: Runoff" in result.output
+    assert "Variables: Total_Runoff" in result.output
 
 
 def test_check_accepts_inline_only_custom_model(tmp_path, monkeypatch):
@@ -540,7 +541,7 @@ def test_check_and_run_dry_run_report_inline_station_fulllist_label(tmp_path, mo
 
     assert check_result.exit_code == 1
     assert dry_run_result.exit_code == 1
-    expected = "simulation.StationCase.variables.Runoff.fulllist contains unresolved environment variable"
+    expected = "simulation.StationCase.variables.Total_Runoff.fulllist contains unresolved environment variable"
     assert expected in check_result.output
     assert expected in dry_run_result.output
 
@@ -664,7 +665,7 @@ def test_run_dry_run_validates_model_resolution_like_check(tmp_path, monkeypatch
 
     assert result.exit_code == 1
     assert "Model 'MissingModel' is not registered" in result.output
-    assert "Variable 'Runoff' is not defined in model profile 'KnownModel'" in result.output
+    assert "Variable 'Total_Runoff' is not defined in model profile 'KnownModel'" in result.output
 
 
 def test_run_validates_model_resolution_before_runner_like_dry_run(tmp_path, monkeypatch):
@@ -705,7 +706,7 @@ def test_run_validates_model_resolution_before_runner_like_dry_run(tmp_path, mon
 
     assert result.exit_code == 1
     assert "Model 'MissingModel' is not registered" in result.output
-    assert "Variable 'Runoff' is not defined in model profile 'KnownModel'" in result.output
+    assert "Variable 'Total_Runoff' is not defined in model profile 'KnownModel'" in result.output
     assert called == []
 
 
@@ -734,7 +735,7 @@ def test_check_comparison_only_skips_missing_simulation_roots(tmp_path, monkeypa
         ),
     )
     output_dir = tmp_path / "out" / "case"
-    stem = "Runoff_ref_DemoRef_sim_CaseA"
+    stem = "Total_Runoff_ref_DemoRef_sim_CaseA"
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_bias.nc")
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_RMSE.nc")
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_correlation.nc")
@@ -768,7 +769,7 @@ def test_check_comparison_only_skips_missing_reference_roots(tmp_path, monkeypat
         ),
     )
     output_dir = tmp_path / "out" / "case"
-    stem = "Runoff_ref_DemoRef_sim_CaseA"
+    stem = "Total_Runoff_ref_DemoRef_sim_CaseA"
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_bias.nc")
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_RMSE.nc")
     _write_fake_netcdf(output_dir / "metrics" / f"{stem}_correlation.nc")
@@ -886,7 +887,7 @@ def test_check_comparison_only_skips_station_simulation_fulllist_preflight(tmp_p
         ),
     )
     output_dir = tmp_path / "out" / "case"
-    filename = "Runoff_stn_DemoRef_CaseA_evaluations.csv"
+    filename = "Total_Runoff_stn_DemoRef_CaseA_evaluations.csv"
     (output_dir / "metrics").mkdir(parents=True)
     (output_dir / "scores").mkdir()
     (output_dir / "metrics" / filename).write_text("station,bias,RMSE,correlation\nS1,1.0,1.0,1.0\n")
@@ -1402,7 +1403,7 @@ def test_grid_ref_station_sim_uses_station_list_years(tmp_path, columns):
     resolved = SimpleNamespace(
         status="ok",
         ref_ds=ref,
-        var_map=ref.variables["Runoff"],
+        var_map=ref.variables["Total_Runoff"],
         var_name="Runoff",
         source_name="DemoRef",
         resolved_name="DemoRef",
@@ -1737,3 +1738,31 @@ def test_only_drawing_skips_raw_reference_checks(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["check", str(path)])
 
     assert "has no NetCDF files" not in result.output
+
+
+@pytest.mark.parametrize(
+    "alias,canonical",
+    [
+        ("Runoff", "Total_Runoff"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("case", [str.lower, str.upper, str])
+def test_variable_filter_accepts_legacy_water_aliases(alias, canonical, case):
+    from openbench.cli._names import resolve_variable_filters
+
+    assert resolve_variable_filters((case(alias),), [canonical]) == [canonical]
+    assert resolve_variable_filters((canonical,), [alias]) == [canonical]
+
+
+def test_variable_filter_preserves_custom_spelling_and_rejects_alias_duplicates():
+    from click import ClickException
+
+    from openbench.cli._names import resolve_variable_filters
+
+    assert resolve_variable_filters(("custom_flux",), ["Custom_Flux"]) == ["Custom_Flux"]
+    with pytest.raises(ClickException, match="must be unique: Total_Runoff"):
+        resolve_variable_filters(("Runoff", "Total_Runoff"), ["Total_Runoff"])
+    with pytest.raises(ClickException, match="ambiguous ignoring case"):
+        resolve_variable_filters(("CUSTOM_FLUX",), ["Custom_Flux", "custom_flux"])

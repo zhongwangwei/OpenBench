@@ -608,10 +608,10 @@ def test_single_register_preserves_existing_descriptor_fields(tmp_path: Path):
     assert entry["category"] == "Custom"
     assert entry["timezone"] == 8
     assert entry["years"] == [1999, 2000]
-    assert entry["variables"]["Runoff"]["varname"] == "Q"
-    assert entry["variables"]["Runoff"]["varunit"] == "m3 s-1"
-    assert entry["variables"]["Runoff"]["prefix"] == "q_"
-    assert entry["variables"]["Runoff"]["suffix"] == "_daily"
+    assert entry["variables"]["Total_Runoff"]["varname"] == "Q"
+    assert entry["variables"]["Total_Runoff"]["varunit"] == "m3 s-1"
+    assert entry["variables"]["Total_Runoff"]["prefix"] == "q_"
+    assert entry["variables"]["Total_Runoff"]["suffix"] == "_daily"
 
 
 def test_register_profile_uses_writable_references_dir_and_clears_caches(
@@ -1010,7 +1010,7 @@ def test_scanner_discovers_nc4_files(tmp_path: Path):
     assert entry["data_type"] == "grid"
     assert entry["data_groupby"] != "Single"
     # Should have inspected the .nc4 file and found varname
-    assert entry["variables"]["Runoff"]["varname"] == "ro"
+    assert entry["variables"]["Total_Runoff"]["varname"] == "ro"
 
 
 def test_find_data_files_finds_nc4(tmp_path: Path):
@@ -1595,8 +1595,8 @@ def test_rescan_reinspects_nc_for_technical_provenance_and_keeps_user_fields(tmp
     catalog: dict = {}
     _register_to_dict(scanned, catalog)
     existing = catalog["DailyDemo_LowRes"]
-    existing["variables"]["Runoff"]["varname"] = "user_ro"
-    existing["variables"]["Runoff"]["prefix"] = "user_prefix_"
+    existing["variables"]["Total_Runoff"]["varname"] = "user_ro"
+    existing["variables"]["Total_Runoff"]["prefix"] = "user_prefix_"
 
     _register_to_dict(scanned, catalog, existing_descriptor=existing)
     rescanned = catalog["DailyDemo_LowRes"]
@@ -1605,8 +1605,8 @@ def test_rescan_reinspects_nc_for_technical_provenance_and_keeps_user_fields(tmp
     assert rescanned["_provenance"]["tim_res"] == "nc"
     assert abs(rescanned["grid_res"] - 0.25) < 0.01
     assert rescanned["_provenance"]["grid_res"] == "nc"
-    assert rescanned["variables"]["Runoff"]["varname"] == "user_ro"
-    assert rescanned["variables"]["Runoff"]["prefix"] == "user_prefix_"
+    assert rescanned["variables"]["Total_Runoff"]["varname"] == "user_ro"
+    assert rescanned["variables"]["Total_Runoff"]["prefix"] == "user_prefix_"
 
 
 def test_rescan_keeps_years_field_order_stable(tmp_path: Path):
@@ -2313,8 +2313,8 @@ def test_reference_profile_matches_registry_name_and_applies_metadata(monkeypatc
     assert entry["category"] == "Energy"
     assert entry["tim_res"] == "Day"
     assert entry["data_groupby"] == "single"
-    assert entry["variables"]["Runoff"]["varname"] == "Q"
-    assert entry["variables"]["Runoff"]["varunit"] == "m3 s-1"
+    assert entry["variables"]["Total_Runoff"]["varname"] == "Q"
+    assert entry["variables"]["Total_Runoff"]["varunit"] == "m3 s-1"
 
 
 def test_reference_profile_does_not_overwrite_existing_variable_edits(
@@ -2362,7 +2362,7 @@ def test_reference_profile_does_not_overwrite_existing_variable_edits(
 
     catalog: dict = {}
     _register_to_dict(scanned, catalog, existing_descriptor=existing)
-    variable = catalog["Demo_LowRes"]["variables"]["Runoff"]
+    variable = catalog["Demo_LowRes"]["variables"]["Total_Runoff"]
 
     assert variable["varname"] == "user_Q"
     assert variable["varunit"] == "user_unit"
@@ -3677,7 +3677,7 @@ def test_profile_scan_grid_composite_children_aggregates_child_dirs(monkeypatch,
 
     assert entry["description"] == "profiled GLEAM composite"
     assert entry["variables"]["Evapotranspiration"]["sub_dir"] == "Composite/GLEAM_v4.2/E"
-    assert entry["variables"]["Bare_Soil_Evaporation"]["sub_dir"] == "Composite/GLEAM_v4.2/Eb"
+    assert entry["variables"]["Soil_Evaporation"]["sub_dir"] == "Composite/GLEAM_v4.2/Eb"
     assert entry["variables"]["Open_Water_Evaporation"]["sub_dir"] == ("Water/Open_Water_Evaporation/GLEAM4.2a")
 
 
@@ -3823,7 +3823,7 @@ def test_profile_scan_grid_nested_root_uses_concrete_subdir(monkeypatch, tmp_pat
     catalog_path = tmp_path / "reference_catalog.yaml"
     register_scanned_datasets_batch([variant], catalog_path=catalog_path)
     entry = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))["DeepRunnable_LowRes"]
-    assert entry["variables"]["Runoff"]["sub_dir"] == "Water/Runoff/DeepRunnable/a/b/c"
+    assert entry["variables"]["Total_Runoff"]["sub_dir"] == "Water/Runoff/DeepRunnable/a/b/c"
 
 
 def test_profile_scan_ignore_consumes_raw_composite_tree(monkeypatch, tmp_path: Path):
@@ -3858,6 +3858,36 @@ def test_profile_scan_ignore_consumes_raw_composite_tree(monkeypatch, tmp_path: 
 
     groups = scan_reference_directory(ref_root)
     assert groups == []
+
+
+@pytest.mark.parametrize("raw_directory_present", [False, True])
+def test_builtin_gleam_raw_composite_guard_does_not_register_originals(
+    monkeypatch, tmp_path: Path, raw_directory_present
+):
+    """An optional legacy raw tree is not a second curated reference dataset."""
+    import numpy as np
+    import xarray as xr
+
+    from openbench.data.registry.manager import REGISTRY_DIR
+
+    profiles = yaml.safe_load((REGISTRY_DIR / "reference_profiles.yaml").read_text())
+    monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", profiles)
+    ref_root = tmp_path / "Reference"
+    (ref_root / "Grid" / "MidRes").mkdir(parents=True)
+    if raw_directory_present:
+        directory = ref_root / "Grid" / "MidRes" / "Composite" / "GLEAM_v4.2"
+        directory.mkdir(parents=True)
+        dataset = xr.Dataset(
+            {"E": (("time", "lat", "lon"), np.zeros((2, 2, 2), dtype="f4"))},
+            coords={
+                "time": np.array(["2001-01-01", "2001-01-02"], dtype="datetime64[D]"),
+                "lat": [0.0, 0.25],
+                "lon": [0.0, 0.25],
+            },
+        )
+        dataset["E"].attrs["units"] = "mm day-1"
+        dataset.to_netcdf(directory / "E_2001_GLEAM_v4.2a.nc")
+    assert scanner_module.scan_reference_directory(ref_root) == []
 
 
 def test_scan_uses_grandchild_dir_when_nc_files_two_levels_deep(tmp_path: Path):
@@ -4417,9 +4447,9 @@ def test_build_variables_uses_injected_remote_inspection(tmp_path):
     variables = _build_variables(scanned, descriptor, None, on_multi_var)
 
     assert chooser_calls == [("Runoff", "Runoff/RemoteSet", ["ro", "ro2"])]
-    assert variables["Runoff"]["varname"] == "ro2"
-    assert variables["Runoff"]["varunit"] == "mm/d"
-    assert variables["Runoff"]["_nc_grid_res"] == 0.5
+    assert variables["Total_Runoff"]["varname"] == "ro2"
+    assert variables["Total_Runoff"]["varunit"] == "mm/d"
+    assert variables["Total_Runoff"]["_nc_grid_res"] == 0.5
 
 
 def test_detect_data_groupby_prefers_injected_value(tmp_path):
@@ -4483,8 +4513,8 @@ def test_build_variables_prefers_remote_inspection_over_coincidental_local_dir(t
 
     variables = _build_variables(scanned, {}, None, None)
 
-    assert variables["Runoff"]["varname"] == "ro"
-    assert variables["Runoff"]["varunit"] == "mm/day"
+    assert variables["Total_Runoff"]["varname"] == "ro"
+    assert variables["Total_Runoff"]["varunit"] == "mm/day"
 
 
 def test_finalize_descriptor_prefers_remote_fulllist_over_local_regeneration(tmp_path):
@@ -4588,3 +4618,109 @@ def test_rescan_keeps_going_when_the_station_matching_check_fails(tmp_path, capl
 
     assert catalog["RiverStn"]["station_matching"] == matching
     assert "cannot check the preserved station_matching block: disk vanished" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "old,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_profile_water_alias_subset_preserves_locator(monkeypatch, old, canonical, reverse):
+    scanned_key, profile_key = (canonical, old) if reverse else (old, canonical)
+    profile = {
+        "variables": {
+            profile_key: {"varname": "native", "varunit": "mm day-1"},
+            "Evapotranspiration": {"varname": "ET", "varunit": "mm day-1"},
+        }
+    }
+    monkeypatch.setattr(scanner_module, "get_reference_profile", lambda name: profile)
+    scanned = SimpleNamespace(name="Demo", registry_name="Demo_MidRes")
+    entry = {
+        "varname": "native",
+        "varunit": "mm day-1",
+        "sub_dir": f"Water/{scanned_key}/Demo",
+        "prefix": "native_",
+        "suffix": "_025_daily",
+    }
+    result = scanner_module._apply_profile_overrides(scanned, {}, {scanned_key: entry.copy()}, {})
+    assert result == {canonical: entry}
+
+
+@pytest.mark.parametrize(
+    "old,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+def test_build_water_alias_preserves_existing_native_fields(monkeypatch, tmp_path, old, canonical):
+    monkeypatch.setattr(scanner_module, "get_reference_profile", lambda name: None)
+    scanned = ScannedDataset(
+        name="Demo",
+        resolution="MidRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path),
+        variables={canonical: f"Water/{canonical}/Demo"},
+    )
+    existing = {
+        "variables": {old: {"varname": "user_native", "varunit": "user_unit", "prefix": "old_", "suffix": "_daily"}}
+    }
+    result = scanner_module._build_variables(scanned, {}, existing, None)
+    assert result == {canonical: {**existing["variables"][old], "sub_dir": f"Water/{canonical}/Demo"}}
+
+
+@pytest.mark.parametrize("location", ["scanned", "profile", "existing"])
+def test_profile_water_alias_conflicts_fail_closed(monkeypatch, location):
+    conflict = {"Transpiration": {"varname": "one"}, "Canopy_Transpiration": {"varname": "two"}}
+    profile = {"variables": conflict if location == "profile" else {"Canopy_Transpiration": {"varname": "one"}}}
+    monkeypatch.setattr(scanner_module, "get_reference_profile", lambda name: profile)
+    scanned = SimpleNamespace(name="Demo", registry_name="Demo_MidRes")
+    variables = conflict if location == "scanned" else {"Canopy_Transpiration": {"varname": "one"}}
+    existing = {"variables": conflict} if location == "existing" else None
+    with pytest.raises(ValueError, match="Conflicting variable alias"):
+        scanner_module._apply_profile_overrides(scanned, {}, variables, {}, existing)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_build_water_alias_profile_matching_keeps_remote_native_inspection(monkeypatch, tmp_path, reverse):
+    old, canonical = "Transpiration", "Canopy_Transpiration"
+    scanned_key, profile_key = (canonical, old) if reverse else (old, canonical)
+    monkeypatch.setattr(
+        scanner_module,
+        "get_reference_profile",
+        lambda name: {"variables": {profile_key: {"varname": "ET_T", "varunit": "mm hr-1"}}},
+    )
+    scanned = ScannedDataset(
+        name="Demo",
+        resolution="MidRes",
+        category="Water",
+        data_type="grid",
+        root_dir=str(tmp_path),
+        variables={scanned_key: f"Water/{scanned_key}/Demo"},
+        nc_inspections={
+            scanned_key: {
+                "varname": "ET_T",
+                "varunit": "mm hr-1",
+                "all_data_vars": [{"name": "ET_T", "unit": "mm hr-1"}, {"name": "other", "unit": "mm hr-1"}],
+            }
+        },
+    )
+    calls = []
+    variables = scanner_module._build_variables(scanned, {}, None, lambda *args: calls.append(args))
+    assert not calls
+    assert variables[canonical]["varname"] == "ET_T"
+    assert variables[canonical]["sub_dir"] == f"Water/{scanned_key}/Demo"
+
+
+def test_scanner_descriptor_overlay_matches_water_aliases_without_losing_fields():
+    base = {"variables": {"Total_Runoff": {"varname": "ro", "varunit": "mm day-1", "sub_dir": "Water/Runoff/Demo"}}}
+    overlay = {"variables": {"Runoff": {"prefix": "user_"}}}
+    merged = scanner_module._merge_descriptor_overlay(base, overlay)
+    assert merged == {"variables": {"Total_Runoff": {**base["variables"]["Total_Runoff"], "prefix": "user_"}}}
+    assert scanner_module._descriptor_overlay_diff(base, merged) == merged

@@ -2,6 +2,8 @@ import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from openbench.gui.pages import page_sim_data
 from tests.gui_fakes import FakeLineEdit as _Text
 
@@ -444,7 +446,7 @@ def test_save_to_config_preserves_simulation_source_metadata():
     assert saved["def_nml"] == {"CaseA": "/old/def.yaml"}
     assert saved["source_configs"]["CaseA"]["general"]["fulllist"] == "/sim/list.csv"
     assert saved["source_configs"]["CaseA"]["general"]["legacy_general"] == "keep"
-    assert saved["source_configs"]["CaseA"]["variables"] == {"Runoff": {"varname": "q"}}
+    assert saved["source_configs"]["CaseA"]["variables"] == {"Total_Runoff": {"varname": "q"}}
 
 
 def test_remote_sim_helpers_expand_tilde_paths():
@@ -829,7 +831,7 @@ def test_save_to_config_only_assigns_variables_to_supporting_cases(monkeypatch):
     page_sim_data.PageSimData.save_to_config(page)
 
     general = controller.updated[1]["general"]
-    assert general["Runoff_sim_source"] == ["RunoffCase"]
+    assert general["Total_Runoff_sim_source"] == ["RunoffCase"]
     assert general["Latent_Heat_sim_source"] == ["ManualHeatCase"]
 
 
@@ -894,7 +896,7 @@ def test_remote_save_preserves_sources_only_when_registry_is_offline(monkeypatch
 
     page_sim_data.PageSimData.save_to_config(page)
 
-    assert controller.updated[1]["general"]["Runoff_sim_source"] == ["CaseA"]
+    assert controller.updated[1]["general"]["Total_Runoff_sim_source"] == ["CaseA"]
 
 
 def test_remote_registry_identity_failure_is_not_classified_as_offline():
@@ -1001,4 +1003,51 @@ def test_remote_saved_model_survives_registry_disconnect(qapp):
     page.save_to_config()
     assert controller.config["sim_data"]["_scanned_cases"][0]["model"] == "RemoteOnly"
     assert controller.config["sim_data"]["source_configs"]["CaseA"]["general"]["model_namelist"] == "RemoteOnly"
-    assert controller.config["sim_data"]["general"]["Runoff_sim_source"] == ["CaseA"]
+    assert controller.config["sim_data"]["general"]["Total_Runoff_sim_source"] == ["CaseA"]
+
+
+@pytest.mark.parametrize(
+    "old,canonical",
+    [
+        ("Runoff", "Total_Runoff"),
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("availability", ["local", "remote", "override"])
+def test_save_water_alias_sources_preserve_native_fields(monkeypatch, old, canonical, reverse, availability):
+    selected, available = (canonical, old) if reverse else (old, canonical)
+    controller = _Controller()
+    controller.config = {"evaluation_items": {selected: True}, "sim_data": {"custom": "keep"}}
+    native = {"varname": old, "prefix": "native_", "suffix": "_daily", "sub_dir": f"Water/{old}"}
+    case = {"label": "CaseA", "model": "Custom", "nc_dir": f"/sim/{old}", "prefix": "", "variables": {}}
+    if availability == "override":
+        case["variables"] = {available: native}
+    elif availability == "remote":
+        controller.is_remote_mode = lambda: True
+        monkeypatch.setattr(
+            page_sim_data.PageSimData,
+            "_registry",
+            lambda self: SimpleNamespace(get_model=lambda model: SimpleNamespace(variables={available: native})),
+        )
+    else:
+        monkeypatch.setattr(page_sim_data, "_get_model_variables", lambda model: [available])
+    page = SimpleNamespace(
+        controller=controller,
+        get_selected_cases=lambda: [case],
+        _prefix_input=_Text(""),
+        _data_type_combo=_Text("grid"),
+        _grid_res_input=_Text("0.5"),
+        _tim_res_combo=_Text("Month"),
+        _data_groupby_combo=_Text("Year"),
+        _suffix_input=_Text(".nc"),
+        _root_input=_Text("/sim"),
+    )
+    page_sim_data.PageSimData.save_to_config(page)
+    saved = controller.updated[1]
+    assert saved["general"] == {f"{canonical}_sim_source": ["CaseA"]}
+    assert saved["custom"] == "keep"
+    assert saved["source_configs"]["CaseA"]["general"]["root_dir"] == f"/sim/{old}"
+    if availability == "override":
+        assert saved["source_configs"]["CaseA"]["variables"] == {canonical: native}

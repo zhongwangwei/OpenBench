@@ -138,7 +138,10 @@ def test_evaluation_menu_uses_supported_water_variable_names():
     water = EVALUATION_ITEMS["Water Cycle"]
 
     assert "Open_Water_Evaporation" in water
-    assert "Transpiration" in water
+    assert "Canopy_Transpiration" in water
+    assert "Total_Runoff" in water
+    assert "Transpiration" not in water
+    assert "Runoff" not in water
     assert "Water_Evaporation" not in water
 
 

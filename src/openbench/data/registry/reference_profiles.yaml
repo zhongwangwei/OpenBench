@@ -495,11 +495,6 @@ Transpiration_OpenBench_Daily:
       sub_dir: ''
       varname: E_canopy_mm_day
       varunit: mm day-1
-    Transpiration:
-      sub_dir: ''
-      varname: E_canopy_mm_day
-      varunit: mm day-1
-
 Transpiration_SAPFLUXNET_Daily:
   scan:
     layout: station_direct
@@ -1007,17 +1002,11 @@ GLEAM_v4.2a:
       child: SMs
       varname: SMs
       varunit: m3 m-3
-    Transpiration:
+    Canopy_Transpiration:
       child: Et
       varname: Et
       varunit: mm day-1
 
-    Canopy_Transpiration:
-      sub_dir: Transpiration/GLEAM_v4.2a
-      varname: Et
-      varunit: mm day-1
-      prefix: Et_
-      suffix: _GLEAM_v4.2a
 GLEAM_v4.3a:
   description: GLEAM v4.3a global evaporation and soil moisture
   category: Water
@@ -1045,9 +1034,6 @@ GLEAM_v4.3a:
     Surface_Soil_Moisture:
       varname: SMs
       varunit: m3 m-3
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
     Canopy_Transpiration:
       varname: Et
       varunit: mm day-1
@@ -1079,9 +1065,6 @@ GLEAM_v4.3b:
     Surface_Soil_Moisture:
       varname: SMs
       varunit: m3 m-3
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
     Canopy_Transpiration:
       varname: Et
       varunit: mm day-1
@@ -1089,8 +1072,8 @@ GLEAM_v4.3b:
 Rn-Xu2022_0p25:
   scan:
     layout: grid_dataset_choice
-    root_sub_dir: Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022_0p25
-    nc_sub_dir: process_data
+    root_sub_dir: Grid/MidRes/Heat/Net_Radiation/Rn-Xu2022
+    nc_sub_dir: .
     file_glob: AVHRR_Rn_*.nc
   description: Rn-Xu2022 0.25 degree net radiation
   category: Energy
@@ -1157,6 +1140,9 @@ ERA5LAND:
     Diurnal_Min_Temperature:
       varname: mn2t
       varunit: K
+      fallbacks:
+      - varname: t2m
+        varunit: K
     Surface_Pressure:
       varname: sp
       varunit: Pa
@@ -1216,7 +1202,7 @@ FLUXCOM-X-BASE:
     Evapotranspiration:
       varname: ET
       varunit: mm hr-1
-    Transpiration:
+    Canopy_Transpiration:
       varname: ET_T
       varunit: mm hr-1
 
@@ -1463,7 +1449,7 @@ GRFR:
   tim_res: Month
   data_groupby: Year
   variables:
-    Runoff:
+    Total_Runoff:
       varname: ro
       varunit: mm day-1
 GloFlux:
@@ -1553,6 +1539,67 @@ SMAP_L4:
     Snow_Depth:
       varname: snow_depth
       varunit: m
+SMAP_L4_MidRes:
+  description: SMAP_L4 reference dataset (MidRes)
+  category: Water
+  tim_res: Day
+  data_groupby: Month
+  variables:
+    Snow_Depth:
+      varname: snow_depth
+      varunit: m
+SMAP_L4_Soil_LowRes:
+  description: >-
+    SMAP L4 soil products processed from provided 0.1-degree daily fields.
+    Root-zone temperature is a user-approved nominal 0–1 m derived estimate,
+    with p=0 and layerwise-uniform temperatures, weighted 0.0988, 0.1952,
+    0.3859, 0.3201 from soil_temp_layer1 through soil_temp_layer4;
+    it is not a native NASA field. Root-zone moisture only on 2016-06-13
+    is globally missing due to source corruption (date retained, no interpolation);
+    the monthly mean uses remaining valid days. Temperature is unaffected.
+  category: Water
+  tim_res: Month
+  data_groupby: Year
+  years: [2016, 2024]
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_surface
+      varunit: m3 m-3
+    Root_Zone_Soil_Moisture:
+      varname: sm_rootzone
+      varunit: m3 m-3
+    Surface_Soil_Temperature:
+      varname: soil_temp_layer1
+      varunit: K
+    Root_Zone_Soil_Temperature:
+      varname: soil_temp_rootzone_0_1m_estimate
+      varunit: K
+SMAP_L4_Soil_MidRes:
+  description: >-
+    SMAP L4 soil products processed from provided 0.1-degree daily fields.
+    Root-zone temperature is a user-approved nominal 0–1 m derived estimate,
+    with p=0 and layerwise-uniform temperatures, weighted 0.0988, 0.1952,
+    0.3859, 0.3201 from soil_temp_layer1 through soil_temp_layer4;
+    it is not a native NASA field. Root-zone moisture only on 2016-06-13
+    is globally missing due to source corruption (date retained, no interpolation);
+    the monthly mean uses remaining valid days. Temperature is unaffected.
+  category: Water
+  tim_res: Day
+  data_groupby: Year
+  years: [2016, 2024]
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_surface
+      varunit: m3 m-3
+    Root_Zone_Soil_Moisture:
+      varname: sm_rootzone
+      varunit: m3 m-3
+    Surface_Soil_Temperature:
+      varname: soil_temp_layer1
+      varunit: K
+    Root_Zone_Soil_Temperature:
+      varname: soil_temp_rootzone_0_1m_estimate
+      varunit: K
 TEMP_Zhang_etal_2022:
   description: TEMP_Zhang_etal_2022 reference dataset (LowRes)
   category: Urban

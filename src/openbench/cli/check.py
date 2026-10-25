@@ -763,12 +763,8 @@ def _effective_sim_values(entry, model_profile, var_name: str) -> dict[str, Any]
     from openbench.config.adapter import simulation_file_layout
 
     layout = simulation_file_layout(entry, model_profile, var_name)
-    inline_variables = entry.variables or {}
-    inline_key = get_mapping_key_case_insensitive(inline_variables, var_name)
-    inline = inline_variables.get(inline_key, {}) if inline_key is not None else {}
-    profile_variables = getattr(model_profile, "variables", {}) if model_profile else {}
-    profile_key = get_mapping_key_case_insensitive(profile_variables, var_name)
-    profile_var = profile_variables.get(profile_key) if profile_key is not None else None
+    inline = layout["inline_vars"]
+    profile_var = layout["profile_var"]
     return {
         "inline": inline,
         "data_type": inline.get("data_type")

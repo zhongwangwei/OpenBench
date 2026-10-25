@@ -375,6 +375,9 @@ def _validate_call(node: ast.Call, allowed_names: set[str]) -> None:
             raise ComputeError(f"Unsafe expression: numpy function '{func.attr}' is not allowed.")
         return
     if root == "xr":
+        # Named in-memory weights need this constructor, never xarray I/O or call chains.
+        if isinstance(func.value, ast.Name) and func.value.id == "xr" and func.attr == "DataArray":
+            return
         raise ComputeError(f"Unsafe expression: xarray function '{func.attr}' is not allowed.")
     if func.attr not in _SAFE_DATA_METHODS:
         raise ComputeError(f"Unsafe expression: method '{func.attr}' is not allowed.")

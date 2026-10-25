@@ -2742,7 +2742,7 @@ def test_model_register_handles_null_variables_in_catalog(tmp_path, monkeypatch)
 
     assert result.exit_code == 0, result.output
     descriptor = yaml.safe_load(catalog.read_text(encoding="utf-8"))["NullVars"]
-    assert descriptor["variables"]["Runoff"]["varname"] == "ro"
+    assert descriptor["variables"]["Total_Runoff"]["varname"] == "ro"
 
 
 def test_model_register_cancels_new_profile_with_no_variables(tmp_path, monkeypatch):
@@ -2803,7 +2803,7 @@ def test_model_register_can_return_to_previous_interactive_fields(tmp_path, monk
     assert result.exit_code == 0, result.output
     catalog = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())
     assert catalog["BackModel"]["data_type"] == "stn"
-    assert catalog["BackModel"]["variables"]["Runoff"]["varname"] == "ro2"
+    assert catalog["BackModel"]["variables"]["Total_Runoff"]["varname"] == "ro2"
     assert "Returning to: NetCDF variable name" in result.output
 
 
@@ -2848,7 +2848,7 @@ def test_model_register_can_return_to_previous_variable_without_losing_it(tmp_pa
 
     assert result.exit_code == 0, result.output
     catalog = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())
-    assert catalog["BackVariableModel"]["variables"] == {"Runoff": {"varname": "ro2", "varunit": "mm"}}
+    assert catalog["BackVariableModel"]["variables"] == {"Total_Runoff": {"varname": "ro2", "varunit": "mm"}}
     assert "Returning to the previous variable" in result.output
 
 
@@ -2905,8 +2905,8 @@ def test_model_register_double_back_keeps_completed_variables(tmp_path, monkeypa
     variables = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text())["DoubleBackModel"][
         "variables"
     ]
-    assert set(variables) == {"Runoff", "GPP"}
-    assert variables["Runoff"]["varname"] == "ro2"
+    assert set(variables) == {"Total_Runoff", "GPP"}
+    assert variables["Total_Runoff"]["varname"] == "ro2"
 
 
 def test_model_register_merges_against_latest_catalog_under_write_lock(tmp_path, monkeypatch):
@@ -3036,7 +3036,7 @@ def test_model_remove_var_can_create_overlay_from_builtin_profile(tmp_path, monk
         grid_res=0.5,
         tim_res="Month",
         variables={
-            "Runoff": VariableMapping(varname="ro", varunit="mm day-1"),
+            "Total_Runoff": VariableMapping(varname="ro", varunit="mm day-1"),
             "Evapotranspiration": VariableMapping(varname="et", varunit="mm day-1"),
         },
     )
@@ -3055,7 +3055,7 @@ def test_model_remove_var_can_create_overlay_from_builtin_profile(tmp_path, monk
     descriptor = yaml.safe_load((home / ".openbench" / "models" / "model_catalog.yaml").read_text(encoding="utf-8"))[
         "BuiltinModel"
     ]
-    assert "Runoff" not in descriptor["variables"]
+    assert "Total_Runoff" not in descriptor["variables"]
     assert "Evapotranspiration" in descriptor["variables"]
 
 
@@ -5806,7 +5806,7 @@ def test_check_fails_when_resolved_reference_root_is_missing(tmp_path, monkeypat
                 years=[2000, 2010],
                 root_dir=str(missing_ref),
                 variables={
-                    "Runoff": SimpleNamespace(
+                    "Total_Runoff": SimpleNamespace(
                         varname="ro",
                         varunit="mm day-1",
                         sub_dir="",
@@ -5865,7 +5865,7 @@ def test_check_rejects_resolved_grid_reference_root_without_netcdf_files(tmp_pat
                 years=[2000, 2010],
                 root_dir=str(ref_root),
                 variables={
-                    "Runoff": SimpleNamespace(
+                    "Total_Runoff": SimpleNamespace(
                         varname="ro",
                         varunit="mm day-1",
                         sub_dir="",
@@ -6651,7 +6651,7 @@ def test_check_warns_on_default_provenance_tim_res(tmp_path, monkeypatch):
         tim_res = "Month"
         grid_res = 0.5
         _provenance = {"tim_res": "default", "grid_res": "nc"}
-        variables = {"Runoff": SimpleNamespace(varname="ro", varunit="mm")}
+        variables = {"Total_Runoff": SimpleNamespace(varname="ro", varunit="mm")}
 
     class MockRegistry:
         def get_reference(self, name, **kw):
@@ -6827,7 +6827,9 @@ def test_run_dry_run_dump_config_is_read_only(tmp_path, monkeypatch):
                 grid_res=0.5,
                 years=[2000, 2001],
                 root_dir=str(tmp_path),
-                variables={"Runoff": SimpleNamespace(varname="Runoff", varunit="", sub_dir="", prefix="", suffix="")},
+                variables={
+                    "Total_Runoff": SimpleNamespace(varname="Runoff", varunit="", sub_dir="", prefix="", suffix="")
+                },
                 _provenance={},
             )
 
@@ -6913,7 +6915,9 @@ def test_run_dump_config_writes_runner_facing_debug_artifacts_for_real_run(tmp_p
                 grid_res=0.5,
                 years=[2000, 2001],
                 root_dir=str(tmp_path),
-                variables={"Runoff": SimpleNamespace(varname="Runoff", varunit="", sub_dir="", prefix="", suffix="")},
+                variables={
+                    "Total_Runoff": SimpleNamespace(varname="Runoff", varunit="", sub_dir="", prefix="", suffix="")
+                },
                 _provenance={},
             )
 

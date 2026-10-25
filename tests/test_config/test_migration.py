@@ -286,7 +286,7 @@ def test_migrated_config_validation_and_run_dry_run_agree(tmp_path: Path, monkey
                 timezone=0,
                 years=[2000, 2001],
                 root_dir=str(ref_root),
-                variables={"Runoff": VariableMapping(varname="runoff", varunit="mm day-1", prefix="runoff_")},
+                variables={"Total_Runoff": VariableMapping(varname="runoff", varunit="mm day-1", prefix="runoff_")},
                 _provenance={},
             )
 

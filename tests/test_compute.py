@@ -387,3 +387,29 @@ def test_required_compute_inputs_exclude_optional_reads(expression, expected):
     from openbench.data.compute import compute_required_inputs
 
     assert compute_required_inputs(expression)[0] == expected
+
+
+def test_compute_allows_only_direct_dataarray_constructor_for_named_weights():
+    ds = xr.Dataset({"a": (("layer",), [270.0, 300.0])}, coords={"layer": [1, 2]})
+    result = execute_compute(
+        ds,
+        "(ds['a'] * xr.DataArray([0.25, 0.75], dims=['layer'], coords=[ds['a']['layer']])).sum('layer', skipna=False)",
+        "weighted_temperature",
+    )
+    assert float(result) == pytest.approx(292.5)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "xr.open_dataset('not-permitted.nc')",
+        "xr.backends.DataArray([1])",
+        "xr.DataArray.from_dict(ds.attrs)",
+        "xr.DataArray([1]).to_netcdf('not-permitted.nc')",
+        "xr.DataArray([1]).data.tofile('not-permitted.bin')",
+        "xr.DataArray([1]).close()",
+    ],
+)
+def test_compute_dataarray_constructor_does_not_enable_xarray_io_or_call_chains(expression):
+    with pytest.raises(ComputeError, match="Unsafe expression"):
+        execute_compute(xr.Dataset(), expression, "unsafe_constructor_chain")

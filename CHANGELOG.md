@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Added
+- Register SMAP L4 soil products for 2016–2024: 0.25° daily MidRes and 0.5°
+  monthly LowRes surface/root-zone moisture and temperature. Root-zone
+  temperature is explicitly a nominal-layer 0–1 m estimate, not a native
+  NASA field. Root-zone moisture on 2016-06-13 remains missing for the entire day.
+- CoLM2024 root-zone soil temperature uses the native `f_t_soisno` 15-position
+  snow/soil profile to calculate a 0–1 m thickness-weighted mean, including
+  the partial eighth soil layer. Nonstandard profile lengths fail closed.
+
+### Fixed
+- Legacy SMAP L4 MidRes snow files use monthly file grouping with daily samples;
+  ERA5-Land daily minimum temperature also accepts native `t2m` in kelvin.
+- Preserve the GLEAM v4.2 raw-composite scan exclusion for installations that
+  retain old originals alongside the standardized reference products.
+- Merge the logical aliases `Transpiration`/`Canopy_Transpiration`,
+  `Canopy_Interception`/`Canopy_Evaporation` and `Runoff`/`Total_Runoff` without renaming native NetCDF variables. Keep surface
+  and subsurface runoff separate. CLM/ELM/E3SM total runoff uses native mm/s;
+  GLDAS total runoff excludes the internal snowmelt flux. CLM canopy evaporation
+  retains `QVEGE`; precipitation intercepted onto the canopy (`QINTR`) is not
+  an evaporation flux.
+- Update reference paths for merged transpiration folders and flattened
+  ERA5-Land, GlobSnow, LGS_Reco, MSWEP, MSWX and Rn-Xu2022 directories. Rn-Xu2022 uses
+  daily samples stored in monthly files, not monthly-mean samples.
+
 ## [3.0.9] - 2026-10-24
 
 ### Changed

@@ -34,7 +34,6 @@ EVALUATION_ITEMS = {
         "Terrestrial_Water_Storage_Change",
         "Total_Runoff",
         "Open_Water_Evaporation",
-        "Transpiration",
     ],
     "Energy Cycle": [
         "Surface_Albedo",

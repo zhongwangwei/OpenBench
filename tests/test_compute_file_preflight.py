@@ -117,7 +117,7 @@ def test_cli_and_runtime_agree_on_compute_branches(tmp_path, monkeypatch, comman
     assert ("same names in several folders" in result.output) == (not complementary)
 
     processor = object.__new__(DatasetProcessing)
-    processor.__dict__.update(item="Runoff", sim_source="Sim", Sim_model="KnownModel")
+    processor.__dict__.update(item="Total_Runoff", sim_source="Sim", Sim_model="KnownModel")
     selected = processor._find_data_files(str(root), "runoff_", 2001, "", "sim", ["runoff"])
     assert {path.relative_to(root).as_posix() for path in map(Path, selected)} == {
         "rain/input_2001.nc",

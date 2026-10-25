@@ -13,7 +13,11 @@ from typing import Any
 
 from openbench.config.schema import OpenBenchConfig, is_simple_project_name
 from openbench.data._system_resources import effective_cpu_count
-from openbench.util.names import get_mapping_key_case_insensitive, get_mapping_value_case_insensitive
+from openbench.util.names import (
+    canonical_variable_name,
+    get_mapping_key_case_insensitive,
+    get_mapping_value_case_insensitive,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -788,9 +792,14 @@ def simulation_file_layout(sim_entry, model_profile, var_name: str) -> dict[str,
     Inline ``simulation.<label>.variables`` settings win over entry-level ones,
     which win over the model profile.
     """
-    inline_key = get_mapping_key_case_insensitive(sim_entry.variables or {}, var_name)
-    inline_vars = (sim_entry.variables or {}).get(inline_key, {}) if inline_key is not None else {}
-    profile_variables = getattr(model_profile, "variables", None) or {}
+    from openbench.data.registry.manager import _canonical_variable_overlays
+
+    # Programmatic configs can bypass the loader's logical-name normalization.
+    var_name = canonical_variable_name(var_name)
+    inline_variables = _canonical_variable_overlays(sim_entry.variables)
+    inline_key = get_mapping_key_case_insensitive(inline_variables, var_name)
+    inline_vars = inline_variables.get(inline_key, {}) if inline_key is not None else {}
+    profile_variables = _canonical_variable_overlays(getattr(model_profile, "variables", None))
     profile_key = get_mapping_key_case_insensitive(profile_variables, var_name) if model_profile else None
     profile_var = profile_variables[profile_key] if profile_key is not None else None
 

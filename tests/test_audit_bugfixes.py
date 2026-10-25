@@ -130,7 +130,7 @@ def test_reference_builder_preserves_compute_and_prefix_fallback():
         }
     )
 
-    mapping = ref.variables["Runoff"]
+    mapping = ref.variables["Total_Runoff"]
     assert mapping.compute == "ds['surface'] + ds['subsurface']"
     assert mapping.prefix_fallback == ["alt_"]
 

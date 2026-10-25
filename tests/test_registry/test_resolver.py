@@ -180,6 +180,81 @@ def _var(varname: str, varunit: str = "") -> VariableMapping:
     return VariableMapping(varname=varname, varunit=varunit)
 
 
+@pytest.mark.parametrize(
+    "legacy,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("legacy_mapping", [False, True])
+def test_reference_resolution_accepts_programmatic_alias_keys(legacy, canonical, legacy_mapping):
+    key = legacy if legacy_mapping else canonical
+    mapping = VariableMapping(varname=legacy, varunit="mm s-1", sub_dir=legacy)
+    ref = _make_ref("Demo", variables={key: mapping})
+    registry = FakeRegistry({"Demo": ref})
+
+    for requested in [legacy, canonical]:
+        result = resolve_reference(requested, "Demo", registry)
+        assert result.status == "ok"
+        assert result.var_name == requested
+        assert result.var_map is mapping
+
+    assert ref.variables == {key: mapping}
+    assert mapping.varname == legacy
+    assert mapping.sub_dir == legacy
+
+
+@pytest.mark.parametrize(
+    "legacy,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+@pytest.mark.parametrize("legacy_query", [False, True])
+def test_programmatic_source_bindings_accept_opposite_alias_key(legacy, canonical, legacy_query):
+    requested, binding = (legacy, canonical) if legacy_query else (canonical, legacy)
+    ref = _make_ref("Demo", variables={canonical: _var("native_flux", "mm day-1")})
+    cfg = _make_cfg(
+        [requested],
+        {binding: "Demo"},
+        comparison_tim_res="Month",
+        comparison_grid_res=0.5,
+    )
+
+    result = resolve_all_references(cfg, FakeRegistry({"Demo": ref}))
+
+    assert len(result) == 1
+    assert result[0].status == "ok"
+    assert result[0].var_name == requested
+    assert result[0].var_map.varname == "native_flux"
+    assert cfg.reference.sources == {binding: "Demo"}
+
+
+@pytest.mark.parametrize(
+    "legacy,canonical",
+    [
+        ("Transpiration", "Canopy_Transpiration"),
+        ("Runoff", "Total_Runoff"),
+        ("Canopy_Interception", "Canopy_Evaporation"),
+    ],
+)
+def test_programmatic_resolution_context_keeps_legacy_inline_overrides(legacy, canonical):
+    from openbench.config.resolver import derive_target_resolution_context
+
+    cfg = _make_cfg([canonical], {canonical: "Demo"}, sim_tim_res="Month", sim_grid_res=0.5)
+    cfg.simulation["sim1"].variables = {legacy: {"tim_res": "Day", "grid_res": 0.25, "varname": legacy}}
+
+    context = derive_target_resolution_context(cfg, FakeRegistry({}), var_name=canonical)
+
+    assert context.tim_res == "Day"
+    assert context.grid_res == 0.25
+    assert cfg.simulation["sim1"].variables[legacy]["varname"] == legacy
+
+
 # ---------------------------------------------------------------------------
 # resolve_reference unit tests
 # ---------------------------------------------------------------------------

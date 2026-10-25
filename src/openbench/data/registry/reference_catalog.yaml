@@ -562,6 +562,9 @@ ERA5LAND_LowRes:
     Diurnal_Min_Temperature:
       varname: mn2t
       varunit: K
+      fallbacks:
+      - varname: t2m
+        varunit: K
       sub_dir: Meteo/Diurnal_Min_Temperature/ERA5LAND
       prefix: ERA5LAND_
       suffix: _daymin_2m_temperature_1D_0p25
@@ -706,7 +709,7 @@ ERA5LAND_MidRes:
     Surface_Upward_LW_Radiation:
       varname: sutr
       varunit: W m-2
-      sub_dir: Heat/Surface_Upward_LW_Radiation/ERA5LAND/0p25deg_daily
+      sub_dir: Heat/Surface_Upward_LW_Radiation/ERA5LAND
       prefix: ERA5LAND_
       suffix: _sutr_1D_0p25
       years:
@@ -929,7 +932,7 @@ ET_Xu_etal_2025_MidRes:
     Evapotranspiration:
       varname: ET
       varunit: mm day-1
-      sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025
+      sub_dir: Water/Evapotranspiration/ET_Xu_etal_2025_0p25
       prefix: AutoML_predict_
       suffix: _1D_0p25
   _provenance:
@@ -972,10 +975,10 @@ FLUXCOM-X-BASE_LowRes:
       years:
         - 2001
         - 2020
-    Transpiration:
+    Canopy_Transpiration:
       varname: ET_T
       varunit: mm hr-1
-      sub_dir: Water/Transpiration/FLUXCOM-X-BASE
+      sub_dir: Water/Canopy_Transpiration/FLUXCOM-X-BASE
       prefix: ET_T_
       suffix: _025_monthly
       grid_res: 0.25
@@ -1015,10 +1018,10 @@ FLUXCOM-X-BASE_MidRes:
       sub_dir: Water/Evapotranspiration/FLUXCOM-X-BASE
       prefix: ET_
       suffix: _025_daily
-    Transpiration:
+    Canopy_Transpiration:
       varname: ET_T
       varunit: mm hr-1
-      sub_dir: Water/Transpiration/FLUXCOM-X-BASE
+      sub_dir: Water/Canopy_Transpiration/FLUXCOM-X-BASE
       prefix: ET_T_
       suffix: _025_daily
   _provenance:
@@ -1485,14 +1488,8 @@ GLEAM_v4.2a_LowRes:
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.2a
       prefix: SMs_
       suffix: _GLEAM_v4.2a
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.2a
-      prefix: Et_
-      suffix: _GLEAM_v4.2a
     Canopy_Transpiration:
-      sub_dir: Water/Transpiration/GLEAM_v4.2a
+      sub_dir: Water/Canopy_Transpiration/GLEAM_v4.2a
       varname: Et
       varunit: mm day-1
       prefix: Et_
@@ -1557,10 +1554,10 @@ GLEAM_v4.2a_MidRes:
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.2a
       prefix: SMs_
       suffix: _GLEAM_v4.2a
-    Transpiration:
+    Canopy_Transpiration:
       varname: Et
       varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.2a
+      sub_dir: Water/Canopy_Transpiration/GLEAM_v4.2a
       prefix: Et_
       suffix: _GLEAM_v4.2a
   _provenance:
@@ -1622,12 +1619,6 @@ GLEAM_v4.3a_LowRes:
       varunit: m3 m-3
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.3a
       prefix: SMs_
-      suffix: _GLEAM_v4.3a
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.3a
-      prefix: Et_
       suffix: _GLEAM_v4.3a
     Canopy_Transpiration:
       sub_dir: Water/Canopy_Transpiration/GLEAM_v4.3a
@@ -1691,12 +1682,6 @@ GLEAM_v4.3a_MidRes:
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.3a
       prefix: SMs_
       suffix: _GLEAM_v4.3a
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.3a
-      prefix: Et_
-      suffix: _GLEAM_v4.3a
     Canopy_Transpiration:
       sub_dir: Water/Canopy_Transpiration/GLEAM_v4.3a
       varname: Et
@@ -1759,12 +1744,6 @@ GLEAM_v4.3b_LowRes:
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.3b
       prefix: SMs_
       suffix: _GLEAM_v4.3b
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.3b
-      prefix: Et_
-      suffix: _GLEAM_v4.3b
     Canopy_Transpiration:
       sub_dir: Water/Canopy_Transpiration/GLEAM_v4.3b
       varname: Et
@@ -1826,12 +1805,6 @@ GLEAM_v4.3b_MidRes:
       varunit: m3 m-3
       sub_dir: Water/Surface_Soil_Moisture/GLEAM_v4.3b
       prefix: SMs_
-      suffix: _GLEAM_v4.3b
-    Transpiration:
-      varname: Et
-      varunit: mm day-1
-      sub_dir: Water/Transpiration/GLEAM_v4.3b
-      prefix: Et_
       suffix: _GLEAM_v4.3b
     Canopy_Transpiration:
       sub_dir: Water/Canopy_Transpiration/GLEAM_v4.3b
@@ -2111,7 +2084,7 @@ GRFR_LowRes:
   - 2019
   grid_res: 0.5
   variables:
-    Runoff:
+    Total_Runoff:
       sub_dir: Water/Total_Runoff/GRFR
       varname: ro
       varunit: mm day-1
@@ -2134,7 +2107,7 @@ GRFR_MidRes:
   - 1979
   - 2019
   variables:
-    Runoff:
+    Total_Runoff:
       sub_dir: Water/Total_Runoff/GRFR
       varname: ro
       varunit: mm day-1
@@ -2425,7 +2398,7 @@ LGS_Reco_LowRes:
     Ecosystem_Respiration:
       varname: Reco
       varunit: gC m-2 day-1
-      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco/0p25deg
+      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco
       prefix: LGS_Reco_
   _provenance:
     data_groupby: profile
@@ -2540,7 +2513,7 @@ MSWEP_0p25_MidRes:
     Precipitation:
       varname: precipitation
       varunit: mm d-1
-      sub_dir: Water/Precipitation/MSWEP_0p25
+      sub_dir: Water/Precipitation/MSWEP
       prefix: Precipitation_
   _provenance:
     data_groupby: scan
@@ -2586,37 +2559,37 @@ MSWX_0p25_LowRes:
     Surface_Downward_LW_Radiation:
       varname: downward_longwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX
       prefix: LWd_
     Surface_Downward_SW_Radiation:
       varname: downward_shortwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX
       prefix: SWd_
     Diurnal_Max_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX
       prefix: Tmax_
     Diurnal_Min_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX
       prefix: Tmin_
     Surface_Air_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX
       prefix: Temp_
     Surface_Specific_Humidity:
       varname: specific_humidity
       varunit: kg kg-1
-      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX
       prefix: SpecHum_
     Surface_Wind_Speed:
       varname: wind_speed
       varunit: m s-1
-      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX
       prefix: Wind_
   _provenance:
     data_groupby: scan
@@ -2639,42 +2612,42 @@ MSWX_0p25_MidRes:
     Surface_Downward_LW_Radiation:
       varname: downward_longwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX_0p25
+      sub_dir: Heat/Surface_Downward_LW_Radiation/MSWX
       prefix: LWd_
     Surface_Downward_SW_Radiation:
       varname: downward_shortwave_radiation
       varunit: W m-2
-      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX_0p25
+      sub_dir: Heat/Surface_Downward_SW_Radiation/MSWX
       prefix: SWd_
     Diurnal_Max_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX_0p25
+      sub_dir: Meteo/Diurnal_Max_Temperature/MSWX
       prefix: Tmax_
     Diurnal_Min_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX_0p25
+      sub_dir: Meteo/Diurnal_Min_Temperature/MSWX
       prefix: Tmin_
     Surface_Air_Temperature:
       varname: air_temperature
       varunit: degree_Celsius
-      sub_dir: Meteo/Surface_Air_Temperature/MSWX_0p25
+      sub_dir: Meteo/Surface_Air_Temperature/MSWX
       prefix: Temp_
     Surface_Specific_Humidity:
       varname: specific_humidity
       varunit: kg kg-1
-      sub_dir: Meteo/Surface_Specific_Humidity/MSWX_0p25
+      sub_dir: Meteo/Surface_Specific_Humidity/MSWX
       prefix: SpecHum_
     Surface_Wind_Speed:
       varname: wind_speed
       varunit: m s-1
-      sub_dir: Meteo/Surface_Wind_Speed/MSWX_0p25
+      sub_dir: Meteo/Surface_Wind_Speed/MSWX
       prefix: Wind_
     Precipitation:
       varname: precipitation
       varunit: mm 3h-1
-      sub_dir: Water/Precipitation/MSWX_0p25
+      sub_dir: Water/Precipitation/MSWX
       prefix: Precipitation_
   _provenance:
     data_groupby: scan
@@ -2969,16 +2942,16 @@ Rn-Xu2022_MidRes:
   grid_res: 0.25
   name: Rn-Xu2022_MidRes
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
-  tim_res: Month
+  tim_res: Day
   timezone: 0
   years:
     - 1982
     - 2019
   variables:
     Net_Radiation:
-      sub_dir: Heat/Net_Radiation/Rn-Xu2022_0p25/process_data/
+      sub_dir: Heat/Net_Radiation/Rn-Xu2022
       varname: Rn
-      varunit: ''
+      varunit: W m-2
       prefix: AVHRR_Rn_
 SMAPL3_LowRes:
   name: SMAPL3_LowRes
@@ -3029,7 +3002,7 @@ SMAP_L4_MidRes:
   category: Water
   data_type: grid
   tim_res: Day
-  data_groupby: Single
+  data_groupby: Month
   timezone: 0
   root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
   years:
@@ -3042,11 +3015,97 @@ SMAP_L4_MidRes:
       varunit: m
       sub_dir: Water/Snow_Depth/SMAP_L4
       prefix: SMAP_L4_snow_depth_
-      suffix: '01'
+      suffix: ''
   _provenance:
     data_groupby: profile
     tim_res: nc
     grid_res: scan
+SMAP_L4_Soil_LowRes:
+  name: SMAP_L4_Soil_LowRes
+  description: >-
+    SMAP L4 soil products processed from provided 0.1-degree daily fields.
+    Root-zone temperature is a user-approved nominal 0–1 m derived estimate,
+    with p=0 and layerwise-uniform temperatures, weighted 0.0988, 0.1952,
+    0.3859, 0.3201 from soil_temp_layer1 through soil_temp_layer4;
+    it is not a native NASA field. Root-zone moisture only on 2016-06-13
+    is globally missing due to source corruption (date retained, no interpolation);
+    the monthly mean uses remaining valid days. Temperature is unaffected.
+  category: Water
+  data_type: grid
+  tim_res: Month
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/LowRes
+  grid_res: 0.5
+  years: [2016, 2024]
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_surface
+      varunit: m3 m-3
+      sub_dir: Water/Surface_Soil_Moisture/SMAP_L4_Soil
+      prefix: SMAP_L4_sm_surface_
+      suffix: ''
+    Root_Zone_Soil_Moisture:
+      varname: sm_rootzone
+      varunit: m3 m-3
+      sub_dir: Water/Root_Zone_Soil_Moisture/SMAP_L4_Soil
+      prefix: SMAP_L4_sm_rootzone_
+      suffix: ''
+    Surface_Soil_Temperature:
+      varname: soil_temp_layer1
+      varunit: K
+      sub_dir: Meteo/Surface_Soil_Temperature/SMAP_L4_Soil
+      prefix: SMAP_L4_soil_temp_layer1_
+      suffix: ''
+    Root_Zone_Soil_Temperature:
+      varname: soil_temp_rootzone_0_1m_estimate
+      varunit: K
+      sub_dir: Meteo/Root_Zone_Soil_Temperature/SMAP_L4_Soil
+      prefix: SMAP_L4_soil_temp_rootzone_0_1m_estimate_
+      suffix: ''
+SMAP_L4_Soil_MidRes:
+  name: SMAP_L4_Soil_MidRes
+  description: >-
+    SMAP L4 soil products processed from provided 0.1-degree daily fields.
+    Root-zone temperature is a user-approved nominal 0–1 m derived estimate,
+    with p=0 and layerwise-uniform temperatures, weighted 0.0988, 0.1952,
+    0.3859, 0.3201 from soil_temp_layer1 through soil_temp_layer4;
+    it is not a native NASA field. Root-zone moisture only on 2016-06-13
+    is globally missing due to source corruption (date retained, no interpolation);
+    the monthly mean uses remaining valid days. Temperature is unaffected.
+  category: Water
+  data_type: grid
+  tim_res: Day
+  data_groupby: Year
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Grid/MidRes
+  grid_res: 0.25
+  years: [2016, 2024]
+  variables:
+    Surface_Soil_Moisture:
+      varname: sm_surface
+      varunit: m3 m-3
+      sub_dir: Water/Surface_Soil_Moisture/SMAP_L4_Soil
+      prefix: SMAP_L4_sm_surface_
+      suffix: ''
+    Root_Zone_Soil_Moisture:
+      varname: sm_rootzone
+      varunit: m3 m-3
+      sub_dir: Water/Root_Zone_Soil_Moisture/SMAP_L4_Soil
+      prefix: SMAP_L4_sm_rootzone_
+      suffix: ''
+    Surface_Soil_Temperature:
+      varname: soil_temp_layer1
+      varunit: K
+      sub_dir: Meteo/Surface_Soil_Temperature/SMAP_L4_Soil
+      prefix: SMAP_L4_soil_temp_layer1_
+      suffix: ''
+    Root_Zone_Soil_Temperature:
+      varname: soil_temp_rootzone_0_1m_estimate
+      varunit: K
+      sub_dir: Meteo/Root_Zone_Soil_Temperature/SMAP_L4_Soil
+      prefix: SMAP_L4_soil_temp_rootzone_0_1m_estimate_
+      suffix: ''
 SWAMPS_v3.2_LowRes:
   name: SWAMPS_v3.2_LowRes
   description: SWAMPS_v3.2 reference dataset (LowRes)
@@ -3177,10 +3236,10 @@ Transpiration_Li_etal2024_LowRes:
   - 2020
   grid_res: 0.5
   variables:
-    Transpiration:
+    Canopy_Transpiration:
       varname: Ec
       varunit: mm d-1
-      sub_dir: Water/Transpiration/Transpiration_Li_etal2024
+      sub_dir: Water/Canopy_Transpiration/Transpiration_Li_etal2024
       prefix: Merged.Tveg.
   _provenance:
     data_groupby: scan
@@ -3319,7 +3378,7 @@ globsnow_v3_MidRes:
     Snow_Water_Equivalent:
       varname: swe
       varunit: mm
-      sub_dir: Water/Snow_Water_Equivalent/globsnow_v3/0p25deg_daily/
+      sub_dir: Water/Snow_Water_Equivalent/globsnow_v3
       prefix: globsnow_swe_daily_lonlat_0.25deg_standardized_
       suffix:
   _provenance:
@@ -3342,7 +3401,7 @@ LGS_Reco_MidRes:
     Ecosystem_Respiration:
       varname: Reco
       varunit: gC m-2 day-1
-      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco/0p25deg/0p25deg
+      sub_dir: Bio/Ecosystem_Respiration/LGS_Reco
       prefix: LGS_Reco_
       suffix: _0p25
   grid_res: 0.25
@@ -3675,10 +3734,6 @@ Transpiration_OpenBench_Daily:
       sub_dir: ''
       varname: E_canopy_mm_day
       varunit: mm day-1
-    Transpiration:
-      sub_dir: ''
-      varname: E_canopy_mm_day
-      varunit: mm day-1
   _provenance:
     data_groupby: profile
     tim_res: profile
@@ -3775,7 +3830,7 @@ Rn-Xu2022_0p25_MidRes:
   grid_res: 0.25
   variables:
     Net_Radiation:
-      sub_dir: Heat/Net_Radiation/Rn-Xu2022_0p25/process_data
+      sub_dir: Heat/Net_Radiation/Rn-Xu2022
       varname: Rn
       varunit: w m-2
       prefix: AVHRR_Rn_
@@ -3820,7 +3875,7 @@ GRFR_HigRes:
     - 2019
   grid_res: 0.05
   variables:
-    Runoff:
+    Total_Runoff:
       varname: ro
       varunit: mm day-1
       sub_dir: Water/Total_Runoff/GRFR/0p05_daily/

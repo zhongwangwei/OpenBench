@@ -39,6 +39,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
+from openbench.gui.config_manager import migrate_gui_variable_config
+from openbench.util.names import canonical_variable_name
 from openbench.gui.localization import get_language_manager, translate_text
 from openbench.gui.remote_python import quote_remote_path
 from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
@@ -1228,7 +1230,8 @@ class PageSimData(BasePage):
 
     def save_to_config(self):
         cases = self.get_selected_cases()
-        existing_sim_data = self.controller.config.get("sim_data", {})
+        config = migrate_gui_variable_config(self.controller.config)
+        existing_sim_data = config.get("sim_data", {})
         preserved = {
             key: value
             for key, value in existing_sim_data.items()
@@ -1302,7 +1305,7 @@ class PageSimData(BasePage):
         # For every selected evaluation variable, only compatible selected cases are sources.
         # Do not fall back to all model-profile variables: Evaluation Variables
         # is the user's source of truth, and an empty selection must stay empty.
-        eval_items = self.controller.config.get("evaluation_items", {})
+        eval_items = config.get("evaluation_items", {})
         selected_vars = [k for k, v in eval_items.items() if v]
 
         # Preserve user-set fields inside sim_data["general"] (e.g. `data_root`
@@ -1334,10 +1337,10 @@ class PageSimData(BasePage):
                     return
         for var_name in selected_vars:
             sources = []
-            var_key = str(var_name).casefold()
+            var_key = canonical_variable_name(var_name).casefold()
             for c in cases:
                 overrides = c.get("variables") if isinstance(c.get("variables"), dict) else {}
-                if var_key in {str(name).casefold() for name in overrides}:
+                if var_key in {canonical_variable_name(name).casefold() for name in overrides}:
                     sources.append(c["label"])
                     continue
                 model = c.get("model", "")
@@ -1348,7 +1351,7 @@ class PageSimData(BasePage):
                         try:
                             profile = remote_registry.get_model(model)
                             variables = profile.variables.keys() if profile and hasattr(profile, "variables") else []
-                            model_vars_cache[model] = {str(name).casefold() for name in variables}
+                            model_vars_cache[model] = {canonical_variable_name(name).casefold() for name in variables}
                         except Exception as exc:
                             if _remote_registry_is_offline(self.controller):
                                 remote_registry_unavailable = True
@@ -1360,7 +1363,8 @@ class PageSimData(BasePage):
                                 return
                     else:
                         model_vars_cache[model] = {
-                            str(name).casefold() for name in PageSimData._registry_model_variables(self, model)
+                            canonical_variable_name(name).casefold()
+                            for name in PageSimData._registry_model_variables(self, model)
                         }
                 if var_key in model_vars_cache[model]:
                     sources.append(c["label"])
@@ -1390,6 +1394,7 @@ class PageSimData(BasePage):
             },
         }
 
+        sim_data = migrate_gui_variable_config({"sim_data": sim_data})["sim_data"]
         self.controller.update_section("sim_data", sim_data)
 
     def load_from_config(self):
