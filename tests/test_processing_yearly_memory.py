@@ -111,7 +111,7 @@ def test_single_file_preprocessing_stays_lazy_and_closes_source(tmp_path):
         else (_ for _ in ()).throw(AssertionError(kwargs))
     )
     processor.check_coordinate = lambda ds: ds
-    processor.check_dataset_time_integrity = lambda ds, *args: ds
+    processor.check_dataset_time_integrity = lambda ds, *args, **kwargs: ds
     processor.select_timerange = lambda ds, *args: ds
     processor.process_units = lambda ds, unit, datasource=None: (ds, unit)
     processor.split_year = lambda *args: None

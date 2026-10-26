@@ -309,7 +309,7 @@ class TimeCoreMixin:
             )
 
     def check_dataset_time_integrity(
-        self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str
+        self, ds: xr.Dataset, syear: int, eyear: int, tim_res: str, datasource: str, *, source_files=None
     ) -> xr.Dataset:
         """Checks and fills missing time values in an xarray Dataset with specified comparison scales."""
         ds = self.check_time(ds, syear, eyear, tim_res)
@@ -321,7 +321,9 @@ class TimeCoreMixin:
             ds["time"] = pd.DatetimeIndex(ds["time"].values)
         else:
             if getattr(self, f"{datasource}_data_type", "") != "stn":
-                ds = self.apply_model_specific_time_adjustment(ds, datasource, syear, eyear, tim_res)
+                ds = self.apply_model_specific_time_adjustment(
+                    ds, datasource, syear, eyear, tim_res, source_files=source_files
+                )
         self._validate_strict_time_coverage(ds, syear, eyear, tim_res)
         ds = self.make_time_integrity(ds, syear, eyear, tim_res, datasource)
         return ds
