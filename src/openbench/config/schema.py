@@ -74,6 +74,7 @@ class ProjectConfig:
     min_year_threshold: int = 1  # Per-station filter: drop stations whose valid span < N years (stn ref only)
     lat_range: list[float] = field(default_factory=lambda: [-90.0, 90.0])  # Spatial bounds, default global
     lon_range: list[float] = field(default_factory=lambda: [-180.0, 180.0])  # Spatial bounds, default global
+    basin_mask: Optional[str] = None  # Optional NetCDF footprint used to mask station and grid-grid evaluations
 
     # --- Target resolution (used in ALL phases: evaluation, comparison, statistics) ---
     tim_res: Optional[str] = None  # Target time resolution: Month | Day | Hour | Year (also "3hr" etc.)

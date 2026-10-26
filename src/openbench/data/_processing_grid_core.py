@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - mirrors processing.py fallback
             _write_netcdf_atomic(ds, output_path, compression=compression)
 
 
-REGRID_ALGORITHM_VERSION = "2026-10-17.regrid-v3"
+REGRID_ALGORITHM_VERSION = "2026-10-26.regrid-v4-basin-mask"
 REGRID_BACKENDS = {
     "openbench_conservative",
     "cdo_remapcon",
@@ -462,6 +462,20 @@ class GridProcessingCoreMixin:
             }
         )
 
+    def _apply_configured_grid_basin_mask(self, data: xr.Dataset) -> xr.Dataset:
+        """Mask pure grid-grid output while leaving station-involved paths unchanged."""
+        mask_path = getattr(self, "basin_mask", None)
+        ref_type = str(getattr(self, "ref_data_type", "grid")).lower()
+        sim_type = str(getattr(self, "sim_data_type", "grid")).lower()
+        if not mask_path or ref_type != "grid" or sim_type != "grid":
+            return data
+
+        from openbench.data.basin_mask import apply_basin_mask_to_grid
+
+        masked = apply_basin_mask_to_grid(data, mask_path)
+        logging.debug("Applied grid basin mask to %s output: %s", getattr(self, "item", "grid"), mask_path)
+        return masked
+
     def _make_grid_parallel(
         self,
         data_source: str,
@@ -519,6 +533,7 @@ class GridProcessingCoreMixin:
                 conservative.reset_weight_cache_activity()
             regrid_start = time.perf_counter()
             remapped_data = self.remap_data(data)
+            remapped_data = self._apply_configured_grid_basin_mask(remapped_data)
             regrid_seconds = time.perf_counter() - regrid_start
             weight_cache = conservative.consume_weight_cache_activity() if conservative is not None else "n/a"
             write_start = time.perf_counter()

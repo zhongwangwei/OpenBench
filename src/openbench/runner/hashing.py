@@ -76,6 +76,7 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.data.compute",
     "openbench.data.file_lookup",
     "openbench.data.coordinates",
+    "openbench.data.basin_mask",
     "openbench.data.processing",
     "openbench.data._processing_base",
     "openbench.data._processing_config",
@@ -366,6 +367,28 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
     return {"files": files}
 
 
+def single_file_signature(path_value: str | None) -> dict[str, Any]:
+    """Return a cache signature for one optional configured input file."""
+    if not path_value:
+        return {"path": None, "exists": False}
+
+    path = Path(os.path.expanduser(os.path.expandvars(str(path_value))))
+    try:
+        stat = path.stat()
+    except OSError:
+        return {"path": str(path), "exists": False}
+    if not path.is_file():
+        return {"path": str(path.resolve()), "exists": False}
+    return {
+        "path": str(path.resolve()),
+        "exists": True,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "ctime_ns": stat.st_ctime_ns,
+        "sample_sha256": file_sample_sha256(path),
+    }
+
+
 def clear_hashing_caches() -> None:
     """Reset process-stable hashing memoization before planning a new evaluation."""
     algorithm_source_fingerprint.cache_clear()
@@ -509,6 +532,7 @@ def task_hash_payload(
         "max_lat",
         "min_lon",
         "max_lon",
+        "basin_mask",
         "compare_tim_res",
         "compare_grid_res",
         "compare_tzone",
@@ -563,6 +587,8 @@ def task_hash_payload(
             "time_alignment": cfg.project.time_alignment,
             "regrid_backend": cfg.project.regrid_backend,
             "only_drawing": cfg.project.only_drawing,
+            "basin_mask": cfg.project.basin_mask,
+            "basin_mask_signature": single_file_signature(cfg.project.basin_mask),
         },
         "regrid_backend": {
             "selected": selected_regrid_backend,

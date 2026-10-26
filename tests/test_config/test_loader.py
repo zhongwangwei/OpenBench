@@ -191,6 +191,27 @@ def test_project_tim_res_is_validated_and_normalized():
         _build_config(raw)
 
 
+def test_project_basin_mask_is_loaded_and_expanded(monkeypatch):
+    from openbench.config.loader import _build_config
+
+    monkeypatch.setenv("MASK_ROOT", "/data/masks")
+    raw = {
+        "project": {
+            "name": "t",
+            "output_dir": ".",
+            "years": [2000, 2010],
+            "basin_mask": "$MASK_ROOT/amazon.nc",
+        },
+        "evaluation": {"variables": ["GPP"]},
+        "reference": {"GPP": "FLUXCOM"},
+        "simulation": {"M": {"model": "M", "root_dir": "/d"}},
+    }
+
+    cfg = _build_config(raw)
+
+    assert cfg.project.basin_mask == "/data/masks/amazon.nc"
+
+
 def test_comparison_section_must_be_mapping():
     from openbench.config.loader import _build_config
 
