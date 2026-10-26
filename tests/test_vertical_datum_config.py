@@ -57,7 +57,7 @@ def test_adapter_runtime_json_paths(monkeypatch, tmp_path):
         SimulationEntry,
     )
 
-    ref = reference()
+    ref = replace(reference(), root_dir=str(tmp_path / "reference"))
     model = manager._build_model(
         dict(
             name="M",
@@ -83,7 +83,7 @@ def test_adapter_runtime_json_paths(monkeypatch, tmp_path):
     f90nml.write(ref_nml, str(path))
     restored = f90nml.read(str(path))
     spec = json.loads(restored["water_surface_elevation"]["datumref_vertical_datum"])
-    assert spec["source_geoid"] == "/ref/08.pgm"
+    assert spec["source_geoid"] == str(tmp_path / "reference" / "08.pgm")
     reader = GeneralInfoReader.__new__(GeneralInfoReader)
     reader.item = "Water_Surface_Elevation"
     restored["Water_Surface_Elevation"]["DatumRef_fulllist"] = "/ref/stations.csv"
@@ -231,7 +231,7 @@ def test_gui_datum_base_is_source_not_repository(tmp_path, route):
 
     gui = ConfigManager()
     item = "Water_Surface_Elevation"
-    general = {"root_dir": "/data/stations"}
+    general = {"root_dir": str(tmp_path / "data" / "stations")}
     content = {"general": general, item: {"sub_dir": "heights", "vertical_datum": SPEC}}
     dest = tmp_path / "out.yaml"
     if route == "legacy":
@@ -245,8 +245,8 @@ def test_gui_datum_base_is_source_not_repository(tmp_path, route):
         source.write_text(yaml.safe_dump(content))
         gui._copy_namelist_filtered(str(source), str(dest), [item], str(tmp_path))
     result = yaml.safe_load(dest.read_text())[item]["vertical_datum"]
-    assert result["source_geoid"] == "/data/stations/08.pgm"
-    assert result["target_geoid"] == "/data/stations/96.pgm"
+    assert result["source_geoid"] == str(tmp_path / "data" / "stations" / "08.pgm")
+    assert result["target_geoid"] == str(tmp_path / "data" / "stations" / "96.pgm")
 
 
 def test_gui_remote_resolves_datum_before_mapping():
@@ -280,3 +280,24 @@ def test_gui_remote_resolves_datum_before_mapping():
     state = gui.unified_to_gui_config(result)
     again = yaml.safe_load(gui.generate_config_yaml(state))
     assert again["reference"]["overrides"]["DatumRef"]["variables"][item]["vertical_datum"] == ref
+
+
+@pytest.mark.parametrize("root", ["/data/stations", r"C:\data\stations", r"\\server\stations"])
+def test_gui_datum_paths_on_windows_client(monkeypatch, root):
+    import ntpath
+
+    from openbench.gui import config_manager
+
+    # Simulate the client's path operations without changing the host filesystem.
+    monkeypatch.setattr(config_manager, "os", SimpleNamespace(path=ntpath))
+    seen = []
+
+    def transform(path):
+        seen.append(path)
+        return "/remote/" + path.replace("\\", "/").lstrip("/")
+
+    result = config_manager._transform_vertical_datum(SPEC, transform, root)
+    expected = root + "/08.pgm" if root.startswith("/") else ntpath.join(root, "08.pgm")
+    assert seen[0] == expected
+    assert "\\" not in result["source_geoid"]
+    assert config_manager._transform_vertical_datum(result, lambda path: path, root) == result

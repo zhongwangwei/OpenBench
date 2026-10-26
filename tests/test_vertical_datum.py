@@ -88,7 +88,7 @@ def test_incompatible_optional_grid_metadata(tmp_path, comment):
         _sample_geoid(str(path), "EGM2008", 0, 0)
 
 
-def test_grid_metadata_cache_refresh_with_preserved_mtime(tmp_path):
+def test_grid_header_refresh_with_preserved_mtime(tmp_path):
     import os
     from pathlib import Path
 
@@ -223,3 +223,19 @@ def test_optional_fixed_fields_are_normalized_without_mutating_input():
     result = normalize_vertical_datum_spec(value)
     assert result["source"] == "EGM2008" and result["target"] == "EGM96"
     assert value["source"] == "egm2008" and "target" not in value
+
+
+def test_geoid_sampling_does_not_cache_memory_mappings(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def forbidden_map(*args, **kwargs):
+        raise AssertionError("Geoid samples must not leave a Windows file mapping open")
+
+    monkeypatch.setattr(np, "memmap", forbidden_map)
+    path = Path(pgm(tmp_path))
+    assert _sample_geoid(str(path), "EGM2008", 0, 0) == 10
+    # Updating and deleting a sampled grid must remain possible while OpenBench runs.
+    path.write_bytes(path.read_bytes().replace(b"# Offset -10", b"# Offset -20"))
+    assert _sample_geoid(str(path), "EGM2008", 0, 0) == 0
+    path.unlink()
+    assert not path.exists()

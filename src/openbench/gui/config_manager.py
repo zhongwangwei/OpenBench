@@ -10,7 +10,13 @@ from pathlib import Path
 import yaml
 
 from openbench.config.schema import DEFAULT_NUM_CORES
-from openbench.gui.path_utils import convert_paths_in_dict, get_openbench_root, to_absolute_path
+from openbench.gui.path_utils import (
+    convert_paths_in_dict,
+    get_openbench_root,
+    is_windows_absolute_path,
+    remote_join,
+    to_absolute_path,
+)
 from openbench.util.names import canonical_variable_name
 
 _BUILTIN_MODEL_KEYS: Optional[Set[str]] = None
@@ -26,12 +32,15 @@ def _transform_vertical_datum(value, transform, root_dir=None):
     for key in ("source_geoid", "target_geoid"):
         if key in spec:
             path = os.path.expanduser(os.path.expandvars(spec[key]))
-            if not os.path.isabs(path):
+            if not (path.startswith("/") or is_windows_absolute_path(path) or os.path.isabs(path)):
                 if not root_dir:
                     # Catalog-only roots are resolved later; never invent a repository-relative geoid path.
                     spec[key] = path
                     continue
-                path = os.path.join(os.path.expanduser(os.path.expandvars(root_dir)), path)
+                root = os.path.expanduser(os.path.expandvars(root_dir))
+                # Remote POSIX roots must not inherit the Windows client separator.
+                join = remote_join if root.startswith("/") and not is_windows_absolute_path(root) else os.path.join
+                path = join(root, path)
             spec[key] = transform(path)
     return spec
 

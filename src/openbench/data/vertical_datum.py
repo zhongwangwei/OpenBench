@@ -3,7 +3,7 @@
 H96 = H08 + N08 - N96. Geoid grids and source/processed station files are read-only.
 """
 
-from functools import lru_cache
+import os
 from pathlib import Path
 import re
 
@@ -50,34 +50,31 @@ def _coordinates(lat, lon):
     return lat, lon % 360
 
 
-@lru_cache(maxsize=8)
-def _read_geoid(path, size, mtime_ns, ctime_ns, inode):
-    del mtime_ns, ctime_ns, inode
+def _read_geoid_header(handle, path, size):
     metadata, tokens = {}, []
-    with open(path, "rb") as handle:
-        while len(tokens) < 4:
-            line = handle.readline(4097)
-            if not line or len(line) > 4096 or handle.tell() > 65536 or not line.endswith(b"\n"):
-                raise VerticalDatumError(f"{path}: malformed or oversized PGM header")
-            try:
-                line = line.decode("ascii").strip()
-            except UnicodeDecodeError:
-                raise VerticalDatumError(f"{path}: non-ASCII PGM header") from None
-            if line.startswith("#"):
-                parts = line[1:].strip().split(None, 1)
-                if len(parts) == 2:
-                    if parts[0] in metadata and parts[0] in (
-                        "Offset",
-                        "Scale",
-                        "Description",
-                        "Origin",
-                        "Vertical_Datum",
-                    ):
-                        raise VerticalDatumError(f"{path}: duplicate PGM metadata")
-                    metadata[parts[0]] = parts[1]
-            else:
-                tokens.extend(line.split())
-        offset_bytes = handle.tell()
+    while len(tokens) < 4:
+        line = handle.readline(4097)
+        if not line or len(line) > 4096 or handle.tell() > 65536 or not line.endswith(b"\n"):
+            raise VerticalDatumError(f"{path}: malformed or oversized PGM header")
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            raise VerticalDatumError(f"{path}: non-ASCII PGM header") from None
+        if line.startswith("#"):
+            parts = line[1:].strip().split(None, 1)
+            if len(parts) == 2:
+                if parts[0] in metadata and parts[0] in (
+                    "Offset",
+                    "Scale",
+                    "Description",
+                    "Origin",
+                    "Vertical_Datum",
+                ):
+                    raise VerticalDatumError(f"{path}: duplicate PGM metadata")
+                metadata[parts[0]] = parts[1]
+        else:
+            tokens.extend(line.split())
+    offset_bytes = handle.tell()
     try:
         magic, width, height, maximum = tokens
         width, height, maximum = int(width), int(height), int(maximum)
@@ -100,29 +97,35 @@ def _read_geoid(path, size, mtime_ns, ctime_ns, inode):
         raise VerticalDatumError(
             f"{path}: invalid GeographicLib PGM dimensions, model, Origin, Vertical_Datum, Offset, Scale or byte count"
         ) from None
-    grid = np.memmap(path, dtype=">u2", mode="r", offset=offset_bytes, shape=(height, width))
-    return grid, offset, scale, models.pop()
+    return width, height, offset_bytes, offset, scale, models.pop()
 
 
 def _sample_geoid(path, model, lat, lon):
     lat, lon = _coordinates(lat, lon)
     try:
         path = Path(path).expanduser().resolve()
-        stat = path.stat()
-        grid, offset, scale, actual_model = _read_geoid(
-            str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino
-        )
+        # Read only the small header and four pixels; persistent mappings lock updates on Windows.
+        with path.open("rb") as handle:
+            width, height, offset_bytes, offset, scale, actual_model = _read_geoid_header(
+                handle, path, os.fstat(handle.fileno()).st_size
+            )
+            if actual_model != model:
+                raise VerticalDatumError(f"{path}: expected {model}, found {actual_model}; check swapped geoid paths")
+            x, y = lon * width / 360, (90 - lat) * (height - 1) / 180
+            i, j = int(x) % width, min(int(y), height - 2)
+            dx, dy = x - int(x), y - j
+            east = (i + 1) % width
+            values = []
+            for row, col in ((j, i), (j, east), (j + 1, i), (j + 1, east)):
+                handle.seek(offset_bytes + 2 * (row * width + col))
+                raw = handle.read(2)
+                if len(raw) != 2:
+                    raise VerticalDatumError(f"{path}: truncated geoid pixel")
+                values.append(int.from_bytes(raw, "big"))
     except (OSError, ValueError) as exc:
         raise VerticalDatumError(f"Cannot read geoid {path}: {exc}") from exc
-    if actual_model != model:
-        raise VerticalDatumError(f"{path}: expected {model}, found {actual_model}; check swapped geoid paths")
-    height, width = grid.shape
-    x, y = lon * width / 360, (90 - lat) * (height - 1) / 180
-    i, j = int(x) % width, min(int(y), height - 2)
-    dx, dy = x - int(x), y - j
-    east = (i + 1) % width
-    north = (1 - dx) * float(grid[j, i]) + dx * float(grid[j, east])
-    south = (1 - dx) * float(grid[j + 1, i]) + dx * float(grid[j + 1, east])
+    north = (1 - dx) * values[0] + dx * values[1]
+    south = (1 - dx) * values[2] + dx * values[3]
     return offset + scale * ((1 - dy) * north + dy * south)
 
 

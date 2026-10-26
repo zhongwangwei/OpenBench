@@ -55,8 +55,8 @@ def assert_description(description):
 @pytest.mark.parametrize("resolution,grid,frequency", RESOLUTIONS)
 def test_soil_catalog_and_profiles(resolution, grid, frequency, tmp_path):
     name = f"SMAP_L4_Soil_{resolution}"
-    catalog = yaml.safe_load((REGISTRY / "reference_catalog.yaml").read_text())
-    profiles = yaml.safe_load((REGISTRY / "reference_profiles.yaml").read_text())
+    catalog = yaml.safe_load((REGISTRY / "reference_catalog.yaml").read_text(encoding="utf-8"))
+    profiles = yaml.safe_load((REGISTRY / "reference_profiles.yaml").read_text(encoding="utf-8"))
     for entry in (catalog[name], profiles[name]):
         assert entry["tim_res"] == frequency
         assert entry["data_groupby"] == "Year"
@@ -125,7 +125,7 @@ def test_real_scan_merges_four_folders_and_registers_annual_variants(tmp_path, m
         assert set(scanned.variables) == set(VARIABLES)
     output = tmp_path / "registered.yaml"
     scanner.register_scanned_datasets_batch(list(group.variants.values()), catalog_path=output)
-    registered = yaml.safe_load(output.read_text())
+    registered = yaml.safe_load(output.read_text(encoding="utf-8"))
     for resolution, grid, frequency in RESOLUTIONS:
         entry = registered[f"SMAP_L4_Soil_{resolution}"]
         assert entry["tim_res"] == frequency
@@ -162,7 +162,7 @@ def test_legacy_midres_snow_month_files_are_found_and_rescan_correctly(tmp_path,
     scanned = groups[0].variants["MidRes"]
     output = tmp_path / "registered.yaml"
     scanner.register_scanned_datasets_batch([scanned], catalog_path=output)
-    entry = yaml.safe_load(output.read_text())["SMAP_L4_MidRes"]
+    entry = yaml.safe_load(output.read_text(encoding="utf-8"))["SMAP_L4_MidRes"]
     assert entry["tim_res"] == "Day"
     assert entry["data_groupby"] == "Month"
     assert entry["variables"]["Snow_Depth"]["prefix"] == var.prefix
