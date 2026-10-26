@@ -905,7 +905,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
     if basin_mask is not None:
         if not basin_mask.strip():
             raise ConfigError("project.basin_mask must be a non-empty path")
-        basin_mask = str(Path(os.path.expandvars(basin_mask)).expanduser())
+        basin_mask = Path(os.path.expandvars(basin_mask)).expanduser().as_posix()
 
     return ProjectConfig(
         name=str(name),
