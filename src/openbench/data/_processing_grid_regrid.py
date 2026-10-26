@@ -26,13 +26,66 @@ except ImportError:  # pragma: no cover - mirrors processing.py fallback
             _write_netcdf_atomic(ds, output_path, compression=compression)
 
 
-REGRID_ALGORITHM_VERSION = "2026-10-17.regrid-v3"
+REGRID_ALGORITHM_VERSION = "2026-10-26.regrid-v4"
 REGRID_BACKENDS = {
     "openbench_conservative",
     "cdo_remapcon",
     "xesmf_conservative",
     "basic_interpolation",
 }
+
+_EARTH_RADIUS_M = 6_371_000.0
+_EXTENSIVE_GRID_CELL_ITEMS = {"inundation_area"}
+
+
+def _axis_cell_factors(values: np.ndarray, *, spherical_latitude: bool) -> np.ndarray:
+    """Return cell widths in radians, or spherical latitude area factors."""
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 1 or values.size < 2:
+        raise ValueError("Grid-cell areas require at least two one-dimensional coordinates per axis")
+
+    order = np.argsort(values)
+    sorted_values = values[order]
+    if np.any(np.diff(sorted_values) <= 0):
+        raise ValueError("Grid-cell areas require unique coordinate centres")
+
+    midpoints = (sorted_values[:-1] + sorted_values[1:]) / 2.0
+    bounds = np.concatenate(
+        ([2.0 * sorted_values[0] - midpoints[0]], midpoints, [2.0 * sorted_values[-1] - midpoints[-1]])
+    )
+    if spherical_latitude:
+        bounds = np.clip(bounds, -90.0, 90.0)
+        sorted_factors = np.sin(np.radians(bounds[1:])) - np.sin(np.radians(bounds[:-1]))
+    else:
+        sorted_factors = np.radians(bounds[1:] - bounds[:-1])
+
+    factors = np.empty_like(sorted_factors)
+    factors[order] = sorted_factors
+    return factors
+
+
+def _rectilinear_cell_area(grid: xr.Dataset) -> xr.DataArray:
+    """Calculate spherical cell areas from one-dimensional lat/lon centres."""
+    if "lat" not in grid.coords or "lon" not in grid.coords:
+        raise ValueError("Grid-cell areas require 'lat' and 'lon' coordinates")
+    if grid["lat"].ndim != 1 or grid["lon"].ndim != 1:
+        raise ValueError("Grid-cell areas require one-dimensional 'lat' and 'lon' coordinates")
+
+    lat_dim = grid["lat"].dims[0]
+    lon_dim = grid["lon"].dims[0]
+    lat_factors = _axis_cell_factors(grid["lat"].values, spherical_latitude=True)
+    lon_factors = _axis_cell_factors(grid["lon"].values, spherical_latitude=False)
+    coords = {}
+    for dim in (lat_dim, lon_dim):
+        if dim in grid.coords:
+            coords[dim] = grid[dim]
+    return xr.DataArray(
+        _EARTH_RADIUS_M**2 * np.outer(lat_factors, lon_factors),
+        dims=(lat_dim, lon_dim),
+        coords=coords,
+        name="cell_area",
+        attrs={"units": "m2"},
+    )
 
 
 def _processing_attr(name, fallback):
@@ -94,6 +147,23 @@ class GridRegridMixin:
             )
         return data.assign_coords(coords)
 
+    def _uses_extensive_grid_cell_regridding(self) -> bool:
+        item = str(getattr(self, "item", "")).strip().lower().replace("-", "_").replace(" ", "_")
+        return item in _EXTENSIVE_GRID_CELL_ITEMS
+
+    @staticmethod
+    def _scale_grid_cell_totals(data: xr.Dataset, cell_area: xr.DataArray, *, to_density: bool) -> xr.Dataset:
+        """Convert spatial grid-cell totals to density, or density back to totals."""
+        result = data.copy()
+        area_dims = set(cell_area.dims)
+        for name, array in data.data_vars.items():
+            if not area_dims.issubset(array.dims):
+                continue
+            attrs = dict(array.attrs)
+            result[name] = array / cell_area if to_density else array * cell_area
+            result[name].attrs = attrs
+        return result
+
     def remap_data(self, data: xr.Dataset) -> xr.Dataset:
         new_grid = self.create_target_grid()
         backend = str(getattr(self, "regrid_backend", "openbench_conservative") or "openbench_conservative").lower()
@@ -111,10 +181,22 @@ class GridRegridMixin:
             logging.info("[REGRID] Skip regridding: source grid already matches target grid")
             return self._mark_regrid_backend(self._assign_target_grid(data, new_grid), backend)
 
+        extensive_grid_cells = self._uses_extensive_grid_cell_regridding()
+        if extensive_grid_cells:
+            data = self._scale_grid_cell_totals(data, _rectilinear_cell_area(data), to_density=True)
+            logging.info("[REGRID] Regridding %s as an extensive grid-cell total", self.item)
+
         try:
             data_regrid = backend_methods[backend](data, new_grid)
         except Exception as e:
             raise RuntimeError(f"Configured regrid backend {backend!r} failed: {e}") from e
+        if extensive_grid_cells:
+            data_regrid = self._scale_grid_cell_totals(
+                data_regrid,
+                _rectilinear_cell_area(new_grid),
+                to_density=False,
+            )
+            data_regrid.attrs["openbench_regrid_quantity"] = "extensive_grid_cell_total"
         return self._mark_regrid_backend(data_regrid, backend)
 
     def create_target_grid(self) -> xr.Dataset:

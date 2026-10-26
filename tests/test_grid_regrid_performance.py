@@ -45,6 +45,17 @@ def test_same_grid_bypasses_backend_and_preserves_values_and_attrs(caplog):
     assert "Skip regridding: source grid already matches target grid" in caplog.text
 
 
+def test_same_grid_extensive_item_bypasses_area_scaling():
+    processor = _processor_for_target()
+    processor.item = "Inundation_Area"
+    processor.remap_interpolate = lambda *_args: (_ for _ in ()).throw(AssertionError("backend called"))
+    data = _grid_data()
+
+    result = processor.remap_data(data)
+
+    xr.testing.assert_identical(result["v"], data["v"])
+
+
 @pytest.mark.parametrize(
     ("lat", "lon"),
     [
@@ -84,6 +95,78 @@ def test_same_grid_compares_longitudes_after_normalization():
     result = processor.remap_data(data)
 
     np.testing.assert_array_equal(result["lon"], [-169.5, -168.5])
+
+
+@pytest.mark.parametrize("descending_lat", [False, True])
+def test_inundation_area_regrids_as_grid_cell_total(descending_lat):
+    from openbench.data._processing_grid_regrid import _rectilinear_cell_area
+
+    processor = _processor_for_target()
+    processor.item = "Inundation_Area"
+    source_grid = xr.Dataset(
+        coords={
+            "lat": [0.25, 0.75, 1.25, 1.75],
+            "lon": [10.25, 10.75, 11.25, 11.75],
+        }
+    )
+    source_area = _rectilinear_cell_area(source_grid)
+    data = (source_area * 0.25 / 1e6).rename("flood_area").to_dataset()
+    data["flood_area"].attrs = {"units": "km2", "long_name": "inundated area"}
+    data.attrs["source"] = "synthetic"
+    if descending_lat:
+        data = data.sortby("lat", ascending=False)
+
+    result = processor.remap_data(data)
+
+    expected = _rectilinear_cell_area(processor.create_target_grid()) * 0.25 / 1e6
+    xr.testing.assert_allclose(result["flood_area"], expected.rename("flood_area"))
+    np.testing.assert_allclose(result["flood_area"].sum(), data["flood_area"].sum(), rtol=1e-12)
+    assert result["flood_area"].attrs == {"units": "km2", "long_name": "inundated area"}
+    assert result.attrs["source"] == "synthetic"
+    assert result.attrs["openbench_regrid_quantity"] == "extensive_grid_cell_total"
+
+
+def test_inundation_fraction_keeps_intensive_regrid_semantics():
+    processor = _processor_for_target()
+    processor.item = "Inundation_Fraction"
+    data = xr.DataArray(
+        np.full((4, 4), 0.25),
+        dims=("lat", "lon"),
+        coords={
+            "lat": [0.25, 0.75, 1.25, 1.75],
+            "lon": [10.25, 10.75, 11.25, 11.75],
+        },
+        name="flood_fraction",
+    ).to_dataset()
+
+    result = processor.remap_data(data)
+
+    np.testing.assert_allclose(result["flood_fraction"], 0.25)
+    assert "openbench_regrid_quantity" not in result.attrs
+
+
+def test_inundation_area_regrid_preserves_strict_nan_and_zero_cells():
+    from openbench.data._processing_grid_regrid import _rectilinear_cell_area
+
+    processor = _processor_for_target()
+    processor.item = "Inundation_Area"
+    source_grid = xr.Dataset(
+        coords={
+            "lat": [0.25, 0.75, 1.25, 1.75],
+            "lon": [10.25, 10.75, 11.25, 11.75],
+        }
+    )
+    source_totals = _rectilinear_cell_area(source_grid) * 0.25
+    source_totals.values[0, 0] = np.nan
+    source_totals.values[2:, 2:] = 0.0
+    data = source_totals.rename("flood_area").to_dataset()
+
+    result = processor.remap_data(data)
+
+    assert np.isnan(result["flood_area"].sel(lat=0.5, lon=10.5))
+    assert result["flood_area"].sel(lat=1.5, lon=11.5) == 0.0
+    assert np.isfinite(result["flood_area"].sel(lat=0.5, lon=11.5))
+    assert np.isfinite(result["flood_area"].sel(lat=1.5, lon=10.5))
 
 
 @pytest.mark.parametrize(
