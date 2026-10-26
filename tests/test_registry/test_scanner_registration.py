@@ -12,6 +12,29 @@ import openbench.data.registry.scanner as scanner_module
 from openbench.data.registry.scanner import ScannedDataset, register_scanned_dataset
 
 
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_catalog_yaml_uses_utf8_with_non_utf8_locale(tmp_path, monkeypatch, operation):
+    catalog = tmp_path / "reference_catalog.yaml"
+    data = {"Demo": {"description": "nominal 0–1 m; 土壤温度"}}
+    if operation == "write":
+        native_fdopen = scanner_module.os.fdopen
+
+        def locale_fdopen(fd, mode, *, encoding="cp1252"):
+            return native_fdopen(fd, mode, encoding=encoding)
+
+        monkeypatch.setattr(scanner_module.os, "fdopen", locale_fdopen)
+        scanner_module._atomic_yaml_write(catalog, data)
+        assert yaml.safe_load(catalog.read_text(encoding="utf-8")) == data
+    else:
+        catalog.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+        def locale_open(path, *, encoding="cp1252"):
+            return open(path, encoding=encoding)
+
+        monkeypatch.setattr(scanner_module, "open", locale_open, raising=False)
+        assert scanner_module._safe_load_catalog(catalog) == data
+
+
 def test_register_scanned_dataset_does_not_persist_unverified_default_years(tmp_path: Path):
     catalog = tmp_path / "reference_catalog.yaml"
     scanned = ScannedDataset(

@@ -132,7 +132,7 @@ def _atomic_yaml_write(path: Path, data: dict) -> None:
     path = Path(path)
     fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
         if path.exists():
             os.chmod(tmp, path.stat().st_mode & 0o777)
@@ -155,7 +155,7 @@ def _safe_load_catalog(catalog_path: Path) -> dict:
     if not catalog_path.exists():
         return {}
     try:
-        with open(catalog_path) as f:
+        with open(catalog_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         raise RuntimeError(
