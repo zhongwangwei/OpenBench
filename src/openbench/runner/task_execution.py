@@ -98,6 +98,21 @@ def evaluate_single(
 
         from openbench.data.unit import check_comparable_units
 
+        if info.get("sim_vertical_datum") is not None:
+            from openbench.data.vertical_datum import VerticalDatumError
+
+            raise VerticalDatumError(
+                "vertical_datum belongs only to Water_Surface_Elevation observations, not simulation"
+            )
+        if info.get("ref_vertical_datum") is not None:
+            from openbench.data.vertical_datum import VerticalDatumError, normalize_vertical_datum_spec
+
+            normalize_vertical_datum_spec(info["ref_vertical_datum"])
+            if var_name != "Water_Surface_Elevation" or info.get("ref_data_type") != "stn":
+                raise VerticalDatumError("vertical_datum requires Water_Surface_Elevation station observations")
+            if info.get("ref_varunit") != "m" or info.get("sim_varunit") != "m":
+                raise VerticalDatumError("Water-surface elevation observations and model output must use metres (m)")
+
         # Metrics of a pair whose sources end up in different units are meaningless.
         check_comparable_units(var_name, info.get("ref_varunit"), info.get("sim_varunit"))
 

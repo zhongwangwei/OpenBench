@@ -9,6 +9,7 @@ import xarray as xr
 
 from openbench.core._comparison_helpers import (
     _comparison_sim_groups,
+    _require_uncorrected_comparison_cache,
     _station_evaluation_frame,
     _STATION_STATISTIC_COLUMNS,
     _station_statistic_sources,
@@ -364,6 +365,17 @@ class Evaluation_stn_only_drawing(metrics, scores):
         logging.info(" ")
 
     def make_evaluation_P(self):
+        if (
+            getattr(self, "ref_vertical_datum", None) is not None
+            or getattr(self, "sim_vertical_datum", None) is not None
+        ):
+            # Existing metric tables may predate the correction; reuse the one station evaluation path.
+            from openbench.core.evaluation import Evaluation_stn
+
+            evaluator = Evaluation_stn(self.__dict__, self.fig_nml)
+            evaluator.make_evaluation_P()
+            self.station_summary = getattr(evaluator, "station_summary", None)
+            return
         try:
             make_plot_index_stn(self)
         finally:
@@ -681,16 +693,19 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         # self.sim_source              =  sim_source
 
     def scenarios_IGBP_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         LC_groupby_only_drawing(self.main_nml, self.scores, self.metrics).scenarios_IGBP_groupby_comparison(
             casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
         )
 
     def scenarios_PFT_groupby_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         LC_groupby_only_drawing(self.main_nml, self.scores, self.metrics).scenarios_PFT_groupby_comparison(
             casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
         )
 
     def scenarios_HeatMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(casedir, "comparisons", "HeatMap")
             for score in scores:
@@ -703,6 +718,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Clean up memory after processing
 
     def scenarios_Taylor_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(casedir, "comparisons", "Taylor_Diagram")
             os.makedirs(dir_path, exist_ok=True)
@@ -748,6 +764,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Final cleanup for the entire method
 
     def scenarios_Target_Diagram_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(casedir, "comparisons", "Target_Diagram")
             os.makedirs(dir_path, exist_ok=True)
@@ -797,6 +814,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Kernel_Density_Estimate_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(basedir, "comparisons", "Kernel_Density_Estimate")
             os.makedirs(dir_path, exist_ok=True)
@@ -936,6 +954,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Parallel_Coordinates_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(basedir, "comparisons", "Parallel_Coordinates")
             os.makedirs(dir_path, exist_ok=True)
@@ -957,6 +976,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Portrait_Plot_seasonal_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(basedir, "comparisons", "Portrait_Plot_seasonal")
             os.makedirs(dir_path, exist_ok=True)
@@ -1006,6 +1026,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Final cleanup for the entire method
 
     def scenarios_Whisker_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(basedir, "comparisons", "Whisker_Plot")
             os.makedirs(dir_path, exist_ok=True)
@@ -1144,6 +1165,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Final cleanup for the entire method
 
     def scenarios_Relative_Score_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(casedir, "comparisons", "Relative_Score")
             os.makedirs(dir_path, exist_ok=True)
@@ -1225,9 +1247,11 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Single_Model_Performance_Index_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         make_scenarios_comparison_Single_Model_Performance_Index(basedir, evaluation_items, ref_nml, sim_nml, option)
 
     def scenarios_Ridgeline_Plot_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         dir_path = os.path.join(f"{basedir}", "comparisons", "Ridgeline_Plot")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
@@ -1369,6 +1393,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             metrics: list of metrics to compare
             option: additional options
         """
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         dir_path = os.path.join(f"{basedir}", "comparisons", "Diff_Plot")
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
@@ -1491,6 +1516,8 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
         2. Calculate sum value for each input
         4. Plot the results
         """
+
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         basic_method = option["key"]
         dir_path = os.path.join(f"{basedir}", "comparisons", basic_method)
         if not os.path.exists(dir_path):
@@ -1639,16 +1666,19 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
     def scenarios_Mann_Kendall_Trend_Test_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         self._draw_source_statistic("Mann_Kendall_Trend_Test", basedir, sim_nml, ref_nml, evaluation_items, option)
 
     def scenarios_Standard_Deviation_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         self._draw_source_statistic("Standard_Deviation", basedir, sim_nml, ref_nml, evaluation_items, option)
 
     def scenarios_Functional_Response_comparison(
         self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
     ):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         method_name = "Functional_Response"
         dir_path = os.path.join(basedir, "comparisons", method_name)
         for item in evaluation_items:
@@ -1673,6 +1703,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                             make_Functional_Response(path, method_name, sim, self.main_nml["general"], option)
 
     def scenarios_RadarMap_comparison(self, casedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         try:
             dir_path = os.path.join(casedir, "comparisons", "RadarMap")
             for score in scores:
@@ -1685,6 +1716,7 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
             gc.collect()  # Clean up memory after processing
 
     def scenarios_Correlation_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
         method_name = "Correlation"
         directory = os.path.join(basedir, "comparisons", method_name)
         for item in evaluation_items:

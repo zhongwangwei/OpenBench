@@ -54,9 +54,21 @@ class VariableMapping:
     compute: Optional[str] = None  # Python expression to compute variable from dataset
     accumulated: Optional[str] = None  # "year" or "run": values are running totals to difference per step
     prefix_fallback: Optional[list[str]] = None  # Alternative file prefix suffixes, e.g., ["_cama_", "_unitcat_"]
+    years: Optional[list[int]] = None  # Reference-only coverage; defaults to dataset years.
+
+    vertical_datum: Optional[dict] = None
+
+    def __post_init__(self):
+        if self.vertical_datum is None:
+            return
+        from openbench.data.vertical_datum import normalize_vertical_datum_spec
+
+        self.vertical_datum = normalize_vertical_datum_spec(self.vertical_datum)
 
     def to_dict(self) -> dict:
         d: dict = {"varname": self.varname, "varunit": self.varunit}
+        if self.vertical_datum is not None:
+            d["vertical_datum"] = dict(self.vertical_datum)
         if self.prefix:
             d["prefix"] = self.prefix
         if self.suffix:
@@ -77,6 +89,8 @@ class VariableMapping:
             d["accumulated"] = self.accumulated
         if self.prefix_fallback:
             d["prefix_fallback"] = self.prefix_fallback
+        if self.years is not None:
+            d["years"] = self.years
         return d
 
 
@@ -157,6 +171,11 @@ class ReferenceDataset:
             d["_provenance"] = self._provenance
         d["variables"] = {name: vm.to_dict() for name, vm in self.variables.items()}
         return d
+
+
+def reference_years(reference: ReferenceDataset, mapping: VariableMapping | None = None) -> list[int] | None:
+    """Return binding coverage, falling back to the dataset when unspecified."""
+    return getattr(mapping, "years", None) or getattr(reference, "years", None)
 
 
 @dataclass

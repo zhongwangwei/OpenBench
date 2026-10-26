@@ -1344,6 +1344,28 @@ CoLM2024:
       compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0.017512817916255204, 0.027578969259676255, 0.045470033242413194, 0.07496741098620857, 0.12360036510228051, 0.20378255101043175, 0.3359806264484327, 0.17110722603430184, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[5, 6, 7, 8, 9, 10, 11, 12]).sum('soilsnow', skipna=False)
       varname: Root_Zone_Soil_Temperature
       varunit: K
+    Soil_Temperature_5cm:
+      # CoLM2024.1 fixed 15-slot profile: linear interpolation of bracketing soil nodes.
+      # Point-depth approximation, not native f_t_soisno_5cm (a layer mean).
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0, 0.3570433450210565, 0.6429566549789435, 0, 0, 0, 0, 0, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[6, 7]).sum('soilsnow', skipna=False)
+      varname: Soil_Temperature_5cm
+      varunit: K
+    Soil_Temperature_10cm:
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0, 0, 0.33326683764484577, 0.66673316235515423, 0, 0, 0, 0, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[7, 8]).sum('soilsnow', skipna=False)
+      varname: Soil_Temperature_10cm
+      varunit: K
+    Soil_Temperature_15cm:
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0, 0, 0, 0.66639354384118077, 0.33360645615881918, 0, 0, 0, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[8, 9]).sum('soilsnow', skipna=False)
+      varname: Soil_Temperature_15cm
+      varunit: K
+    Soil_Temperature_20cm:
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0, 0, 0, 0.13065053278528993, 0.86934946721471007, 0, 0, 0, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[8, 9]).sum('soilsnow', skipna=False)
+      varname: Soil_Temperature_20cm
+      varunit: K
+    Soil_Temperature_40cm:
+      compute: (ds['f_t_soisno'] * xr.DataArray([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.86623894662744938, 0.13376105337255059, 0, 0, 0], dims=['soilsnow'], coords=[ds['f_t_soisno']['soilsnow']])).isel(soilsnow=[10, 11]).sum('soilsnow', skipna=False)
+      varname: Soil_Temperature_40cm
+      varunit: K
     Snow_Depth:
       varname: f_snowdp
       varunit: m

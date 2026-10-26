@@ -56,6 +56,8 @@ class BasicComparisonMixin:
                     station_list.iloc[iik],
                     ref_varname,
                     sim_varname,
+                    ref_nml=ref_nml,
+                    sim_nml=sim_nml,
                 )
             except StationDataUnavailable as exc:
                 return {"ref_value": np.nan, "sim_value": np.nan, "status": "unavailable", "reason": str(exc)}

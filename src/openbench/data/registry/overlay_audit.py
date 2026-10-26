@@ -111,6 +111,7 @@ def _merged(kind: str, base_obj, overlay: dict):
     from openbench.data.registry import manager as registry_manager
 
     merge = registry_manager._deep_merge_model if kind == "models" else registry_manager._deep_merge_reference
+    overlay = registry_manager._migrate_legacy_entry_aliases(overlay, context=f"{kind} overlay audit: {base_obj.name}")
     with registry_manager.quiet_unresolved_env():
         return merge(base_obj, overlay)
 
@@ -170,6 +171,7 @@ _MERGED_FIELDS = {
 _MERGED_VARIABLE_FIELDS = {
     "references": frozenset(
         {
+            "years",
             "varname",
             "varunit",
             "prefix",
@@ -182,10 +184,22 @@ _MERGED_VARIABLE_FIELDS = {
             "compute",
             "accumulated",
             "prefix_fallback",
+            "vertical_datum",
         }
     ),
     "models": frozenset(
-        {"varname", "varunit", "prefix", "suffix", "sub_dir", "fallbacks", "compute", "accumulated", "prefix_fallback"}
+        {
+            "varname",
+            "varunit",
+            "prefix",
+            "suffix",
+            "sub_dir",
+            "fallbacks",
+            "compute",
+            "accumulated",
+            "prefix_fallback",
+            "vertical_datum",
+        }
     ),
 }
 
@@ -569,6 +583,7 @@ def _built(kind: str, name: str, data: dict):
     from openbench.data.registry import manager as registry_manager
 
     build = registry_manager._build_model if kind == "models" else registry_manager._build_reference
+    data = registry_manager._migrate_legacy_entry_aliases(data, context=f"{kind} overlay audit: {name}")
     with registry_manager.quiet_unresolved_env():
         return build({**data, "name": data.get("name") or name})
 

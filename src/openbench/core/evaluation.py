@@ -655,6 +655,21 @@ class Evaluation_stn(metrics, scores):
             ref_ds = open_dataset_chunked(ref_path, use_chunking=False)
             s_ds = self._load_station_dataset(sim_ds, "sim")
             o_ds = self._load_station_dataset(ref_ds, "ref")
+            from openbench.data.vertical_datum import harmonize_station_vertical_datum
+
+            if (
+                getattr(self, "ref_vertical_datum", None) is not None
+                or getattr(self, "sim_vertical_datum", None) is not None
+            ):
+                station = {key: station_list[key][iik] for key in ("ref_lat", "ref_lon") if key in station_list}
+                s_ds, o_ds = harmonize_station_vertical_datum(
+                    s_ds,
+                    o_ds,
+                    sim_config=getattr(self, "sim_vertical_datum", None),
+                    ref_config=getattr(self, "ref_vertical_datum", None),
+                    station=station,
+                    item=self.item,
+                )
             s = s_ds.to_array()
             o = o_ds.to_array()
             # Keep even a single time step indexed so data-gap checks still apply.

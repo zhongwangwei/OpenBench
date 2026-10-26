@@ -60,7 +60,11 @@ def _registry_source_data(var_name: str, source_name: str, registry=None) -> dic
     if ref is None:
         return None
 
-    years = list(ref.years or [])
+    from openbench.data.registry.schema import reference_years
+
+    var_key = get_mapping_key_case_insensitive(ref.variables or {}, var_name)
+    var_mapping = ref.variables.get(var_key) if var_key is not None else None
+    years = list(reference_years(ref, var_mapping) or [])
     general = {
         "root_dir": ref.root_dir or "",
         "data_type": ref.data_type,
@@ -75,9 +79,12 @@ def _registry_source_data(var_name: str, source_name: str, registry=None) -> dic
     if ref.fulllist:
         general["fulllist"] = ref.fulllist
 
-    source_data = {"general": general, "_explicit_override": False}
-    var_key = get_mapping_key_case_insensitive(ref.variables or {}, var_name)
-    var_mapping = ref.variables.get(var_key) if var_key is not None else None
+    source_data = {
+        "general": general,
+        "_explicit_override": False,
+        "_years_scope": "variable",
+        "_dataset_years": list(ref.years or []),
+    }
     if var_mapping:
         source_data.update(
             {
@@ -87,6 +94,8 @@ def _registry_source_data(var_name: str, source_name: str, registry=None) -> dic
                 "suffix": var_mapping.suffix,
             }
         )
+        if getattr(var_mapping, "vertical_datum", None) is not None:
+            source_data["vertical_datum"] = dict(var_mapping.vertical_datum)
         if var_mapping.sub_dir:
             source_data["sub_dir"] = var_mapping.sub_dir
     return source_data
@@ -912,7 +921,13 @@ class PageRefData(BasePage):
                     )
                 if registry_data:
                     if explicit_override:
-                        registry_data["general"].update(source_data.get("general", {}))
+                        saved_general = source_data.get("general", {})
+                        if "_years_scope" not in source_data and any(
+                            key in saved_general for key in ("syear", "eyear")
+                        ):
+                            # Older GUI/namelist general years are dataset-wide overrides.
+                            registry_data["_years_scope"] = "dataset"
+                        registry_data["general"].update(saved_general)
                         registry_data.update({key: value for key, value in source_data.items() if key != "general"})
                     else:
                         def_nml_path = source_data.get("def_nml_path") or def_nml.get(source_name, "")

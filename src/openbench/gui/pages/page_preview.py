@@ -17,7 +17,7 @@ from openbench.remote.ssh import expand_remote_home
 from openbench.gui.widgets._ssh_worker import call_responsive, execute_responsive
 from openbench.gui.pages.base_page import BasePage
 from openbench.gui.widgets import YamlPreview
-from openbench.gui.config_manager import ConfigManager
+from openbench.gui.config_manager import ConfigManager, _source_binding_time_range
 # get_openbench_root is now inherited from BasePage via _get_openbench_root()
 
 logger = logging.getLogger(__name__)
@@ -613,6 +613,10 @@ class PagePreview(BasePage):
                 merged["general"] = cfg["general"].copy()
                 break
 
+        per_variable_years = any(
+            cfg.get("_years_scope") == "variable" or "years" in cfg or cfg.get("general", {}).get("per_var_time_range")
+            for cfg in configs
+        )
         for cfg, var_name in zip(configs, var_names or [None] * len(configs)):
             names = [var_name] if var_name else []
             variables = cfg.get("variables", {}) if isinstance(cfg.get("variables"), dict) else {}
@@ -636,13 +640,8 @@ class PagePreview(BasePage):
                     var_config.update(cfg[name])
 
                 # Handle per-variable time range settings (consistent with local mode)
-                general = cfg.get("general", {})
-                if general.get("per_var_time_range"):
-                    var_config["per_var_time_range"] = True
-                    if "syear" in general and general["syear"] != "":
-                        var_config["syear"] = general["syear"]
-                    if "eyear" in general and general["eyear"] != "":
-                        var_config["eyear"] = general["eyear"]
+                if per_variable_years:
+                    var_config.update(_source_binding_time_range(cfg, configs))
 
                 if var_config:
                     merged[name] = var_config

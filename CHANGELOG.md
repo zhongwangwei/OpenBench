@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- Make `Water_Surface_Elevation` selectable in the GUI and add opt-in station
+  EGM2008-to-EGM96 correction using two external GeographicLib PGM grids.
+  Only observations are corrected; model output is already EGM96 and units must be metres.
+- Add CRU monthly frost-day counts, five explicit HOMTS point-depth temperatures,
+  WAD2M grid-cell-area UpCH4 wetland contributions and four HSWUD v8 gross
+  withdrawal sectors without inventing default model equivalences.
+- Register the independent FLUXCOM RS+METEO ensemble median (six carbon/energy
+  fields) and the already-processed ERA5-Land MidRes evapotranspiration product.
 - Register SMAP L4 soil products for 2016–2024: 0.25° daily MidRes and 0.5°
   monthly LowRes surface/root-zone moisture and temperature. Root-zone
   temperature is explicitly a nominal-layer 0–1 m estimate, not a native
@@ -12,6 +20,30 @@
   the partial eighth soil layer. Nonstandard profile lengths fail closed.
 
 ### Fixed
+- Reject simulation `vertical_datum` overrides during YAML loading. Datum-enabled
+  `only_drawing` refreshes station metrics and plots from existing NetCDFs through
+  the normal correction path, without rewriting inputs or accumulating offsets.
+  Normal station comparisons use that same correction. Datum-enabled comparison
+  redraws, comparison-only runs and drawing-only reports fail early: run normal
+  evaluation (without `--comparison-only`, with `only_drawing: false`) to regenerate
+  comparison aggregates, or disable both comparison and report generation for
+  station-only redraws.
+- Declare Rn-Xu2022 HigRes as daily mean net radiation in W m-2; retain
+  GloFlux native coordinates and carbon-flux signs during metadata normalization.
+- Use the native 0.5° GPCC Full Data Monthly v2022 daily-rate product and its
+  full 1891–2020 coverage instead of a mismatched 0.25° filename.
+- Use the existing 0.1° daily GRFR product for the HigRes binding instead of 0.05°.
+- Point CRU TS 4.08 precipitation to the processed 1901–2023 daily-rate
+  product and ERA5-Land LowRes wind to its 0.5° monthly files. Wind is the
+  monthly mean of daily-mean-vector magnitudes, not hourly scalar speed.
+- Remove the retired `globsnow_v3-bk_MidRes` backup registration; retain both
+  canonical `globsnow_v3` resolutions.
+- Honor variable-specific reference coverage in registry roundtrips, runtime
+  namelists, preflight and GUI defaults. ERA5-Land variables retain their actual
+  individual periods rather than advertising the entire 1950–2022 dataset span.
+- Restrict registered LGS_Reco coverage to 1985–2015, GIEMS v2 to 1992–2015,
+  and FLUXCOM-X-BASE to 2001–2020. GIEMS file matching now treats the fixed
+  `2020` product label separately from the scientific year at the filename end.
 - Legacy SMAP L4 MidRes snow files use monthly file grouping with daily samples;
   ERA5-Land daily minimum temperature also accepts native `t2m` in kelvin.
 - Preserve the GLEAM v4.2 raw-composite scan exclusion for installations that

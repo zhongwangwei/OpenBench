@@ -233,7 +233,7 @@ def test_basic_partial_statistic_keeps_valid_role_and_redraws_na(tmp_path, monke
     from openbench.visualization.only_drawing import _require_station_csv_values
 
     monkeypatch.setattr(basic, "_station_evaluation_frame", lambda *args: pd.DataFrame({"ID": ["A"]}))
-    monkeypatch.setattr(basic, "_load_station_pair", lambda *args: (1.0, np.nan))
+    monkeypatch.setattr(basic, "_load_station_pair", lambda *args, **kwargs: (1.0, np.nan))
     monkeypatch.setattr(basic, "_comparison_callable", lambda name: lambda *args: None)
     handler = SimpleNamespace(
         main_nml={"general": {}},

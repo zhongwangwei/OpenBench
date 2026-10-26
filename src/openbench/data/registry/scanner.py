@@ -193,6 +193,9 @@ def _load_builtin_catalog_for_user_overlay(catalog_path: Path) -> dict:
 
 def _merge_descriptor_overlay(base: Optional[dict], overlay: Optional[dict]) -> Optional[dict]:
     """Merge a raw user overlay dict onto a raw bundled descriptor dict."""
+    from openbench.data.registry.manager import _migrate_legacy_entry_aliases
+
+    overlay = _migrate_legacy_entry_aliases(overlay, context="existing scan catalog")
     if base is None:
         return overlay
     if not overlay:
@@ -1924,6 +1927,11 @@ def _register_to_dict(
       4. _apply_profile_overrides  — reference_profiles.yaml metadata + variables
       5. _finalize_descriptor      — grid_res default, provenance, station fulllist
     """
+    from openbench.data.registry.manager import _migrate_legacy_entry_aliases
+
+    existing_descriptor = _migrate_legacy_entry_aliases(
+        existing_descriptor, context=f"existing scan catalog:{scanned.registry_name}"
+    )
     prov: dict[str, str] = {}
 
     # Stage 1: base descriptor
@@ -2204,7 +2212,7 @@ def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_va
     NC-detected fields (_detected_data_type, _nc_tim_res, _nc_grid_res) are
     stored as temporary keys on var entries for Stage 3 to consume.
     """
-    from openbench.data.registry.manager import _canonical_variable_overlays
+    from openbench.data.registry.manager import _canonical_variable_overlays, _migrate_legacy_variable_aliases
 
     variables = {}
     profile = get_reference_profile(scanned.registry_name) or get_reference_profile(scanned.name)
@@ -2213,9 +2221,19 @@ def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_va
     )
     profile_vars = _canonical_variable_overlays(profile_vars)
     existing_vars = _canonical_variable_overlays((existing_descriptor or {}).get("variables"))
-    scanned_vars = _canonical_variable_overlays(scanned.variables)
+    scanned_vars = _migrate_legacy_variable_aliases(
+        scanned.variables, context=f"scan {scanned.registry_name} under {scanned.root_dir}"
+    )
     profile_replaces_placeholder_variables = bool(profile_vars) and not any(vn in profile_vars for vn in scanned_vars)
-    for var_name, sub_dir in scanned.variables.items():
+    seen = set()
+    # Retain the chosen raw key for remote inspection/file-glob lookups.
+    for var_name, sub_dir in sorted(
+        scanned.variables.items(), key=lambda item: item[0] != canonical_variable_name(item[0])
+    ):
+        canonical_name = canonical_variable_name(var_name)
+        if canonical_name in seen or scanned_vars[canonical_name] != sub_dir:
+            continue
+        seen.add(canonical_name)
         var_entry: dict = {"varname": var_name, "varunit": ""}
         if sub_dir:
             var_entry["sub_dir"] = sub_dir
@@ -2303,7 +2321,8 @@ def _build_variables(scanned, descriptor: dict, existing_descriptor, on_multi_va
                     continue
                 if key in {"prefix", "suffix"} and suppress_existing_filename_pattern:
                     continue
-                if value is not None and value != "":
+                # These nulls explicitly clear bundled binding metadata on rescan.
+                if (value is None and key in {"years", "vertical_datum"}) or (value is not None and value != ""):
                     var_entry[key] = value
 
         variables[var_name] = var_entry
@@ -2467,6 +2486,8 @@ def _merge_profile_var_fields(
     def set_field(key: str, value) -> None:
         if value is None:
             return
+        if not overwrite_existing and key in {"years", "vertical_datum"} and key in target and target[key] is None:
+            return  # An explicit clear is not a missing profile default.
         if overwrite_existing or target.get(key) in (None, ""):
             target[key] = value
 
@@ -2534,7 +2555,9 @@ def _apply_profile_overrides(
                         existing_var = existing_vars.get(vn)
                         if isinstance(existing_var, dict):
                             for key, value in _public_existing_var_fields(existing_var).items():
-                                if value is not None and value != "":
+                                if (value is None and key in {"years", "vertical_datum"}) or (
+                                    value is not None and value != ""
+                                ):
                                     variables[vn][key] = value
                         _merge_profile_var_fields(
                             variables[vn],

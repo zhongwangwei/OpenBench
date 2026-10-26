@@ -191,6 +191,8 @@ class TailComparisonMixin:
                                     row,
                                     ref_varname,
                                     sim_varname,
+                                    ref_nml=ref_nml,
+                                    sim_nml=sim_nml,
                                 )
                                 ref_result = method_function(o)
                                 sim_result = method_function(s)
@@ -371,6 +373,8 @@ class TailComparisonMixin:
                                     row,
                                     ref_varname,
                                     sim_varname,
+                                    ref_nml=ref_nml,
+                                    sim_nml=sim_nml,
                                 )
                                 ref_value = _scalar(method_function(o))
                                 sim_value = _scalar(method_function(s))
@@ -443,6 +447,8 @@ class TailComparisonMixin:
                                     row,
                                     ref_varname,
                                     sim_varname,
+                                    ref_nml=ref_nml,
+                                    sim_nml=sim_nml,
                                 )
                                 value = _scalar(method_function(o, s)["functional_response_score"])
                                 output.loc[index, "functional_response_score"] = value
@@ -646,7 +652,16 @@ class TailComparisonMixin:
 
             def _sim_series(item, ref_source, sim_source, row, ref_varname, sim_varname):
                 sim, _ref = _load_station_pair(
-                    self, basedir, item, ref_source, sim_source, row, ref_varname, sim_varname
+                    self,
+                    basedir,
+                    item,
+                    ref_source,
+                    sim_source,
+                    row,
+                    ref_varname,
+                    sim_varname,
+                    ref_nml=ref_nml,
+                    sim_nml=sim_nml,
                 )
                 return sim
 

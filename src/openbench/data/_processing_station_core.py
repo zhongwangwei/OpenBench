@@ -281,6 +281,13 @@ class StationProcessingCoreMixin:
                 else:
                     ds = stn_data[actual_station_var]
 
+            if datasource == "ref" and getattr(self, "ref_vertical_datum", None) is not None:
+                from openbench.data.vertical_datum import VerticalDatumError, validate_observation_height
+
+                if self.item != "Water_Surface_Elevation":
+                    raise VerticalDatumError("vertical_datum supports only Water_Surface_Elevation")
+                validate_observation_height(ds)
+
             # Apply fallback conversion expressions. Supports multi-variable expressions: 'value' is current var,
             # other NC variables are accessible by name (e.g., f_assim).
             fb_convert = getattr(self, f"_fb_convert_{datasource}", None)

@@ -230,6 +230,8 @@ class TaylorDiagramComparisonMixin:
                                                 station_row,
                                                 ref_varname,
                                                 sim_varname,
+                                                ref_nml=ref_nml,
+                                                sim_nml=sim_nml,
                                             )
                                             result = {
                                                 "std_s": _to_scalar_float(_taylor_standard_deviation(s)),

@@ -258,7 +258,7 @@ def test_sync_readonly_failure_is_quiet(tmp_path, monkeypatch, caplog):
 
 
 def test_incomparable_overlay_is_preserved_without_success_notice(tmp_path, caplog):
-    invalid = {"variables": {"Soil_Evaporation": {"varname": "a"}, "Bare_Soil_Evaporation": {"varname": "b"}}}
+    invalid = {"variables": {"Soil_Evaporation": 42}}
     _write_overlays(tmp_path, {}, {"CoLM2024": invalid})
     path = tmp_path / "models" / "model_catalog.yaml"
     original = path.read_bytes()

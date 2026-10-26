@@ -18,6 +18,8 @@ from openbench.cli._wizard import BackRequested, navigation_hint, prompt_fields,
 from openbench.cli._wizard import confirm as _wizard_confirm
 from openbench.cli._wizard import prompt as _base_wizard_prompt
 from openbench.core.registry import IMPLEMENTED_METRIC_NAMES, IMPLEMENTED_SCORE_NAMES
+from openbench.data.registry.schema import reference_years
+from openbench.util.names import get_mapping_value_case_insensitive
 
 
 def _wizard_prompt(text: str, **kwargs):
@@ -301,7 +303,8 @@ def _selected_reference_items(selected_refs: dict):
 
 def _warn_reference_year_coverage(selected_refs: dict, project_years: tuple[int, int]) -> None:
     for variable, ref in _selected_reference_items(selected_refs):
-        ref_years = _coerce_year_span(getattr(ref, "years", None))
+        mapping = get_mapping_value_case_insensitive(getattr(ref, "variables", {}) or {}, variable)
+        ref_years = _coerce_year_span(reference_years(ref, mapping))
         if ref_years is None or _year_spans_overlap(project_years, ref_years):
             continue
         click.secho(
@@ -627,7 +630,7 @@ def _validate_selected_reference_data(selected: dict[str, object], years: tuple[
                 prefix=getattr(var_map, "prefix", ""),
                 suffix=getattr(var_map, "suffix", ""),
                 data_groupby=getattr(ref, "data_groupby", "Year"),
-                years=_probe_years(list(years), getattr(ref, "years", None)),
+                years=_probe_years(list(years), reference_years(ref, var_map)),
                 prefix_fallback=getattr(var_map, "prefix_fallback", None),
                 compute=getattr(var_map, "compute", None),
                 standard_varname=variable,

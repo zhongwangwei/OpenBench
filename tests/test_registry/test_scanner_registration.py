@@ -3860,9 +3860,10 @@ def test_profile_scan_ignore_consumes_raw_composite_tree(monkeypatch, tmp_path: 
     assert groups == []
 
 
+@pytest.mark.parametrize("resolution", ["LowRes", "MidRes"])
 @pytest.mark.parametrize("raw_directory_present", [False, True])
 def test_builtin_gleam_raw_composite_guard_does_not_register_originals(
-    monkeypatch, tmp_path: Path, raw_directory_present
+    monkeypatch, tmp_path: Path, raw_directory_present, resolution
 ):
     """An optional legacy raw tree is not a second curated reference dataset."""
     import numpy as np
@@ -3873,9 +3874,9 @@ def test_builtin_gleam_raw_composite_guard_does_not_register_originals(
     profiles = yaml.safe_load((REGISTRY_DIR / "reference_profiles.yaml").read_text())
     monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", profiles)
     ref_root = tmp_path / "Reference"
-    (ref_root / "Grid" / "MidRes").mkdir(parents=True)
+    (ref_root / "Grid" / resolution).mkdir(parents=True)
     if raw_directory_present:
-        directory = ref_root / "Grid" / "MidRes" / "Composite" / "GLEAM_v4.2"
+        directory = ref_root / "Grid" / resolution / "Composite" / "GLEAM_v4.2" / "E"
         directory.mkdir(parents=True)
         dataset = xr.Dataset(
             {"E": (("time", "lat", "lon"), np.zeros((2, 2, 2), dtype="f4"))},
@@ -3888,6 +3889,43 @@ def test_builtin_gleam_raw_composite_guard_does_not_register_originals(
         dataset["E"].attrs["units"] = "mm day-1"
         dataset.to_netcdf(directory / "E_2001_GLEAM_v4.2a.nc")
     assert scanner_module.scan_reference_directory(ref_root) == []
+
+
+@pytest.mark.parametrize("resolution, spacing", [("LowRes", 0.5), ("MidRes", 0.25)])
+def test_builtin_gleam_standardized_scan_survives_retired_raw_copy(monkeypatch, tmp_path, resolution, spacing):
+    import numpy as np
+    import xarray as xr
+
+    from openbench.data.registry.manager import REGISTRY_DIR
+
+    profiles = yaml.safe_load((REGISTRY_DIR / "reference_profiles.yaml").read_text())
+    monkeypatch.setattr(scanner_module, "_REFERENCE_PROFILES", profiles)
+    ref_root = tmp_path / "Reference"
+    standard = ref_root / "Grid" / resolution / "Water/Evapotranspiration/GLEAM_v4.2a"
+    raw = ref_root / "Grid" / resolution / "Composite/GLEAM_v4.2/E"
+    ds = xr.Dataset(
+        {"E": (("time", "lat", "lon"), np.zeros((2, 2, 2), dtype="f4"))},
+        coords={
+            "time": np.array(["2001-01-01", "2001-02-01"], dtype="datetime64[D]"),
+            "lat": [0.0, spacing],
+            "lon": [0.0, spacing],
+        },
+    )
+    ds["E"].attrs["units"] = "mm day-1"
+    for path in (standard, raw):
+        path.mkdir(parents=True)
+        ds.to_netcdf(path / "E_2001_GLEAM_v4.2a.nc")
+    groups = scanner_module.scan_reference_directory(ref_root)
+    assert len(groups) == 1
+    assert groups[0].base_name == "GLEAM_v4.2a"
+    variant = groups[0].variants[resolution]
+    assert variant.variables == {"Evapotranspiration": "Water/Evapotranspiration/GLEAM_v4.2a"}
+    catalog = tmp_path / "catalog.yaml"
+    scanner_module.register_scanned_dataset(variant, catalog_path=catalog)
+    entry = yaml.safe_load(catalog.read_text())[f"GLEAM_v4.2a_{resolution}"]
+    assert entry["variables"]["Evapotranspiration"]["sub_dir"] == variant.variables["Evapotranspiration"]
+    assert entry["variables"]["Evapotranspiration"]["varname"] == "E"
+    assert entry["variables"]["Evapotranspiration"]["varunit"] == "mm day-1"
 
 
 def test_scan_uses_grandchild_dir_when_nc_files_two_levels_deep(tmp_path: Path):

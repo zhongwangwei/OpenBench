@@ -242,6 +242,12 @@ def run_evaluation_impl(
         force = bool(getattr(cfg.project, "force", False))
 
     only_drawing = bool(general.get("only_drawing", False))
+    if (
+        comparison_only or (only_drawing and (cfg.comparison.enabled or cfg.project.generate_report))
+    ) and "Water_Surface_Elevation" in runner_cfg.evaluation_items:
+        from openbench.core._comparison_helpers import _require_uncorrected_comparison_cache
+
+        _require_uncorrected_comparison_cache(bindings.namelists.reference, runner_cfg.evaluation_items)
     if resume and comparison_only:
         raise ValueError("resume cannot be combined with comparison_only")
     if resume and only_drawing:

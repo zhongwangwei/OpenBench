@@ -161,6 +161,8 @@ class PortraitSeasonalComparisonMixin:
                                                 station_row,
                                                 ref_varname,
                                                 sim_varname,
+                                                ref_nml=ref_nml,
+                                                sim_nml=sim_nml,
                                             )
                                             s_season, o_season = _select_season_pair(s, o, season)
                                             if metric_or_score == "metric":

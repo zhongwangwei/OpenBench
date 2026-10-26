@@ -468,11 +468,12 @@ def test_packaged_station_lists_do_not_embed_developer_absolute_paths():
     assert bad == {}
 
 
-def test_gleam_open_water_profile_subdir_matches_catalog_variants():
+def test_gleam_plain_profile_keeps_paths_in_catalog_variants_only():
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
 
-    profile_subdir = profiles["GLEAM_v4.2a"]["variables"]["Open_Water_Evaporation"]["sub_dir"]
+    assert "sub_dir" not in profiles["GLEAM_v4.2a"]["variables"]["Open_Water_Evaporation"]
+    profile_subdir = "Water/Open_Water_Evaporation/GLEAM_v4.2a"
     catalog_subdirs = {
         variant: catalog[variant]["variables"]["Open_Water_Evaporation"]["sub_dir"]
         for variant in ("GLEAM_v4.2a_LowRes", "GLEAM_v4.2a_MidRes")
@@ -763,19 +764,23 @@ def test_formal_reference_scan_entries_are_bundled_and_profiled():
             assert profile["variables"]["Lake_Area"]["varname"] == "LakeArea"
 
 
-def test_gleam_midres_raw_composite_is_ignored_because_standardized_entry_exists():
+@pytest.mark.parametrize("resolution", ["LowRes", "MidRes"])
+def test_gleam_raw_composite_is_ignored_because_standardized_entry_exists(resolution):
     catalog = _load_builtin_yaml("reference_catalog.yaml")
     profiles = _load_builtin_yaml("reference_profiles.yaml")
 
     # Ignore hints are not registrations and remain useful if old originals still exist.
-    assert profiles["GLEAM_v4.2a_MidRes_RawComposite"]["scan"] == {
+    guard = f"GLEAM_v4.2a_{resolution}_RawComposite"
+    assert profiles[guard]["scan"] == {
         "layout": "ignore",
-        "root_sub_dir": "Grid/MidRes/Composite/GLEAM_v4.2",
+        "root_sub_dir": f"Grid/{resolution}/Composite/GLEAM_v4.2",
     }
-    assert "GLEAM_v4.2a_MidRes_RawComposite" not in catalog
+    assert guard not in catalog
+    assert "scan" not in profiles["GLEAM_v4.2a"]
+    assert all("child" not in var for var in profiles["GLEAM_v4.2a"]["variables"].values())
 
-    entry = catalog["GLEAM_v4.2a_MidRes"]
-    assert entry["root_dir"] == "${OPENBENCH_REF_ROOT}/Grid/MidRes"
+    entry = catalog[f"GLEAM_v4.2a_{resolution}"]
+    assert entry["root_dir"] == "${OPENBENCH_REF_ROOT}/Grid/" + resolution
     assert entry["variables"]["Evapotranspiration"]["sub_dir"] == "Water/Evapotranspiration/GLEAM_v4.2a"
     assert entry["variables"]["Canopy_Transpiration"]["sub_dir"] == "Water/Canopy_Transpiration/GLEAM_v4.2a"
 

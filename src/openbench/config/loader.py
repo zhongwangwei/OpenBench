@@ -538,8 +538,17 @@ def _build_dask(raw: Any) -> DaskConfig:
     )
 
 
-def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any]] | None:
-    """Validate simulation variable override mappings."""
+def _validate_years(years: Any, path: str) -> None:
+    if not isinstance(years, list) or len(years) != 2:
+        raise ConfigError(f"{path} must be a list of [start_year, end_year]")
+    if not all(isinstance(y, int) and not isinstance(y, bool) for y in years):
+        raise ConfigError(f"{path} must be integers, got {[type(y).__name__ for y in years]}")
+    if years[0] > years[1]:
+        raise ConfigError(f"{path} start year ({years[0]}) must be <= end year ({years[1]})")
+
+
+def _validated_variables_mapping(raw: Any, path: str, *, reference: bool = False) -> dict[str, dict[str, Any]] | None:
+    """Validate variable overrides; coverage windows apply only to references."""
     if raw is None:
         return None
     if not isinstance(raw, dict):
@@ -549,7 +558,23 @@ def _validated_variables_mapping(raw: Any, path: str) -> dict[str, dict[str, Any
             raise ConfigError(f"{path} keys must be variable names (strings)")
         if not isinstance(override, dict):
             raise ConfigError(f"{path}.{var_name} must be a mapping")
-        _reject_unknown_keys(override, _VARIABLE_OVERRIDE_KEYS, f"{path}.{var_name}")
+        if not reference and "vertical_datum" in override:
+            raise ConfigError(
+                f"{path}.{var_name}.vertical_datum is reference-only; configure it on "
+                "Water_Surface_Elevation station observations, not simulation"
+            )
+        allowed = _VARIABLE_OVERRIDE_KEYS | {"years", "vertical_datum"} if reference else _VARIABLE_OVERRIDE_KEYS
+        _reject_unknown_keys(override, allowed, f"{path}.{var_name}")
+        # A null variable window clears the catalog binding and inherits its dataset window.
+        if "years" in override and override["years"] is not None:
+            _validate_years(override["years"], f"{path}.{var_name}.years")
+        if "vertical_datum" in override:
+            from openbench.data.vertical_datum import normalize_vertical_datum_spec
+
+            try:
+                normalize_vertical_datum_spec(override["vertical_datum"], context=f"{path}.{var_name}.vertical_datum")
+            except ValueError as exc:
+                raise ConfigError(str(exc)) from exc
         accumulated = override.get("accumulated")
         if accumulated is not None and str(accumulated).strip().lower() not in ("year", "run"):
             raise ConfigError(f"{path}.{var_name}.accumulated must be 'year' or 'run', got {accumulated!r}")
@@ -868,12 +893,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         raise ConfigError("project.name must be a simple directory name, not a path.")
 
     years = raw["years"]
-    if not isinstance(years, list) or len(years) != 2:
-        raise ConfigError("project.years must be a list of [start_year, end_year]")
-    if not all(isinstance(y, int) and not isinstance(y, bool) for y in years):
-        raise ConfigError(f"project.years must be integers, got {[type(y).__name__ for y in years]}")
-    if years[0] > years[1]:
-        raise ConfigError(f"project.years start year ({years[0]}) must be <= end year ({years[1]})")
+    _validate_years(years, "project.years")
 
     time_alignment = raw.get("time_alignment", "intersection")
     if time_alignment not in VALID_TIME_ALIGNMENTS:
@@ -1004,11 +1024,16 @@ def _validate_reference_overrides(raw: Any) -> dict[str, dict[str, Any]]:
         _reject_unknown_keys(override, allowed_dataset, f"reference.overrides.{source}")
         if "root_dir" in override:
             _validated_required_string(override["root_dir"], f"reference.overrides.{source}.root_dir")
+        if override.get("years") is not None:
+            _validate_years(override["years"], f"reference.overrides.{source}.years")
         variables = override.get("variables")
         result[safe_source] = dict(override)
+        # Legacy dataset null means no override, unlike a variable null which clears its binding.
+        if override.get("years") is None:
+            result[safe_source].pop("years", None)
         if variables is not None:
             result[safe_source]["variables"] = _validated_variables_mapping(
-                variables, f"reference.overrides.{source}.variables"
+                variables, f"reference.overrides.{source}.variables", reference=True
             )
     return result
 

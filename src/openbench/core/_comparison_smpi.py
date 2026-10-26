@@ -222,6 +222,8 @@ class SingleModelPerformanceIndexComparisonMixin:
                                         station_row,
                                         ref_varname,
                                         sim_varname,
+                                        ref_nml=ref_nml,
+                                        sim_nml=sim_nml,
                                     )
                                     smpi, lower, upper = calculate_smpi(s, o)
                                     result = {"SMPI": smpi, "Lower_CI": lower, "Upper_CI": upper}

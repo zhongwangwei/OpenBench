@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import logging
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -18,6 +19,7 @@ import pandas as pd
 import xarray as xr
 
 from openbench.data.station_missing import StationDataUnavailable
+from openbench.data.vertical_datum import harmonize_station_vertical_datum
 from openbench.data.time_utils import align_station_times
 from openbench.util.names import select_data_array
 from openbench.util.converttype import Convert_Type
@@ -125,7 +127,31 @@ def _station_evaluation_frame(basedir, item, ref_source, sim_source, kind="metri
     return Convert_Type.convert_Frame(frame)
 
 
-def _load_station_pair(handler, basedir, item, ref_source, sim_source, row, ref_varname, sim_varname):
+def _require_uncorrected_comparison_cache(ref_nml, evaluation_items):
+    """Reject redraws whose aggregate products cannot prove the active WSE datum."""
+    item = "Water_Surface_Elevation"
+    if item not in evaluation_items:
+        return
+    refs = ref_nml.get("general", {}).get(f"{item}_ref_source", [])
+    refs = [refs] if isinstance(refs, str) else refs
+    for ref in refs:
+        datum = ref_nml.get(item, {}).get(f"{ref}_vertical_datum")
+        if isinstance(datum, str):
+            datum = json.loads(datum)
+        if datum is not None:
+            from openbench.data.vertical_datum import VerticalDatumError
+
+            raise VerticalDatumError(
+                "Water_Surface_Elevation vertical_datum comparisons/reports cannot use cached products in "
+                "only_drawing or --comparison-only mode; run normal evaluation with only_drawing=False "
+                "and without --comparison-only to regenerate products. For station-only redraws, omit "
+                "--comparison-only and set comparison.enabled=False and project.generate_report=False"
+            )
+
+
+def _load_station_pair(
+    handler, basedir, item, ref_source, sim_source, row, ref_varname, sim_varname, *, ref_nml=None, sim_nml=None
+):
     """Load a station pair; only recorded or proven data gaps are recoverable."""
     if row.get("status") == "unavailable":
         raise StationDataUnavailable(str(row.get("reason") or "station data unavailable"))
@@ -143,6 +169,23 @@ def _load_station_pair(handler, basedir, item, ref_source, sim_source, row, ref_
             data = select_data_array(ds, varname).load()
         data = data.squeeze([dim for dim in data.dims if dim != "time" and data.sizes[dim] == 1])
         arrays.append(Convert_Type.convert_nc(data))
+    configs = {}
+    for role, source, nml in (("ref", ref_source, ref_nml), ("sim", sim_source, sim_nml)):
+        if nml is None:
+            configs[role] = getattr(handler, f"{role}_vertical_datum", None)
+        else:
+            section = nml.get(item, {})
+            datum = section.get(f"{source}_vertical_datum")
+            if isinstance(datum, str):
+                datum = json.loads(datum)
+            if datum is not None:
+                from openbench.config.adapter import _resolved_vertical_datum
+
+                datum = _resolved_vertical_datum(datum, section.get(f"{source}_dir"))
+            configs[role] = datum
+    arrays = harmonize_station_vertical_datum(
+        *arrays, sim_config=configs["sim"], ref_config=configs["ref"], station=row, item=item
+    )
     s, o = align_station_times(*arrays, row["ID"], getattr(handler, "compare_tim_res", ""))
     s, o = _apply_pairwise_valid_mask(s, o)
     if not bool(np.isfinite(s).any()):

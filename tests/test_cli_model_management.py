@@ -1494,23 +1494,41 @@ def test_per_variable_offset_keeps_cleared_bundled_offsets_cleared(tmp_path, mon
     assert _load_model(home, "CLM5").time_offset["Month"] == {"Latent_Heat": "-2 days"}
 
 
-def test_rename_refuses_an_overlay_the_registry_cannot_merge(tmp_path, monkeypatch):
+def test_rename_preserves_migrated_legacy_aliases(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
     _catalog(home).parent.mkdir(parents=True)
-    broken = {
+    legacy = {
         "TE": {
             "description": "mine",
             "variables": {"Soil_Evaporation": {"varname": "a"}, "Bare_Soil_Evaporation": {"varname": "b"}},
         }
     }
+    _catalog(home).write_text(yaml.safe_dump(legacy))
+
+    result = runner.invoke(cli, ["model", "rename", "TE", "TE2", "--yes"])
+
+    assert result.exit_code == 0, result.output
+    renamed = _load_model(home, "TE2")
+    assert renamed.description == "mine"
+    assert renamed.variables["Soil_Evaporation"].varname == "a"
+    assert "Bare_Soil_Evaporation" not in renamed.variables
+    backups = _catalog(home).parent.glob("model_catalog.yaml*.bak")
+    assert any(yaml.safe_load(path.read_text()) == legacy for path in backups)
+
+
+def test_rename_refuses_an_overlay_the_registry_cannot_merge(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    _catalog(home).parent.mkdir(parents=True)
+    broken = {"TE": {"description": "mine", "variables": {"Soil_Evaporation": 42}}}
     _catalog(home).write_text(yaml.safe_dump(broken))
 
     result = runner.invoke(cli, ["model", "rename", "TE", "TE2", "--yes"])
 
     assert result.exit_code != 0
-    assert "Conflicting variable alias definitions" in result.output
     assert yaml.safe_load(_catalog(home).read_text(encoding="utf-8")) == broken
 
 

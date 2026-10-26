@@ -148,6 +148,8 @@ class TargetDiagramComparisonMixin:
                                                 station_row,
                                                 ref_varname,
                                                 sim_varname,
+                                                ref_nml=ref_nml,
+                                                sim_nml=sim_nml,
                                             )
                                             s = s.astype("float64")
                                             o = o.astype("float64")

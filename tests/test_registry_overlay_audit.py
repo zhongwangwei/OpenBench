@@ -124,3 +124,24 @@ def test_notice_silent_when_clean(tmp_path, monkeypatch):
     # a historical match; its intent needs no warning.
     _write_overlay(tmp_path, {"CLARA_3_LowRes": {"variables": {"Surface_Albedo": {"varunit": "user_unit"}}}})
     assert oa.maybe_emit_overlay_notice(tmp_path) is None
+
+
+def test_reference_years_sparse_delta_drops_only_behaviorally_redundant_fields():
+    bundled = {
+        "name": "CoverageRef",
+        "data_type": "grid",
+        "tim_res": "Month",
+        "years": [1980, 2020],
+        "variables": {"Latent_Heat": {"varname": "le", "varunit": "W m-2"}},
+    }
+    # No explicit bundled variable window: null has no effect, but a custom window does.
+    redundant = {"variables": {"Latent_Heat": {"years": None, "varunit": "J"}}}
+    assert oa._sparse_delta(bundled, redundant) == {"variables": {"Latent_Heat": {"varunit": "J"}}}
+    custom = {"variables": {"Latent_Heat": {"years": [2001, 2010]}}}
+    assert oa._sparse_delta(bundled, custom) == custom
+    bundled["variables"]["Latent_Heat"]["years"] = [2001, 2010]
+    assert oa._sparse_delta(bundled, custom) == {}
+    # Clearing a real binding changes coverage to dataset years and must remain.
+    cleared = {"variables": {"Latent_Heat": {"years": None}}}
+    assert oa._sparse_delta(bundled, cleared) == cleared
+    assert "years" not in oa._MERGED_VARIABLE_FIELDS["models"]

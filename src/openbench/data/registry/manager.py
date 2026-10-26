@@ -373,6 +373,7 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
+                    data = _migrate_legacy_entry_aliases(data, context=f"{path}:{name}")
                     key = normalize_name(name)
                     if isinstance(data, dict) and data.get("_deleted"):
                         self._references.pop(key, None)
@@ -408,6 +409,7 @@ class RegistryManager:
                 else:
                     entries = data
                 for name, entry in entries.items():
+                    entry = _migrate_legacy_entry_aliases(entry, context=f"{path}:{name}")
                     key = normalize_name(name)
                     if isinstance(entry, dict) and entry.get("_deleted"):
                         self._references.pop(key, None)
@@ -432,6 +434,7 @@ class RegistryManager:
                 catalog = yaml.safe_load(f) or {}
             for name, data in catalog.items():
                 try:
+                    data = _migrate_legacy_entry_aliases(data, context=f"{path}:{name}")
                     key = normalize_name(name)
                     if isinstance(data, dict) and data.get("_deleted"):
                         self._models.pop(key, None)
@@ -484,6 +487,7 @@ class RegistryManager:
                 else:
                     entries = data
                 for name, entry in entries.items():
+                    entry = _migrate_legacy_entry_aliases(entry, context=f"{path}:{name}")
                     key = normalize_name(name)
                     if key in self._models:
                         self._models[key] = _deep_merge_model(self._models[key], entry)
@@ -754,7 +758,20 @@ class RegistryManager:
             bundled_data = self._read_catalog(REGISTRY_DIR / "reference_catalog.yaml")
             bundled_key = get_mapping_key_case_insensitive(bundled_data, name)
             raw_base = bundled_data[bundled_key] if bundled_key else None
-            raw_overlay = catalog.get(existing_key, {}) if existing_key else {}
+            if raw_base:
+                # Omission inherits bundled fields; explicitly cleared binding
+                # years need a null tombstone to retain dataset-level fallback.
+                bundled_variables = _canonical_variable_overlays(raw_base.get("variables"))
+                for var_name, mapping in dataset.variables.items():
+                    base_key = get_mapping_key_case_insensitive(bundled_variables, var_name)
+                    base_mapping = bundled_variables.get(base_key, {})
+                    if mapping.vertical_datum is None and base_mapping.get("vertical_datum") is not None:
+                        snapshot["variables"][var_name]["vertical_datum"] = None
+                    if mapping.years is None and base_mapping.get("years") is not None:
+                        snapshot["variables"][var_name]["years"] = None
+            raw_overlay = _migrate_legacy_entry_aliases(
+                catalog.get(existing_key, {}) if existing_key else {}, context=f"{catalog_path}:{name}"
+            )
             current = _build_reference({**raw_base, "name": bundled_key}) if raw_base else None
             if current is not None:
                 # The saved dataset lists every variable it keeps. A deep merge
@@ -828,6 +845,17 @@ class RegistryManager:
         )
         from openbench.data.registry.scanner import _atomic_yaml_write
 
+        # An explicit save can canonicalize a legacy entry. Keep its competing
+        # definitions recoverable using the scanner's existing backup protocol.
+        previous = RegistryManager._read_catalog(path)
+        for entry in previous.values():
+            variables = entry.get("variables") if isinstance(entry, dict) else None
+            if isinstance(variables, dict) and len(variables) != len({canonical_variable_name(v) for v in variables}):
+                from openbench.data.registry.scanner import _backup_then_write
+
+                _backup_then_write(path, catalog)
+                return
+
         overlay_kind = overlay_kind_for_path(path)
         if overlay_kind is not None:
             # An edit a separate overlay file undoes on load would appear saved until a restart.
@@ -887,7 +915,16 @@ def model_snapshot_overlay(profile: ModelProfile, bundled: ModelProfile | None =
     variables = _canonicalize_variable_mappings(profile.variables)
     for name, mapping in variables.items():
         data = mapping.to_dict()
-        for key in ("prefix", "suffix", "sub_dir", "fallbacks", "compute", "accumulated", "prefix_fallback"):
+        for key in (
+            "prefix",
+            "suffix",
+            "sub_dir",
+            "fallbacks",
+            "compute",
+            "accumulated",
+            "prefix_fallback",
+            "vertical_datum",
+        ):
             data.setdefault(key, getattr(mapping, key))
         snapshot["variables"][name] = data
     if bundled is not None:
@@ -1013,6 +1050,11 @@ def _build_reference(data: dict) -> ReferenceDataset:
     """Build a ReferenceDataset from a raw dict."""
     variables = {}
     for var_name, var_data in (data.get("variables") or {}).items():
+        years = var_data.get("years")
+        if years and len(years) >= 2 and years[0] > years[1]:
+            logger.warning(
+                "Reference '%s' variable '%s' has start year > end year: %s", data.get("name"), var_name, years
+            )
         primary_varname, fallbacks = _normalize_legacy_varname_list(var_data)
         _add_canonical_variable(
             variables,
@@ -1030,6 +1072,8 @@ def _build_reference(data: dict) -> ReferenceDataset:
                 compute=var_data.get("compute"),
                 accumulated=var_data.get("accumulated"),
                 prefix_fallback=var_data.get("prefix_fallback"),
+                vertical_datum=var_data.get("vertical_datum"),
+                years=var_data.get("years"),
             ),
         )
 
@@ -1095,6 +1139,7 @@ def _build_model(data: dict) -> ModelProfile:
                 compute=var_data.get("compute"),
                 accumulated=var_data.get("accumulated"),
                 prefix_fallback=var_data.get("prefix_fallback"),
+                vertical_datum=var_data.get("vertical_datum"),
             ),
         )
 
@@ -1107,6 +1152,47 @@ def _build_model(data: dict) -> ModelProfile:
         variables=variables,
         time_offset=data.get("time_offset"),
     )
+
+
+def _migrate_legacy_variable_aliases(raw_variables: dict, *, context: str) -> dict:
+    """Read old duplicate aliases without rewriting the user's source catalog.
+
+    A canonical mapping wins as a whole: mixing fields from two populated
+    mappings could pair one native variable with another variable's units.
+    New registrations still use the strict canonicalization helpers below.
+    """
+    grouped: dict[str, list[tuple[str, Any]]] = {}
+    for raw_name, value in raw_variables.items():
+        grouped.setdefault(canonical_variable_name(raw_name), []).append((raw_name, value))
+    migrated = {}
+    for name, candidates in grouped.items():
+        candidates.sort(key=lambda pair: (normalize_name(pair[0]) != normalize_name(name), pair[0] != name, pair[0]))
+        selected_name, selected = candidates[0]
+        # Empty placeholders do not override populated legacy definitions;
+        # explicit null is a deletion and must not be treated as a placeholder.
+        if isinstance(selected, dict) and _is_empty_value(selected):
+            selected_name, selected = next(
+                ((key, value) for key, value in candidates if not _is_empty_value(value)),
+                (selected_name, selected),
+            )
+        if any(value != selected for _, value in candidates):
+            logger.warning(
+                "%s: migrated legacy variable aliases %s in memory; using %r as %r. "
+                "Conflicting mappings are not combined; source catalog/data unchanged. "
+                "Review the aliases before saving or rescanning.",
+                context,
+                [key for key, _ in candidates],
+                selected_name,
+                name,
+            )
+        migrated[name] = selected
+    return migrated
+
+
+def _migrate_legacy_entry_aliases(data: dict, *, context: str) -> dict:
+    if not isinstance(data, dict) or not isinstance(data.get("variables"), dict):
+        return data
+    return {**data, "variables": _migrate_legacy_variable_aliases(data["variables"], context=context)}
 
 
 def _canonical_variable_overlays(raw_variables: dict | None) -> dict[str, Any]:
@@ -1144,6 +1230,7 @@ def _merge_variable_mapping(
         "compute": merged.get("compute"),
         "accumulated": merged.get("accumulated"),
         "prefix_fallback": merged.get("prefix_fallback"),
+        "vertical_datum": merged.get("vertical_datum"),
     }
     if include_reference_fields:
         kwargs.update(
@@ -1151,6 +1238,7 @@ def _merge_variable_mapping(
                 "fulllist": merged.get("fulllist"),
                 "max_uparea": merged.get("max_uparea"),
                 "min_uparea": merged.get("min_uparea"),
+                "years": merged.get("years"),
             }
         )
     return VariableMapping(**kwargs)

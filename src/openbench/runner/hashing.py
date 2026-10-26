@@ -12,6 +12,7 @@ import glob
 import hashlib
 import importlib
 import inspect
+import json
 import logging
 import os
 import shutil
@@ -89,6 +90,7 @@ COMMON_ALGORITHM_SOURCE_MODULES = (
     "openbench.data._processing_yearly",
     "openbench.data.time_utils",
     "openbench.data.unit",
+    "openbench.data.vertical_datum",
     "openbench.util.groupby",
 )
 
@@ -307,7 +309,8 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
     prefix = str(legacy_source_value(section, source, "prefix", "") or "")
     suffix = str(legacy_source_value(section, source, "suffix", "") or "")
     varname = str(legacy_source_value(section, source, "varname", "") or "")
-    if not root:
+    datum = legacy_source_value(section, source, "vertical_datum")
+    if not root and not datum:
         return {"files": []}
 
     root_path = Path(os.path.expanduser(os.path.expandvars(str(root))))
@@ -320,7 +323,7 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
         candidates.add(list_path)
         candidates.update(_station_fulllist_files(list_path, root_path))
 
-    if root_path.exists():
+    if root and root_path.exists():
         escaped_prefix = glob.escape(prefix)
         escaped_varname = glob.escape(varname)
         escaped_suffix = glob.escape(suffix)
@@ -345,6 +348,15 @@ def input_file_signature(section: dict[str, Any], source: str) -> dict[str, Any]
                     candidates.update(root_path.rglob(pattern))
         except OSError as exc:
             logger.debug("Could not stat input directory %s for cache signature: %s", root_path, exc)
+
+    if datum:
+        from openbench.data.vertical_datum import normalize_vertical_datum_spec
+
+        spec = normalize_vertical_datum_spec(json.loads(datum) if isinstance(datum, str) else datum)
+        for key in ("source_geoid", "target_geoid"):
+            if key in spec:
+                path = Path(os.path.expanduser(os.path.expandvars(spec[key])))
+                candidates.add(path if path.is_absolute() else root_path / path)
 
     files: list[dict[str, Any]] = []
     for path in sorted(candidates, key=lambda item: str(item)):

@@ -969,41 +969,29 @@ GLEAM_v4.2a:
   category: Energy
   tim_res: Month
   data_groupby: Year
-  scan:
-    layout: grid_composite_children
-    root_sub_dir: Grid/LowRes/Composite/GLEAM_v4.2
   variables:
     Sensible_Heat:
-      child: H
       varname: H
       varunit: W m-2
     Bare_Soil_Evaporation:
-      child: Eb
       varname: Eb
       varunit: mm day-1
     Canopy_Evaporation:
-      child: Ei
       varname: Ei
       varunit: mm day-1
     Evapotranspiration:
-      child: E
       varname: E
       varunit: mm day-1
     Open_Water_Evaporation:
-      child: Ew
-      sub_dir: Water/Open_Water_Evaporation/GLEAM_v4.2a
       varname: Ew
       varunit: mm day-1
     Root_Zone_Soil_Moisture:
-      child: SMrz
       varname: SMrz
       varunit: m3 m-3
     Surface_Soil_Moisture:
-      child: SMs
       varname: SMs
       varunit: m3 m-3
     Canopy_Transpiration:
-      child: Et
       varname: Et
       varunit: mm day-1
 
@@ -1084,6 +1072,12 @@ Rn-Xu2022_0p25:
       varname: Rn
       varunit: W/m2
 
+# Ignore hints only: retired raw copies must not become reference registrations.
+GLEAM_v4.2a_LowRes_RawComposite:
+  scan:
+    layout: ignore
+    root_sub_dir: Grid/LowRes/Composite/GLEAM_v4.2
+
 GLEAM_v4.2a_MidRes_RawComposite:
   scan:
     layout: ignore
@@ -1092,6 +1086,9 @@ GLEAM_v4.2a_MidRes_RawComposite:
 ERA5LAND:
   description: ERA5-Land reanalysis
   variables:
+    Evapotranspiration:
+      varname: ET
+      varunit: mm day-1
     Latent_Heat:
       varname: slhf
       varunit: W m-2
@@ -1192,6 +1189,7 @@ CLARA_3:
 
 FLUXCOM-X-BASE:
   description: FLUXCOM-X machine learning flux estimates
+  years: [2001, 2020]
   variables:
     Gross_Primary_Productivity:
       varname: GPP
@@ -1205,6 +1203,80 @@ FLUXCOM-X-BASE:
     Canopy_Transpiration:
       varname: ET_T
       varunit: mm hr-1
+
+FLUXCOM_RS_METEO_Ensemble_LowRes:
+  dataset_name: FLUXCOM_RS_METEO_Ensemble
+  scan:
+    layout: grid_composite_files
+    root_sub_dir: Grid/LowRes/Composite/FLUXCOM
+  description: FLUXCOM RS+METEO multi-forcing ensemble median (not the GSWP3-only or X-BASE product)
+  category: Composite
+  tim_res: Month
+  data_groupby: Year
+  years:
+  - 2001
+  - 2013
+  variables:
+    Gross_Primary_Productivity:
+      varname: GPP
+      varunit: gC m-2 d-1
+      prefix: GPP.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2010
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Carbon
+      file_glob: GPP.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
+    Ecosystem_Respiration:
+      varname: TER
+      varunit: gC m-2 d-1
+      prefix: TER.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2010
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Carbon
+      file_glob: TER.RS_METEO.FP-ALL.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
+    Net_Ecosystem_Exchange:
+      varname: NEE
+      varunit: gC m-2 d-1
+      prefix: NEE.RS_METEO.FP-NONE.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2010
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Carbon
+      file_glob: NEE.RS_METEO.FP-NONE.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
+    Sensible_Heat:
+      varname: H
+      varunit: MJ m-2 d-1
+      prefix: H.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2013
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Energy
+      file_glob: H.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
+    Latent_Heat:
+      varname: LE
+      varunit: MJ m-2 d-1
+      prefix: LE.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2013
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Energy
+      file_glob: LE.RS_METEO.EBC-ALL.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
+    Net_Radiation:
+      varname: Rn
+      varunit: MJ m-2 d-1
+      prefix: Rn.RS_METEO.EBC-NONE.MLM-ALL.METEO-ALL.720_360.monthly.
+      suffix: ''
+      years:
+      - 2001
+      - 2013
+      root_sub_dir: Grid/LowRes/Composite/FLUXCOM/Energy
+      file_glob: Rn.RS_METEO.EBC-NONE.MLM-ALL.METEO-ALL.720_360.monthly.[0-9][0-9][0-9][0-9].nc
 
 _Ignore_FLUXCOM_raw_composite:
   scan:
@@ -1341,6 +1413,10 @@ CRU_TS_4.08:
     Precipitation:
       varname: pre
       varunit: mm day-1
+    Ground_Frost_Frequency:
+      varname: frs
+      varunit: days
+      years: [1901, 2023]
 ESACCI-BIOMASS-L4:
   description: ESACCI-BIOMASS-L4 reference dataset (LowRes)
   category: Carbon
@@ -1386,6 +1462,8 @@ GGMSEUD:
     Total_Irrigation_Amount:
       varname: withd_irr
       varunit: mm month-1
+GIEMS_v2:
+  years: [1992, 2015]
 GIEMS_MC:
   description: GIEMS-MC Global Inundation Extent (LowRes)
   category: Water
@@ -1453,7 +1531,7 @@ GRFR:
       varname: ro
       varunit: mm day-1
 GloFlux:
-  description: GloFlux reference dataset (LowRes)
+  description: GloFlux monthly carbon fluxes
   category: Carbon
   tim_res: Month
   data_groupby: Single
@@ -1481,6 +1559,7 @@ LGS_Reco:
   category: Carbon
   tim_res: Day
   data_groupby: Year
+  years: [1985, 2015]
   variables:
     Ecosystem_Respiration:
       varname: Reco
@@ -1621,15 +1700,32 @@ TRIMS:
     Urban_Surface_Temperature:
       varname: LST_N
       varunit: K
-UpCH4:
-  description: UpCH4 reference dataset (LowRes)
+UpCH4_v0.4_WAD2M_LowRes:
+  dataset_name: UpCH4_v0.4_WAD2M
+  scan:
+    layout: grid_composite_files
+    root_sub_dir: Grid/LowRes/Bio/Wetland_Methane_Emission/UpCH4_v0.4_WAD2M
+  description: UpCH4 v0.4 WAD2M 500-model ensemble mean freshwater vegetated wetland
+    contribution per total grid-cell area; already wetland-fraction weighted, excludes
+    open water and coastal wetlands, not all-source methane
   category: Carbon
   tim_res: Month
-  data_groupby: Year
+  data_groupby: Single
+  years:
+  - 2001
+  - 2018
+  grid_res: 0.25
   variables:
     Wetland_Methane_Emission:
       varname: mean_ch4
-      varunit: gC m-2 day-1
+      varunit: mg CH4 m-2 day-1
+      prefix: UpCH4_v0p4_WAD2M_gridcell_mean
+      suffix: ''
+      file_glob: UpCH4_v0p4_WAD2M_gridcell_mean.nc
+_Ignore_UpCH4_legacy_raw:
+  scan:
+    layout: ignore
+    root_sub_dir: Grid/LowRes/Bio/Wetland_Methane_Emission/UpCH4
 globsnow_v3:
   description: globsnow_v3 reference dataset (LowRes)
   category: Water
@@ -1759,3 +1855,108 @@ OpenBench_Sediment_Annual:
     Suspended_Sediment_Load:
       varname: ssl
       varunit: t d-1
+HOMTS_MidRes:
+  dataset_name: HOMTS
+  scan:
+    layout: grid_composite_files
+    root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+  description: HOMTS daily surface and point-depth soil temperatures; not a root-zone
+    average
+  category: Meteorology
+  tim_res: Day
+  data_groupby: Single
+  years:
+  - 1960
+  - 2017
+  grid_res: 0.25
+  variables:
+    Surface_Soil_Temperature:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS0cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Surface_Soil_Temperature/HOMTS
+      file_glob: HOM_TS0cm_daily_025x025_1960_2017.nc
+    Soil_Temperature_5cm:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS5cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+      file_glob: HOM_TS5cm_daily_025x025_1960_2017.nc
+    Soil_Temperature_10cm:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS10cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+      file_glob: HOM_TS10cm_daily_025x025_1960_2017.nc
+    Soil_Temperature_15cm:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS15cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+      file_glob: HOM_TS15cm_daily_025x025_1960_2017.nc
+    Soil_Temperature_20cm:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS20cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+      file_glob: HOM_TS20cm_daily_025x025_1960_2017.nc
+    Soil_Temperature_40cm:
+      varname: TS
+      varunit: degC
+      prefix: HOM_TS40cm_daily_025x025_1960_2017
+      suffix: ''
+      root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+      file_glob: HOM_TS40cm_daily_025x025_1960_2017.nc
+HSWUD_v8_MidRes:
+  dataset_name: HSWUD_v8
+  scan:
+    layout: grid_composite_files
+    root_sub_dir: Grid/MidRes/Anth/Water_Withdrawal/HSWUD_v8
+  description: HSWUD v8 monthly gross sectoral water withdrawals per total grid-cell
+    area, not consumption; irrigation includes conveyance losses and thermoelectric
+    withdrawal is cooling water. Native unequal spacings (latitude 0.1002857143,
+    longitude 0.1001639344 degrees) are retained without regridding.
+  category: Anthropogenic
+  tim_res: Month
+  data_groupby: Single
+  years:
+  - 1965
+  - 2022
+  variables:
+    Domestic_Water_Withdrawal:
+      varname: dom
+      varunit: mm day-1
+      prefix: HSWUD_v8_dom_mm_day
+      suffix: ''
+      file_glob: HSWUD_v8_dom_mm_day.nc
+    Manufacturing_Water_Withdrawal:
+      varname: manu
+      varunit: mm day-1
+      prefix: HSWUD_v8_manu_mm_day
+      suffix: ''
+      file_glob: HSWUD_v8_manu_mm_day.nc
+    Irrigation_Water_Withdrawal:
+      varname: irr
+      varunit: mm day-1
+      prefix: HSWUD_v8_irr_mm_day
+      suffix: ''
+      file_glob: HSWUD_v8_irr_mm_day.nc
+    Thermoelectric_Water_Withdrawal:
+      varname: ele
+      varunit: mm day-1
+      prefix: HSWUD_v8_ele_mm_day
+      suffix: ''
+      file_glob: HSWUD_v8_ele_mm_day.nc
+_Ignore_HOMTS_unselected_point_files:
+  scan:
+    layout: ignore
+    root_sub_dir: Grid/MidRes/Meteo/Root_Zone_Soil_Temperature/HOMTS
+_Ignore_HSWUD_legacy_water_use:
+  scan:
+    layout: ignore
+    root_sub_dir: Grid/MidRes/Anth/Water_Use/HSWUD

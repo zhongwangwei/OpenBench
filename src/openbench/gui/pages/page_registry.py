@@ -138,6 +138,8 @@ def _merge_reference_editor_dataset(existing, edited):
             min_uparea=old_var.min_uparea,
             compute=old_var.compute,
             prefix_fallback=old_var.prefix_fallback,
+            years=old_var.years,
+            vertical_datum=old_var.vertical_datum,
         )
 
     return schema.ReferenceDataset(
