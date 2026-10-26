@@ -23,10 +23,18 @@ def test_colm_offset_uses_actual_history_source(model, varname, resolution, endp
     proc = SimpleNamespace(sim_source=model, item="Streamflow")
     # The actual file, not the variable name, selects the CaMa rule.
     for filename, raw, expected in [
-        ("case_hist_cama_2001.nc", endpoint, pd.Timestamp(endpoint) - (
-            pd.DateOffset(hours=1) if resolution == "Hour" else
-            pd.DateOffset(days=1) if resolution == "Day" else pd.DateOffset(months=1)
-        )),
+        (
+            "case_hist_cama_2001.nc",
+            endpoint,
+            pd.Timestamp(endpoint)
+            - (
+                pd.DateOffset(hours=1)
+                if resolution == "Hour"
+                else pd.DateOffset(days=1)
+                if resolution == "Day"
+                else pd.DateOffset(months=1)
+            ),
+        ),
         ("case_hist_unitcat_2001-01.nc", midpoint, pd.Timestamp(midpoint)),
     ]:
         data = xr.DataArray([3.0], dims="time", coords={"time": [pd.Timestamp(raw)]}, name=varname)
@@ -57,7 +65,12 @@ def test_mixed_history_sources_rejected():
     data = xr.DataArray([1.0], dims="time", coords={"time": [pd.Timestamp("2001-01-02")]}, name="outflw")
     with pytest.raises(ValueError, match="Mixed"):
         TimeAdjustmentMixin.apply_model_specific_time_adjustment(
-            proc, data, "sim", 2001, 2001, "Day",
+            proc,
+            data,
+            "sim",
+            2001,
+            2001,
+            "Day",
             source_files=["run_hist_cama_2001.nc", "run_hist_unitcat_2001.nc"],
         )
 

@@ -407,7 +407,6 @@ def stable_hash_data(value: Any) -> Any:
     return value
 
 
-
 def effective_model_time_offset(model_name: str | None) -> dict | None:
     """Return merged model registry rules, including user override layers."""
     if not model_name:

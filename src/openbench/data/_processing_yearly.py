@@ -158,9 +158,7 @@ class YearlyPreprocessingMixin:
                 return_source=True,
             )
             ds = self.check_coordinate(ds)
-            ds = self.check_dataset_time_integrity(
-                ds, syear, eyear, tim_res, datasource, source_files=varfile
-            )
+            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource, source_files=varfile)
             ds = self.select_timerange(ds, self.minyear, self.maxyear)
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
@@ -190,9 +188,7 @@ class YearlyPreprocessingMixin:
             syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res, return_sources=True
         )
         ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(
-            ds, syear, eyear, tim_res, datasource, source_files=source_files
-        )
+        ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource, source_files=source_files)
         # Use updated varunit from filter if available (filter may have modified it)
         current_varunit = getattr(self, f"{datasource}_varunit", varunit)
         ds = self._deaccumulate_if_configured(ds, datasource)
@@ -241,9 +237,7 @@ class YearlyPreprocessingMixin:
                 return_source=True,
             )
             ds = self.check_coordinate(ds)
-            ds = self.check_dataset_time_integrity(
-                ds, syear, eyear, tim_res, datasource, source_files=found_files
-            )
+            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource, source_files=found_files)
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
             ds = self._deaccumulate_if_configured(ds, datasource)

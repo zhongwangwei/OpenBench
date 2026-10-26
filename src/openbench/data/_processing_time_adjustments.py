@@ -14,11 +14,25 @@ from openbench.data._processing_utils import parse_time_offset as _parse_time_of
 logger = logging.getLogger(__name__)
 
 _RESOLUTION_NAMES = {
-    "h": "Hour", "hr": "Hour", "hour": "Hour", "hourly": "Hour",
-    "d": "Day", "day": "Day", "daily": "Day",
-    "m": "Month", "me": "Month", "mon": "Month", "month": "Month", "monthly": "Month",
-    "y": "Year", "ye": "Year", "yr": "Year", "year": "Year", "yearly": "Year",
-    "annual": "Year", "a": "Year",
+    "h": "Hour",
+    "hr": "Hour",
+    "hour": "Hour",
+    "hourly": "Hour",
+    "d": "Day",
+    "day": "Day",
+    "daily": "Day",
+    "m": "Month",
+    "me": "Month",
+    "mon": "Month",
+    "month": "Month",
+    "monthly": "Month",
+    "y": "Year",
+    "ye": "Year",
+    "yr": "Year",
+    "year": "Year",
+    "yearly": "Year",
+    "annual": "Year",
+    "a": "Year",
 }
 _RESERVED = frozenset({"Hour", "Day", "Month", "Year", "default"})
 
@@ -56,7 +70,7 @@ def _group_offset(group, resolution, native_name, item_name):
 def resolve_time_offset(profile, resolution, ds, item, source_files=None, file_context=None):
     """Return (offset, rule) without losing the actual NetCDF provenance."""
     offsets = profile.time_offset or {}
-    native_name = (ds.name if isinstance(ds, xr.DataArray) else next(iter(ds.data_vars), ""))
+    native_name = ds.name if isinstance(ds, xr.DataArray) else next(iter(ds.data_vars), "")
     native = str(native_name or "").strip().casefold()
     logical = str(item or "").strip().casefold()
     generic = offsets.get(resolution)
@@ -73,8 +87,7 @@ def resolve_time_offset(profile, resolution, ds, item, source_files=None, file_c
     for filename in files:
         basename = Path(filename).name.casefold()
         patterns = sorted(
-            (key for key, val in offsets.items()
-             if key not in _RESERVED and isinstance(val, dict)),
+            (key for key, val in offsets.items() if key not in _RESERVED and isinstance(val, dict)),
             key=lambda x: (-len(x), x),
         )
         matching = next((key for key in patterns if key.casefold() in basename), None)
@@ -112,8 +125,14 @@ class TimeAdjustmentMixin:
     """Shift timestamps according to the source model and actual input file."""
 
     def apply_model_specific_time_adjustment(
-        self, ds: xr.Dataset, datasource: str, syear: int, eyear: int,
-        tim_res: str, *, source_files=None,
+        self,
+        ds: xr.Dataset,
+        datasource: str,
+        syear: int,
+        eyear: int,
+        tim_res: str,
+        *,
+        source_files=None,
     ) -> xr.Dataset:
         source = self.sim_source if datasource == "sim" else self.ref_source
         model = getattr(self, f"{source}_model", source)
@@ -126,9 +145,7 @@ class TimeAdjustmentMixin:
             # models and legacy direct callers. Actual-file CoLM data is
             # never rewritten to an artificial HH:30 before offset resolution.
             try:
-                ds = ds.assign_coords(
-                    time=pd.to_datetime(ds["time"].dt.strftime("%Y-%m-%dT%H:30:00"))
-                )
+                ds = ds.assign_coords(time=pd.to_datetime(ds["time"].dt.strftime("%Y-%m-%dT%H:30:00")))
             except (ValueError, AttributeError, TypeError):
                 logger.debug("Legacy time normalization skipped for %s", model)
         if not profile or not profile.time_offset:
@@ -141,19 +158,34 @@ class TimeAdjustmentMixin:
 
         context = f"{getattr(self, f'{datasource}_dir', '')}/{getattr(self, f'{datasource}_prefix', '')}"
         offset_str, rule = resolve_time_offset(
-            profile, resolution, ds, getattr(self, "item", ""),
-            source_files=source_files, file_context=context,
+            profile,
+            resolution,
+            ds,
+            getattr(self, "item", ""),
+            source_files=source_files,
+            file_context=context,
         )
 
         # Preserve original timestamps when no offset is selected. A blanket
         # HH:30 normalization changes even CoLM's already centred daily time.
         if offset_str.strip() in {"0", "+0", "-0"}:
-            logger.debug("Time offset model=%s item=%s rule=%s offset=0 files=%s",
-                         model, getattr(self, "item", ""), rule, source_files)
+            logger.debug(
+                "Time offset model=%s item=%s rule=%s offset=0 files=%s",
+                model,
+                getattr(self, "item", ""),
+                rule,
+                source_files,
+            )
             return ds
 
         offset = _parse_time_offset(offset_str)
         ds = ds.assign_coords(time=pd.DatetimeIndex(ds["time"].values) + offset)
-        logger.info("Time offset model=%s item=%s rule=%s offset=%s files=%s",
-                    model, getattr(self, "item", ""), rule, offset_str, source_files)
+        logger.info(
+            "Time offset model=%s item=%s rule=%s offset=%s files=%s",
+            model,
+            getattr(self, "item", ""),
+            rule,
+            offset_str,
+            source_files,
+        )
         return ds

@@ -48,6 +48,7 @@ def parse_time_offset(offset_str: str):
         return pd.DateOffset(months=value)
     return pd.DateOffset(years=value)
 
+
 def get_coordinate_map() -> dict[str, str]:
     """Return a copy of the shared coordinate mapping."""
     return dict(COORDINATE_MAP)
