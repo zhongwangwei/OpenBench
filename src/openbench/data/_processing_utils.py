@@ -23,27 +23,30 @@ except ImportError:
 
 
 def parse_time_offset(offset_str: str):
-    """Parse a time offset string like '-15 days', '-1 months', '3 hours'.
+    """Parse a strict calendar-aware offset including years.
 
-    Returns a pandas DateOffset, or None if parsing fails.
+    The zero offset is handled by the caller (it need not have a unit).
+    Invalid nonzero configuration must not silently shift to zero.
     """
     import pandas as pd
 
-    match = re.match(r"([+-]?\d+)\s*(day|days|month|months|hour|hours)", offset_str.strip())
-    if not match:
-        return None
+    match = re.fullmatch(
+        r"([+-]?\d+)\s*(hours?|days?|months?|years?)",
+        str(offset_str).strip(),
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        raise ValueError(f"Invalid time offset: {offset_str!r}")
 
     value = int(match.group(1))
     unit = match.group(2).lower()
-
+    if unit.startswith("hour"):
+        return pd.DateOffset(hours=value)
     if unit.startswith("day"):
         return pd.DateOffset(days=value)
     if unit.startswith("month"):
         return pd.DateOffset(months=value)
-    if unit.startswith("hour"):
-        return pd.DateOffset(hours=value)
-    return None
-
+    return pd.DateOffset(years=value)
 
 def get_coordinate_map() -> dict[str, str]:
     """Return a copy of the shared coordinate mapping."""

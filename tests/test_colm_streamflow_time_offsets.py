@@ -1,4 +1,4 @@
-"""CoLM riverlake discharge is already period-labelled; CaMa discharge is not."""
+"""History provenance, rather than variable names, determines CoLM time shifts."""
 
 from types import SimpleNamespace
 
@@ -10,94 +10,80 @@ from openbench.data._processing_time_adjustments import TimeAdjustmentMixin
 
 
 @pytest.mark.parametrize("model", ["CoLM2024", "CoLM"])
-@pytest.mark.parametrize("as_dataset", [False, True])
-@pytest.mark.parametrize("varname", ["outflw", "f_discharge", "v_discharge"])
+@pytest.mark.parametrize("varname", ["outflw", "fldare", "f_discharge", "f_floodarea", "f_sedcon_1"])
 @pytest.mark.parametrize(
-    "resolution, endpoint, midpoint, expected",
+    "resolution, endpoint, midpoint",
     [
-        ("Hour", "2001-01-01 01:00", "2001-01-01 00:30", "2001-01-01 00:30"),
-        ("Day", "2001-01-02 00:00", "2001-01-01 12:00", "2001-01-01 00:30"),
-        ("Month", "2001-02-01 00:00", "2001-01-17 00:00", "2001-01-01 00:30"),
+        ("Hour", "2001-01-01 01:00", "2001-01-01 00:30"),
+        ("Day", "2001-01-02 00:00", "2001-01-01 12:00"),
+        ("Month", "2001-02-01 00:00", "2001-01-17 00:00"),
     ],
 )
-def test_colm_streamflow_offset_depends_on_selected_variable(
-    model, as_dataset, varname, resolution, endpoint, midpoint, expected
-):
-    configured_name = "f_discharge" if varname == "outflw" else "outflw"
-    processor = SimpleNamespace(sim_source=model, item="Streamflow", sim_varname=[configured_name])
-    raw_time = endpoint if varname == "outflw" else midpoint
-    data = xr.DataArray([3.0], dims="time", coords={"time": [pd.Timestamp(raw_time)]}, name=varname)
-    if as_dataset:
-        data = data.to_dataset()
+def test_colm_offset_uses_actual_history_source(model, varname, resolution, endpoint, midpoint):
+    proc = SimpleNamespace(sim_source=model, item="Streamflow")
+    # The actual file, not the variable name, selects the CaMa rule.
+    for filename, raw, expected in [
+        ("case_hist_cama_2001.nc", endpoint, pd.Timestamp(endpoint) - (
+            pd.DateOffset(hours=1) if resolution == "Hour" else
+            pd.DateOffset(days=1) if resolution == "Day" else pd.DateOffset(months=1)
+        )),
+        ("case_hist_unitcat_2001-01.nc", midpoint, pd.Timestamp(midpoint)),
+    ]:
+        data = xr.DataArray([3.0], dims="time", coords={"time": [pd.Timestamp(raw)]}, name=varname)
+        actual = TimeAdjustmentMixin.apply_model_specific_time_adjustment(
+            proc, data, "sim", 2001, 2001, resolution, source_files=filename
+        )
+        assert pd.Timestamp(actual.time.values[0]) == expected
+        assert actual.values[0] == 3.0
 
-    adjusted = TimeAdjustmentMixin.apply_model_specific_time_adjustment(processor, data, "sim", 2001, 2001, resolution)
 
-    expected_time = pd.Timestamp(expected) if varname == "outflw" else pd.Timestamp(midpoint).replace(minute=30)
-    assert pd.Timestamp(adjusted.time.values[0]) == expected_time
-    adjusted_data = adjusted[varname] if as_dataset else adjusted
-    assert adjusted_data.values[0] == 3.0
-
-
-@pytest.mark.parametrize("resolution", ["Hour", "Day", "Month"])
-def test_colm_selected_fallback_keeps_its_period(monkeypatch, resolution):
-    import openbench.data.processing as processing
-
-    processor = object.__new__(processing.BaseDatasetProcessing)
-    processor.sim_source = "CoLM2024"
-    processor.item = "Streamflow"
-    processor.sim_data_type = "grid"
-    processor.sim_varname = ["outflw"]
-    processor.sim_varunit = "m3 s-1"
-    dataset = xr.Dataset(
-        {"F_Discharge": ("time", [3.0])},
-        coords={"time": [pd.Timestamp("2001-01-17 12:30")]},
+def test_original_year_day_not_shifted_by_coarse_month_comparison():
+    proc = SimpleNamespace(sim_source="CoLM2024", item="Inundation_Area")
+    data = xr.DataArray(
+        [11.0, 22.0],
+        dims="time",
+        coords={"time": pd.to_datetime(["2001-01-01 12:00", "2001-12-31 12:00"])},
+        name="f_floodarea",
     )
-    monkeypatch.setattr(processing.xr, "open_dataset", lambda *args, **kwargs: dataset)
-    monkeypatch.setattr(processing.Convert_Type, "convert_nc", lambda data: data)
-
-    selected = processor.select_var(2001, 2001, resolution, "dummy.nc", ["outflw"], "sim")
-    adjusted = processor.apply_model_specific_time_adjustment(selected, "sim", 2001, 2001, resolution)
-
-    assert selected.name == "F_Discharge"
-    assert pd.Timestamp(adjusted.time.values[0]) == pd.Timestamp("2001-01-17 12:30")
+    result = TimeAdjustmentMixin.apply_model_specific_time_adjustment(
+        proc, data, "sim", 2001, 2001, "Day", source_files="run_hist_unitcat_2001.nc"
+    )
+    assert list(pd.DatetimeIndex(result.time.values)) == list(pd.DatetimeIndex(data.time.values))
+    assert result.values.tolist() == [11.0, 22.0]
 
 
-def test_native_variable_time_offset_can_be_overridden():
+def test_mixed_history_sources_rejected():
+    proc = SimpleNamespace(sim_source="CoLM2024", item="Streamflow")
+    data = xr.DataArray([1.0], dims="time", coords={"time": [pd.Timestamp("2001-01-02")]}, name="outflw")
+    with pytest.raises(ValueError, match="Mixed"):
+        TimeAdjustmentMixin.apply_model_specific_time_adjustment(
+            proc, data, "sim", 2001, 2001, "Day",
+            source_files=["run_hist_cama_2001.nc", "run_hist_unitcat_2001.nc"],
+        )
+
+
+def test_yearly_cama_uses_previous_calendar_year():
+    proc = SimpleNamespace(sim_source="CoLM2024", item="Streamflow")
+    data = xr.DataArray([99.0], dims="time", coords={"time": [pd.Timestamp("2002-01-01")]}, name="outflw")
+    result = TimeAdjustmentMixin.apply_model_specific_time_adjustment(
+        proc, data, "sim", 2001, 2001, "Year", source_files="run_hist_cama_2001.nc"
+    )
+    assert pd.Timestamp(result.time.values[0]) == pd.Timestamp("2001-01-01")
+
+
+def test_user_override_on_native_variable(monkeypatch):
     from openbench.data.registry import manager
 
     catalog = manager.get_writable_model_catalog_path()
-    catalog.parent.mkdir(parents=True)
+    catalog.parent.mkdir(parents=True, exist_ok=True)
     catalog.write_text(
         "CoLM2024:\n  time_offset:\n    Day:\n      f_discharge: '-2 days'\n",
         encoding="utf-8",
     )
-    processor = SimpleNamespace(sim_source="CoLM2024", item="Streamflow")
-    data = xr.DataArray([3.0], dims="time", coords={"time": [pd.Timestamp("2001-01-03 12:00")]}, name="f_discharge")
-
-    adjusted = TimeAdjustmentMixin.apply_model_specific_time_adjustment(processor, data, "sim", 2001, 2001, "Day")
-
-    assert pd.Timestamp(adjusted.time.values[0]) == pd.Timestamp("2001-01-01 12:30")
-
-
-@pytest.mark.parametrize("varname", ["outflw", "f_discharge"])
-@pytest.mark.parametrize(
-    "resolution, endpoint, midpoint, expected",
-    [
-        ("h", "2001-01-01 01:00", "2001-01-01 00:30", "2001-01-01 00:30"),
-        ("D", "2001-01-02 00:00", "2001-01-01 12:00", "2001-01-01 12:00"),
-        ("ME", "2001-02-01 00:00", "2001-01-17 00:00", "2001-01-15 00:00"),
-    ],
-)
-def test_colm_time_integrity_preserves_first_period(varname, resolution, endpoint, midpoint, expected):
-    from openbench.data.processing import BaseDatasetProcessing
-
-    processor = object.__new__(BaseDatasetProcessing)
-    processor.sim_source = "CoLM2024"
-    processor.sim_data_type = "grid"
-    processor.item = "Streamflow"
-    raw_time = endpoint if varname == "outflw" else midpoint
-    data = xr.DataArray([3.0], dims="time", coords={"time": [pd.Timestamp(raw_time)]}, name=varname)
-
-    adjusted = processor.check_dataset_time_integrity(data, 2001, 2001, resolution, "sim")
-
-    assert float(adjusted.sel(time=expected)) == 3.0
+    manager.clear_registry_cache()
+    proc = SimpleNamespace(sim_source="CoLM2024", item="Streamflow")
+    data = xr.DataArray([1.0], dims="time", coords={"time": [pd.Timestamp("2001-01-03 12:00")]}, name="f_discharge")
+    result = TimeAdjustmentMixin.apply_model_specific_time_adjustment(
+        proc, data, "sim", 2001, 2001, "Day", source_files="run_hist_unitcat_2001.nc"
+    )
+    assert pd.Timestamp(result.time.values[0]) == pd.Timestamp("2001-01-01 12:00")

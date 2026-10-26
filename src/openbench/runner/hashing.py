@@ -407,6 +407,17 @@ def stable_hash_data(value: Any) -> Any:
     return value
 
 
+
+def effective_model_time_offset(model_name: str | None) -> dict | None:
+    """Return merged model registry rules, including user override layers."""
+    if not model_name:
+        return None
+    from openbench.data.registry.manager import get_registry
+
+    profile = get_registry().get_model(str(model_name))
+    return stable_hash_data(profile.time_offset) if profile is not None else None
+
+
 def shared_mask_peer_payload(
     *,
     cfg: OpenBenchConfig,
@@ -464,6 +475,9 @@ def shared_mask_peer_payload(
                     source_specific_section(sim_section, peer_source, all_sources=candidate_sources)
                 ),
                 "inputs": input_file_signature_fn(sim_section, peer_source),
+                "effective_time_offset": effective_model_time_offset(
+                    sim_section.get(f"{peer_source}_model") or getattr(sim_entry, "model", None)
+                ),
             }
         )
 
@@ -593,6 +607,9 @@ def task_hash_payload(
             ),
         },
         "simulation": {
+            "model_time_offset": effective_model_time_offset(
+                sim_section.get(f"{sim_source}_model") or getattr(sim_entry, "model", None)
+            ),
             "config": stable_hash_data(sim_entry),
             "namelist": sim_section,
             "inputs": input_file_signature_fn(

@@ -72,6 +72,8 @@ class YearlyPreprocessingMixin:
         varname: List[str],
         datasource: str,
         tim_res: str,
+        *,
+        return_sources: bool = False,
     ) -> xr.Dataset:
         var_files = self._find_data_files(dirx, prefix, year, suffix, datasource, varname=varname)
 
@@ -87,7 +89,7 @@ class YearlyPreprocessingMixin:
                 ds = self.select_var(year, year, tim_res, file, varname, datasource)
                 datasets.append(ds)
             data0 = xr.concat(datasets, dim="time").sortby("time")
-            return data0
+            return (data0, var_files) if return_sources else data0
         finally:
             # Clean up memory
             for ds in datasets:
@@ -156,7 +158,9 @@ class YearlyPreprocessingMixin:
                 return_source=True,
             )
             ds = self.check_coordinate(ds)
-            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
+            ds = self.check_dataset_time_integrity(
+                ds, syear, eyear, tim_res, datasource, source_files=varfile
+            )
             ds = self.select_timerange(ds, self.minyear, self.maxyear)
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
@@ -182,9 +186,13 @@ class YearlyPreprocessingMixin:
         datasource: str,
     ) -> None:
         logging.debug("The dataset groupby is not Year --> combine it to Year")
-        ds = self.combine_year(syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res)
+        ds, source_files = self.combine_year(
+            syear, casedir, dirx, suffix, prefix, varname, datasource, tim_res, return_sources=True
+        )
         ds = self.check_coordinate(ds)
-        ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
+        ds = self.check_dataset_time_integrity(
+            ds, syear, eyear, tim_res, datasource, source_files=source_files
+        )
         # Use updated varunit from filter if available (filter may have modified it)
         current_varunit = getattr(self, f"{datasource}_varunit", varunit)
         ds = self._deaccumulate_if_configured(ds, datasource)
@@ -233,7 +241,9 @@ class YearlyPreprocessingMixin:
                 return_source=True,
             )
             ds = self.check_coordinate(ds)
-            ds = self.check_dataset_time_integrity(ds, syear, eyear, tim_res, datasource)
+            ds = self.check_dataset_time_integrity(
+                ds, syear, eyear, tim_res, datasource, source_files=found_files
+            )
             # Use updated varunit from filter if available (filter may have modified it)
             current_varunit = getattr(self, f"{datasource}_varunit", varunit)
             ds = self._deaccumulate_if_configured(ds, datasource)
