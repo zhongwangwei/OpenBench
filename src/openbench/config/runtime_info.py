@@ -669,6 +669,14 @@ class GeneralInfoReader:
         else:
             self._apply_default_filter()
 
+        basin_mask = getattr(self, "basin_mask", None)
+        if basin_mask and not self.stn_list.empty:
+            from openbench.data.basin_mask import filter_stations_by_basin_mask
+
+            before_mask = len(self.stn_list)
+            self.stn_list = filter_stations_by_basin_mask(self.stn_list, basin_mask)
+            logging.info("Basin mask filtering: %d -> %d stations", before_mask, len(self.stn_list))
+
         if hasattr(self, "stn_list"):
             if self.stn_list.empty:
                 cause = getattr(self, "_station_list_error", None)

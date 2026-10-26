@@ -83,6 +83,7 @@ _PROJECT_KEYS = {
     "min_year_threshold",
     "lat_range",
     "lon_range",
+    "basin_mask",
     "tim_res",
     "grid_res",
     "timezone",
@@ -920,6 +921,11 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         lower=-180.0,
         upper=180.0,
     )
+    basin_mask = _validated_optional_string(raw.get("basin_mask"), "project.basin_mask")
+    if basin_mask is not None:
+        if not basin_mask.strip():
+            raise ConfigError("project.basin_mask must be a non-empty path")
+        basin_mask = Path(os.path.expandvars(basin_mask)).expanduser().as_posix()
 
     return ProjectConfig(
         name=str(name),
@@ -930,6 +936,7 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         min_year_threshold=raw.get("min_year_threshold", 1),
         lat_range=lat_range,
         lon_range=lon_range,
+        basin_mask=basin_mask,
         tim_res=_validated_optional_tim_res(raw.get("tim_res"), "project.tim_res"),
         grid_res=_validated_optional_positive_number(raw.get("grid_res"), "project.grid_res"),
         timezone=_validated_optional_number(raw.get("timezone"), "project.timezone"),

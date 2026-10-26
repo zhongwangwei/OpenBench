@@ -4,7 +4,7 @@ import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import numpy as np
 
-from openbench.visualization._geo_axes import adaptive_degree_ticks, configure_geo_axis
+from openbench.visualization._geo_axes import adaptive_degree_ticks, basin_mask_extent, configure_geo_axis
 
 _VISUALIZATION_DIR = Path(__file__).resolve().parents[1] / "src" / "openbench" / "visualization"
 
@@ -98,3 +98,34 @@ def test_configure_geo_axis_keeps_rendering_degenerate_or_dateline_extents():
 
         assert lon_ticks.size == 0 or lat_ticks.size == 0
         plt.close(fig)
+
+
+def test_configure_geo_axis_uses_complete_basin_mask_extent_and_draws_boundary(tmp_path):
+    import xarray as xr
+
+    mask_path = tmp_path / "basin.nc"
+    xr.Dataset(
+        {
+            "basin_mask": (
+                ("lat", "lon"),
+                np.array([[0, 1, 0], [0, 1, 1], [0, 0, 0]], dtype=np.uint8),
+            )
+        },
+        coords={"lat": [10.0, 11.0, 12.0], "lon": [100.0, 101.0, 102.0]},
+    ).to_netcdf(mask_path)
+
+    assert basin_mask_extent(str(mask_path)) == (100.5, 102.5, 9.5, 11.5)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+    before = len(ax.collections)
+    extent, _, _ = configure_geo_axis(
+        ax,
+        {"set_lat_lon": True, "min_lon": -1, "max_lon": 1, "min_lat": -1, "max_lat": 1},
+        (-180, 180, -90, 90),
+        basin_mask=str(mask_path),
+    )
+
+    assert extent == (100.5, 102.5, 9.5, 11.5)
+    assert len(ax.collections) > before
+    plt.close(fig)

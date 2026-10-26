@@ -163,6 +163,7 @@ def test_adapter_declares_legacy_general_key_contract():
         "max_lat",
         "min_lon",
         "max_lon",
+        "basin_mask",
         "num_cores",
         "evaluation",
         "comparison",

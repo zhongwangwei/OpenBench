@@ -134,6 +134,7 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option, *, value_c
             option,
             (main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]),
             gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
+            basin_mask=main_nml.get("basin_mask"),
         )
         ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
         ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")

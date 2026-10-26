@@ -127,6 +127,20 @@ def _config_findings(cfg) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
 
+    if cfg.project.basin_mask:
+        from openbench.data.basin_mask import validate_extent_covers_basin
+
+        configured_extent = (
+            cfg.project.lon_range[0],
+            cfg.project.lon_range[1],
+            cfg.project.lat_range[0],
+            cfg.project.lat_range[1],
+        )
+        try:
+            validate_extent_covers_basin(configured_extent, cfg.project.basin_mask)
+        except ValueError as exc:
+            errors.append(str(exc))
+
     output_path, output_error = _expanded_path(str(cfg.project.output_dir), "project.output_dir")
     if output_error:
         errors.append(output_error)

@@ -178,6 +178,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         option,
         (main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]),
         gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
+        basin_mask=main_nml.get("basin_mask"),
     )
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
     ax.tick_params(axis="y", color="#969696", width=1.5, length=4, which="major")
@@ -338,6 +339,7 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         option,
         (main_nml["min_lon"], main_nml["max_lon"], main_nml["min_lat"], main_nml["max_lat"]),
         gridline_kwargs={"linestyle": ":", "linewidth": 0.5, "color": "grey", "alpha": 0.8},
+        basin_mask=main_nml.get("basin_mask"),
     )
 
     ax.tick_params(axis="x", color="#969696", width=1.5, length=4, which="major")
