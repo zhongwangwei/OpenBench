@@ -75,7 +75,7 @@ def test_general_info_reader_applies_basin_mask_after_custom_station_filter(tmp_
             "ref_lat": [20.0, 10.0],
         }
     )
-    reader._get_custom_filter = lambda: (lambda _reader: None)
+    reader._get_custom_filter = lambda: lambda _reader: None
 
     reader._filter_stations()
 
