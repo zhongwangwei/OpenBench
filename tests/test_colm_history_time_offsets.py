@@ -16,7 +16,7 @@ from openbench.data.registry.schema import ModelProfile
 
 def test_longest_filename_pattern_and_directory_name_ignored():
     profile = ModelProfile(
-        name="Demo", time_offset={
+        name="Demo", description="Test history filename provenance", time_offset={
             "_hist_": {"Day": "0"},
             "_hist_cama_": {"Day": "-1 days"},
             "default": {"Day": "0"},
@@ -46,14 +46,18 @@ def test_time_offset_years_supported():
 def test_legacy_resolution_specific_rule_still_supported(monkeypatch):
     from openbench.data.registry import manager
 
-    profile = ModelProfile(name="Demo", time_offset={"Day": {"default": "-1 days", "special": "0"}})
+    profile = ModelProfile(
+        name="Demo", description="Test legacy resolution offsets",
+        time_offset={"Day": {"default": "-1 days", "special": "0"}},
+    )
     monkeypatch.setattr(manager, "get_registry", lambda: SimpleNamespace(get_model=lambda model: profile))
     processor = SimpleNamespace(sim_source="Demo", item="Any")
     data = xr.DataArray([42], dims="time", coords={"time": [pd.Timestamp("2001-01-02 12:00")]}, name="a")
     shifted = TimeAdjustmentMixin.apply_model_specific_time_adjustment(
         processor, data, "sim", 2001, 2001, "Day"
     )
-    assert pd.Timestamp(shifted.time.values[0]) == pd.Timestamp("2001-01-01 12:00")
+    # Legacy no-source callers also normalize timestamps to HH:30.
+    assert pd.Timestamp(shifted.time.values[0]) == pd.Timestamp("2001-01-01 12:30")
 
 
 def test_cache_hash_records_effective_model_offset(monkeypatch):
