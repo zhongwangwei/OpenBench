@@ -9,6 +9,8 @@ import cartopy.crs as ccrs
 import numpy as np
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 
+from openbench.data.basin_mask import basin_mask_extent, load_basin_mask
+
 
 _CANONICAL_DEGREE_STEPS = (15.0, 30.0, 45.0, 60.0, 90.0, 180.0)
 
@@ -55,15 +57,32 @@ def _ticks_or_empty(minimum: float, maximum: float) -> np.ndarray:
         return np.array([], dtype=float)
 
 
+def _draw_basin_mask_boundary(ax, mask_path: str, projection) -> None:
+    mask = load_basin_mask(mask_path)
+    ax.contour(
+        mask["lon"].values,
+        mask["lat"].values,
+        np.asarray(mask.values, dtype=float),
+        levels=[0.5],
+        colors=["black"],
+        linewidths=[1.2],
+        transform=projection,
+        zorder=12,
+    )
+
+
 def configure_geo_axis(
     ax,
     option: Mapping,
     default_extent: tuple[float, float, float, float],
     *,
     gridline_kwargs: Mapping | None = None,
+    basin_mask: str | None = None,
 ) -> tuple[tuple[float, float, float, float], np.ndarray, np.ndarray]:
     """Apply one extent and one matching tick set to a Cartopy map axis."""
-    if option["set_lat_lon"]:
+    if basin_mask:
+        extent = basin_mask_extent(basin_mask)
+    elif option["set_lat_lon"]:
         extent = (
             float(option["min_lon"]),
             float(option["max_lon"]),
@@ -79,6 +98,8 @@ def configure_geo_axis(
     projection = ccrs.PlateCarree()
 
     ax.set_extent(extent, crs=projection)
+    if basin_mask:
+        _draw_basin_mask_boundary(ax, basin_mask, projection)
     ax.set_xticks(lon_ticks, crs=projection)
     ax.set_yticks(lat_ticks, crs=projection)
     ax.xaxis.set_major_formatter(LongitudeFormatter())
