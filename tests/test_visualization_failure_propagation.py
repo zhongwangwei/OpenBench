@@ -648,6 +648,106 @@ def test_basic_metric_plot_preparation_failures_propagate(tmp_path, monkeypatch)
         fig_basic.make_plot_index_grid(renderer)
 
 
+def _grid_tick_renderer(tmp_path, metric_values, scores):
+    import xarray as xr
+
+    (tmp_path / "metrics").mkdir()
+    for metric, values in metric_values.items():
+        xr.Dataset({metric: (("lat", "lon"), np.asarray(values).reshape(2, 2))}).to_netcdf(
+            tmp_path / "metrics" / f"Net_Radiation_ref_RefA_sim_SimA_{metric}.nc"
+        )
+    return SimpleNamespace(
+        ref_varname="Rn",
+        metrics=list(metric_values),
+        scores=scores,
+        fig_nml={"make_geo_plot_index": {"vmin_max_on": False, "cmap": "viridis"}},
+        casedir=str(tmp_path),
+        item="Net_Radiation",
+        ref_source="RefA",
+        sim_source="SimA",
+    )
+
+
+@pytest.mark.parametrize("metric", ["bias", "RMSE"])
+def test_basic_grid_tick_overflow_warns_and_continues(tmp_path, monkeypatch, caplog, metric):
+    import openbench.visualization.Fig_Basic_Plot as fig_basic
+
+    values = [-9.96921e36, -5e35, -8e34, -8e33] if metric == "bias" else [9.96921e36] * 4
+    renderer = _grid_tick_renderer(
+        tmp_path, {metric: values, "correlation": [0.1, 0.2, 0.3, 0.4]}, ["Overall_Score"]
+    )
+    plotted = []
+    monkeypatch.setattr(fig_basic, "plot_map_grid", lambda *args: plotted.append((args[4], args[5])))
+
+    fig_basic.make_plot_index_grid(renderer)
+
+    assert plotted == [("correlation", "metrics"), ("Overall_Score", "scores")]
+    records = [record for record in caplog.records if record.name == fig_basic.__name__]
+    assert len(records) == 1
+    warning = records[0]
+    assert warning.levelname == "WARNING"
+    for detail in (metric, "Net_Radiation", "SimA", "RefA", "tick count overflow", "check input data"):
+        assert detail in warning.message
+
+
+def test_basic_grid_score_tick_overflow_warns_and_continues(tmp_path, monkeypatch, caplog):
+    import openbench.visualization.Fig_Basic_Plot as fig_basic
+
+    renderer = _grid_tick_renderer(tmp_path, {}, ["Overall_Score", "nBiasScore"])
+    get_index = fig_basic.get_index
+
+    def overflow_first_score(vmin, vmax, cmap, name):
+        if name == "Overall_Score":
+            raise ValueError("Maximum allowed size exceeded")
+        return get_index(vmin, vmax, cmap, name)
+
+    plotted = []
+    monkeypatch.setattr(fig_basic, "get_index", overflow_first_score)
+    monkeypatch.setattr(fig_basic, "plot_map_grid", lambda *args: plotted.append((args[4], args[5])))
+
+    fig_basic.make_plot_index_grid(renderer)
+
+    assert plotted == [("nBiasScore", "scores")]
+    records = [record for record in caplog.records if record.name == fig_basic.__name__]
+    assert len(records) == 1
+    assert records[0].levelname == "WARNING"
+    assert "Overall_Score" in caplog.text
+    assert "tick count overflow" in caplog.text
+
+
+@pytest.mark.parametrize("kind", ["metric", "score"])
+def test_basic_grid_other_color_scale_errors_still_propagate(tmp_path, monkeypatch, kind):
+    import openbench.visualization.Fig_Basic_Plot as fig_basic
+
+    renderer = _grid_tick_renderer(
+        tmp_path, {"bias": [1, 2, 3, 4]} if kind == "metric" else {}, ["Overall_Score"] if kind == "score" else []
+    )
+
+    def fail_get_index(*args):
+        raise ValueError("invalid color scale")
+
+    monkeypatch.setattr(fig_basic, "get_index", fail_get_index)
+    with pytest.raises(ValueError, match="invalid color scale"):
+        fig_basic.make_plot_index_grid(renderer)
+
+
+@pytest.mark.parametrize("stage", ["input", "renderer"])
+def test_basic_grid_size_errors_outside_tick_generation_still_propagate(tmp_path, monkeypatch, stage):
+    import openbench.visualization.Fig_Basic_Plot as fig_basic
+
+    renderer = _grid_tick_renderer(tmp_path, {"bias": [1, 2, 3, 4]}, [])
+
+    def fail(*args, **kwargs):
+        raise ValueError("Maximum allowed size exceeded")
+
+    if stage == "input":
+        monkeypatch.setattr(fig_basic.xr, "open_dataset", fail)
+    else:
+        monkeypatch.setattr(fig_basic, "plot_map_grid", fail)
+    with pytest.raises(ValueError, match="Maximum allowed size exceeded"):
+        fig_basic.make_plot_index_grid(renderer)
+
+
 def test_basic_station_map_renderer_skips_empty_filtered_data(tmp_path, monkeypatch):
     """All-NaN station metric maps are optional figures and should be skipped."""
     import openbench.visualization.Fig_Basic_Plot as fig_basic

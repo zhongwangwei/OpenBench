@@ -195,7 +195,17 @@ def make_plot_index_grid(self):
                 else:
                     option["vmin"], option["vmax"] = 0, 1
 
-            cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], metric)
+            try:
+                cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], metric)
+            except ValueError as exc:
+                if str(exc) != "Maximum allowed size exceeded":
+                    raise
+                logger.warning(
+                    "Skipping grid metric map %s (item=%s, sim=%s, ref=%s): tick count overflow "
+                    "for range [%s, %s]; check input data. %s",
+                    metric, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+                )
+                continue
             option["extend"] = extend
             plot_map_grid(self, cmap, norm, bnd, metric, "metrics", mticks, option)
         except Exception:
@@ -213,7 +223,17 @@ def make_plot_index_grid(self):
         if not option["vmin_max_on"]:
             option["vmin"], option["vmax"] = 0, 1
 
-        cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], score)
+        try:
+            cmap, mticks, norm, bnd, extend = get_index(option["vmin"], option["vmax"], option["cmap"], score)
+        except ValueError as exc:
+            if str(exc) != "Maximum allowed size exceeded":
+                raise
+            logger.warning(
+                "Skipping grid score map %s (item=%s, sim=%s, ref=%s): tick count overflow "
+                "for range [%s, %s]; check input data. %s",
+                score, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+            )
+            continue
         option["extend"] = extend
         plot_map_grid(self, cmap, norm, bnd, score, "scores", mticks, option)
 
