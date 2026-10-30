@@ -31,3 +31,6 @@ general:
   saving_format: jpg
   font: DejaVu Sans
   dpi: 300
+  # Optional per-figure overrides; unspecified river settings come from map_features.yaml.
+  river_color: "#4088b8"
+  river_linewidth: 0.5

@@ -22,7 +22,7 @@ from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import convert_unit
 from ._downsample import downsample_for_plot, lat_lon_plot_args
-from ._geo_axes import configure_geo_axis
+from ._geo_axes import add_rivers, configure_geo_axis
 from ._validation import finite_min_max
 
 
@@ -203,7 +203,13 @@ def make_plot_index_grid(self):
                 logger.warning(
                     "Skipping grid metric map %s (item=%s, sim=%s, ref=%s): tick count overflow "
                     "for range [%s, %s]; check input data. %s",
-                    metric, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+                    metric,
+                    self.item,
+                    self.sim_source,
+                    self.ref_source,
+                    option["vmin"],
+                    option["vmax"],
+                    exc,
                 )
                 continue
             option["extend"] = extend
@@ -231,7 +237,13 @@ def make_plot_index_grid(self):
             logger.warning(
                 "Skipping grid score map %s (item=%s, sim=%s, ref=%s): tick count overflow "
                 "for range [%s, %s]; check input data. %s",
-                score, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+                score,
+                self.item,
+                self.sim_source,
+                self.ref_source,
+                option["vmin"],
+                option["vmax"],
+                exc,
             )
             continue
         option["extend"] = extend
@@ -287,13 +299,10 @@ def plot_map_grid(self, colormap, normalize, levels, xitem, k, mticks, option):
         spine.set_linewidth(option["line_width"])
 
     coastline = cfeature.NaturalEarthFeature("physical", "coastline", "110m", edgecolor="0.6", facecolor="none")
-    rivers = cfeature.NaturalEarthFeature(
-        "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
-    )
     ax.add_feature(cfeature.LAND, facecolor="0.9")
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
-    ax.add_feature(rivers, linewidth=0.5)
+    add_rivers(ax, option)
     configure_geo_axis(
         ax,
         option,
@@ -595,13 +604,10 @@ def plot_stn_map(self, stn_lon, stn_lat, metric, cmap, norm, varname, s_m, mtick
         spine.set_linewidth(option["line_width"])
 
     coastline = cfeature.NaturalEarthFeature("physical", "coastline", "110m", edgecolor="0.6", facecolor="none")
-    rivers = cfeature.NaturalEarthFeature(
-        "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
-    )
     ax.add_feature(cfeature.LAND, facecolor="0.9")
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white", zorder=9)
-    ax.add_feature(rivers, linewidth=0.5)
+    add_rivers(ax, option)
     configure_geo_axis(
         ax,
         option,
@@ -859,13 +865,10 @@ def make_Basic(file, method_name, data_sources, main_nml, option):
         spine.set_linewidth(option["line_width"])
 
     coastline = cfeature.NaturalEarthFeature("physical", "coastline", "110m", edgecolor="0.6", facecolor="none")
-    rivers = cfeature.NaturalEarthFeature(
-        "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
-    )
     ax.add_feature(cfeature.LAND, facecolor="0.9")
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
-    ax.add_feature(rivers, linewidth=0.5)
+    add_rivers(ax, option)
     configure_geo_axis(
         ax,
         option,

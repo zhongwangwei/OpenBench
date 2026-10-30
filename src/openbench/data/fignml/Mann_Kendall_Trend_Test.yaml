@@ -36,3 +36,5 @@ general:
   saving_format: jpg
   font: DejaVu Sans
   dpi: 300
+  # River override example (defaults are in map_features.yaml):
+  # river_resolution: 50m
