@@ -673,9 +673,7 @@ def test_basic_grid_tick_overflow_warns_and_continues(tmp_path, monkeypatch, cap
     import openbench.visualization.Fig_Basic_Plot as fig_basic
 
     values = [-9.96921e36, -5e35, -8e34, -8e33] if metric == "bias" else [9.96921e36] * 4
-    renderer = _grid_tick_renderer(
-        tmp_path, {metric: values, "correlation": [0.1, 0.2, 0.3, 0.4]}, ["Overall_Score"]
-    )
+    renderer = _grid_tick_renderer(tmp_path, {metric: values, "correlation": [0.1, 0.2, 0.3, 0.4]}, ["Overall_Score"])
     plotted = []
     monkeypatch.setattr(fig_basic, "plot_map_grid", lambda *args: plotted.append((args[4], args[5])))
 

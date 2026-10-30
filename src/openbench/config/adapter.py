@@ -1048,12 +1048,8 @@ def build_fig_nml() -> dict[str, Any]:
         for name, options in list(fig_nml.items()):
             if name != "map_features" and isinstance(options, dict):
                 fig_nml[name] = {**map_features, **options}
-        fig_nml["Comparison"] = {
-            name: {**map_features, **options} for name, options in comparison.items()
-        }
-        fig_nml["Statistic"] = {
-            name: {**map_features, **options} for name, options in statistic.items()
-        }
+        fig_nml["Comparison"] = {name: {**map_features, **options} for name, options in comparison.items()}
+        fig_nml["Statistic"] = {name: {**map_features, **options} for name, options in statistic.items()}
 
     # Keep raw registry sections for legacy figure-updater compatibility
     fig_nml["validation_nml"] = figlib.get("validation_nml", {})
