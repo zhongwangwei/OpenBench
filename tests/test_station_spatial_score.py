@@ -83,9 +83,9 @@ def test_station_spatial_score_is_one_network_value_and_updates_overall(tmp_path
             ),
             0,
         )
-        expected_overall = (
-            worker_row["_overall_nonspatial_numerator"] + expected_spatial
-        ) / (worker_row["_overall_nonspatial_denominator"] + 1.0)
+        expected_overall = (worker_row["_overall_nonspatial_numerator"] + expected_spatial) / (
+            worker_row["_overall_nonspatial_denominator"] + 1.0
+        )
         assert frame.loc[row_index, "Overall_Score"] == pytest.approx(expected_overall)
 
     assert not any(column.startswith("_") for column in frame.columns)
@@ -161,9 +161,7 @@ def test_overall_skips_undefined_implicit_spatial_component(tmp_path, monkeypatc
     frame = _run_and_read(evaluator, tmp_path, monkeypatch)
 
     worker = evaluator.make_evaluation_parallel(
-        pd.DataFrame(
-            {"ID": ["A"], "use_syear": [2000], "use_eyear": [2001], "sim_lat": [0.0], "sim_lon": [0.0]}
-        ),
+        pd.DataFrame({"ID": ["A"], "use_syear": [2000], "use_eyear": [2001], "sim_lat": [0.0], "sim_lon": [0.0]}),
         0,
     )
     expected = worker["_overall_nonspatial_numerator"] / worker["_overall_nonspatial_denominator"]

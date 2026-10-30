@@ -203,7 +203,13 @@ def make_plot_index_grid(self):
                 logger.warning(
                     "Skipping grid metric map %s (item=%s, sim=%s, ref=%s): tick count overflow "
                     "for range [%s, %s]; check input data. %s",
-                    metric, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+                    metric,
+                    self.item,
+                    self.sim_source,
+                    self.ref_source,
+                    option["vmin"],
+                    option["vmax"],
+                    exc,
                 )
                 continue
             option["extend"] = extend
@@ -231,7 +237,13 @@ def make_plot_index_grid(self):
             logger.warning(
                 "Skipping grid score map %s (item=%s, sim=%s, ref=%s): tick count overflow "
                 "for range [%s, %s]; check input data. %s",
-                score, self.item, self.sim_source, self.ref_source, option["vmin"], option["vmax"], exc,
+                score,
+                self.item,
+                self.sim_source,
+                self.ref_source,
+                option["vmin"],
+                option["vmax"],
+                exc,
             )
             continue
         option["extend"] = extend

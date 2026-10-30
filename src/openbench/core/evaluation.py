@@ -176,9 +176,7 @@ def _station_scalar_value(value, *, label: str, station_id: object) -> float:
     """Return a station aggregate as a scalar, rejecting ambiguous arrays."""
     array = np.asarray(value, dtype=float)
     if array.size != 1:
-        raise ValueError(
-            f"Station {station_id} {label} must be scalar after time reduction; got shape {array.shape}"
-        )
+        raise ValueError(f"Station {station_id} {label} must be scalar after time reduction; got shape {array.shape}")
     return float(array.reshape(-1)[0])
 
 
@@ -913,9 +911,9 @@ class Evaluation_stn(metrics, scores):
                     "_overall_nonspatial_numerator",
                     "_overall_nonspatial_denominator",
                 }.issubset(station_list.columns):
-                    numerator = pd.to_numeric(
-                        station_list["_overall_nonspatial_numerator"], errors="coerce"
-                    ).to_numpy(dtype=float)
+                    numerator = pd.to_numeric(station_list["_overall_nonspatial_numerator"], errors="coerce").to_numpy(
+                        dtype=float
+                    )
                     denominator = pd.to_numeric(
                         station_list["_overall_nonspatial_denominator"], errors="coerce"
                     ).to_numpy(dtype=float)
