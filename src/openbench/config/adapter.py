@@ -705,9 +705,7 @@ def _resolve_varname(
         filename_prefix = str(prefix or "")
         filename_suffix = str(suffix or "")
         nc_files = [
-            path
-            for path in nc_files
-            if path.stem.startswith(filename_prefix) and path.stem.endswith(filename_suffix)
+            path for path in nc_files if path.stem.startswith(filename_prefix) and path.stem.endswith(filename_suffix)
         ]
     if not nc_files:
         return primary, primary_unit, ""
