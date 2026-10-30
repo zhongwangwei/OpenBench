@@ -171,10 +171,33 @@ class scores:
         smean = s.mean(dim="time")
         omean = o.mean(dim="time")
 
+        spatial_score_0 = self._spatial_score_from_means(smean, omean)
+        # Broadcast the network-wide score back to the spatial field.  This
+        # preserves the existing grid output contract (lat/lon dimensions).
+        return smean * 0.0 + spatial_score_0
+
+    @staticmethod
+    def _spatial_score_from_means(smean, omean, dim=None):
+        """Return one spatial score from paired spatial/time-mean values.
+
+        Grid evaluation calls this with a lat/lon field.  Station evaluation
+        calls it once after collecting all station means, with ``dim`` set to
+        the station dimension.  Degenerate networks return NaN so callers can
+        apply their context-specific explicit/implicit error policy.
+        """
+        smean, omean = xr.align(smean, omean, join="inner")
+        valid = np.isfinite(smean) & np.isfinite(omean)
+        smean = smean.where(valid)
+        omean = omean.where(valid)
+
+        if dim is None and {"lat", "lon"}.issubset(smean.dims) and {"lat", "lon"}.issubset(omean.dims):
+            corr_dim = ["lat", "lon"]
+        else:
+            corr_dim = dim
+
         # Calculate the spatial correlation between reference and model
-        # spatial_corr = np.corrcoef(smean.values.flatten(), omean.values.flatten())[0, 1]
         try:
-            spatial_corr = xr.corr(smean, omean, dim=["lat", "lon"])
+            spatial_corr = xr.corr(smean, omean, dim=corr_dim)
         except (ValueError, KeyError):
             # Bare `except:` was previously swallowing KeyboardInterrupt /
             # SystemExit; narrow to the actual missing-dim cases (1D data
@@ -182,17 +205,36 @@ class scores:
             spatial_corr = xr.corr(smean, omean)
 
         # Calculate the spatial standard deviation for reference and model
-        ref_std = omean.std().squeeze()
-        sim_std = smean.std().squeeze()
+        ref_std = omean.std(dim=corr_dim).squeeze()
+        sim_std = smean.std(dim=corr_dim).squeeze()
+        valid_count = valid.sum(dim=corr_dim) if corr_dim is not None else valid.sum()
         # Guard zero standard deviations: ref_std == 0 would make
         # sim_std/ref_std infinite, while sim_std == 0 would make 1/sigma
         # infinite in the score formula below.
-        sigma = xr.where((ref_std != 0) & (sim_std != 0), sim_std / ref_std, np.nan)
+        sigma = xr.where((valid_count >= 2) & (ref_std != 0) & (sim_std != 0), sim_std / ref_std, np.nan)
         # Calculate the spatial score
-        spatial_score_0 = 2.0 * (1 + spatial_corr) / (sigma + 1 / sigma) ** 2
-        # spatial_score   = xr.full_like(smean, spatial_score_0)
-        spatial_score = smean * 0.0 + spatial_score_0
-        return spatial_score
+        return 2.0 * (1 + spatial_corr) / (sigma + 1 / sigma) ** 2
+
+    @staticmethod
+    def _weighted_score_components(weighted_components):
+        """Combine available score components and retain their weighted terms."""
+        numerator = 0.0
+        denominator = 0.0
+        for score, weight in weighted_components:
+            valid = np.isfinite(score)
+            numerator = numerator + score.where(valid, 0.0) * weight
+            denominator = denominator + xr.where(valid, weight, 0.0)
+        result = xr.where(denominator > 0, numerator / denominator, np.nan)
+        return result, numerator, denominator
+
+    def _overall_nonspatial_components(self, s, o):
+        """Return the four per-location Overall Score components and weights."""
+        return [
+            (self.nBiasScore(s, o), 1.0),
+            (self.nRMSEScore(s, o), 2.0),
+            (self.nPhaseScore(s, o), 1.0),
+            (self.nIavScore(s, o), 1.0),
+        ]
 
     def Overall_Score(self, s, o):
         """
@@ -205,32 +247,15 @@ class scores:
         Returns:
             xarray.DataArray: Overall Score
         """
-        bias_score = self.nBiasScore(s, o)
-        rmse_score = self.nRMSEScore(s, o)
-        phase_score = self.nPhaseScore(s, o)
-        iav_score = self.nIavScore(s, o)
-        spatial_score = self.nSpatialScore(s, o)
-
         # Aggregate Scores (Adjust weights as per your ILAMB configuration).
         # Some components are legitimately undefined for only part of a field
         # (for example IAV in cells with no interannual variability). Normalize
         # by the available weighted components per cell rather than decrementing
         # a single global denominator only when an entire component is NaN.
-        weighted_components = [
-            (bias_score, 1.0),
-            (rmse_score, 2.0),
-            (phase_score, 1.0),
-            (iav_score, 1.0),
-            (spatial_score, 1.0),
-        ]
-        numerator = 0.0
-        denominator = 0.0
-        for score, weight in weighted_components:
-            valid = np.isfinite(score)
-            numerator = numerator + score.where(valid, 0.0) * weight
-            denominator = denominator + xr.where(valid, weight, 0.0)
-
-        return xr.where(denominator > 0, numerator / denominator, np.nan)
+        weighted_components = self._overall_nonspatial_components(s, o)
+        weighted_components.append((self.nSpatialScore(s, o), 1.0))
+        result, _, _ = self._weighted_score_components(weighted_components)
+        return result
 
     def nSeasonalityScore(self, s, o):
         """

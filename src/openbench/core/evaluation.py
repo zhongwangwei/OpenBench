@@ -172,6 +172,16 @@ def _scalar_plot_value(value, *, label: str, station_id: object) -> float:
     return float(np.nanmean(finite))
 
 
+def _station_scalar_value(value, *, label: str, station_id: object) -> float:
+    """Return a station aggregate as a scalar, rejecting ambiguous arrays."""
+    array = np.asarray(value, dtype=float)
+    if array.size != 1:
+        raise ValueError(
+            f"Station {station_id} {label} must be scalar after time reduction; got shape {array.shape}"
+        )
+    return float(array.reshape(-1)[0])
+
+
 def _grid_output_array(value, template: xr.DataArray, name: str) -> xr.DataArray:
     """Return a named grid output without squeezing singleton lat/lon axes."""
     if isinstance(value, xr.DataArray):
@@ -686,6 +696,19 @@ class Evaluation_stn(metrics, scores):
             s, o = _apply_pairwise_valid_mask(s, o)
 
             row = {}
+            score_names = getattr(self, "scores", []) or []
+            needs_station_network = "nSpatialScore" in score_names or "Overall_Score" in score_names
+            if needs_station_network:
+                row["_station_sim_mean"] = _station_scalar_value(
+                    s.mean(dim="time").values,
+                    label="simulation mean",
+                    station_id=station_id,
+                )
+                row["_station_ref_mean"] = _station_scalar_value(
+                    o.mean(dim="time").values,
+                    label="reference mean",
+                    station_id=station_id,
+                )
             shared_mfm_names = _mfm_shared_metric_names(self.metrics)
             shared_mfm = self._MFM_shared_components(s, o) if shared_mfm_names else {}
             for name in ("KGESS", "RMSE", "correlation"):
@@ -709,9 +732,28 @@ class Evaluation_stn(metrics, scores):
                 else:
                     raise ValueError(f"No such metric: {metric}")
 
-            for score in self.scores:
+            for score in score_names:
                 if hasattr(self, score):
-                    pb = getattr(self, score)(s, o)
+                    if score == "nSpatialScore":
+                        # A spatial score is undefined for one station.  It is
+                        # calculated once from all successful station means.
+                        row[score] = np.nan
+                        continue
+                    if score == "Overall_Score":
+                        components = self._overall_nonspatial_components(s, o)
+                        pb, numerator, denominator = self._weighted_score_components(components)
+                        row["_overall_nonspatial_numerator"] = _station_scalar_value(
+                            numerator.values,
+                            label="Overall Score non-spatial numerator",
+                            station_id=station_id,
+                        )
+                        row["_overall_nonspatial_denominator"] = _station_scalar_value(
+                            denominator.values,
+                            label="Overall Score non-spatial denominator",
+                            station_id=station_id,
+                        )
+                    else:
+                        pb = getattr(self, score)(s, o)
                     if pb is None:
                         row[f"{score}"] = np.nan
                     elif hasattr(pb, "values"):
@@ -818,6 +860,11 @@ class Evaluation_stn(metrics, scores):
             )
             _write_file_atomic(status_path, lambda path: station_status.to_csv(path, index=False), suffix=".tmp.csv")
             if not valid_indices:
+                if "nSpatialScore" in (getattr(self, "scores", []) or []):
+                    raise RuntimeError(
+                        "Station nSpatialScore requires at least two stations with finite paired means and "
+                        "non-zero simulated and reference spatial standard deviations; no valid stations remain"
+                    )
                 raise RuntimeError(
                     f"Station evaluation produced no valid station results ({len(skipped)}/{len(results)} skipped)"
                 )
@@ -828,6 +875,61 @@ class Evaluation_stn(metrics, scores):
                 ],
                 axis=1,
             )
+            score_names = getattr(self, "scores", []) or []
+            uses_station_network = "nSpatialScore" in score_names or "Overall_Score" in score_names
+            internal_columns = [
+                "_station_sim_mean",
+                "_station_ref_mean",
+                "_overall_nonspatial_numerator",
+                "_overall_nonspatial_denominator",
+            ]
+            if uses_station_network and {"_station_sim_mean", "_station_ref_mean"}.issubset(station_list.columns):
+                sim_means = pd.to_numeric(station_list["_station_sim_mean"], errors="coerce").to_numpy(dtype=float)
+                ref_means = pd.to_numeric(station_list["_station_ref_mean"], errors="coerce").to_numpy(dtype=float)
+                finite = np.isfinite(sim_means) & np.isfinite(ref_means)
+                spatial_value = np.nan
+                if finite.sum() >= 2:
+                    sim_network = xr.DataArray(sim_means[finite], dims="station")
+                    ref_network = xr.DataArray(ref_means[finite], dims="station")
+                    spatial = self._spatial_score_from_means(sim_network, ref_network, dim="station")
+                    spatial_value = _station_scalar_value(
+                        spatial.values,
+                        label="network nSpatialScore",
+                        station_id="<network>",
+                    )
+
+                if not np.isfinite(spatial_value):
+                    reason = (
+                        "Station nSpatialScore requires at least two stations with finite paired means "
+                        "and non-zero simulated and reference spatial standard deviations"
+                    )
+                    if "nSpatialScore" in score_names:
+                        raise RuntimeError(reason)
+                    logging.warning("%s; omitting the spatial component from Overall_Score", reason)
+                elif "nSpatialScore" in score_names:
+                    station_list["nSpatialScore"] = spatial_value
+
+                if "Overall_Score" in score_names and {
+                    "_overall_nonspatial_numerator",
+                    "_overall_nonspatial_denominator",
+                }.issubset(station_list.columns):
+                    numerator = pd.to_numeric(
+                        station_list["_overall_nonspatial_numerator"], errors="coerce"
+                    ).to_numpy(dtype=float)
+                    denominator = pd.to_numeric(
+                        station_list["_overall_nonspatial_denominator"], errors="coerce"
+                    ).to_numpy(dtype=float)
+                    if np.isfinite(spatial_value):
+                        numerator = numerator + spatial_value
+                        denominator = denominator + 1.0
+                    station_list["Overall_Score"] = np.divide(
+                        numerator,
+                        denominator,
+                        out=np.full(numerator.shape, np.nan, dtype=float),
+                        where=np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0),
+                    )
+
+            station_list = station_list.drop(columns=internal_columns, errors="ignore")
             requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
             if not requested_columns:
                 requested_columns = ["KGESS", "RMSE", "correlation"]
