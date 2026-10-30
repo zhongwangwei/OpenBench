@@ -189,6 +189,21 @@ def test_adapter_fallback_conversion_only_applies_to_raw_result(monkeypatch, tmp
     np.testing.assert_allclose(result.values, [10.0, 20.0])
 
 
+def test_adapter_varname_probe_respects_filename_prefix(tmp_path):
+    from openbench.config.adapter import _resolve_varname
+    from openbench.data.registry.schema import FallbackVar
+
+    mapping = VariableMapping(
+        varname="primary",
+        varunit="m2",
+        fallbacks=[FallbackVar(varname="fallback", varunit="m2")],
+    )
+    _site_output(unrelated=[1.0]).to_netcdf(tmp_path / "other_2001.nc")
+    _site_output(fallback=[2.0]).to_netcdf(tmp_path / "selected_2001.nc")
+
+    assert _resolve_varname(mapping, str(tmp_path), prefix="selected_") == ("fallback", "m2", "")
+
+
 @pytest.mark.parametrize(
     "expression",
     [

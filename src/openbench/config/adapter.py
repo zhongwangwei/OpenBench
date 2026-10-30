@@ -661,7 +661,13 @@ def _fallbacks_to_dicts(var_map) -> list[dict[str, Any]]:
     return result
 
 
-def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str, str]:
+def _resolve_varname(
+    profile_var,
+    root_dir: str | None = None,
+    *,
+    prefix: str | None = None,
+    suffix: str | None = None,
+) -> tuple[str, str, str]:
     """Resolve a variable name from profile, handling fallbacks.
 
     Checks the data files to determine which variable actually exists.
@@ -669,7 +675,9 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
 
     Args:
         profile_var: A VariableMapping object or raw varname.
-        root_dir: Path to simulation data directory to check actual files.
+        root_dir: Path to the data directory to inspect. ``None`` skips inspection.
+        prefix: Optional filename prefix used to select the actual input files.
+        suffix: Optional filename suffix used to select the actual input files.
 
     Returns:
         (resolved_varname, resolved_varunit, convert_expr) tuple.
@@ -693,6 +701,14 @@ def _resolve_varname(profile_var, root_dir: str | None = None) -> tuple[str, str
     from openbench.data.coordinates import glob_nc
 
     nc_files = glob_nc(root_dir)
+    if prefix or suffix:
+        filename_prefix = str(prefix or "")
+        filename_suffix = str(suffix or "")
+        nc_files = [
+            path
+            for path in nc_files
+            if path.stem.startswith(filename_prefix) and path.stem.endswith(filename_suffix)
+        ]
     if not nc_files:
         return primary, primary_unit, ""
 
@@ -1122,7 +1138,13 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                     var_name,
                 )
 
-            ref_varname, ref_varunit, ref_convert = _resolve_varname(var_map, ref_dir)
+            inspect_dir = None if cfg.project.only_drawing else ref_dir
+            ref_varname, ref_varunit, ref_convert = _resolve_varname(
+                var_map,
+                inspect_dir,
+                prefix=var_map.prefix,
+                suffix=var_map.suffix,
+            )
             section[f"{prefix}_data_type"] = ref_ds.data_type
             section[f"{prefix}_varname"] = ref_varname
             section[f"{prefix}_varunit"] = ref_varunit
@@ -1232,7 +1254,13 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
                     convert_expr = inline_vars.get("convert", "")
                 else:
                     # Resolve from profile with fallback chain
-                    varname, varunit, convert_expr = _resolve_varname(profile_var, sim_entry.root_dir)
+                    inspect_dir = None if cfg.project.only_drawing else sim_entry.root_dir
+                    varname, varunit, convert_expr = _resolve_varname(
+                        profile_var,
+                        inspect_dir,
+                        prefix=layout["prefix"],
+                        suffix=layout["suffix"],
+                    )
                     varunit = inline_vars.get("varunit", varunit)
                     convert_expr = inline_vars.get("convert", convert_expr)
             elif inline_vars:

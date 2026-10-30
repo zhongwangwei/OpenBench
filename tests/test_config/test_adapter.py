@@ -227,6 +227,26 @@ def test_full_config_adapter():
     assert stats_ctx.stats_nml["ANOVA"]["analysis_type"] == "oneway"
 
 
+def test_only_drawing_bindings_skip_raw_data_varname_inspection(monkeypatch):
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="draw", output_dir="/data/out", years=[2000, 2001], only_drawing=True),
+        evaluation=EvaluationConfig(variables=["Latent_Heat"]),
+        reference=ReferenceConfig(sources={"Latent_Heat": "FLUXCOM"}),
+        simulation={"CoLM": SimulationEntry(model="CoLM2024", root_dir="/raw/simulation")},
+    )
+    inspected_roots = []
+
+    def resolve_without_opening(profile_var, root_dir=None, **_kwargs):
+        inspected_roots.append(root_dir)
+        return profile_var.varname, profile_var.varunit, ""
+
+    monkeypatch.setattr(adapter_module, "_resolve_varname", resolve_without_opening)
+    adapter_module.build_runner_bindings(cfg)
+
+    assert inspected_roots
+    assert all(root is None for root in inspected_roots)
+
+
 def test_defaults_applied():
     """Verify sensible defaults when options not specified."""
     cfg = OpenBenchConfig(
