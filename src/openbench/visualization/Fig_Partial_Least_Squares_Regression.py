@@ -12,7 +12,7 @@ import xarray as xr
 from matplotlib import colors, rcParams
 
 from openbench.util.converttype import Convert_Type
-from openbench.visualization._geo_axes import configure_geo_axis
+from openbench.visualization._geo_axes import add_rivers, configure_geo_axis
 
 
 def get_index(vmin, vmax, colormap):
@@ -107,13 +107,10 @@ def map(file, method_name, data_sources, ilon, ilat, data, title, main_nml, opti
         # cs = ax.imshow(data, cmap=option['cmap'], vmin=option['vmin'], vmax=option['vmax'], extent=extent, origin=origin)
 
     coastline = cfeature.NaturalEarthFeature("physical", "coastline", "50m", edgecolor="0.6", facecolor="none")
-    rivers = cfeature.NaturalEarthFeature(
-        "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
-    )
     ax.add_feature(cfeature.LAND, facecolor="0.9")
     ax.add_feature(coastline, linewidth=0.6)
     ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white")
-    ax.add_feature(rivers, linewidth=0.5)
+    add_rivers(ax, option)
     configure_geo_axis(
         ax,
         option,

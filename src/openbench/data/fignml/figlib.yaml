@@ -1,4 +1,5 @@
 validation_nml:
+  map_features_source: ./nml/nml-yaml/fignml/map_features.yaml
   plot_stn_source: ./nml/nml-yaml/fignml/plot_stn.yaml
   make_stn_plot_index_source: ./nml/nml-yaml/fignml/make_stn_plot_index.yaml
   make_geo_plot_index_source: ./nml/nml-yaml/fignml/make_geo_plot_index.yaml

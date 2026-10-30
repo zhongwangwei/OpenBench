@@ -1,0 +1,16 @@
+general:
+  # These defaults are inherited by every map-producing figure YAML.
+  # Add any of the same keys to an individual figure YAML to override them.
+  #
+  # Available options / 可选项：
+  # show_rivers: true or false / 是否显示河网。
+  # river_resolution: 110m, 50m, or 10m / 河网精度；10m 最精细，110m 最粗略。
+  # river_color: any Matplotlib color / 任意 Matplotlib 合法颜色，
+  #              e.g. "#6baed6", "blue", or "0.5".
+  # river_linewidth: any number >= 0 / 非负线宽；0 表示线条不可见。
+  # river_alpha: number from 0 to 1 / 透明度；0 为完全透明，1 为完全不透明。
+  show_rivers: true
+  river_resolution: 10m
+  river_color: "#6baed6"
+  river_linewidth: 0.35
+  river_alpha: 0.8

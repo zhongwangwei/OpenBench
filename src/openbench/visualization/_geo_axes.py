@@ -6,13 +6,53 @@ import math
 from collections.abc import Mapping
 
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import numpy as np
 from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
+from matplotlib.colors import is_color_like
 
 from openbench.data.basin_mask import basin_mask_extent, load_basin_mask
 
 
 _CANONICAL_DEGREE_STEPS = (15.0, 30.0, 45.0, 60.0, 90.0, 180.0)
+_RIVER_RESOLUTIONS = {"110m", "50m", "10m"}
+
+
+def add_rivers(ax, option: Mapping):
+    """Validate river settings and add the configured Natural Earth feature."""
+    show_rivers = option.get("show_rivers", True)
+    if not isinstance(show_rivers, bool):
+        raise ValueError("show_rivers must be a boolean")
+
+    resolution = str(option.get("river_resolution", "10m"))
+    if resolution not in _RIVER_RESOLUTIONS:
+        raise ValueError("river_resolution must be one of: 110m, 50m, 10m")
+
+    color = option.get("river_color", "#6baed6")
+    if not is_color_like(color):
+        raise ValueError(f"river_color is not a valid Matplotlib color: {color!r}")
+
+    try:
+        linewidth = float(option.get("river_linewidth", 0.35))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("river_linewidth must be a non-negative number") from exc
+    if not math.isfinite(linewidth) or linewidth < 0:
+        raise ValueError("river_linewidth must be a non-negative number")
+
+    try:
+        alpha = float(option.get("river_alpha", 0.8))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("river_alpha must be a number between 0 and 1") from exc
+    if not math.isfinite(alpha) or not 0 <= alpha <= 1:
+        raise ValueError("river_alpha must be a number between 0 and 1")
+
+    if not show_rivers:
+        return None
+
+    rivers = cfeature.NaturalEarthFeature(
+        "physical", "rivers_lake_centerlines", resolution, edgecolor=color, facecolor="none"
+    )
+    return ax.add_feature(rivers, linewidth=linewidth, alpha=alpha)
 
 
 def adaptive_degree_ticks(minimum: float, maximum: float, *, target_count: int = 5) -> np.ndarray:

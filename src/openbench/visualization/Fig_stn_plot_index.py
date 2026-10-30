@@ -13,7 +13,7 @@ from openbench.util.filenames import filename_component
 from openbench.util.converttype import Convert_Type
 
 from .Fig_toolbox import get_index
-from ._geo_axes import configure_geo_axis
+from ._geo_axes import add_rivers, configure_geo_axis
 from ._validation import finite_min_max
 
 logger = logging.getLogger(__name__)
@@ -122,13 +122,10 @@ def make_stn_plot_index(file, method_name, main_nml, sources, option, *, value_c
             spine.set_linewidth(option["line_width"])
 
         coastline = cfeature.NaturalEarthFeature("physical", "coastline", "110m", edgecolor="0.6", facecolor="none")
-        rivers = cfeature.NaturalEarthFeature(
-            "physical", "rivers_lake_centerlines", "110m", edgecolor="0.6", facecolor="none"
-        )
         ax.add_feature(cfeature.LAND, facecolor="0.9")
         ax.add_feature(coastline, linewidth=0.6)
         ax.add_feature(cfeature.LAKES, alpha=1, facecolor="white", edgecolor="white", zorder=9)
-        ax.add_feature(rivers, linewidth=0.5)
+        add_rivers(ax, option)
         configure_geo_axis(
             ax,
             option,

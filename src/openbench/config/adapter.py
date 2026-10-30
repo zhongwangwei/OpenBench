@@ -1041,6 +1041,20 @@ def build_fig_nml() -> dict[str, Any]:
             statistic[config_name] = data.get("general", data)
     fig_nml["Statistic"] = statistic
 
+    # Every map-capable figure receives the common map defaults. A setting in
+    # an individual figure YAML wins because it is merged last.
+    map_features = fig_nml.get("map_features", {})
+    if map_features:
+        for name, options in list(fig_nml.items()):
+            if name != "map_features" and isinstance(options, dict):
+                fig_nml[name] = {**map_features, **options}
+        fig_nml["Comparison"] = {
+            name: {**map_features, **options} for name, options in comparison.items()
+        }
+        fig_nml["Statistic"] = {
+            name: {**map_features, **options} for name, options in statistic.items()
+        }
+
     # Keep raw registry sections for legacy figure-updater compatibility
     fig_nml["validation_nml"] = figlib.get("validation_nml", {})
     fig_nml["comparison_nml"] = figlib.get("comparison_nml", {})
