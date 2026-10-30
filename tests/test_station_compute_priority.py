@@ -198,8 +198,8 @@ def test_adapter_varname_probe_respects_filename_prefix(tmp_path):
         varunit="m2",
         fallbacks=[FallbackVar(varname="fallback", varunit="m2")],
     )
-    _site_output(unrelated=[1.0]).to_netcdf(tmp_path / "other_2001.nc")
-    _site_output(fallback=[2.0]).to_netcdf(tmp_path / "selected_2001.nc")
+    _site_output(unrelated=[1.0, 1.0]).to_netcdf(tmp_path / "other_2001.nc")
+    _site_output(fallback=[2.0, 2.0]).to_netcdf(tmp_path / "selected_2001.nc")
 
     assert _resolve_varname(mapping, str(tmp_path), prefix="selected_") == ("fallback", "m2", "")
 
