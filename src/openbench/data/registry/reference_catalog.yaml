@@ -4868,3 +4868,1229 @@ HSWUD_v8_MidRes:
       varunit: mm day-1
       sub_dir: Anth/Water_Withdrawal/HSWUD_v8
       prefix: HSWUD_v8_ele_mm_day
+
+# OBRefGen received station integration (2026-10-31)
+OBRefGen_ReaLSAT_monthly:
+  name: OBRefGen_ReaLSAT_monthly
+  description: Satellite reconstructed lake area; upstream filling and water-pixel
+    diagnostics retained.
+  category: Lake
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Area/ReaLSAT/monthly
+  years:
+  - 1984
+  - 2020
+  variables:
+    Lake_Water_Area:
+      varname: LakeArea
+      varunit: m2
+      prefix: OpenBench_LakeArea_Monthly_full
+      years:
+      - 1984
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_ReaLSAT_monthly_LakeArea.csv
+OBRefGen_G_REALM_daily:
+  name: OBRefGen_G_REALM_daily
+  description: Satellite altimetry lake levels on daily slots; irregular source samples
+    and datum metadata retained; no temporal filling.
+  category: Lake
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Lake/Lake_Level/G_REALM/daily
+  years:
+  - 1992
+  - 2026
+  variables:
+    Lake_Water_Level:
+      varname: LakeLevel
+      varunit: m
+      prefix: OpenBench_LakeLevel_Daily_full
+      years:
+      - 1992
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_G_REALM_daily_LakeLevel.csv
+OBRefGen_WSE_EGM2008_daily:
+  name: OBRefGen_WSE_EGM2008_daily
+  description: EGM2008 water-surface elevation; unresolved source datums remain missing.
+    Configure geoid harmonization before comparing another height datum.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Water_Surface_Elevation/WSE_EGM2008/daily
+  years:
+  - 1995
+  - 2024
+  variables:
+    Water_Surface_Elevation:
+      varname: Water_Surface_Elevation
+      varunit: m
+      prefix: OpenBench_Water_Surface_Elevation_Daily_full
+      years:
+      - 1995
+      - 2024
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_WSE_EGM2008_daily_Water_Surface_Elevation.csv
+OBRefGen_SAPFLUXNET_hourly:
+  name: OBRefGen_SAPFLUXNET_hourly
+  description: Sap-flux-derived canopy transpiration; daily totals may sum 18 or more
+    valid hours; no gap filling.
+  category: Water
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET/hourly
+  years:
+  - 1990
+  - 2020
+  variables:
+    Canopy_Transpiration:
+      varname: Transpiration
+      varunit: mm day-1
+      prefix: OpenBench_Transpiration_Hourly_full
+      years:
+      - 1990
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_SAPFLUXNET_hourly_Transpiration.csv
+OBRefGen_SAPFLUXNET_daily:
+  name: OBRefGen_SAPFLUXNET_daily
+  description: Sap-flux-derived canopy transpiration; daily totals may sum 18 or more
+    valid hours; no gap filling.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Transpiration/SAPFLUXNET/daily
+  years:
+  - 1990
+  - 2020
+  variables:
+    Canopy_Transpiration:
+      varname: Transpiration
+      varunit: mm day-1
+      prefix: OpenBench_Transpiration_Daily_full
+      years:
+      - 1990
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_SAPFLUXNET_daily_Transpiration.csv
+OBRefGen_BEFED_daily:
+  name: OBRefGen_BEFED_daily
+  description: Publisher-processed ET, including publisher gap filling; source day
+    labels retained, physical day boundary unverified.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Evapotranspiration/BEFED/daily
+  years:
+  - 1990
+  - 2022
+  variables:
+    Evapotranspiration:
+      varname: Evapotranspiration
+      varunit: mm day-1
+      prefix: OpenBench_Evapotranspiration_Daily_full
+      years:
+      - 1990
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_BEFED_daily_Evapotranspiration.csv
+OBRefGen_Filled_LE_daily:
+  name: OBRefGen_Filled_LE_daily
+  description: Published daily energy fluxes; source QC 0 observed / 1 reanalysis
+    or calculated / 2 gap-filled retained; day boundary unverified.
+  category: Energy
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Heat/Composite/Filled_LE/daily
+  years:
+  - 1996
+  - 2022
+  variables:
+    Ground_Heat:
+      varname: Ground_Heat
+      varunit: W m-2
+      prefix: OpenBench_Ground_Heat_Daily_full
+      years:
+      - 1996
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Filled_LE_daily_Ground_Heat.csv
+    Latent_Heat:
+      varname: Latent_Heat
+      varunit: W m-2
+      prefix: OpenBench_Latent_Heat_Daily_full
+      years:
+      - 1996
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Filled_LE_daily_Latent_Heat.csv
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Net_Radiation_Daily_full
+      years:
+      - 1996
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Filled_LE_daily_Net_Radiation.csv
+OBRefGen_Yuan2011_8day:
+  name: OBRefGen_Yuan2011_8day
+  description: Received Yuan2011 satellite LAI extraction; native time labels retained;
+    upstream version and extraction chain unverified.
+  category: Bio
+  data_type: stn
+  tim_res: 8day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/8day
+  years:
+  - 2000
+  - 2021
+  variables:
+    Leaf_Area_Index:
+      varname: Leaf_Area_Index
+      varunit: '1'
+      prefix: OpenBench_Leaf_Area_Index_8day_full
+      years:
+      - 2000
+      - 2021
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Yuan2011_8day_Leaf_Area_Index.csv
+OBRefGen_Yuan2011_monthly:
+  name: OBRefGen_Yuan2011_monthly
+  description: Received Yuan2011 satellite LAI extraction; native time labels retained;
+    upstream version and extraction chain unverified.
+  category: Bio
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Leaf_Area_Index/Yuan2011/monthly
+  years:
+  - 2000
+  - 2021
+  variables:
+    Leaf_Area_Index:
+      varname: Leaf_Area_Index
+      varunit: '1'
+      prefix: OpenBench_Leaf_Area_Index_Monthly_full
+      years:
+      - 2000
+      - 2021
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Yuan2011_monthly_Leaf_Area_Index.csv
+OBRefGen_GEBA_monthly:
+  name: OBRefGen_GEBA_monthly
+  description: Five qualified monthly radiation references; ambiguous H/LE/G flux
+    directions excluded.
+  category: Energy
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Heat/GEBA/monthly
+  years:
+  - 1922
+  - 2022
+  variables:
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Net_Radiation_Monthly_full
+      years:
+      - 1922
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_GEBA_monthly_Net_Radiation.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_Monthly_full
+      years:
+      - 1922
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_GEBA_monthly_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_Monthly_full
+      years:
+      - 1922
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_GEBA_monthly_Surface_Downward_SW_Radiation.csv
+    Surface_Net_LW_Radiation:
+      varname: Surface_Net_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Net_LW_Radiation_Monthly_full
+      years:
+      - 1922
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_GEBA_monthly_Surface_Net_LW_Radiation.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_Monthly_full
+      years:
+      - 1922
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_GEBA_monthly_Surface_Upward_LW_Radiation.csv
+OBRefGen_USGS_WTD_daily:
+  name: OBRefGen_USGS_WTD_daily
+  description: Received USGS groundwater depth observations; well measurement references
+    and source metadata retained.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Water_Table_Depth/USGS/daily
+  years:
+  - 2000
+  - 2025
+  variables:
+    Water_Table_Depth:
+      varname: Water_Table_Depth
+      varunit: m
+      prefix: OpenBench_Water_Table_Depth_Daily_full
+      years:
+      - 2000
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_USGS_WTD_daily_Water_Table_Depth.csv
+OBRefGen_USGS_WTD_monthly:
+  name: OBRefGen_USGS_WTD_monthly
+  description: Received USGS groundwater depth observations; well measurement references
+    and source metadata retained.
+  category: Water
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Water_Table_Depth/USGS/monthly
+  years:
+  - 2000
+  - 2025
+  variables:
+    Water_Table_Depth:
+      varname: Water_Table_Depth
+      varunit: m
+      prefix: OpenBench_Water_Table_Depth_Monthly_full
+      years:
+      - 2000
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_USGS_WTD_monthly_Water_Table_Depth.csv
+OBRefGen_FLUXNET_CH4_ANN_monthly:
+  name: OBRefGen_FLUXNET_CH4_ANN_monthly
+  description: Published derived wetland monthly methane product, not purely measured
+    flux; original station names and measured/ANN fractions unavailable.
+  category: Bio
+  data_type: stn
+  tim_res: Month
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Bio/Methane/FLUXNET-CH4_Monthly
+  years:
+  - 2006
+  - 2018
+  variables:
+    Wetland_Methane_Emission:
+      varname: Wetland_Methane_Emission
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Wetland_Methane_Emission_Monthly_full
+      years:
+      - 2006
+      - 2018
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUXNET_CH4_ANN_monthly_Wetland_Methane_Emission.csv
+OBRefGen_Urban_PLUMBER_30min:
+  name: OBRefGen_Urban_PLUMBER_30min
+  description: Urban-PLUMBER v1 source-QC-qualified data; original time bounds, QC
+    and derived aggregation retained.
+  category: Urban
+  data_type: stn
+  tim_res: 30min
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/30min
+  years:
+  - 2003
+  - 2020
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: mm day-1
+      prefix: OpenBench_Precipitation_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Precipitation.csv
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: W m-2
+      prefix: OpenBench_Sensible_Heat_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Sensible_Heat.csv
+    Snowfall:
+      varname: Snowfall
+      varunit: mm day-1
+      prefix: OpenBench_Snowfall_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Snowfall.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Air_Temperature.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Downward_SW_Radiation.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Pressure.csv
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: kg kg-1
+      prefix: OpenBench_Surface_Specific_Humidity_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Specific_Humidity.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Upward_LW_Radiation.csv
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_SW_Radiation_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Upward_SW_Radiation.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Surface_Wind_Speed.csv
+    Urban_Latent_Heat_Flux:
+      varname: Urban_Latent_Heat_Flux
+      varunit: W m-2
+      prefix: OpenBench_Urban_Latent_Heat_Flux_30min_full
+      years:
+      - 2003
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_30min_Urban_Latent_Heat_Flux.csv
+OBRefGen_Urban_PLUMBER_hourly:
+  name: OBRefGen_Urban_PLUMBER_hourly
+  description: Urban-PLUMBER v1 source-QC-qualified data; original time bounds, QC
+    and derived aggregation retained.
+  category: Urban
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/hourly
+  years:
+  - 2002
+  - 2020
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: mm day-1
+      prefix: OpenBench_Precipitation_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Precipitation.csv
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: W m-2
+      prefix: OpenBench_Sensible_Heat_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Sensible_Heat.csv
+    Snowfall:
+      varname: Snowfall
+      varunit: mm day-1
+      prefix: OpenBench_Snowfall_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Snowfall.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Air_Temperature.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Downward_SW_Radiation.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Pressure.csv
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: kg kg-1
+      prefix: OpenBench_Surface_Specific_Humidity_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Specific_Humidity.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Upward_LW_Radiation.csv
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_SW_Radiation_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Upward_SW_Radiation.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Surface_Wind_Speed.csv
+    Urban_Latent_Heat_Flux:
+      varname: Urban_Latent_Heat_Flux
+      varunit: W m-2
+      prefix: OpenBench_Urban_Latent_Heat_Flux_Hourly_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_hourly_Urban_Latent_Heat_Flux.csv
+OBRefGen_Urban_PLUMBER_daily:
+  name: OBRefGen_Urban_PLUMBER_daily
+  description: Urban-PLUMBER v1 source-QC-qualified data; original time bounds, QC
+    and derived aggregation retained.
+  category: Urban
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Urban/UrbanFlux/daily
+  years:
+  - 2002
+  - 2020
+  variables:
+    Precipitation:
+      varname: Precipitation
+      varunit: mm day-1
+      prefix: OpenBench_Precipitation_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Precipitation.csv
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: W m-2
+      prefix: OpenBench_Sensible_Heat_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Sensible_Heat.csv
+    Snowfall:
+      varname: Snowfall
+      varunit: mm day-1
+      prefix: OpenBench_Snowfall_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Snowfall.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Air_Temperature.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Downward_SW_Radiation.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Pressure.csv
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: kg kg-1
+      prefix: OpenBench_Surface_Specific_Humidity_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Specific_Humidity.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Upward_LW_Radiation.csv
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_SW_Radiation_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Upward_SW_Radiation.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Surface_Wind_Speed.csv
+    Urban_Latent_Heat_Flux:
+      varname: Urban_Latent_Heat_Flux
+      varunit: W m-2
+      prefix: OpenBench_Urban_Latent_Heat_Flux_Daily_full
+      years:
+      - 2002
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_Urban_PLUMBER_daily_Urban_Latent_Heat_Flux.csv
+OBRefGen_SWE_daily:
+  name: OBRefGen_SWE_daily
+  description: Qualified SWE reference; direct measurements and snow-depth-derived
+    estimates remain distinguished.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Snow_Water_Equivalent/Daily
+  years:
+  - 1950
+  - 2022
+  variables:
+    Snow_Water_Equivalent:
+      varname: Snow_Water_Equivalent
+      varunit: mm
+      prefix: OpenBench_Snow_Water_Equivalent_Daily_full
+      years:
+      - 1950
+      - 2022
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_SWE_daily_Snow_Water_Equivalent.csv
+OBRefGen_C3S_2011_hourly:
+  name: OBRefGen_C3S_2011_hourly
+  description: Only 2011 has passed independent value/source/coordinate audit; nearest-hour
+    observations, not hourly means. Remaining years are still being processed.
+  category: Atmospheric
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Meteo/C3S/hourly/2011
+  years:
+  - 2011
+  - 2011
+  variables:
+    Sea_Level_Pressure:
+      varname: Sea_Level_Pressure
+      varunit: Pa
+      prefix: OpenBench_Sea_Level_Pressure_Hourly_full
+      years:
+      - 2011
+      - 2011
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_C3S_2011_hourly_Sea_Level_Pressure.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_Hourly_full
+      years:
+      - 2011
+      - 2011
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_C3S_2011_hourly_Surface_Air_Temperature.csv
+    Surface_Dew_Point_Temperature:
+      varname: Surface_Dew_Point_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Dew_Point_Temperature_Hourly_full
+      years:
+      - 2011
+      - 2011
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_C3S_2011_hourly_Surface_Dew_Point_Temperature.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_Hourly_full
+      years:
+      - 2011
+      - 2011
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_C3S_2011_hourly_Surface_Pressure.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_Hourly_full
+      years:
+      - 2011
+      - 2011
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_C3S_2011_hourly_Surface_Wind_Speed.csv
+OBRefGen_FLUX_hourly:
+  name: OBRefGen_FLUX_hourly
+  description: Accepted hourly/half-hourly tower synthesis; source QC and provenance
+    retained. Daily/monthly reprocessing not included.
+  category: Composite
+  data_type: stn
+  tim_res: Hour
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/hourly
+  years:
+  - 1990
+  - 2025
+  variables:
+    Ecosystem_Respiration:
+      varname: Ecosystem_Respiration
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Ecosystem_Respiration_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Ecosystem_Respiration.csv
+    Gross_Primary_Productivity:
+      varname: Gross_Primary_Productivity
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Gross_Primary_Productivity_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Gross_Primary_Productivity.csv
+    Ground_Heat:
+      varname: Ground_Heat
+      varunit: W m-2
+      prefix: OpenBench_Ground_Heat_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Ground_Heat.csv
+    Latent_Heat:
+      varname: Latent_Heat
+      varunit: W m-2
+      prefix: OpenBench_Latent_Heat_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Latent_Heat.csv
+    Leaf_Area_Index:
+      varname: Leaf_Area_Index
+      varunit: '1'
+      prefix: OpenBench_Leaf_Area_Index_Hourly_full
+      years:
+      - 1991
+      - 2018
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Leaf_Area_Index.csv
+    Net_Ecosystem_Exchange:
+      varname: Net_Ecosystem_Exchange
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Net_Ecosystem_Exchange_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Net_Ecosystem_Exchange.csv
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Net_Radiation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Net_Radiation.csv
+    Precipitation:
+      varname: Precipitation
+      varunit: mm day-1
+      prefix: OpenBench_Precipitation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Precipitation.csv
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: W m-2
+      prefix: OpenBench_Sensible_Heat_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Sensible_Heat.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Air_Temperature.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Downward_SW_Radiation.csv
+    Surface_Friction_Velocity:
+      varname: Surface_Friction_Velocity
+      varunit: m s-1
+      prefix: OpenBench_Surface_Friction_Velocity_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Friction_Velocity.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Pressure.csv
+    Surface_Relative_Humidity:
+      varname: Surface_Relative_Humidity
+      varunit: '%'
+      prefix: OpenBench_Surface_Relative_Humidity_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Relative_Humidity.csv
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      prefix: OpenBench_Surface_Soil_Moisture_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Soil_Moisture.csv
+    Surface_Soil_Temperature:
+      varname: Surface_Soil_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Soil_Temperature_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Soil_Temperature.csv
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: kg kg-1
+      prefix: OpenBench_Surface_Specific_Humidity_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Specific_Humidity.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Upward_LW_Radiation.csv
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_SW_Radiation_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Upward_SW_Radiation.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Surface_Wind_Speed.csv
+    Vapor_Pressure_Deficit:
+      varname: Vapor_Pressure_Deficit
+      varunit: Pa
+      prefix: OpenBench_Vapor_Pressure_Deficit_Hourly_full
+      years:
+      - 1990
+      - 2025
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_hourly_Vapor_Pressure_Deficit.csv
+OBRefGen_FLUX_30min:
+  name: OBRefGen_FLUX_30min
+  description: Accepted hourly/half-hourly tower synthesis; source QC and provenance
+    retained. Daily/monthly reprocessing not included.
+  category: Composite
+  data_type: stn
+  tim_res: 30min
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Composite/OpenBench_FLUX/30min
+  years:
+  - 1990
+  - 2026
+  variables:
+    Ecosystem_Respiration:
+      varname: Ecosystem_Respiration
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Ecosystem_Respiration_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Ecosystem_Respiration.csv
+    Gross_Primary_Productivity:
+      varname: Gross_Primary_Productivity
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Gross_Primary_Productivity_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Gross_Primary_Productivity.csv
+    Ground_Heat:
+      varname: Ground_Heat
+      varunit: W m-2
+      prefix: OpenBench_Ground_Heat_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Ground_Heat.csv
+    Latent_Heat:
+      varname: Latent_Heat
+      varunit: W m-2
+      prefix: OpenBench_Latent_Heat_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Latent_Heat.csv
+    Leaf_Area_Index:
+      varname: Leaf_Area_Index
+      varunit: '1'
+      prefix: OpenBench_Leaf_Area_Index_Native_full
+      years:
+      - 1995
+      - 2019
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Leaf_Area_Index.csv
+    Net_Ecosystem_Exchange:
+      varname: Net_Ecosystem_Exchange
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Net_Ecosystem_Exchange_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Net_Ecosystem_Exchange.csv
+    Net_Radiation:
+      varname: Net_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Net_Radiation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Net_Radiation.csv
+    Precipitation:
+      varname: Precipitation
+      varunit: mm day-1
+      prefix: OpenBench_Precipitation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Precipitation.csv
+    Sensible_Heat:
+      varname: Sensible_Heat
+      varunit: W m-2
+      prefix: OpenBench_Sensible_Heat_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Sensible_Heat.csv
+    Snow_Depth:
+      varname: Snow_Depth
+      varunit: m
+      prefix: OpenBench_Snow_Depth_Native_full
+      years:
+      - 2021
+      - 2023
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Snow_Depth.csv
+    Surface_Air_Temperature:
+      varname: Surface_Air_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Air_Temperature_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Air_Temperature.csv
+    Surface_Downward_LW_Radiation:
+      varname: Surface_Downward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_LW_Radiation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Downward_LW_Radiation.csv
+    Surface_Downward_SW_Radiation:
+      varname: Surface_Downward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Downward_SW_Radiation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Downward_SW_Radiation.csv
+    Surface_Friction_Velocity:
+      varname: Surface_Friction_Velocity
+      varunit: m s-1
+      prefix: OpenBench_Surface_Friction_Velocity_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Friction_Velocity.csv
+    Surface_Pressure:
+      varname: Surface_Pressure
+      varunit: Pa
+      prefix: OpenBench_Surface_Pressure_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Pressure.csv
+    Surface_Relative_Humidity:
+      varname: Surface_Relative_Humidity
+      varunit: '%'
+      prefix: OpenBench_Surface_Relative_Humidity_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Relative_Humidity.csv
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      prefix: OpenBench_Surface_Soil_Moisture_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Soil_Moisture.csv
+    Surface_Soil_Temperature:
+      varname: Surface_Soil_Temperature
+      varunit: K
+      prefix: OpenBench_Surface_Soil_Temperature_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Soil_Temperature.csv
+    Surface_Specific_Humidity:
+      varname: Surface_Specific_Humidity
+      varunit: kg kg-1
+      prefix: OpenBench_Surface_Specific_Humidity_Native_full
+      years:
+      - 1993
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Specific_Humidity.csv
+    Surface_Upward_LW_Radiation:
+      varname: Surface_Upward_LW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_LW_Radiation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Upward_LW_Radiation.csv
+    Surface_Upward_SW_Radiation:
+      varname: Surface_Upward_SW_Radiation
+      varunit: W m-2
+      prefix: OpenBench_Surface_Upward_SW_Radiation_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Upward_SW_Radiation.csv
+    Surface_Wind_Speed:
+      varname: Surface_Wind_Speed
+      varunit: m s-1
+      prefix: OpenBench_Surface_Wind_Speed_Native_full
+      years:
+      - 1990
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Surface_Wind_Speed.csv
+    Vapor_Pressure_Deficit:
+      varname: Vapor_Pressure_Deficit
+      varunit: Pa
+      prefix: OpenBench_Vapor_Pressure_Deficit_Native_full
+      years:
+      - 1993
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Vapor_Pressure_Deficit.csv
+    Wetland_Methane_Emission:
+      varname: Wetland_Methane_Emission
+      varunit: gC m-2 day-1
+      prefix: OpenBench_Wetland_Methane_Emission_Native_full
+      years:
+      - 2012
+      - 2018
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_FLUX_30min_Wetland_Methane_Emission.csv
+OBRefGen_CEMADEN_daily:
+  name: OBRefGen_CEMADEN_daily
+  description: Locked processed daily shallow soil moisture, source-specific depths;
+    no per-value QC companion.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Surface_Soil_Moisture/CEMADEN/daily
+  years:
+  - 2015
+  - 2019
+  variables:
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      prefix: Surface_Soil_Moisture
+      years:
+      - 2015
+      - 2019
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_CEMADEN_daily_Surface_Soil_Moisture.csv
+OBRefGen_ISMN_Root_daily:
+  name: OBRefGen_ISMN_Root_daily
+  description: Locked processed daily ISMN root-zone moisture admitted by 0-1m coverage
+    rules; no per-value QC companion.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Root_Zone_Soil_Moisture/ISMN/daily
+  years:
+  - 1952
+  - 2026
+  variables:
+    Root_Zone_Soil_Moisture:
+      varname: Root_Zone_Soil_Moisture
+      varunit: m3 m-3
+      prefix: Root_Zone_Soil_Moisture
+      years:
+      - 1952
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_ISMN_Root_daily_Root_Zone_Soil_Moisture.csv
+OBRefGen_ISMN_Surface_daily:
+  name: OBRefGen_ISMN_Surface_daily
+  description: Locked processed daily ISMN shallow soil moisture; source-specific
+    depths, no per-value QC companion.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Surface_Soil_Moisture/ISMN/daily
+  years:
+  - 1952
+  - 2026
+  variables:
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      prefix: Surface_Soil_Moisture
+      years:
+      - 1952
+      - 2026
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_ISMN_Surface_daily_Surface_Soil_Moisture.csv
+OBRefGen_SONTE_daily:
+  name: OBRefGen_SONTE_daily
+  description: Locked processed daily SONTE-China shallow soil moisture; no per-value
+    QC companion.
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Water/Surface_Soil_Moisture/SONTE-China/daily
+  years:
+  - 2018
+  - 2020
+  variables:
+    Surface_Soil_Moisture:
+      varname: Surface_Soil_Moisture
+      varunit: m3 m-3
+      prefix: Surface_Soil_Moisture
+      years:
+      - 2018
+      - 2020
+      fulllist: ${OPENBENCH_REF_ROOT}/Station/station_lists/openbench_station_new/OBRefGen_SONTE_daily_Surface_Soil_Moisture.csv

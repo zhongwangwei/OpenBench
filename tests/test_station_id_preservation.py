@@ -1,6 +1,7 @@
 """Station IDs are labels, not numbers, even when every ID contains digits."""
 
 import pandas as pd
+import pytest
 import xarray as xr
 
 
@@ -187,7 +188,8 @@ def test_padded_station_ids_select_integer_station_coordinates(tmp_path):
         assert proc._select_merged_station_data(ds, proc.station_list.iloc[1], "ref")["wse"].item() == 2.0
 
 
-def test_merged_station_selection_recognizes_n_stations_dimension(tmp_path):
+@pytest.mark.parametrize("id_name", ["station_id", "source_station_id"])
+def test_merged_station_selection_recognizes_n_stations_dimension(tmp_path, id_name):
     from openbench.data.processing import StationDatasetProcessing
 
     proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
@@ -195,7 +197,8 @@ def test_merged_station_selection_recognizes_n_stations_dimension(tmp_path):
     dataset = xr.Dataset(
         {"ssc": (("n_stations", "time"), [[1.0], [2.0]])},
         coords={
-            "station_id": ("n_stations", ["amazon-a", "amazon-b"]),
+            id_name: ("n_stations", ["amazon-a", "amazon-b"]),
+            "n_stations": [0, 1],
             "lon": ("n_stations", [-60.0, -61.0]),
             "time": pd.date_range("2001-01-01", periods=1),
         },
@@ -205,6 +208,108 @@ def test_merged_station_selection_recognizes_n_stations_dimension(tmp_path):
 
     assert selected["ssc"].item() == 2.0
     assert "n_stations" not in selected.dims
+
+
+def test_station_id_precedes_source_station_id_during_selection():
+    from openbench.data.processing import StationDatasetProcessing
+
+    proc = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    proc.ref_varname = "temperature"
+    dataset = xr.Dataset(
+        {"temperature": (("station", "time"), [[1.0], [2.0]])},
+        coords={
+            "station": [0, 1],
+            "station_id": ("station", ["source-b", "canonical-b"]),
+            "source_station_id": ("station", ["source-a", "source-b"]),
+            "time": pd.date_range("2001-01-01", periods=1),
+        },
+    )
+
+    selected = proc._select_merged_station_data(dataset, pd.Series({"ID": "source-b"}), "ref")
+
+    assert selected["temperature"].item() == 1.0
+
+
+def test_station_read_decodes_vlen_metadata_only_after_selecting_one_station(tmp_path, monkeypatch):
+    import numpy as np
+    from xarray.coding.variables import ObjectVLenStringCoder
+
+    from openbench.data.processing import StationDatasetProcessing
+
+    path = tmp_path / "stations.nc"
+    xr.Dataset(
+        {
+            "temperature": (("station", "time"), [[1.0, np.nan], [2.0, np.nan]]),
+            "station_metadata": ("station", ["short", "long provenance " * 100], {"long_name": "station metadata"}),
+        },
+        coords={
+            "station": [0, 1],
+            "source_station_id": ("station", ["0001", "0002"]),
+            "time": pd.date_range("2001-01-01", periods=2),
+        },
+    ).to_netcdf(
+        path,
+        encoding={"temperature": {"dtype": "int16", "scale_factor": 0.1, "add_offset": 10, "_FillValue": -9999}},
+    )
+    metadata_sizes = []
+    original_decode = ObjectVLenStringCoder.decode
+
+    def decode_one_station(self, variable, name=None):
+        if variable.attrs.get("long_name") == "station metadata":
+            metadata_sizes.append(variable.size)
+            assert variable.size == 1, "VLEN provenance must be sliced before padding"
+        return original_decode(self, variable, name=name)
+
+    monkeypatch.setattr(ObjectVLenStringCoder, "decode", decode_one_station)
+    processor = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    processor.ref_varname = "temperature"
+    captured = []
+    processor.process_single_station_data = lambda data, *args: data.load()
+    processor.save_station_data = lambda data, *args: captured.append(data.copy(deep=True))
+    stations = pd.DataFrame([{"ID": "0002", "ref_dir": str(path), "use_syear": 2001, "use_eyear": 2001}])
+
+    assert processor._make_stn_parallel(stations, "ref", 0) == {"ok": True, "station": "0002"}
+    assert metadata_sizes == [1]
+    selected = captured[0]
+    assert "station" not in selected.dims
+    assert selected.temperature.values[0] == pytest.approx(2.0)
+    assert np.isnan(selected.temperature.values[1])
+    assert selected.time.values.tolist() == pd.date_range("2001-01-01", periods=2).values.tolist()
+    assert selected.station_metadata.item() == "long provenance " * 100
+
+
+@pytest.mark.parametrize("processing_fails", [False, True])
+def test_station_raw_store_closes_after_processing(tmp_path, monkeypatch, processing_fails):
+    from openbench.data.processing import StationDatasetProcessing
+
+    path = tmp_path / "station.nc"
+    xr.Dataset({"temperature": ("time", [1.0])}, coords={"time": pd.date_range("2001-01-01", periods=1)}).to_netcdf(
+        path
+    )
+    closed = []
+    original_close = xr.backends.NetCDF4DataStore.close
+
+    def track_close(store):
+        original_close(store)
+        closed.append(True)
+
+    def process(data, *args):
+        if processing_fails:
+            raise RuntimeError("processing failed")
+        return data
+
+    monkeypatch.setattr(xr.backends.NetCDF4DataStore, "close", track_close)
+    processor = StationDatasetProcessing.__new__(StationDatasetProcessing)
+    processor.ref_varname = "temperature"
+    processor.process_single_station_data = process
+    processor.save_station_data = lambda *args: None
+    stations = pd.DataFrame([{"ID": "A", "ref_dir": str(path), "use_syear": 2001, "use_eyear": 2001}])
+    if processing_fails:
+        with pytest.raises(RuntimeError, match="processing failed"):
+            processor._make_stn_parallel(stations, "ref", 0)
+    else:
+        assert processor._make_stn_parallel(stations, "ref", 0)["ok"]
+    assert closed
 
 
 def test_station_fulllists_merge_padded_and_unpadded_ids(tmp_path):

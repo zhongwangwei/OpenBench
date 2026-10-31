@@ -1695,6 +1695,9 @@ def scan_reference_directory(
                             )
                         continue
 
+                    if nc_dir is not None and _is_profile_consumed(nc_dir, consumed_dirs):
+                        continue
+
                     # Composite layout: dataset_dir is literally named "dataset"
                     # or "data" — the real dataset name is var_name (one level up).
                     # Detection key is dataset_dir.name (kept for backward compat
@@ -2661,6 +2664,11 @@ def _finalize_descriptor(
             descriptor["fulllist"] = scanned.remote_fulllist
             return
 
+        # Per-variable lists already select the correct merged NetCDF file.
+        variables = descriptor.get("variables", {})
+        if variables and all(mapping.get("fulllist") for mapping in variables.values()):
+            return
+
         existing_fulllist = (existing_descriptor or {}).get("fulllist")
         if existing_fulllist and _fulllist_path_exists(
             existing_fulllist,
@@ -3023,6 +3031,7 @@ def _inspect_nc_file(
                     "station",
                     "station_uid",
                     "station_id",
+                    "source_station_id",
                     "station_name",
                     "site",
                     "site_id",
@@ -3409,7 +3418,7 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
             station_id = None
 
             # 1. Try NC variables (scalar or single-element)
-            for id_var in ("station_id", "site_id", "station_name", "site"):
+            for id_var in ("station_id", "source_station_id", "site_id", "station_name", "site"):
                 if id_var in nc.variables:
                     val = nc.variables[id_var][:]
                     station_id = _decode_station_id_value(val)
@@ -3419,7 +3428,7 @@ def _parse_single_station_file(nc_file: Path) -> list | None:
 
             # 2. Try NC global attributes
             if not station_id:
-                for id_attr in ("station_id", "site_id", "station_code"):
+                for id_attr in ("station_id", "source_station_id", "site_id", "station_code"):
                     if id_attr in nc.ncattrs():
                         station_id = str(nc.getncattr(id_attr)).strip()
                         if station_id:
@@ -3490,7 +3499,8 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
         # Use a with-block so the file handle is released even if any of
         # the per-station unpacking below raises (previously the outer
         # except swallowed the error and leaked the open NC file).
-        with xr.open_dataset(nc_file) as ds:
+        with xr.backends.NetCDF4DataStore.open(nc_file) as store:
+            ds = xr.Dataset.load_store(store)
             from openbench.data.coordinates import LAT_NAMES, LON_NAMES
 
             time_dim = next((dim for dim in ds.dims if dim.lower() in ("time", "t")), None)
@@ -3502,17 +3512,20 @@ def _parse_merged_station_file(nc_file: Path, dataset_dir: Path) -> list:
             n_stations = ds.sizes[stn_dim]
             lat_var = _find_var(ds, LAT_NAMES)
             lon_var = _find_var(ds, LON_NAMES)
+            id_names = ("station_id", "source_station_id", "site_id", "station_name", "site")
+            # List generation needs no VLEN provenance that CF decoding would pad to its longest string.
+            ds = xr.decode_cf(
+                ds[[name for name in (*id_names, lat_var, lon_var, time_dim, stn_dim) if name in ds.variables]]
+            )
             lat_values = _station_coordinate_values(ds, lat_var, stn_dim)
             lon_values = _station_coordinate_values(ds, lon_var, stn_dim)
-            id_values = [
-                (name, ds[name].values) for name in ("station_id", "site_id", "station_name", "site") if name in ds
-            ]
+            id_values = [(name, ds[name].values) for name in id_names if name in ds]
             station_values = ds[stn_dim].values if stn_dim in ds.coords else None
 
             # Time range (case-insensitive dim name)
             syear = ""
             eyear = ""
-            if time_dim and ds.sizes[time_dim] > 0:
+            if time_dim in ds.sizes and ds.sizes[time_dim] > 0:
                 time_vals = ds[time_dim].values
                 try:
                     syear = int(pd.Timestamp(time_vals[0]).year)

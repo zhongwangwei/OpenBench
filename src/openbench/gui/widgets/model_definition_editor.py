@@ -42,6 +42,13 @@ EVALUATION_VARIABLES = [
     "Net_Radiation",
     "Surface_Upward_SW_Radiation",
     "Surface_Upward_LW_Radiation",
+    "Sea_Level_Pressure",
+    "Surface_Air_Temperature",
+    "Surface_Dew_Point_Temperature",
+    "Surface_Friction_Velocity",
+    "Surface_Pressure",
+    "Surface_Wind_Speed",
+    "Vapor_Pressure_Deficit",
     "Gross_Primary_Productivity",
     "Ecosystem_Respiration",
     "Leaf_Area_Index",
@@ -61,6 +68,9 @@ EVALUATION_VARIABLES = [
     "Suspended_Sediment_Concentration",
     "Suspended_Sediment_Load",
     "Water_Table_Depth",
+    "Water_Surface_Elevation",
+    "Lake_Water_Area",
+    "Lake_Water_Level",
     "Terrestrial_Water_Storage_Change",
 ]
 

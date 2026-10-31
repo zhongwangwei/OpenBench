@@ -38,6 +38,7 @@ _MERGED_STATION_DIMS = {
 }
 _MERGED_STATION_ID_VARS = (
     "station_id",
+    "source_station_id",
     "site_id",
     "station_key",
     "station_name",
@@ -389,9 +390,13 @@ class StationProcessingCoreMixin:
             start_year = int(station["use_syear"])
             end_year = int(station["use_eyear"])
             file_path = station["sim_dir"] if datasource == "sim" else station["ref_dir"]
-            with xr.open_dataset(file_path) as stn_data:
-                stn_data = Convert_Type.convert_nc(stn_data)
+            # Select before CF decoding so VLEN metadata is not padded across every station.
+            with xr.backends.NetCDF4DataStore.open(file_path) as store:
+                stn_data = xr.Dataset.load_store(store)
+                # Keep the source path in encoding so error messages still name the file.
+                stn_data.encoding["source"] = str(file_path)
                 stn_data = self._select_merged_station_data(stn_data, station, datasource)
+                stn_data = Convert_Type.convert_nc(xr.decode_cf(stn_data))
                 processed_data = self.process_single_station_data(stn_data, start_year, end_year, datasource)
                 if processed_data is None:
                     raise RuntimeError("Station processing unexpectedly returned None")

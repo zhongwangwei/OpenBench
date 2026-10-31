@@ -2790,7 +2790,8 @@ def test_parse_single_station_file_decodes_char_array_station_id(tmp_path: Path)
     assert row[0] == "US_HRV"
 
 
-def test_parse_single_station_file_decodes_scalar_string_station_id(tmp_path: Path):
+@pytest.mark.parametrize("id_name", ["station_id", "source_station_id"])
+def test_parse_single_station_file_decodes_scalar_string_station_id(tmp_path: Path, id_name):
     """Scalar vlen string station IDs should not fall back to the filename."""
     import netCDF4
 
@@ -2798,7 +2799,7 @@ def test_parse_single_station_file_decodes_scalar_string_station_id(tmp_path: Pa
 
     nc_file = tmp_path / "filename_fallback_2015_2019.nc"
     with netCDF4.Dataset(nc_file, "w") as nc:
-        station = nc.createVariable("station_id", str)
+        station = nc.createVariable(id_name, str)
         station[0] = "US_HRV"
         lat = nc.createVariable("lat", "f4")
         lon = nc.createVariable("lon", "f4")
@@ -2809,6 +2810,106 @@ def test_parse_single_station_file_decodes_scalar_string_station_id(tmp_path: Pa
 
     assert row is not None
     assert row[0] == "US_HRV"
+
+
+@pytest.mark.parametrize("as_attribute", [False, True])
+@pytest.mark.parametrize("with_station_id", [False, True])
+def test_single_station_source_id_and_station_id_priority(tmp_path, as_attribute, with_station_id):
+    import netCDF4
+
+    from openbench.data.registry.scanner import _parse_single_station_file
+
+    path = tmp_path / "fallback.nc"
+    with netCDF4.Dataset(path, "w") as nc:
+        ids = {"source_station_id": "source-a"}
+        if with_station_id:
+            ids["station_id"] = "canonical-a"
+        for name, value in ids.items():
+            if as_attribute:
+                nc.setncattr(name, value)
+            else:
+                nc.createVariable(name, str)[0] = value
+        nc.createVariable("lat", "f4").assignValue(42.0)
+        nc.createVariable("lon", "f4").assignValue(-72.0)
+
+    row = _parse_single_station_file(path)
+
+    assert row[0] == ("canonical-a" if with_station_id else "source-a")
+
+
+@pytest.mark.parametrize("with_station_id", [False, True])
+def test_merged_station_source_id_and_station_id_priority(tmp_path, with_station_id):
+    import pandas as pd
+    import xarray as xr
+
+    from openbench.data.registry.scanner import _parse_merged_station_file, _parse_single_station_file, inspect_nc_file
+
+    path = tmp_path / "merged.nc"
+    dataset = xr.Dataset(
+        {"temperature": (("station", "time"), [[1.0], [2.0]])},
+        coords={
+            "station": [0, 1],
+            "source_station_id": ("station", ["0001", "0002"]),
+            "lat": ("station", [42.0, 43.0]),
+            "lon": ("station", [-72.0, -73.0]),
+            "time": pd.date_range("2001-01-01", periods=1),
+        },
+    )
+    if with_station_id:
+        dataset["station_id"] = ("station", ["canonical-a", "canonical-b"])
+    dataset.to_netcdf(path)
+
+    assert _parse_single_station_file(path) is None
+    rows = _parse_merged_station_file(path, tmp_path)
+
+    assert [row[0] for row in rows] == (["canonical-a", "canonical-b"] if with_station_id else ["0001", "0002"])
+    assert {var["name"] for var in inspect_nc_file(tmp_path)["all_data_vars"]} == {"temperature"}
+
+
+def test_merged_station_scan_decodes_coordinates_without_vlen_provenance(tmp_path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import xarray as xr
+    from xarray.coding.variables import ObjectVLenStringCoder
+
+    from openbench.data.registry.scanner import _parse_merged_station_file
+
+    path = tmp_path / "stations.nc"
+    xr.Dataset(
+        {
+            "temperature": (("station", "time"), [[1.0], [2.0], [3.0]]),
+            "station_metadata": (
+                "station",
+                ["short", "long provenance " * 100, "missing position"],
+                {"long_name": "station metadata"},
+            ),
+        },
+        coords={
+            "station": [0, 1, 2],
+            "source_station_id": ("station", ["0001", "0002", "0003"]),
+            "lat": ("station", [42.0, 43.0, np.nan]),
+            "lon": ("station", [-72.0, -73.0, -74.0]),
+            "time": pd.date_range("2001-01-01", periods=1),
+        },
+    ).to_netcdf(
+        path,
+        encoding={name: {"dtype": "int16", "scale_factor": 0.01, "_FillValue": -9999} for name in ("lat", "lon")},
+    )
+    original_decode = ObjectVLenStringCoder.decode
+    provenance_calls = []
+
+    def reject_provenance(self, variable, name=None):
+        if variable.attrs.get("long_name") == "station metadata":
+            provenance_calls.append(variable)
+            raise AssertionError("Station listing does not need VLEN provenance decoding")
+        return original_decode(self, variable, name=name)
+
+    monkeypatch.setattr(ObjectVLenStringCoder, "decode", reject_provenance)
+
+    rows = _parse_merged_station_file(path, tmp_path)
+
+    assert not provenance_calls
+    assert [row[:5] for row in rows] == [["0001", 2001, 2001, -72.0, 42.0], ["0002", 2001, 2001, -73.0, 43.0]]
 
 
 def test_parse_single_station_file_rejects_vector_lat_lon(tmp_path: Path):
