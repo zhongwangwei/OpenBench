@@ -1163,3 +1163,168 @@ def test_programmatic_simulation_layout_rejects_conflicting_aliases(conflicting_
 
     with pytest.raises(ValueError, match="Conflicting variable alias definitions"):
         adapter_module.simulation_file_layout(entry, profile, "Runoff")
+
+
+def test_only_drawing_restores_fallback_from_real_run_manifest(tmp_path, monkeypatch):
+    import xarray as xr
+
+    from openbench.runner.orchestration import _write_run_manifest
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    xr.Dataset({"RAIN": ("time", [1.0, 2.0])}).to_netcdf(raw / "rain.nc")
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="draw", output_dir=str(tmp_path), years=[2000, 2001], strict_reference=False),
+        evaluation=EvaluationConfig(variables=["Precipitation"]),
+        reference=ReferenceConfig(sources={}),
+        simulation={"ELM": SimulationEntry(model="ELM", root_dir=str(raw))},
+    )
+    bindings = adapter_module.build_runner_bindings(cfg)
+    assert bindings.namelists.simulation["Precipitation"]["ELM_varname"] == "RAIN"
+    output = tmp_path / "draw"
+    output.mkdir()
+    manifest = _write_run_manifest(cfg, bindings, output, [])
+    original = manifest.read_bytes()
+    (raw / "rain.nc").unlink()
+    raw.rmdir()
+    cfg.project.only_drawing = True
+
+    def no_raw_access(*args, **kwargs):
+        pytest.fail("drawing must not inspect raw data")
+
+    monkeypatch.setattr("openbench.data.coordinates.glob_nc", no_raw_access)
+    restored = adapter_module.build_runner_bindings(cfg)
+    assert restored.namelists.simulation["Precipitation"]["ELM_varname"] == "RAIN"
+    _write_run_manifest(cfg, restored, output, [])
+    assert manifest.read_bytes() == original
+
+    from openbench.visualization import only_drawing
+
+    sim = restored.namelists.simulation
+    ref = {
+        "general": {"Precipitation_ref_source": "OBS"},
+        "Precipitation": {"OBS_varname": "obs", "OBS_data_type": "grid"},
+    }
+    directory = output / "comparisons" / "Standard_Deviation"
+    directory.mkdir(parents=True)
+    for suffix in ("sim_ELM_RAIN", "ref_OBS_obs"):
+        xr.Dataset({"Standard_Deviation": ("lat", [1.0])}).to_netcdf(
+            directory / f"Standard_Deviation_Precipitation_{suffix}.nc"
+        )
+    drawn = []
+    monkeypatch.setattr(only_drawing, "make_Standard_Deviation", lambda path, *args: drawn.append(path))
+    only_drawing.ComparisonProcessing_only_drawing._draw_source_statistic(
+        SimpleNamespace(main_nml=restored.namelists.main),
+        "Standard_Deviation",
+        str(output),
+        sim,
+        ref,
+        ["Precipitation"],
+        {},
+    )
+    assert any(path.endswith("_RAIN.nc") for path in drawn)
+
+
+@pytest.mark.parametrize("role,short_role", [("reference", "ref"), ("simulation", "sim")])
+@pytest.mark.parametrize("cache_kind", ["manifest", "data", "Standard_Deviation", "Mann_Kendall_Trend_Test", "mean"])
+def test_restore_drawing_variables_preserves_fallback_units(tmp_path, role, short_role, cache_kind):
+    import json
+
+    main = {"general": {"basedir": str(tmp_path), "basename": "draw"}}
+    section = {
+        "case_varname": "Rainf",
+        "case_varunit": "mm s-1",
+        "case_fallbacks": [{"varname": "RAIN", "varunit": "mm day-1"}],
+    }
+    ref = {"Precipitation": section} if role == "reference" else {}
+    sim = {"Precipitation": section} if role == "simulation" else {}
+    output = tmp_path / "draw"
+    if cache_kind == "manifest":
+        output.mkdir()
+        (output / "run_manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "resolved_runtime": {
+                        "namelists": {role: {"Precipitation": {"case_varname": "RAIN", "case_varunit": "mm day-1"}}}
+                    },
+                }
+            )
+        )
+    else:
+        stem = f"Precipitation_{short_role}_case_RAIN"
+        if cache_kind == "data":
+            path = output / "data" / f"{stem}.nc"
+        elif cache_kind == "mean":
+            path = output / "comparisons" / "mean" / f"{stem}_mean.nc"
+        else:
+            path = output / "comparisons" / cache_kind / f"{cache_kind}_{stem}.nc"
+        path.parent.mkdir(parents=True)
+        path.touch()
+    adapter_module._restore_drawing_variables(main, ref, sim)
+    assert section["case_varname"] == "RAIN"
+    assert section["case_varunit"] == "mm day-1"
+
+
+def test_restore_drawing_variables_rejects_ambiguous_legacy_cache(tmp_path):
+    data = tmp_path / "draw" / "data"
+    data.mkdir(parents=True)
+    for name in ("Rainf", "RAIN"):
+        (data / f"Precipitation_sim_case_{name}.nc").touch()
+    with pytest.raises(ValueError, match="Ambiguous"):
+        adapter_module._restore_drawing_variables(
+            {"general": {"basedir": str(tmp_path), "basename": "draw"}},
+            {},
+            {"Precipitation": {"case_varname": "Rainf", "case_fallbacks": [{"varname": "RAIN"}]}},
+        )
+
+
+@pytest.mark.parametrize(
+    "contents", ["{", '{"schema_version": 9}', '{"schema_version": 1, "resolved_runtime": {"namelists": []}}']
+)
+def test_restore_drawing_variables_rejects_invalid_manifest(tmp_path, contents):
+    output = tmp_path / "draw"
+    output.mkdir()
+    (output / "run_manifest.json").write_text(contents)
+    with pytest.raises(ValueError, match="Cannot restore"):
+        adapter_module._restore_drawing_variables(
+            {"general": {"basedir": str(tmp_path), "basename": "draw"}},
+            {},
+            {},
+        )
+
+
+def test_restore_legacy_fallback_without_unit_keeps_primary_unit(tmp_path):
+    data = tmp_path / "draw" / "data"
+    data.mkdir(parents=True)
+    (data / "Precipitation_sim_case_RAIN.nc").touch()
+    section = {"case_varname": "Rainf", "case_varunit": "mm s-1", "case_fallbacks": [{"varname": "RAIN"}]}
+    adapter_module._restore_drawing_variables(
+        {"general": {"basedir": str(tmp_path), "basename": "draw"}}, {}, {"Precipitation": section}
+    )
+    assert section["case_varunit"] == "mm s-1"
+
+
+@pytest.mark.parametrize(
+    "saved_fields",
+    [
+        {"case_varname": "WRONG", "case_varunit": "mm s-1"},
+        {"case_varname": "RAIN", "case_varunit": "mm s-1", "case_model": "Other"},
+    ],
+)
+def test_restore_drawing_variables_rejects_incompatible_saved_source(tmp_path, saved_fields):
+    import json
+
+    output = tmp_path / "draw"
+    output.mkdir()
+    (output / "run_manifest.json").write_text(
+        json.dumps(
+            {"schema_version": 1, "resolved_runtime": {"namelists": {"simulation": {"Precipitation": saved_fields}}}}
+        )
+    )
+    with pytest.raises(ValueError, match="incompatible|differs"):
+        adapter_module._restore_drawing_variables(
+            {"general": {"basedir": str(tmp_path), "basename": "draw"}},
+            {},
+            {"Precipitation": {"case_varname": "Rainf", "case_model": "ELM", "case_fallbacks": [{"varname": "RAIN"}]}},
+        )

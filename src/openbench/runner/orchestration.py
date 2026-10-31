@@ -112,6 +112,11 @@ def _write_run_manifest(
     """Persist the resolved configuration and the exact evidence behind task hashes."""
     from openbench.util.netcdf import write_file_atomic
 
+    path = output_dir / "run_manifest.json"
+    # Rendering must not replace the provenance of the cached evaluation.
+    if cfg.project.only_drawing and path.exists():
+        return path
+
     namelists = getattr(bindings, "namelists", None)
     if namelists is None:
         namelists = {
@@ -141,7 +146,6 @@ def _write_run_manifest(
             for task in tasks
         ],
     }
-    path = output_dir / "run_manifest.json"
 
     def _write(temp_path: Path) -> None:
         with temp_path.open("w", encoding="utf-8") as handle:

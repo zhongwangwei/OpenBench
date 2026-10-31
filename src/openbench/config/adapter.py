@@ -1073,6 +1073,97 @@ def build_fig_nml() -> dict[str, Any]:
     return fig_nml
 
 
+def _restore_drawing_variables(main_nl: dict, ref_nml: dict, sim_nml: dict) -> None:
+    """Reuse resolved names without consulting raw inputs in drawing-only mode."""
+    from pathlib import Path
+
+    general = main_nl["general"]
+    output = Path(general["basedir"]) / general["basename"]
+    manifest_path = output / "run_manifest.json"
+    saved = {}
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest["schema_version"] != 1:
+                raise ValueError("unsupported schema version")
+            saved = manifest["resolved_runtime"]["namelists"]
+            if not isinstance(saved, dict) or any(
+                not isinstance(sections, dict) or any(not isinstance(section, dict) for section in sections.values())
+                for sections in saved.values()
+            ):
+                raise ValueError("namelists must contain source-section objects")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"Cannot restore drawing variables from {manifest_path}: {exc}") from exc
+
+    for role, nml in (("reference", ref_nml), ("simulation", sim_nml)):
+        short_role = "ref" if role == "reference" else "sim"
+        for item, section in nml.items():
+            if item == "general":
+                continue
+            for key in list(section):
+                if not key.endswith("_varname"):
+                    continue
+                source = key.removesuffix("_varname")
+                primary = section[key]
+                fallbacks = section.get(f"{source}_fallbacks", [])
+                candidates = [primary, *(fb["varname"] for fb in fallbacks)]
+                previous = saved.get(role, {}).get(item, {})
+                actual = previous.get(key)
+                if actual is not None:
+                    for field in ("model", "data_type", "syear", "eyear"):
+                        field_key = f"{source}_{field}"
+                        if field_key in previous and section.get(field_key) != previous[field_key]:
+                            raise ValueError(
+                                f"Saved {field} for {item}/{source} differs from the current configuration"
+                            )
+                    if not isinstance(actual, str) or actual.casefold() not in {n.casefold() for n in candidates}:
+                        raise ValueError(
+                            f"Saved variable for {item}/{source} is incompatible with the current mapping: {actual!r}"
+                        )
+                    for field in ("varname", "varunit", "convert"):
+                        field_key = f"{source}_{field}"
+                        section.pop(field_key, None)
+                        if field_key in previous:
+                            section[field_key] = previous[field_key]
+                    continue
+
+                if not fallbacks:
+                    continue
+                # Old runs may lack a manifest; accept only unambiguous, task-local cache names.
+                matches = []
+                for name in candidates:
+                    stem = f"{item}_{short_role}_{source}_{name}"
+                    stems = [stem]
+                    if role == "reference":
+                        stems.extend(
+                            f"{item}_ref_{source}_sim_{sim_key.removesuffix('_varname')}_{name}"
+                            for sim_key in sim_nml.get(item, {})
+                            if sim_key.endswith("_varname")
+                        )
+                    paths = [output / "data" / f"{value}.nc" for value in stems]
+                    for method in ("Standard_Deviation", "Mann_Kendall_Trend_Test"):
+                        paths.extend(output / "comparisons" / method / f"{method}_{value}.nc" for value in stems)
+                    for method in ("mean", "min", "max", "sum", "median"):
+                        paths.extend(output / "comparisons" / method / f"{value}_{method}.nc" for value in stems)
+                    if any(path.is_file() for path in paths):
+                        matches.append(name)
+                if len(matches) > 1:
+                    raise ValueError(f"Ambiguous cached variables for {item}/{source}: {matches}")
+                if matches:
+                    section[key] = matches[0]
+                    for fb in fallbacks:
+                        if fb["varname"] == matches[0]:
+                            section[f"{source}_varunit"] = (
+                                section.get(f"{source}_varunit", "")
+                                if fb.get("convert")
+                                else (fb.get("varunit") or section.get(f"{source}_varunit", ""))
+                            )
+                            section.pop(f"{source}_convert", None)
+                            if fb.get("convert"):
+                                section[f"{source}_convert"] = fb["convert"]
+                            break
+
+
 def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
     """Build legacy ref_nml, sim_nml, and main_nl from new config.
 
@@ -1359,5 +1450,8 @@ def build_legacy_namelists(cfg: OpenBenchConfig) -> tuple[dict, dict, dict]:
         sim_sections[var_name] = var_section
 
     sim_nml = {"general": sim_general, **sim_sections}
+
+    if cfg.project.only_drawing:
+        _restore_drawing_variables(main_nl, ref_nml, sim_nml)
 
     return main_nl, ref_nml, sim_nml
