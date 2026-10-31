@@ -866,7 +866,7 @@ def test_install_path_probe_requires_exit_zero_and_exact_sentinel(qapp, monkeypa
     assert len(FakeWorker.created) == 1
     assert (
         FakeWorker.created[0].command
-        == "mkdir -p /remote && git clone --progress git@github.com:zhongwangwei/OpenBench.git "
+        == "mkdir -p /remote && git clone --progress git@github.com:CoLM-SYSU/OpenBench.git "
         "/remote/OpenBench 2>&1"
     )
     assert all(".git" not in command for command, _timeout in widget._ssh_manager.execute_calls)
@@ -943,7 +943,7 @@ def test_existing_empty_directory_can_be_install_target(qapp, monkeypatch):
 
     assert len(FakeWorker.created) == 1
     assert FakeWorker.created[0].command.endswith(
-        "git clone --progress git@github.com:zhongwangwei/OpenBench.git /remote/OpenBench 2>&1"
+        "git clone --progress git@github.com:CoLM-SYSU/OpenBench.git /remote/OpenBench 2>&1"
     )
 
 

@@ -2196,7 +2196,7 @@ if spec is not None:
             source_dialog.setWindowTitle("Select Protocol")
             source_layout = QVBoxLayout(source_dialog)
 
-            source_layout.addWidget(QLabel("Source: GitHub (github.com/zhongwangwei/OpenBench)"))
+            source_layout.addWidget(QLabel("Source: GitHub (github.com/CoLM-SYSU/OpenBench)"))
             source_layout.addWidget(QLabel("\nChoose protocol:"))
 
             protocol_group = QButtonGroup(source_dialog)
@@ -2222,9 +2222,9 @@ if spec is not None:
                 return
 
             if radio_ssh.isChecked():
-                repo_url = "git@github.com:zhongwangwei/OpenBench.git"
+                repo_url = "git@github.com:CoLM-SYSU/OpenBench.git"
             else:
-                repo_url = "https://github.com/zhongwangwei/OpenBench.git"
+                repo_url = "https://github.com/CoLM-SYSU/OpenBench.git"
         else:
             repo_url = None  # Not needed for update
 

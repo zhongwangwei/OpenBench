@@ -60,7 +60,7 @@ test:
 
 about:
   home: https://github.com/CoLM-SYSU/OpenBench
-  dev_url: https://github.com/zhongwangwei/OpenBench
+  dev_url: https://github.com/CoLM-SYSU/OpenBench
   license: MIT AND GPL-3.0-only AND LicenseRef-NCL-6.3.0
   license_file:
     - LICENSE

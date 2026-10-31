@@ -718,13 +718,13 @@ class PageRuntime(BasePage):
                 return
 
         # Protocol selection dialog (consistent with remote mode)
-        repo_url = "https://github.com/zhongwangwei/OpenBench.git"
+        repo_url = "https://github.com/CoLM-SYSU/OpenBench.git"
         if not is_update:
             source_dialog = QDialog(self)
             source_dialog.setWindowTitle("Select Protocol")
             source_layout = QVBoxLayout(source_dialog)
 
-            source_layout.addWidget(QLabel("Source: GitHub (github.com/zhongwangwei/OpenBench)"))
+            source_layout.addWidget(QLabel("Source: GitHub (github.com/CoLM-SYSU/OpenBench)"))
             source_layout.addWidget(QLabel("\nChoose protocol:"))
 
             protocol_group = QButtonGroup(source_dialog)
@@ -750,7 +750,7 @@ class PageRuntime(BasePage):
                 return
 
             if radio_ssh.isChecked():
-                repo_url = "git@github.com:zhongwangwei/OpenBench.git"
+                repo_url = "git@github.com:CoLM-SYSU/OpenBench.git"
 
         # Build the git + editable install commands up front so failures
         # surface before the dialog. Success is reported only after both pass.
