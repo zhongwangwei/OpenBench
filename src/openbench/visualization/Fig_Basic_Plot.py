@@ -740,6 +740,11 @@ def make_plot_index_stn(self):
                         option["vmax"] = 100
                     if option["vmin"] < -100:
                         option["vmin"] = -100
+                    if option["vmin"] >= option["vmax"]:
+                        if vmin >= 100:
+                            option["vmin"], option["vmax"] = 0, 100
+                        elif vmax <= -100:
+                            option["vmin"], option["vmax"] = -100, 0
                 elif metric in [
                     "NSE",
                     "KGE",
