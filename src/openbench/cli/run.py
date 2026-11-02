@@ -90,9 +90,9 @@ def run(config, dry_run, cores, variables, remote, dump_config, comparison_only,
             "--resume conflicts with --force/project.force because force rebuilds evaluation inputs"
         )
 
-    _run_static_preflight(cfg)
-
     output_only = comparison_only or cfg.project.only_drawing
+    _run_static_preflight(cfg, check_metric_applicability=not output_only)
+
     if not output_only:
         sim_errors = simulation_root_errors(cfg)
         if sim_errors:
@@ -312,12 +312,18 @@ def _expand_config_paths(cfg):
                 inline["fulllist"] = _expand_path_value(inline["fulllist"])
 
 
-def _run_static_preflight(cfg):
+def _run_static_preflight(cfg, *, check_metric_applicability=True):
     """Run non-data-mutating checks shared with openbench check."""
     from openbench.cli.check import _config_findings, _groupby_static_dataset_findings
 
     errors, _warnings = _config_findings(cfg)
     errors.extend(_groupby_static_dataset_findings(cfg))
+    if check_metric_applicability:
+        from openbench.cli._metric_guidance import effective_metric_tim_res, metric_score_errors
+        from openbench.data.registry.manager import get_registry
+
+        registry = get_registry()
+        errors.extend(metric_score_errors(cfg, effective_metric_tim_res(cfg, registry)))
     if errors:
         details = "\n  ".join(errors)
         raise click.ClickException(f"Config error:\n  {details}")

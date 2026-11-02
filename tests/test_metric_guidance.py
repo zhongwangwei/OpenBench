@@ -1,11 +1,10 @@
-"""Configuration-only metric/score advisory tests (no NetCDF required)."""
+"""Configuration-only metric/score preflight tests (no NetCDF required)."""
 
 from types import SimpleNamespace
 
 import pytest
 
-from openbench.cli._metric_guidance import METRIC_LIMITS, SCORE_LIMITS, metric_score_findings
-from openbench.core.registry import IMPLEMENTED_METRICS, IMPLEMENTED_SCORES
+from openbench.cli._metric_guidance import metric_score_errors
 
 
 def _cfg(years=(2001, 2001), *, tim_res="Day", metrics=None, scores=None):
@@ -16,76 +15,80 @@ def _cfg(years=(2001, 2001), *, tim_res="Day", metrics=None, scores=None):
     )
 
 
-def test_guidance_covers_every_selectable_metric_and_score():
-    assert set(METRIC_LIMITS) == IMPLEMENTED_METRICS
-    assert set(SCORE_LIMITS) == IMPLEMENTED_SCORES
-    assert all(METRIC_LIMITS.values()) and all(SCORE_LIMITS.values())
-
-
-def test_single_year_iav_warns_without_blocking_normal_metrics():
-    warnings, notes = metric_score_findings(
-        _cfg(metrics=["bias", "RMSE"], scores=["nIavScore", "Overall_Score"])
+def test_single_year_iav_is_an_error_but_overall_score_can_reweight():
+    errors = metric_score_errors(
+        _cfg(metrics=["bias", "RMSE"], scores=["nIavScore", "Overall_Score"]), "Month"
     )
-    assert any("nIavScore:" in message and "only one year" in message for message in warnings)
-    assert any("Overall_Score:" in message and "IAV" in message for message in warnings)
-    assert any("bias:" in note for note in notes)
-    assert any("RMSE:" in note for note in notes)
-    assert not any("bias:" in message or "RMSE:" in message for message in warnings)
-    assert any("raw daily samples" in message for message in warnings)
+
+    assert len(errors) == 1
+    assert "nIavScore cannot be calculated" in errors[0]
+    assert "project.years [2001, 2001]" in errors[0]
+    assert not any("Overall_Score" in message for message in errors)
 
 
-def test_one_year_monthly_phase_is_not_rejected():
-    warnings, notes = metric_score_findings(
-        _cfg(tim_res="Month", metrics=[], scores=["nPhaseScore", "nSeasonalityScore"])
+def test_single_year_overall_score_alone_is_allowed():
+    errors = metric_score_errors(_cfg(metrics=[], scores=["Overall_Score"]), "Month")
+
+    assert errors == []
+
+
+def test_one_year_monthly_phase_and_seasonality_are_allowed():
+    errors = metric_score_errors(
+        _cfg(metrics=[], scores=["nPhaseScore", "nSeasonalityScore"]), "Month"
     )
-    assert warnings == []
-    assert any("12 calendar months" in note for note in notes)
+
+    assert errors == []
 
 
-def test_yearly_resolution_flags_seasonality_and_single_sample_temporal_metrics():
-    warnings, _ = metric_score_findings(
-        _cfg(tim_res="Year", metrics=["correlation", "bias"], scores=["nPhaseScore"])
+def test_yearly_resolution_rejects_seasonality_and_single_sample_metrics():
+    errors = metric_score_errors(
+        _cfg(tim_res="Year", metrics=["correlation", "bias"], scores=["nPhaseScore"]), "Year"
     )
-    assert any("nPhaseScore:" in text and "12-month" in text for text in warnings)
-    assert any("correlation:" in text and "single Year-resolution" in text for text in warnings)
-    assert not any("bias:" in text for text in warnings)
+
+    assert any("nPhaseScore cannot be calculated" in text and "12-month" in text for text in errors)
+    assert any("correlation cannot be calculated" in text and "one temporal sample" in text for text in errors)
+    assert not any("bias" in text for text in errors)
 
 
 def test_climatology_uses_existing_compatibility_rules():
-    warnings, _ = metric_score_findings(
-        _cfg(years=(2001, 2005), tim_res="climatology-year",
-             metrics=["bias", "correlation", "APFB"], scores=["nIavScore", "Overall_Score"])
+    errors = metric_score_errors(
+        _cfg(
+            years=(2001, 2005),
+            tim_res="climatology-year",
+            metrics=["bias", "correlation", "APFB"],
+            scores=["nIavScore", "Overall_Score"],
+        ),
+        "climatology-year",
     )
+
     for name in ["correlation", "APFB", "nIavScore", "Overall_Score"]:
-        assert any(f"{name}: climatology-year is unsupported" in text for text in warnings)
-    assert not any("bias:" in text for text in warnings)
+        assert any(f"{name} cannot be calculated" in text for text in errors)
+    assert not any(text.startswith("bias ") for text in errors)
 
 
-def test_climatology_month_overall_notes_missing_iav_component():
-    warnings, _ = metric_score_findings(
-        _cfg(years=(2001, 2005), tim_res="climatology-month",
-             metrics=[], scores=["Overall_Score"])
+def test_monthly_climatology_allows_reweighted_overall_score():
+    errors = metric_score_errors(
+        _cfg(years=(2001, 2005), metrics=[], scores=["Overall_Score"]), "climatology-month"
     )
-    assert any("one representative annual cycle" in text for text in warnings)
+
+    assert errors == []
 
 
 def test_explicit_empty_selections_do_not_enable_defaults():
-    warnings, notes = metric_score_findings(_cfg(metrics=[], scores=[]))
-    assert warnings == []
-    assert not any(note.startswith("bias:") or note.startswith("Overall_Score:") for note in notes)
+    assert metric_score_errors(_cfg(metrics=[], scores=[]), "Year") == []
 
 
-def test_omitted_selections_use_runtime_defaults_and_unknown_names_are_ignored():
-    _, notes = metric_score_findings(_cfg(tim_res=None))
-    assert any(note.startswith("bias:") for note in notes)
-    assert any(note.startswith("Overall_Score:") for note in notes)
-    _, notes = metric_score_findings(_cfg(metrics=["not-a-metric"], scores=[]))
-    assert not any(note.startswith("not-a-metric:") for note in notes)
+def test_omitted_selections_keep_runtime_defaults():
+    errors = metric_score_errors(_cfg(metrics=None, scores=None), "Year")
+
+    assert any(message.startswith("correlation cannot be calculated") for message in errors)
+    assert not any("Overall_Score" in message for message in errors)
 
 
 @pytest.mark.parametrize("year_range", [(2001, 2002), (2001, 2005)])
-def test_multi_year_iav_guidance_is_not_a_one_year_error(year_range):
-    warnings, _ = metric_score_findings(
-        _cfg(years=year_range, tim_res="Month", metrics=[], scores=["nIavScore"])
+def test_multi_year_iav_has_no_static_error(year_range):
+    errors = metric_score_errors(
+        _cfg(years=year_range, tim_res="Month", metrics=[], scores=["nIavScore"]), "Month"
     )
-    assert not any("only one year" in text for text in warnings)
+
+    assert errors == []
