@@ -1278,6 +1278,19 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
     if cfg.scores is not None:
         click.secho(f"Scores: {_format_optional_list(cfg.scores)}", bold=True)
 
+    # Report applicability before the evaluation starts. These static notes
+    # never turn a valid configuration into a failure: actual paired sample
+    # counts and denominators can only be checked after data alignment.
+    if not (comparison_only or cfg.project.only_drawing):
+        from openbench.cli._metric_guidance import metric_score_findings
+
+        applicability_warnings, applicability_notes = metric_score_findings(cfg)
+        click.secho("\nMetric/score applicability (configuration-only):", bold=True)
+        for message in applicability_warnings:
+            click.secho(f"  ⚠ {message}", fg="yellow")
+        for message in applicability_notes:
+            click.secho(f"  ~ {message}", fg="cyan")
+
     click.secho("\nOptions:", bold=True)
     click.secho(f"  Time alignment: {cfg.project.time_alignment}")
     click.secho(f"  Unified mask: {cfg.project.unified_mask}")
