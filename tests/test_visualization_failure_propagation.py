@@ -789,9 +789,7 @@ def test_basic_station_map_renderer_skips_empty_filtered_data(tmp_path, monkeypa
     ("values", "expected_limits"),
     [([103.86721, 134.2578], (0, 100)), ([-134.2578, -103.86721], (-100, 0))],
 )
-def test_basic_station_bias_above_plot_caps_keeps_valid_color_scale(
-    tmp_path, monkeypatch, values, expected_limits
-):
+def test_basic_station_bias_above_plot_caps_keeps_valid_color_scale(tmp_path, monkeypatch, values, expected_limits):
     import openbench.visualization.Fig_Basic_Plot as fig_basic
 
     case_dir = tmp_path / "case"
