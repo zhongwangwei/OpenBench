@@ -311,22 +311,40 @@ def _expand_config_paths(cfg):
             if isinstance(inline, dict) and inline.get("fulllist"):
                 inline["fulllist"] = _expand_path_value(inline["fulllist"])
 
-
 def _run_static_preflight(cfg, *, check_metric_applicability=True):
     """Run non-data-mutating checks shared with openbench check."""
-    from openbench.cli.check import _config_findings, _groupby_static_dataset_findings
+    from openbench.cli.check import (
+        _config_findings,
+        _groupby_static_dataset_findings,
+    )
 
     errors, _warnings = _config_findings(cfg)
     errors.extend(_groupby_static_dataset_findings(cfg))
+
     if check_metric_applicability:
-        from openbench.cli._metric_guidance import effective_metric_tim_res, metric_score_errors
+        from openbench.cli._metric_guidance import (
+            effective_metric_tim_res,
+            metric_score_errors,
+        )
+        from openbench.config import ConfigError
         from openbench.data.registry.manager import get_registry
 
         registry = get_registry()
-        errors.extend(metric_score_errors(cfg, effective_metric_tim_res(cfg, registry)))
+
+        try:
+            effective_tim_res = effective_metric_tim_res(cfg, registry)
+        except ConfigError:
+            # Defer resolution ambiguity to the existing
+            # reference resolver, which provides actionable guidance.
+            effective_tim_res = None
+
+        if effective_tim_res is not None:
+            errors.extend(metric_score_errors(cfg, effective_tim_res))
+
     if errors:
         details = "\n  ".join(errors)
         raise click.ClickException(f"Config error:\n  {details}")
+
 
 
 def _run_model_preflight(cfg):
