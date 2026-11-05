@@ -1278,6 +1278,19 @@ def check(config, comparison_only=False, strict_reference=False, variables=()):
     if cfg.scores is not None:
         click.secho(f"Scores: {_format_optional_list(cfg.scores)}", bold=True)
 
+    # Fail before evaluation when the configuration alone proves that a
+    # requested metric or score cannot be calculated. Data-dependent
+    # requirements remain runtime checks.
+    if not (comparison_only or cfg.project.only_drawing):
+        from openbench.cli._metric_guidance import effective_metric_tim_res, metric_score_errors
+
+        applicability_errors = metric_score_errors(cfg, effective_metric_tim_res(cfg, mgr))
+        if applicability_errors:
+            click.secho("\nMetric/score applicability errors:", bold=True)
+            for message in applicability_errors:
+                click.secho(f"  ✗ {message}", fg="red")
+            has_errors = True
+
     click.secho("\nOptions:", bold=True)
     click.secho(f"  Time alignment: {cfg.project.time_alignment}")
     click.secho(f"  Unified mask: {cfg.project.unified_mask}")

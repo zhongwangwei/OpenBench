@@ -5935,7 +5935,12 @@ def test_run_comparison_only_skips_missing_simulation_root_preflight(tmp_path, m
     config_path.write_text(
         yaml.dump(
             {
-                "project": {"name": "compare_only", "output_dir": str(tmp_path), "years": [2004, 2005]},
+                "project": {
+                    "name": "compare_only",
+                    "output_dir": str(tmp_path),
+                    "years": [2004, 2004],
+                    "tim_res": "Month",
+                },
                 "evaluation": {"variables": ["Latent_Heat"]},
                 "reference": {"Latent_Heat": "FLUXCOM_LowRes"},
                 "simulation": {
@@ -5945,6 +5950,7 @@ def test_run_comparison_only_skips_missing_simulation_root_preflight(tmp_path, m
                         "variables": {"Latent_Heat": {"varname": "Latent_Heat"}},
                     }
                 },
+                "scores": ["nIavScore"],
                 "comparison": {"enabled": True, "items": ["HeatMap"]},
             }
         )
@@ -5964,6 +5970,7 @@ def test_run_comparison_only_skips_missing_simulation_root_preflight(tmp_path, m
 
     assert result.exit_code == 0, result.output
     assert "Simulation root does not exist" not in result.output
+    assert "nIavScore cannot be calculated" not in result.output
 
 
 def test_run_remote_fails_before_local_preflight_or_dump_config(tmp_path):
@@ -6213,7 +6220,8 @@ def test_run_dry_run_only_drawing_checks_existing_outputs(tmp_path):
                 "project": {
                     "name": "only_drawing_missing_outputs",
                     "output_dir": str(tmp_path),
-                    "years": [2004, 2005],
+                    "years": [2004, 2004],
+                    "tim_res": "Month",
                     "only_drawing": True,
                 },
                 "evaluation": {"variables": ["Latent_Heat"]},
@@ -6226,7 +6234,7 @@ def test_run_dry_run_only_drawing_checks_existing_outputs(tmp_path):
                     }
                 },
                 "metrics": ["bias"],
-                "scores": ["Overall_Score"],
+                "scores": ["nIavScore"],
                 "comparison": {"enabled": False},
             }
         )
@@ -6281,6 +6289,7 @@ def test_run_only_drawing_skips_missing_simulation_root_preflight(tmp_path, monk
 
     assert result.exit_code == 0, result.output
     assert "Simulation root does not exist" not in result.output
+    assert "nIavScore cannot be calculated" not in result.output
 
 
 def test_run_expands_env_paths_before_runner(tmp_path, monkeypatch):

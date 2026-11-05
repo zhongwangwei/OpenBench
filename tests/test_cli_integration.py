@@ -60,12 +60,115 @@ def test_check_invalid_config():
     assert result.exit_code == 1
 
 
+def test_check_blocks_statically_unavailable_score(tmp_path):
+    config = _minimal_config_with_data(tmp_path)
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["project"]["years"] = [2004, 2004]
+    data["project"]["tim_res"] = "Month"
+    data["metrics"] = []
+    data["scores"] = ["nIavScore", "Overall_Score"]
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = runner.invoke(cli, ["check", str(config)])
+
+    assert result.exit_code == 1
+    assert "Metric/score applicability errors:" in result.output
+    assert "nIavScore cannot be calculated" in result.output
+    assert "Overall_Score cannot be calculated" not in result.output
+    assert "Config has errors" in result.output
+    assert "\n✓ Config valid (" not in result.output
+    assert "Requires finite aligned pairs" not in result.output
+
+
+def test_check_allows_single_year_reweighted_overall_score(tmp_path):
+    config = _minimal_config_with_data(tmp_path)
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["project"]["years"] = [2004, 2004]
+    data["project"]["tim_res"] = "Month"
+    data["metrics"] = []
+    data["scores"] = ["Overall_Score"]
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = runner.invoke(cli, ["check", str(config)])
+
+    assert result.exit_code == 0, result.output
+    assert "Metric/score applicability" not in result.output
+    assert "Config valid" in result.output
+
+
+@pytest.mark.parametrize(
+    ("years", "tim_res", "metrics", "scores", "expected_errors", "unexpected_errors"),
+    [
+        ([2004, 2004], "Month", [], ["nPhaseScore", "nSeasonalityScore"], [], []),
+        ([2004, 2004], "Year", ["bias", "correlation"], [], ["correlation"], ["bias"]),
+        (
+            [2004, 2005],
+            "Year",
+            [],
+            ["nPhaseScore", "nSeasonalityScore"],
+            ["nPhaseScore", "nSeasonalityScore"],
+            [],
+        ),
+        ([2004, 2005], "climatology-year", ["bias", "correlation"], [], ["correlation"], ["bias"]),
+        ([2004, 2005], "Month", [], ["nIavScore"], [], []),
+    ],
+)
+def test_check_metric_score_applicability_matrix(
+    tmp_path, years, tim_res, metrics, scores, expected_errors, unexpected_errors
+):
+    config = _minimal_config_with_data(tmp_path)
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["project"]["years"] = years
+    data["project"]["tim_res"] = tim_res
+    data["metrics"] = metrics
+    data["scores"] = scores
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+
+    result = runner.invoke(cli, ["check", str(config)])
+
+    if expected_errors:
+        assert result.exit_code == 1
+        assert "Metric/score applicability errors:" in result.output
+        for name in expected_errors:
+            assert f"{name} cannot be calculated" in result.output
+        for name in unexpected_errors:
+            assert f"{name} cannot be calculated" not in result.output
+    else:
+        assert result.exit_code == 0, result.output
+        assert "Metric/score applicability" not in result.output
+
+
 def test_run_dry_run(tmp_path):
     config = _minimal_config_with_data(tmp_path)
     result = runner.invoke(cli, ["run", str(config), "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "Dry run" in result.output
     assert "test-minimal" in result.output
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_run_blocks_statically_unavailable_score_before_evaluation(tmp_path, monkeypatch, dry_run):
+    import openbench.runner.local as local_runner
+
+    config = _fixture_with_existing_sim_roots(tmp_path, "minimal.yaml")
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["project"]["years"] = [2004, 2004]
+    data["project"]["tim_res"] = "Month"
+    data["metrics"] = []
+    data["scores"] = ["nIavScore"]
+    config.write_text(yaml.safe_dump(data, sort_keys=False))
+    called = []
+    monkeypatch.setattr(local_runner, "run_evaluation", lambda *args, **kwargs: called.append(True))
+
+    args = ["run", str(config)]
+    if dry_run:
+        args.insert(1, "--dry-run")
+    result = runner.invoke(cli, args)
+
+    assert result.exit_code == 1
+    assert "nIavScore cannot be calculated" in result.output
+    assert "config valid" not in result.output.lower()
+    assert called == []
 
 
 def test_run_dry_run_fails_on_missing_data_files_like_check(tmp_path):
