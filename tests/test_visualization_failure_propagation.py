@@ -785,6 +785,48 @@ def test_basic_station_map_renderer_skips_empty_filtered_data(tmp_path, monkeypa
     fig_basic.make_plot_index_stn(renderer)
 
 
+@pytest.mark.parametrize(
+    ("values", "expected_limits"),
+    [([103.86721, 134.2578], (0, 100)), ([-134.2578, -103.86721], (-100, 0))],
+)
+def test_basic_station_bias_above_plot_caps_keeps_valid_color_scale(tmp_path, monkeypatch, values, expected_limits):
+    import openbench.visualization.Fig_Basic_Plot as fig_basic
+
+    case_dir = tmp_path / "case"
+    metrics_dir = case_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "ID": ["S1", "S2"],
+            "ref_lon": [104.45, 102.35],
+            "ref_lat": [15.85, 17.55],
+            "bias": values,
+        }
+    ).to_csv(metrics_dir / "Runoff_stn_RefA_SimA_evaluations.csv", index=False)
+
+    renderer = SimpleNamespace(
+        casedir=str(case_dir),
+        item="Runoff",
+        ref_source="RefA",
+        sim_source="SimA",
+        ref_varunit="mm",
+        sim_varunit="mm",
+        metrics=["bias"],
+        scores=[],
+        fig_nml={
+            "make_geo_plot_index": {"extend": "both"},
+            "make_stn_plot_index": {"cmap": "viridis", "vmin_max_on": False},
+        },
+    )
+    plotted_options = []
+    monkeypatch.setattr(fig_basic, "plot_stn_map", lambda *args: plotted_options.append(args[-1]))
+
+    fig_basic.make_plot_index_stn(renderer)
+
+    assert len(plotted_options) == 1
+    assert (plotted_options[0]["vmin"], plotted_options[0]["vmax"]) == expected_limits
+
+
 def test_basic_grid_renderer_rejects_all_nan_netcdf(tmp_path):
     """Basic grid renderer should reject all-NaN NC inputs before creating a misleading map."""
     import xarray as xr
