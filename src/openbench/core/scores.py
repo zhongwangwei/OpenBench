@@ -252,11 +252,15 @@ class scores:
         # (for example IAV in cells with no interannual variability). Normalize
         # by the available weighted components per cell rather than decrementing
         # a single global denominator only when an entire component is NaN.
+        return self._overall_score_details(s, o)[0]
+
+    def _overall_score_details(self, s, o):
+        """Return the unchanged score and its already-calculated components."""
         weighted_components = self._overall_nonspatial_components(s, o)
         has_nonspatial = sum(np.isfinite(score).astype(int) for score, _ in weighted_components) > 0
         weighted_components.append((self.nSpatialScore(s, o), 1.0))
         result, _, _ = self._weighted_score_components(weighted_components)
-        return result.where(has_nonspatial)
+        return result.where(has_nonspatial), weighted_components
 
     def nSeasonalityScore(self, s, o):
         """

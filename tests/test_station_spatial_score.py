@@ -69,6 +69,10 @@ def test_station_spatial_score_is_one_network_value_and_updates_overall(tmp_path
     expected_spatial = float(scores._spatial_score_from_means(sim_means, ref_means, dim="station"))
     np.testing.assert_allclose(frame["nSpatialScore"], expected_spatial)
     assert frame["nSpatialScore"].nunique() == 1
+    diagnostic = pd.read_csv(next((tmp_path / "diagnostics").rglob("component_validity.csv")))
+    assert diagnostic["nSpatialScore_valid_mask"].eq(1).all()
+    # Existing station output is converted to float32; diagnostics retain float64.
+    np.testing.assert_allclose(diagnostic["Overall_Score"], frame["Overall_Score"], rtol=1e-7)
 
     for row_index, station_id in enumerate(values):
         worker_row = evaluator.make_evaluation_parallel(
