@@ -875,6 +875,7 @@ class Evaluation_stn(metrics, scores):
             )
             score_names = getattr(self, "scores", []) or []
             uses_station_network = "nSpatialScore" in score_names or "Overall_Score" in score_names
+            overall_without_temporal_support = False
             internal_columns = [
                 "_station_sim_mean",
                 "_station_ref_mean",
@@ -917,6 +918,8 @@ class Evaluation_stn(metrics, scores):
                     denominator = pd.to_numeric(
                         station_list["_overall_nonspatial_denominator"], errors="coerce"
                     ).to_numpy(dtype=float)
+                    has_nonspatial = np.isfinite(denominator) & (denominator > 0)
+                    overall_without_temporal_support = not has_nonspatial.any()
                     if np.isfinite(spatial_value):
                         numerator = numerator + spatial_value
                         denominator = denominator + 1.0
@@ -924,7 +927,7 @@ class Evaluation_stn(metrics, scores):
                         numerator,
                         denominator,
                         out=np.full(numerator.shape, np.nan, dtype=float),
-                        where=np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0),
+                        where=has_nonspatial & np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0),
                     )
 
             station_list = station_list.drop(columns=internal_columns, errors="ignore")
@@ -939,7 +942,10 @@ class Evaluation_stn(metrics, scores):
             )
             numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
             empty_columns = [
-                col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                col
+                for col in requested_columns
+                if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                and not (col == "Overall_Score" and overall_without_temporal_support)
             ]
             if empty_columns:
                 raise RuntimeError(

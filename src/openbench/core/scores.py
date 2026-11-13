@@ -253,9 +253,10 @@ class scores:
         # by the available weighted components per cell rather than decrementing
         # a single global denominator only when an entire component is NaN.
         weighted_components = self._overall_nonspatial_components(s, o)
+        has_nonspatial = sum(np.isfinite(score).astype(int) for score, _ in weighted_components) > 0
         weighted_components.append((self.nSpatialScore(s, o), 1.0))
         result, _, _ = self._weighted_score_components(weighted_components)
-        return result
+        return result.where(has_nonspatial)
 
     def nSeasonalityScore(self, s, o):
         """
