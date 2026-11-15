@@ -12,7 +12,6 @@ from openbench.core._comparison_helpers import _comparison_sim_groups
 from openbench.core._comparison_diff_grid import process_grid_diff_plot
 from openbench.core._comparison_diff_station import process_station_diff_plot
 from openbench.util.filenames import diff_grid_difference_filename
-from openbench.visualization._validation import finite_values
 
 
 def _comparison_callable(name: str):
@@ -25,6 +24,10 @@ def _comparison_callable(name: str):
 
 def render_grid_diff_kdes(basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
     """Render KDE curves from the pairwise gridded Diff_Plot NetCDF outputs."""
+    # Imported lazily: openbench.core must not pull in openbench.visualization
+    # at module import time (see tests/test_architecture_cleanup.py).
+    from openbench.visualization._validation import finite_values
+
     diff_dir = os.path.join(basedir, "comparisons", "Diff_Plot")
     output_dir = os.path.join(basedir, "comparisons", "Kernel_Density_Estimate")
     item_types = [*metrics, *(score for score in scores if score != "nSpatialScore")]
