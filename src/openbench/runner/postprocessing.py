@@ -25,6 +25,7 @@ def _comparison_execution_order(comparison_vars: list[str]) -> list[str]:
             ordered.append(cvar)
     return ordered
 
+
 MakePhaseError = Callable[..., dict[str, Any]]
 PostPhasePreflight = Callable[..., list[dict[str, Any]]]
 ItemFilter = Callable[[Path, list[str]], list[str]]

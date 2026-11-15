@@ -33,9 +33,7 @@ def test_render_grid_diff_kdes_uses_expected_pairwise_file(tmp_path: Path, monke
     diff_dir = tmp_path / "comparisons" / "Diff_Plot"
     diff_dir.mkdir(parents=True)
     filename = diff_grid_difference_filename("Runoff", "RefA", "SimA", "SimB", "Overall_Score")
-    xr.Dataset(
-        {"Overall_Score_diff": (("lat", "lon"), [[-0.2, np.nan], [0.1, 0.2]])}
-    ).to_netcdf(diff_dir / filename)
+    xr.Dataset({"Overall_Score_diff": (("lat", "lon"), [[-0.2, np.nan], [0.1, 0.2]])}).to_netcdf(diff_dir / filename)
 
     calls = []
     monkeypatch.setattr(
