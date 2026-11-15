@@ -124,7 +124,7 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
                 varname,
             )
             plt.close(fig)
-            return
+            return None
 
         if varname == "percent_bias":
             legend_title = "Percent Bias showing value between [-100,100]"
@@ -194,6 +194,8 @@ def make_scenarios_comparison_Kernel_Density_Estimate(
         # Close the figure so matplotlib's figure manager releases its
         # reference; otherwise figures accumulate across batch calls.
         plt.close(fig)
+        return output_file_path
+    return None
 
 
 def generate_lines(data_names, option):

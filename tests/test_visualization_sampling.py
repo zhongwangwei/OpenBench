@@ -24,6 +24,32 @@ def test_sample_series_for_plot_uses_kde_limit():
     assert np.array_equal(out, data[::20])
 
 
+@pytest.mark.parametrize("size", [10_001, 15_000, 19_999, 20_001, 123_457])
+def test_sample_series_for_plot_spans_whole_series_when_not_divisible(size):
+    from openbench.visualization._sampling import sample_series_for_plot
+
+    data = np.arange(size)
+
+    out = sample_series_for_plot(data, {"kde_max_samples": 10_000}, purpose="kde")
+
+    assert len(out) == 10_000
+    assert len(np.unique(out)) == 10_000
+    assert out[0] == 0
+    # The last sample must lie within one stride of the end, not stop halfway.
+    assert out[-1] >= size - int(np.ceil(size / 10_000))
+    # Both halves of the series are represented roughly equally.
+    assert abs(int((out < size / 2).sum()) - 5_000) <= 1
+
+
+def test_diagram_sampling_spans_whole_series():
+    from openbench.visualization._diagram_sampling import _sample_indices
+
+    idx = _sample_indices(399, 200, {})
+
+    assert len(idx) == 200
+    assert idx[-1] >= 397
+
+
 def test_sample_series_for_plot_native_keeps_full_series():
     from openbench.visualization._sampling import sample_series_for_plot
 

@@ -415,12 +415,23 @@ def test_check_flags_station_fulllist_time_and_year_problems(tmp_path, monkeypat
 
 
 @pytest.mark.parametrize(
-    ("ref_tim_res", "expected_exit_code"),
-    [("Month", 0), ("Day", 1), ("month", 1)],
+    ("target_tim_res", "ref_tim_res", "expected_exit_code"),
+    [
+        ("Month", "Month", 0),
+        ("Month", "month", 0),
+        ("Month", "Monthly", 0),
+        # Finer references are aggregated to the target resolution at runtime.
+        ("Month", "Day", 0),
+        ("month", "daily", 0),
+        # Coarser references cannot be disaggregated.
+        ("Day", "Month", 1),
+        ("day", "monthly", 1),
+    ],
 )
-def test_check_month_target_requires_literal_month_reference(
+def test_check_reference_time_resolution_must_not_be_coarser_than_target(
     tmp_path,
     monkeypatch,
+    target_tim_res,
     ref_tim_res,
     expected_exit_code,
 ):
@@ -432,12 +443,12 @@ def test_check_month_target_requires_literal_month_reference(
     _touch_year_files(ref_root, sim_root)
     config = _base_config(
         tmp_path,
-        project={"tim_res": "Month"},
+        project={"tim_res": target_tim_res},
         simulation={
             "CaseA": {
                 "model": "KnownModel",
                 "root_dir": str(sim_root),
-                "tim_res": "Month",
+                "tim_res": target_tim_res,
                 "grid_res": 0.5,
             }
         },
@@ -450,7 +461,7 @@ def test_check_month_target_requires_literal_month_reference(
             {
                 "KnownModel": _model(
                     "KnownModel",
-                    tim_res="Month",
+                    tim_res=target_tim_res,
                     variables={"Runoff": _var("runoff")},
                 )
             },
@@ -460,10 +471,7 @@ def test_check_month_target_requires_literal_month_reference(
     result = runner.invoke(cli, ["check", str(path)])
 
     assert result.exit_code == expected_exit_code, result.output
-    message = (
-        f"Reference 'DemoRef' time resolution {ref_tim_res} is incompatible with target Month; "
-        "expected exactly Month"
-    )
+    message = f"Reference 'DemoRef' time resolution {ref_tim_res} is coarser than target"
     if expected_exit_code:
         assert message in result.output
     else:

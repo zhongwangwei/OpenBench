@@ -7,6 +7,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from openbench.visualization._sampling import even_stride_indices
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_DIAGRAM_POINTS = 200
@@ -42,8 +44,7 @@ def _sample_indices(count: int, limit: int, option: dict[str, Any]) -> np.ndarra
     method = str(option.get("diagram_sample_method", "stride")).lower()
     if method != "stride":
         logger.warning("Unknown diagram sample method %r; using stride", method)
-    step = max(1, count // limit)
-    return np.arange(count)[::step][:limit]
+    return even_stride_indices(count, limit)
 
 
 def limit_diagram_points(

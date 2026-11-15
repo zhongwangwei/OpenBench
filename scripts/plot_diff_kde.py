@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,7 +13,6 @@ import numpy as np
 import xarray as xr
 
 from openbench.config.adapter import build_fig_nml
-from openbench.util.filenames import join_filename_components
 from openbench.visualization import make_scenarios_comparison_Kernel_Density_Estimate
 
 LOG = logging.getLogger("plot_diff_kde")
@@ -98,18 +96,6 @@ def default_output_dir(path: Path) -> Path:
     return path.parent.parent / "Kernel_Density_Estimate"
 
 
-def expected_output_path(output_dir: Path, metadata: DiffMetadata, option: dict) -> Path:
-    sim_token = hashlib.sha1(metadata.curve_label.encode("utf-8")).hexdigest()[:8]
-    filename = join_filename_components(
-        "Kernel_Density_Estimate",
-        metadata.evaluation_item,
-        metadata.ref_source,
-        metadata.variable,
-        sim_token,
-    )
-    return output_dir / f"{filename}.{option['saving_format']}"
-
-
 def plot_diff_file(path: Path, output_dir: Path | None = None) -> Path:
     """Create one KDE figure from a gridded OpenBench pairwise diff file."""
     path = path.expanduser().resolve()
@@ -123,7 +109,7 @@ def plot_diff_file(path: Path, output_dir: Path | None = None) -> Path:
     option["title"] = f"Kernel Density Estimate of {item_label} Difference"
     option["xticklabel"] = f"{type_label} Difference"
 
-    make_scenarios_comparison_Kernel_Density_Estimate(
+    saved = make_scenarios_comparison_Kernel_Density_Estimate(
         str(destination),
         metadata.evaluation_item,
         metadata.ref_source,
@@ -132,7 +118,16 @@ def plot_diff_file(path: Path, output_dir: Path | None = None) -> Path:
         [values],
         option,
     )
-    return expected_output_path(destination, metadata, option)
+    if not saved:
+        # The renderer skips (and only logs a warning) when no valid KDE curve
+        # can be drawn, e.g. too few samples or a singular covariance.
+        raise RuntimeError(
+            f"KDE renderer produced no figure for {path.name} (skipped: no valid KDE curve; see warnings above)"
+        )
+    output_path = Path(saved)
+    if not output_path.is_file():
+        raise RuntimeError(f"KDE renderer reported {output_path} but the file does not exist")
+    return output_path
 
 
 def build_parser() -> argparse.ArgumentParser:

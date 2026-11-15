@@ -119,7 +119,10 @@ def test_inundation_area_regrids_as_grid_cell_total(descending_lat):
     result = processor.remap_data(data)
 
     expected = _rectilinear_cell_area(processor.create_target_grid()) * 0.25 / 1e6
-    xr.testing.assert_allclose(result["flood_area"], expected.rename("flood_area"))
+    np.testing.assert_allclose(result["regrid_coverage_fraction"], 1.0, rtol=1e-12)
+    xr.testing.assert_allclose(
+        result["flood_area"].drop_vars("regrid_coverage_fraction"), expected.rename("flood_area")
+    )
     np.testing.assert_allclose(result["flood_area"].sum(), data["flood_area"].sum(), rtol=1e-12)
     assert result["flood_area"].attrs == {"units": "km2", "long_name": "inundated area"}
     assert result.attrs["source"] == "synthetic"
@@ -211,6 +214,8 @@ def test_inundation_regrid_roundoff_and_conservation(resolution, item):
     if extensive:
         expected = expected * _rectilinear_cell_area(expected_density)
         np.testing.assert_allclose(result["flood"].sum(), data["flood"].sum(), rtol=1e-12)
+        np.testing.assert_allclose(result["regrid_coverage_fraction"], 1.0, rtol=1e-12)
+        result = result.drop_vars("regrid_coverage_fraction")
     xr.testing.assert_allclose(result["flood"], expected.rename("flood"))
 
     # Keep strict missing-overlap policy, valid zero totals, and valid neighbours.
@@ -224,6 +229,50 @@ def test_inundation_regrid_roundoff_and_conservation(resolution, item):
     assert result.values[-1, -1] == 0
     assert np.isfinite(result.values[0, -1])
     assert int(result.count()) == result.size - 1
+
+
+@pytest.mark.parametrize("descending_lat", [False, True])
+def test_inundation_area_partial_target_coverage_preserves_total(descending_lat):
+    """Source covering only part of a target cell must not be extrapolated."""
+    from openbench.data._processing_grid_regrid import REGRID_COVERAGE_COORD, _rectilinear_cell_area
+
+    processor = _processor_for_target()  # 1-degree target over lat 0-2, lon 10-12
+    processor.item = "Inundation_Area"
+    # 0.25-degree source over lat 0-2 but only lon 10.0-10.5 (west half of the
+    # first target column); the second target column has no source at all.
+    source_grid = xr.Dataset(coords={"lat": np.arange(0.125, 2.0, 0.25), "lon": [10.125, 10.375]})
+    data = (_rectilinear_cell_area(source_grid) * 0.5).rename("flood_area").to_dataset()
+    if descending_lat:
+        data = data.sortby("lat", ascending=False)
+
+    result = processor.remap_data(data)
+
+    np.testing.assert_allclose(result["flood_area"].sum(), data["flood_area"].sum(), rtol=1e-12)
+    coverage = result[REGRID_COVERAGE_COORD]
+    np.testing.assert_allclose(coverage.sel(lon=10.5), 0.5, rtol=1e-12)
+    np.testing.assert_allclose(coverage.sel(lon=11.5), 0.0)
+    assert result["flood_area"].sel(lon=11.5).isnull().all()
+    target_area = _rectilinear_cell_area(processor.create_target_grid())
+    np.testing.assert_allclose(
+        result["flood_area"].sel(lon=10.5).values,
+        (target_area.sel(lon=10.5) * 0.5 * 0.5).values,
+        rtol=1e-12,
+    )
+
+
+def test_axis_coverage_fraction_handles_partial_and_spherical_edges():
+    from openbench.data._processing_grid_regrid import _axis_coverage_fraction
+
+    lon = _axis_coverage_fraction(np.array([0.25, 0.75]), np.array([0.5, 1.5, 2.5]), spherical_latitude=False)
+    np.testing.assert_allclose(lon, [1.0, 0.0, 0.0])
+    lon = _axis_coverage_fraction(np.array([0.75, 1.25]), np.array([0.5, 1.5]), spherical_latitude=False)
+    np.testing.assert_allclose(lon, [0.5, 0.5])
+    # Latitude uses sin(lat) measure, so equal-degree halves are not 0.5 each.
+    lat = _axis_coverage_fraction(np.array([59.5, 60.5, 61.5]), np.array([60.0, 62.0]), spherical_latitude=True)
+    expected = (np.sin(np.radians(62.0)) - np.sin(np.radians(61.0))) / (
+        np.sin(np.radians(63.0)) - np.sin(np.radians(61.0))
+    )
+    np.testing.assert_allclose(lat, [1.0, expected])
 
 
 @pytest.mark.parametrize("to_density", [False, True])

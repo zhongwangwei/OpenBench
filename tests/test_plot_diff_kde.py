@@ -40,10 +40,18 @@ def test_plot_diff_file_filters_values_and_calls_openbench_renderer(tmp_path, mo
     diff_dir.mkdir(parents=True)
     path = _write_diff(diff_dir / FILENAME)
     calls = []
+
+    def fake_renderer(*args):
+        calls.append(args)
+        out = Path(args[0]) / "Kernel_Density_Estimate__Runoff__RefA__Overall_Score_diff__token.jpg"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.touch()
+        return str(out)
+
     monkeypatch.setattr(
         plot_diff_kde,
         "make_scenarios_comparison_Kernel_Density_Estimate",
-        lambda *args: calls.append(args),
+        fake_renderer,
     )
 
     output = plot_diff_kde.plot_diff_file(path)
@@ -127,3 +135,24 @@ def test_real_renderer_creates_jpg(tmp_path):
 
     assert output.is_file()
     assert output.suffix == ".jpg"
+
+
+def test_main_reports_failure_when_renderer_skips_figure(tmp_path, monkeypatch, capsys):
+    """A skipped KDE (e.g. singular covariance) must not be reported as Created."""
+    import openbench.visualization.Fig_kernel_density_estimate as fig_kde
+
+    rng = np.random.default_rng(0)
+    diff_dir = tmp_path / "comparisons" / "Diff_Plot"
+    diff_dir.mkdir(parents=True)
+    path = _write_diff(diff_dir / FILENAME, values=rng.normal(size=(10, 10)))
+
+    def singular(*_args, **_kwargs):
+        raise np.linalg.LinAlgError("singular matrix")
+
+    monkeypatch.setattr(fig_kde, "gaussian_kde", singular)
+
+    result = plot_diff_kde.main([str(path), "--output-dir", str(tmp_path / "plots")])
+
+    assert result == 1
+    assert "Created" not in capsys.readouterr().out
+    assert not list((tmp_path / "plots").glob("*.jpg"))

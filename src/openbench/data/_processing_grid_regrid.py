@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - mirrors processing.py fallback
             _write_netcdf_atomic(ds, output_path, compression=compression)
 
 
-REGRID_ALGORITHM_VERSION = "2026-11-12.regrid-v5"
+REGRID_ALGORITHM_VERSION = "2026-11-15.regrid-v6-extensive-coverage"
 REGRID_BACKENDS = {
     "openbench_conservative",
     "cdo_remapcon",
@@ -36,10 +36,16 @@ REGRID_BACKENDS = {
 
 _EARTH_RADIUS_M = 6_371_000.0
 _EXTENSIVE_GRID_CELL_ITEMS = {"inundation_area"}
+# Backends whose conservative output is normalised by the *overlapped* part of a
+# target cell (an intensive mean over the source footprint).  Converting such a
+# density back to a total must use the covered area, not the full cell area.
+# xESMF's un-normalised "conservative" method already scales partial cells.
+_FRACAREA_NORMALISED_BACKENDS = {"openbench_conservative", "cdo_remapcon"}
+REGRID_COVERAGE_COORD = "regrid_coverage_fraction"
 
 
-def _axis_cell_factors(values: np.ndarray, *, spherical_latitude: bool) -> np.ndarray:
-    """Return cell widths in radians, or spherical latitude area factors."""
+def _sorted_axis_bounds(values: np.ndarray, *, spherical_latitude: bool) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(order, bounds)`` for 1-D cell centres, matching regrid cell edges."""
     values = np.asarray(values, dtype=float)
     if values.ndim != 1 or values.size < 2:
         raise ValueError("Grid-cell areas require at least two one-dimensional coordinates per axis")
@@ -55,13 +61,57 @@ def _axis_cell_factors(values: np.ndarray, *, spherical_latitude: bool) -> np.nd
     )
     if spherical_latitude:
         bounds = np.clip(bounds, -90.0, 90.0)
-        sorted_factors = np.sin(np.radians(bounds[1:])) - np.sin(np.radians(bounds[:-1]))
-    else:
-        sorted_factors = np.radians(bounds[1:] - bounds[:-1])
+    return order, bounds
+
+
+def _axis_measure(bounds: np.ndarray, *, spherical_latitude: bool) -> np.ndarray:
+    return np.sin(np.radians(bounds)) if spherical_latitude else np.radians(bounds)
+
+
+def _axis_cell_factors(values: np.ndarray, *, spherical_latitude: bool) -> np.ndarray:
+    """Return cell widths in radians, or spherical latitude area factors."""
+    order, bounds = _sorted_axis_bounds(values, spherical_latitude=spherical_latitude)
+    measure = _axis_measure(bounds, spherical_latitude=spherical_latitude)
+    sorted_factors = measure[1:] - measure[:-1]
 
     factors = np.empty_like(sorted_factors)
     factors[order] = sorted_factors
     return factors
+
+
+def _axis_coverage_fraction(source: np.ndarray, target: np.ndarray, *, spherical_latitude: bool) -> np.ndarray:
+    """Fraction of each target cell (along one axis) inside the source footprint."""
+    _, src_bounds = _sorted_axis_bounds(source, spherical_latitude=spherical_latitude)
+    order, tgt_bounds = _sorted_axis_bounds(target, spherical_latitude=spherical_latitude)
+    src_lo, src_hi = _axis_measure(src_bounds[[0, -1]], spherical_latitude=spherical_latitude)
+    tgt = _axis_measure(tgt_bounds, spherical_latitude=spherical_latitude)
+    lo, hi = tgt[:-1], tgt[1:]
+    width = hi - lo
+    overlap = np.clip(np.minimum(hi, src_hi) - np.maximum(lo, src_lo), 0.0, None)
+    sorted_fraction = np.divide(overlap, width, out=np.zeros_like(width), where=width > 0)
+    sorted_fraction = np.clip(sorted_fraction, 0.0, 1.0)
+
+    fraction = np.empty_like(sorted_fraction)
+    fraction[order] = sorted_fraction
+    return fraction
+
+
+def _rectilinear_coverage_fraction(source: xr.Dataset, target: xr.Dataset) -> xr.DataArray:
+    """Geometric fraction of each target cell covered by the source grid footprint."""
+    lat_dim = target["lat"].dims[0]
+    lon_dim = target["lon"].dims[0]
+    lat_fraction = _axis_coverage_fraction(source["lat"].values, target["lat"].values, spherical_latitude=True)
+    lon_fraction = _axis_coverage_fraction(source["lon"].values, target["lon"].values, spherical_latitude=False)
+    return xr.DataArray(
+        np.outer(lat_fraction, lon_fraction),
+        dims=(lat_dim, lon_dim),
+        coords={lat_dim: target[lat_dim].values, lon_dim: target[lon_dim].values},
+        name=REGRID_COVERAGE_COORD,
+        attrs={
+            "units": "1",
+            "long_name": "fraction of target grid cell covered by the source grid",
+        },
+    )
 
 
 def _rectilinear_cell_area(grid: xr.Dataset) -> xr.DataArray:
@@ -185,6 +235,7 @@ class GridRegridMixin:
             return self._mark_regrid_backend(self._assign_target_grid(data, new_grid), backend)
 
         extensive_grid_cells = self._uses_extensive_grid_cell_regridding()
+        source_grid = data
         if extensive_grid_cells:
             data = self._scale_grid_cell_totals(data, _rectilinear_cell_area(data), to_density=True)
             logging.info("[REGRID] Regridding %s as an extensive grid-cell total", self.item)
@@ -194,11 +245,16 @@ class GridRegridMixin:
         except Exception as e:
             raise RuntimeError(f"Configured regrid backend {backend!r} failed: {e}") from e
         if extensive_grid_cells:
-            data_regrid = self._scale_grid_cell_totals(
-                data_regrid,
-                _rectilinear_cell_area(data_regrid),
-                to_density=False,
-            )
+            target_area = _rectilinear_cell_area(data_regrid)
+            if backend in _FRACAREA_NORMALISED_BACKENDS:
+                # The regridded density is a mean over the overlapped part of
+                # each target cell; convert back with the covered area only so
+                # partially covered edge cells are not extrapolated.
+                coverage = _rectilinear_coverage_fraction(source_grid, data_regrid)
+                coverage = coverage.transpose(*target_area.dims)
+                target_area = target_area * coverage.values
+                data_regrid = data_regrid.assign_coords({REGRID_COVERAGE_COORD: coverage})
+            data_regrid = self._scale_grid_cell_totals(data_regrid, target_area, to_density=False)
             data_regrid.attrs["openbench_regrid_quantity"] = "extensive_grid_cell_total"
         return self._mark_regrid_backend(data_regrid, backend)
 
