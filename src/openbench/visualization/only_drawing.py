@@ -1509,6 +1509,15 @@ class ComparisonProcessing_only_drawing(metrics, scores, statistics_calculate):
                         option,
                     )
 
+    def scenarios_Diff_Kernel_Density_Estimate_comparison(
+        self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option
+    ):
+        """Render KDE figures from existing pairwise gridded Diff_Plot outputs."""
+        from openbench.core._comparison_diff_plot import render_grid_diff_kdes
+
+        _require_uncorrected_comparison_cache(ref_nml, evaluation_items)
+        render_grid_diff_kdes(basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option)
+
     def scenarios_Basic_comparison(self, basedir, sim_nml, ref_nml, evaluation_items, scores, metrics, option):
         """
         Calculate all the data (including input data,metrics,scores):

@@ -11,6 +11,20 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
+_DIFF_KDE = "Diff_Kernel_Density_Estimate"
+_DIFF_PLOT = "Diff_Plot"
+
+
+def _comparison_execution_order(comparison_vars: list[str]) -> list[str]:
+    """Place Diff_Plot before its KDE consumer and avoid duplicate execution."""
+    ordered = []
+    for cvar in comparison_vars:
+        if cvar == _DIFF_KDE and _DIFF_PLOT not in ordered:
+            ordered.append(_DIFF_PLOT)
+        if cvar not in ordered:
+            ordered.append(cvar)
+    return ordered
+
 MakePhaseError = Callable[..., dict[str, Any]]
 PostPhasePreflight = Callable[..., list[dict[str, Any]]]
 ItemFilter = Callable[[Path, list[str]], list[str]]
@@ -69,7 +83,7 @@ def run_comparison(
 
         comparison_fig = context.comparison_fig
 
-        for cvar in comparison_vars:
+        for cvar in _comparison_execution_order(comparison_vars):
             logger.info("Running %s comparison...", cvar)
             if cvar in basic_methods:
                 method_name = "scenarios_Basic_comparison"

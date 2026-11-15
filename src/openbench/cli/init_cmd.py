@@ -50,6 +50,7 @@ COMPARISON_OPTIONS = [
     "HeatMap",
     "Kernel_Density_Estimate",
     "Diff_Plot",
+    "Diff_Kernel_Density_Estimate",
     "RadarMap",
     "Single_Model_Performance_Index",
     "Relative_Score",

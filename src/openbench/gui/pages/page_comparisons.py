@@ -16,7 +16,13 @@ COMPARISON_ITEMS = {
         "Portrait_Plot_seasonal",
         "Ridgeline_Plot",
     ],
-    "Plots": ["HeatMap", "Kernel_Density_Estimate", "Diff_Plot", "RadarMap"],
+    "Plots": [
+        "HeatMap",
+        "Kernel_Density_Estimate",
+        "Diff_Plot",
+        "Diff_Kernel_Density_Estimate",
+        "RadarMap",
+    ],
     "Statistics": [
         "Single_Model_Performance_Index",
         "Relative_Score",
