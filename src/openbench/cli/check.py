@@ -734,14 +734,20 @@ def _reference_metadata_findings(
     ref_name = resolved_ref.resolved_name
     ref_tim_res = getattr(ref_ds, "tim_res", None)
     if ref_tim_res and target_tim_res:
-        ref_rank = _tim_res_rank(ref_tim_res)
-        target_rank = _tim_res_rank(target_tim_res)
-        if ref_rank < 0:
-            warnings.append(f"Reference '{ref_name}' time resolution '{ref_tim_res}' is not recognized")
-        elif target_rank >= 0 and ref_rank < target_rank:
+        if target_tim_res == "Month" and ref_tim_res != "Month":
             errors.append(
-                f"Reference '{ref_name}' time resolution {ref_tim_res} is coarser than target {target_tim_res}"
+                f"Reference '{ref_name}' time resolution {ref_tim_res} is incompatible with target Month; "
+                "expected exactly Month"
             )
+        else:
+            ref_rank = _tim_res_rank(ref_tim_res)
+            target_rank = _tim_res_rank(target_tim_res)
+            if ref_rank < 0:
+                warnings.append(f"Reference '{ref_name}' time resolution '{ref_tim_res}' is not recognized")
+            elif target_rank >= 0 and ref_rank < target_rank:
+                errors.append(
+                    f"Reference '{ref_name}' time resolution {ref_tim_res} is coarser than target {target_tim_res}"
+                )
 
     err = _data_groupby_error(getattr(ref_ds, "data_groupby", None), f"reference.{ref_name}")
     if err:

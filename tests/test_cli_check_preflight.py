@@ -414,6 +414,62 @@ def test_check_flags_station_fulllist_time_and_year_problems(tmp_path, monkeypat
     assert "Station reference 'DemoRef' has no fulllist" in result.output
 
 
+@pytest.mark.parametrize(
+    ("ref_tim_res", "expected_exit_code"),
+    [("Month", 0), ("Day", 1), ("month", 1)],
+)
+def test_check_month_target_requires_literal_month_reference(
+    tmp_path,
+    monkeypatch,
+    ref_tim_res,
+    expected_exit_code,
+):
+    sim_root = tmp_path / "sim"
+    sim_root.mkdir()
+    ref_root = tmp_path / "ref"
+    ref_root.mkdir()
+    (ref_root / "runoff.nc").touch()
+    _touch_year_files(ref_root, sim_root)
+    config = _base_config(
+        tmp_path,
+        project={"tim_res": "Month"},
+        simulation={
+            "CaseA": {
+                "model": "KnownModel",
+                "root_dir": str(sim_root),
+                "tim_res": "Month",
+                "grid_res": 0.5,
+            }
+        },
+    )
+    path = _write_config(tmp_path, config)
+    _install_registry(
+        monkeypatch,
+        _Registry(
+            {"DemoRef": _ref("DemoRef", str(ref_root), tim_res=ref_tim_res)},
+            {
+                "KnownModel": _model(
+                    "KnownModel",
+                    tim_res="Month",
+                    variables={"Runoff": _var("runoff")},
+                )
+            },
+        ),
+    )
+
+    result = runner.invoke(cli, ["check", str(path)])
+
+    assert result.exit_code == expected_exit_code, result.output
+    message = (
+        f"Reference 'DemoRef' time resolution {ref_tim_res} is incompatible with target Month; "
+        "expected exactly Month"
+    )
+    if expected_exit_code:
+        assert message in result.output
+    else:
+        assert message not in result.output
+
+
 def test_check_rejects_simulation_data_outside_project_years(tmp_path, monkeypatch):
     sim_root = tmp_path / "sim"
     ref_root = tmp_path / "ref"
