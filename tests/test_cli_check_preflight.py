@@ -414,6 +414,70 @@ def test_check_flags_station_fulllist_time_and_year_problems(tmp_path, monkeypat
     assert "Station reference 'DemoRef' has no fulllist" in result.output
 
 
+@pytest.mark.parametrize(
+    ("target_tim_res", "ref_tim_res", "expected_exit_code"),
+    [
+        ("Month", "Month", 0),
+        ("Month", "month", 0),
+        ("Month", "Monthly", 0),
+        # Finer references are aggregated to the target resolution at runtime.
+        ("Month", "Day", 0),
+        ("month", "daily", 0),
+        # Coarser references cannot be disaggregated.
+        ("Day", "Month", 1),
+        ("day", "monthly", 1),
+    ],
+)
+def test_check_reference_time_resolution_must_not_be_coarser_than_target(
+    tmp_path,
+    monkeypatch,
+    target_tim_res,
+    ref_tim_res,
+    expected_exit_code,
+):
+    sim_root = tmp_path / "sim"
+    sim_root.mkdir()
+    ref_root = tmp_path / "ref"
+    ref_root.mkdir()
+    (ref_root / "runoff.nc").touch()
+    _touch_year_files(ref_root, sim_root)
+    config = _base_config(
+        tmp_path,
+        project={"tim_res": target_tim_res},
+        simulation={
+            "CaseA": {
+                "model": "KnownModel",
+                "root_dir": str(sim_root),
+                "tim_res": target_tim_res,
+                "grid_res": 0.5,
+            }
+        },
+    )
+    path = _write_config(tmp_path, config)
+    _install_registry(
+        monkeypatch,
+        _Registry(
+            {"DemoRef": _ref("DemoRef", str(ref_root), tim_res=ref_tim_res)},
+            {
+                "KnownModel": _model(
+                    "KnownModel",
+                    tim_res=target_tim_res,
+                    variables={"Runoff": _var("runoff")},
+                )
+            },
+        ),
+    )
+
+    result = runner.invoke(cli, ["check", str(path)])
+
+    assert result.exit_code == expected_exit_code, result.output
+    message = f"Reference 'DemoRef' time resolution {ref_tim_res} is coarser than target"
+    if expected_exit_code:
+        assert message in result.output
+    else:
+        assert message not in result.output
+
+
 def test_check_rejects_simulation_data_outside_project_years(tmp_path, monkeypatch):
     sim_root = tmp_path / "sim"
     ref_root = tmp_path / "ref"

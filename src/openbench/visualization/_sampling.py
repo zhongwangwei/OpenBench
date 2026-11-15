@@ -55,10 +55,24 @@ def sample_series_for_plot(
     method = str(opts.get("sample_method", "stride")).lower()
     if method != "stride":
         logger.warning("Unknown plot sample method %r; using stride", method)
-    step = max(1, values.size // limit)
-    sampled = values[::step][:limit]
+    sampled = values[even_stride_indices(values.size, limit)]
     logger.info("Sampled plot series from %s to %s values using stride", values.size, sampled.size)
     return sampled
+
+
+def even_stride_indices(count: int, limit: int) -> np.ndarray:
+    """Return ``min(count, limit)`` deterministic indices spread over the whole series.
+
+    A plain ``[::count // limit][:limit]`` stride degenerates to "keep the first
+    ``limit`` values" whenever ``count < 2 * limit``, silently dropping the tail.
+    ``floor(i * count / limit)`` keeps exact integer strides when ``count`` is a
+    multiple of ``limit`` and otherwise spaces the samples across the full range.
+    """
+    count = int(count)
+    limit = int(limit)
+    if limit <= 0 or count <= limit:
+        return np.arange(max(count, 0))
+    return (np.arange(limit, dtype=np.int64) * count) // limit
 
 
 def sample_distribution_series(

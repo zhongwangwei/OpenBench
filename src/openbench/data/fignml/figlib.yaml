@@ -11,6 +11,7 @@ comparison_nml:
   Taylor_Diagram_source: ./nml/nml-yaml/fignml/Taylor_Diagram.yaml
   Target_Diagram_source: ./nml/nml-yaml/fignml/Target_Diagram.yaml
   Kernel_Density_Estimate_source: ./nml/nml-yaml/fignml/Kernel_Density_Estimate.yaml
+  Diff_Kernel_Density_Estimate_source: ./nml/nml-yaml/fignml/Kernel_Density_Estimate.yaml
   Whisker_Plot_source: ./nml/nml-yaml/fignml/Whisker_Plot.yaml
   Parallel_Coordinates_source: ./nml/nml-yaml/fignml/Parallel_Coordinates.yaml
   Portrait_Plot_seasonal_source: ./nml/nml-yaml/fignml/Portrait_Plot_seasonal.yaml

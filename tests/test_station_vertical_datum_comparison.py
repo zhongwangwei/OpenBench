@@ -109,7 +109,7 @@ def test_all_only_drawing_comparisons_reject_datum_before_touching_outputs(tmp_p
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     draw = ComparisonProcessing_only_drawing.__new__(ComparisonProcessing_only_drawing)
     methods = [name for name in dir(draw) if name.startswith("scenarios_") and name.endswith("_comparison")]
-    assert len(methods) == 19
+    assert len(methods) == 20
     for name in methods:
         with pytest.raises(VerticalDatumError, match="only_drawing=False"):
             getattr(draw, name)(str(tmp_path), sim, ref, ["Runoff", ev.item], [], ["bias"], {})
