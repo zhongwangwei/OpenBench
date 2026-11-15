@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - mirrors processing.py fallback
             _write_netcdf_atomic(ds, output_path, compression=compression)
 
 
-REGRID_ALGORITHM_VERSION = "2026-10-26.regrid-v4"
+REGRID_ALGORITHM_VERSION = "2026-11-12.regrid-v5"
 REGRID_BACKENDS = {
     "openbench_conservative",
     "cdo_remapcon",
@@ -160,7 +160,10 @@ class GridRegridMixin:
             if not area_dims.issubset(array.dims):
                 continue
             attrs = dict(array.attrs)
-            result[name] = array / cell_area if to_density else array * cell_area
+            # Default arithmetic alignment can drop cells, then assignment back
+            # into this Dataset fills the unmatched coordinates with NaN.
+            array, aligned_area = xr.align(array, cell_area, join="exact", copy=False)
+            result[name] = array / aligned_area if to_density else array * aligned_area
             result[name].attrs = attrs
         return result
 
@@ -193,7 +196,7 @@ class GridRegridMixin:
         if extensive_grid_cells:
             data_regrid = self._scale_grid_cell_totals(
                 data_regrid,
-                _rectilinear_cell_area(new_grid),
+                _rectilinear_cell_area(data_regrid),
                 to_density=False,
             )
             data_regrid.attrs["openbench_regrid_quantity"] = "extensive_grid_cell_total"

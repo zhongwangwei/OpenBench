@@ -169,6 +169,76 @@ def test_inundation_area_regrid_preserves_strict_nan_and_zero_cells():
     assert np.isfinite(result["flood_area"].sel(lat=1.5, lon=10.5))
 
 
+@pytest.mark.parametrize("resolution", [0.1, 0.5, 1.0])
+@pytest.mark.parametrize("item", ["Inundation_Area", "Inundation_Fraction"])
+def test_inundation_regrid_roundoff_and_conservation(resolution, item):
+    from openbench.data._processing_grid_regrid import _rectilinear_cell_area
+
+    processor = _processor_for_target()
+    processor.item = item
+    processor.min_lat, processor.max_lat = 36.0, 38.0
+    processor.min_lon, processor.max_lon = -115.0, -113.0
+    processor.compare_grid_res = resolution
+    spacing = resolution / 2
+    count = round(2 / spacing)
+    source = xr.Dataset(
+        coords={
+            "lat": 36 + (np.arange(count) + 0.5) * spacing,
+            "lon": -115 + (np.arange(count) + 0.5) * spacing,
+        }
+    )
+    # A nonuniform field checks more than preservation of a constant mean.
+    fraction = xr.DataArray(
+        np.linspace(0.1, 0.9, count**2).reshape(count, count),
+        dims=("lat", "lon"),
+        coords=source.coords,
+    )
+    intensive = fraction.rename("flood").to_dataset()
+    expected_density = processor.remap_interpolate(intensive, processor.create_target_grid())
+    if resolution == 0.1:
+        for axis in ("lat", "lon"):
+            target = processor.create_target_grid()[axis].values
+            actual = expected_density[axis].values
+            assert not np.array_equal(actual, target)
+            np.testing.assert_allclose(actual, target, rtol=0, atol=2e-12)
+
+    extensive = item == "Inundation_Area"
+    data = (fraction * _rectilinear_cell_area(source) if extensive else fraction).rename("flood").to_dataset()
+    result = processor.remap_data(data)
+
+    assert result["flood"].count() == result["flood"].size
+    expected = expected_density["flood"]
+    if extensive:
+        expected = expected * _rectilinear_cell_area(expected_density)
+        np.testing.assert_allclose(result["flood"].sum(), data["flood"].sum(), rtol=1e-12)
+    xr.testing.assert_allclose(result["flood"], expected.rename("flood"))
+
+    # Keep strict missing-overlap policy, valid zero totals, and valid neighbours.
+    mixed = data.copy(deep=True)
+    mixed["flood"].values[0, 0] = np.nan
+    # Include a neighbouring source cell so floating-point overlap slivers
+    # also contain zero, without changing the conservative backend's policy.
+    mixed["flood"].values[-3:, -3:] = 0
+    result = processor.remap_data(mixed)["flood"]
+    assert np.isnan(result.values[0, 0])
+    assert result.values[-1, -1] == 0
+    assert np.isfinite(result.values[0, -1])
+    assert int(result.count()) == result.size - 1
+
+
+@pytest.mark.parametrize("to_density", [False, True])
+@pytest.mark.parametrize("axis", ["lat", "lon"])
+def test_grid_cell_scaling_rejects_coordinate_mismatch(axis, to_density):
+    from openbench.data._processing_grid_regrid import _rectilinear_cell_area
+
+    processor = _processor_for_target()
+    data = _grid_data()
+    area = _rectilinear_cell_area(data)
+    area = area.assign_coords({axis: area[axis].values + 1e-12})
+    with pytest.raises(ValueError, match="align"):
+        processor._scale_grid_cell_totals(data, area, to_density=to_density)
+
+
 @pytest.mark.parametrize(
     ("source_freq", "periods", "target_freq", "expected"),
     [("h", 48, "D", 2), ("D", 59, "ME", 2)],

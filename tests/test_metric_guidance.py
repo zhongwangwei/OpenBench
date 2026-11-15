@@ -16,9 +16,7 @@ def _cfg(years=(2001, 2001), *, tim_res="Day", metrics=None, scores=None):
 
 
 def test_single_year_iav_is_an_error_but_overall_score_can_reweight():
-    errors = metric_score_errors(
-        _cfg(metrics=["bias", "RMSE"], scores=["nIavScore", "Overall_Score"]), "Month"
-    )
+    errors = metric_score_errors(_cfg(metrics=["bias", "RMSE"], scores=["nIavScore", "Overall_Score"]), "Month")
 
     assert len(errors) == 1
     assert "nIavScore cannot be calculated" in errors[0]
@@ -33,17 +31,13 @@ def test_single_year_overall_score_alone_is_allowed():
 
 
 def test_one_year_monthly_phase_and_seasonality_are_allowed():
-    errors = metric_score_errors(
-        _cfg(metrics=[], scores=["nPhaseScore", "nSeasonalityScore"]), "Month"
-    )
+    errors = metric_score_errors(_cfg(metrics=[], scores=["nPhaseScore", "nSeasonalityScore"]), "Month")
 
     assert errors == []
 
 
 def test_yearly_resolution_rejects_seasonality_and_single_sample_metrics():
-    errors = metric_score_errors(
-        _cfg(tim_res="Year", metrics=["correlation", "bias"], scores=["nPhaseScore"]), "Year"
-    )
+    errors = metric_score_errors(_cfg(tim_res="Year", metrics=["correlation", "bias"], scores=["nPhaseScore"]), "Year")
 
     assert any("nPhaseScore cannot be calculated" in text and "12-month" in text for text in errors)
     assert any("correlation cannot be calculated" in text and "one temporal sample" in text for text in errors)
@@ -67,9 +61,7 @@ def test_climatology_uses_existing_compatibility_rules():
 
 
 def test_monthly_climatology_allows_reweighted_overall_score():
-    errors = metric_score_errors(
-        _cfg(years=(2001, 2005), metrics=[], scores=["Overall_Score"]), "climatology-month"
-    )
+    errors = metric_score_errors(_cfg(years=(2001, 2005), metrics=[], scores=["Overall_Score"]), "climatology-month")
 
     assert errors == []
 
@@ -87,8 +79,6 @@ def test_omitted_selections_keep_runtime_defaults():
 
 @pytest.mark.parametrize("year_range", [(2001, 2002), (2001, 2005)])
 def test_multi_year_iav_has_no_static_error(year_range):
-    errors = metric_score_errors(
-        _cfg(years=year_range, tim_res="Month", metrics=[], scores=["nIavScore"]), "Month"
-    )
+    errors = metric_score_errors(_cfg(years=year_range, tim_res="Month", metrics=[], scores=["nIavScore"]), "Month")
 
     assert errors == []

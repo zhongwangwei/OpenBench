@@ -311,6 +311,7 @@ def _expand_config_paths(cfg):
             if isinstance(inline, dict) and inline.get("fulllist"):
                 inline["fulllist"] = _expand_path_value(inline["fulllist"])
 
+
 def _run_static_preflight(cfg, *, check_metric_applicability=True):
     """Run non-data-mutating checks shared with openbench check."""
     from openbench.cli.check import (
@@ -344,7 +345,6 @@ def _run_static_preflight(cfg, *, check_metric_applicability=True):
     if errors:
         details = "\n  ".join(errors)
         raise click.ClickException(f"Config error:\n  {details}")
-
 
 
 def _run_model_preflight(cfg):
