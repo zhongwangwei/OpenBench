@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.1.2] - 2026-11-18
+
+### Added
+- Report metric and score configurations that cannot be evaluated during preflight,
+  before starting a full run.
+- Add optional kernel density plots for gridded differences and expose the
+  comparison in the GUI.
+
+### Fixed
+- Convert regridded inundation-area densities back to totals using the covered
+  portion of partial cells on overlap-normalized backends. Record the target
+  coverage fraction and update the regridding algorithm version.
+- Preserve support for aggregating finer reference data to monthly comparison
+  frequency.
+- Keep station bias color scales valid and spread visualization samples across
+  the whole input instead of taking only its leading segment.
+
 ## [3.1.1] - 2026-10-31
 
 ### Fixed
