@@ -100,6 +100,8 @@ class ClimatologyProcessor:
             "nPhaseScore",  # Phase score requires temporal cycle
             "nIavScore",  # Interannual variability score requires multiple years
             "APFB",  # Annual Peak Flow Bias requires multi-year data with hydrological year grouping
+            "PeakTimingError",  # Flood event timing requires a daily/subdaily hydrograph
+            "PeakTimingMatchRate",  # Flood event timing requires a daily/subdaily hydrograph
         ]
 
         # Metrics that require multiple time points (not supported for annual climatology with 1 time point)

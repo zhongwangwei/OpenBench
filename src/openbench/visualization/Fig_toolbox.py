@@ -42,6 +42,11 @@ def process_unit(ref_unit, sim_unit, metric):
         "pc_min": "%",  # the bias of the minimum value
         "pc_ampli": "%",  # the bias of the amplitude value
         "rSD": "Unitless",  # Ratio of standard deviations
+        "Q95_Bias": "%",
+        "Q99_Bias": "%",
+        "PeakTimingError": "days",
+        "PeakTimingMatchRate": "Unitless",
+        "Inundation_CSI": "Unitless",
         "PBIAS_HF": "%",  # Percent bias of flows ≥ Q98 (Yilmaz et al., 2008)
         "PBIAS_LF": "%",  # Percent bias of flows ≤ Q30(Yilmaz et al., 2008)
         "SMPI": "Unitless",  # https://docs.esmvaltool.org/en/latest/recipes/recipe_smpi.html
@@ -91,6 +96,8 @@ def process_unit(ref_unit, sim_unit, metric):
         return "(-)"
     elif unit == "%":
         return "(%)"
+    elif unit == "days":
+        return "(days)"
     elif unit == "Same as input data":
         return f"({ref_unit})"
     elif unit == "Square of input data unit":

@@ -7,6 +7,12 @@ import pandas as pd
 import xarray as xr
 from scipy.stats import linregress  # used by br2 metric
 
+from openbench.core._hydrology_extreme_metrics import (
+    inundation_temporal_csi,
+    peak_timing_stats,
+    quantile_flow_bias,
+)
+
 from openbench.util.groupby import without_flox
 
 # Import CacheSystem - CacheSystem is mandatory for metrics calculation
@@ -107,6 +113,35 @@ class metrics:
         s, o = self._validate_inputs(s, o)
         o_sum = o.sum(dim="time")
         return xr.where(o_sum != 0, 100.0 * (s - o).sum(dim="time") / o_sum, np.nan)
+
+    def Q95_Bias(self, s, o):
+        """High-flow 95th non-exceedance quantile bias (%), on paired dates."""
+        s, o = self._validate_inputs(s, o)
+        return quantile_flow_bias(s, o, 0.95)
+
+    def Q99_Bias(self, s, o):
+        """High-flow 99th non-exceedance quantile bias (%), on paired dates."""
+        s, o = self._validate_inputs(s, o)
+        return quantile_flow_bias(s, o, 0.99)
+
+    def PeakTimingError(self, s, o):
+        """Mean absolute matched flood-peak time error (days; smaller is better)."""
+        s, o = self._validate_inputs(s, o)
+        error, _match_rate = peak_timing_stats(s, o)
+        return error
+
+    def PeakTimingMatchRate(self, s, o):
+        """Fraction of independent observed floods matched to model peaks."""
+        s, o = self._validate_inputs(s, o)
+        _error, match_rate = peak_timing_stats(s, o)
+        return match_rate
+
+    def Inundation_CSI(self, s, o, threshold=0.05):
+        """Per-pixel temporal inundation CSI, using 0-1 inundation fractions."""
+        if getattr(self, "item", None) not in (None, "Inundation_Fraction"):
+            raise ValueError("Inundation_CSI is defined for Inundation_Fraction only")
+        s, o = self._validate_inputs(s, o)
+        return inundation_temporal_csi(s, o, threshold=threshold)
 
     def absolute_percent_bias(self, s, o):
         """
