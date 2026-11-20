@@ -9,6 +9,8 @@ import pandas as pd
 import xarray as xr
 from joblib import Parallel, delayed
 
+from openbench.core._overall_diagnostics import NAMES, write_diagnostics
+
 from openbench.data._system_resources import effective_cpu_count, get_system_resources
 from openbench.data.station_missing import StationDataUnavailable
 from openbench.data.time_utils import align_station_times, normalize_station_time
@@ -310,7 +312,13 @@ class Evaluation_grid(metrics, scores):
                 logging.error(f"No such metric: {metric}; skipping")
 
     def process_score(self, score, s, o, vkey=""):
-        pb = getattr(self, score)(s, o)
+        if score == "Overall_Score":
+            pb, components = self._overall_score_details(s, o)
+            paired_s, paired_o = xr.align(s, o, join="inner")
+            paired = (np.isfinite(paired_s) & np.isfinite(paired_o)).any("time")
+            write_diagnostics(self, [a for a, _ in components], pb, paired, vkey=vkey)
+        else:
+            pb = getattr(self, score)(s, o)
         pb_da = _grid_output_array(pb, o, score)
         # ponytail: compute before HDF5 write; lazy source reads inside to_netcdf can hang on Windows/netCDF4.
         pb_da = pb_da.load()
@@ -739,6 +747,8 @@ class Evaluation_stn(metrics, scores):
                         continue
                     if score == "Overall_Score":
                         components = self._overall_nonspatial_components(s, o)
+                        for name, (component, _) in zip(NAMES, components):
+                            row[f"_diagnostic_{name}"] = float(component.values)
                         pb, numerator, denominator = self._weighted_score_components(components)
                         row["_overall_nonspatial_numerator"] = _station_scalar_value(
                             numerator.values,
@@ -866,6 +876,7 @@ class Evaluation_stn(metrics, scores):
                 raise RuntimeError(
                     f"Station evaluation produced no valid station results ({len(skipped)}/{len(results)} skipped)"
                 )
+            diagnostic_station_ids = station_list["ID"].to_numpy().copy()
             station_list = pd.concat(
                 [
                     station_list.iloc[valid_indices].reset_index(drop=True),
@@ -875,6 +886,7 @@ class Evaluation_stn(metrics, scores):
             )
             score_names = getattr(self, "scores", []) or []
             uses_station_network = "nSpatialScore" in score_names or "Overall_Score" in score_names
+            overall_without_temporal_support = False
             internal_columns = [
                 "_station_sim_mean",
                 "_station_ref_mean",
@@ -917,6 +929,8 @@ class Evaluation_stn(metrics, scores):
                     denominator = pd.to_numeric(
                         station_list["_overall_nonspatial_denominator"], errors="coerce"
                     ).to_numpy(dtype=float)
+                    has_nonspatial = np.isfinite(denominator) & (denominator > 0)
+                    overall_without_temporal_support = not has_nonspatial.any()
                     if np.isfinite(spatial_value):
                         numerator = numerator + spatial_value
                         denominator = denominator + 1.0
@@ -924,9 +938,29 @@ class Evaluation_stn(metrics, scores):
                         numerator,
                         denominator,
                         out=np.full(numerator.shape, np.nan, dtype=float),
-                        where=np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0),
+                        where=has_nonspatial & np.isfinite(numerator) & np.isfinite(denominator) & (denominator > 0),
                     )
 
+                    diagnostic_components = []
+                    for name in NAMES:
+                        values = np.full(len(results), np.nan)
+                        values[valid_indices] = (
+                            spatial_value if name == "nSpatialScore" else station_list[f"_diagnostic_{name}"]
+                        )
+                        diagnostic_components.append(xr.DataArray(values, dims="station"))
+                    diagnostic_overall = np.full(len(results), np.nan)
+                    diagnostic_overall[valid_indices] = station_list["Overall_Score"]
+                    paired = np.zeros(len(results), dtype=bool)
+                    paired[valid_indices] = finite
+                    write_diagnostics(
+                        self,
+                        diagnostic_components,
+                        xr.DataArray(diagnostic_overall, dims="station"),
+                        xr.DataArray(paired, dims="station"),
+                        stations=diagnostic_station_ids,
+                    )
+
+            internal_columns.extend(f"_diagnostic_{name}" for name in NAMES[:-1])
             station_list = station_list.drop(columns=internal_columns, errors="ignore")
             requested_columns = list((getattr(self, "metrics", None) or []) + (getattr(self, "scores", None) or []))
             if not requested_columns:
@@ -939,7 +973,10 @@ class Evaluation_stn(metrics, scores):
             )
             numeric_results = station_list[requested_columns].apply(pd.to_numeric, errors="coerce")
             empty_columns = [
-                col for col in requested_columns if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                col
+                for col in requested_columns
+                if not np.isfinite(numeric_results[col].to_numpy(dtype=float)).any()
+                and not (col == "Overall_Score" and overall_without_temporal_support)
             ]
             if empty_columns:
                 raise RuntimeError(

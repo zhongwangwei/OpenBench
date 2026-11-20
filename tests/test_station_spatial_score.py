@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -69,6 +71,10 @@ def test_station_spatial_score_is_one_network_value_and_updates_overall(tmp_path
     expected_spatial = float(scores._spatial_score_from_means(sim_means, ref_means, dim="station"))
     np.testing.assert_allclose(frame["nSpatialScore"], expected_spatial)
     assert frame["nSpatialScore"].nunique() == 1
+    diagnostic = pd.read_csv(next((tmp_path / "diagnostics").rglob("component_validity.csv")))
+    assert diagnostic["nSpatialScore_valid_mask"].eq(1).all()
+    # Existing station output is converted to float32; diagnostics retain float64.
+    np.testing.assert_allclose(diagnostic["Overall_Score"], frame["Overall_Score"], rtol=1e-7)
 
     for row_index, station_id in enumerate(values):
         worker_row = evaluator.make_evaluation_parallel(
@@ -101,9 +107,24 @@ def test_overall_implicitly_uses_spatial_score_without_output_column(tmp_path, m
     assert np.isfinite(frame["Overall_Score"]).all()
 
 
-def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatch):
+@pytest.mark.parametrize("level", [0.0, 5.0])
+def test_constant_station_keeps_spatial_but_not_overall(tmp_path, monkeypatch, level):
+    evaluator = _station_evaluator(tmp_path, ["nSpatialScore", "Overall_Score"], {"A": (10.0, 12.0), "B": (20.0, 18.0)})
+    path = tmp_path / "data" / "stn_Ref_Sim" / "Runoff_ref_A_2000_2001.nc"
+    with xr.open_dataset(path) as ds:
+        changed = ds.load()
+    changed["flow"][:] = level
+    changed.to_netcdf(path, mode="w")
+    frame = _run_and_read(evaluator, tmp_path, monkeypatch)
+    assert np.isfinite(frame["nSpatialScore"]).all()
+    assert np.isnan(frame.loc[frame.ID == "A", "Overall_Score"]).all()
+    assert np.isfinite(frame.loc[frame.ID == "B", "Overall_Score"]).all()
+
+
+@pytest.mark.parametrize("score_names", [["nSpatialScore"], ["nSpatialScore", "Overall_Score"]])
+def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatch, score_names):
     values = {"A": (10.0, 12.0), "B": (20.0, 18.0), "C": (30.0, 33.0)}
-    evaluator = _station_evaluator(tmp_path, ["nSpatialScore"], values)
+    evaluator = _station_evaluator(tmp_path, score_names, values)
     missing_path = tmp_path / "data" / "stn_Ref_Sim" / "Runoff_ref_C_2000_2001.nc"
     with xr.open_dataset(missing_path) as dataset:
         missing = dataset.load()
@@ -121,6 +142,19 @@ def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatc
     )
     assert frame["ID"].tolist() == ["A", "B"]
     np.testing.assert_allclose(frame["nSpatialScore"], expected)
+    if "Overall_Score" in score_names:
+        diagnostic_path = next((tmp_path / "diagnostics").rglob("component_validity.csv"))
+        diagnostic = pd.read_csv(diagnostic_path)
+        assert diagnostic["ID"].tolist() == ["A", "B", "C"]
+        np.testing.assert_array_equal(diagnostic["paired_data_mask"], [1, 1, 0])
+        missing = diagnostic.loc[diagnostic.ID == "C"].iloc[0]
+        assert missing["valid_component_count"] == 0
+        assert missing["valid_weight_sum"] == 0
+        assert np.isnan(missing["Overall_Score"])
+        np.testing.assert_allclose(diagnostic["Overall_Score"][:2], frame["Overall_Score"], rtol=1e-7)
+        summary = json.loads((diagnostic_path.parent / "summary.json").read_text())
+        assert summary["total_locations"] == 3
+        assert summary["paired_data_locations"] == 2
 
 
 def test_explicit_station_spatial_score_reports_degenerate_network(tmp_path, monkeypatch):
@@ -166,6 +200,23 @@ def test_overall_skips_undefined_implicit_spatial_component(tmp_path, monkeypatc
     )
     expected = worker["_overall_nonspatial_numerator"] / worker["_overall_nonspatial_denominator"]
     assert frame.loc[0, "Overall_Score"] == pytest.approx(expected)
+
+
+def test_all_constant_stations_export_nan_overall_and_finite_spatial(tmp_path, monkeypatch):
+    evaluator = _station_evaluator(tmp_path, ["nSpatialScore", "Overall_Score"], {"A": (10.0, 12.0), "B": (20.0, 18.0)})
+    for station_id, level in [("A", 0.0), ("B", 5.0)]:
+        path = tmp_path / "data" / "stn_Ref_Sim" / f"Runoff_ref_{station_id}_2000_2001.nc"
+        with xr.open_dataset(path) as ds:
+            changed = ds.load()
+        changed["flow"][:] = level
+        changed.to_netcdf(path, mode="w")
+    frame = _run_and_read(evaluator, tmp_path, monkeypatch)
+    assert frame.Overall_Score.isna().all()
+    assert np.isfinite(frame.nSpatialScore).all()
+    summary = json.loads(next((tmp_path / "diagnostics").rglob("summary.json")).read_text())
+    assert summary["spatial_only"] == 2
+    assert summary["any_nonspatial"] == 0
+    assert summary["finite_overall"] == 0
 
 
 def test_station_spatial_serial_and_parallel_results_match(tmp_path, monkeypatch):
