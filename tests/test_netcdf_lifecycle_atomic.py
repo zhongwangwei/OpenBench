@@ -72,16 +72,23 @@ def _evaluation_processor(tmp_path):
     processor.sim_source = "SimA"
     processor.output_manager = None
     processor.bias = lambda s, o: np.array([[2.0, 3.0], [4.0, 5.0]])
-    processor.Overall_Score = lambda s, o: np.array([[0.5, 0.6], [0.7, 0.8]])
+    processor._overall_score_details = lambda s, o: _overall_details(np.array([[0.5, 0.6], [0.7, 0.8]]))
     return processor
 
 
-def _lat_lon_array():
+def _lat_lon_array(data=None):
     return xr.DataArray(
-        np.ones((2, 2), dtype=float),
+        np.ones((2, 2), dtype=float) if data is None else data,
         coords={"lat": [0.0, 1.0], "lon": [10.0, 11.0]},
         dims=("lat", "lon"),
     )
+
+
+def _overall_details(result):
+    # Stub the combined calculation used by Overall_Score diagnostics, while
+    # exercising the real diagnostic writer and score output lifecycle.
+    components = [(_lat_lon_array(), weight) for weight in (1, 2, 1, 1, 1)]
+    return _lat_lon_array(result), components
 
 
 def test_evaluation_metric_save_preserves_existing_netcdf_on_write_failure(tmp_path, monkeypatch):
@@ -118,8 +125,9 @@ def test_evaluation_score_save_preserves_existing_netcdf_on_write_failure(tmp_pa
 
     monkeypatch.setattr(xr.DataArray, "to_netcdf", failing_to_netcdf)
 
+    inputs = _lat_lon_array().expand_dims(time=[np.datetime64("2000-01-01")])
     with pytest.raises(OSError, match="simulated score write failure"):
-        processor.process_score("Overall_Score", _lat_lon_array(), _lat_lon_array())
+        processor.process_score("Overall_Score", inputs, inputs)
 
     with xr.open_dataset(target) as ds:
         np.testing.assert_allclose(ds["Overall_Score"].values, [[1.0]])
@@ -153,7 +161,10 @@ def test_evaluation_netcdf_outputs_materialize_lazy_results_before_write(
     import openbench.core.evaluation as evaluation_module
 
     processor = _evaluation_processor(tmp_path)
-    setattr(processor, result_name, lambda _s, _o: result)
+    if result_name == "Overall_Score":
+        processor._overall_score_details = lambda _s, _o: _overall_details(result)
+    else:
+        setattr(processor, result_name, lambda _s, _o: result)
     writes = []
 
     def fake_write(data, output_path, **_kwargs):
@@ -161,7 +172,8 @@ def test_evaluation_netcdf_outputs_materialize_lazy_results_before_write(
 
     monkeypatch.setattr(evaluation_module, "_write_netcdf_atomic", fake_write)
 
-    getattr(processor, method_name)(result_name, _lat_lon_array(), _lat_lon_array())
+    inputs = _lat_lon_array().expand_dims(time=[np.datetime64("2000-01-01")])
+    getattr(processor, method_name)(result_name, inputs, inputs)
 
     assert writes[0][0] is False
     assert writes[0][2] == output_name
