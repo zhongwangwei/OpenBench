@@ -42,6 +42,25 @@ def test_empty_domain(tmp_path):
     assert summary["valid_component_counts"]["5"]["fraction"] == 0
 
 
+def test_repeated_diagnostics_preserve_previous_artifacts(tmp_path):
+    evaluator = SimpleNamespace(casedir=tmp_path, item="Flood", ref_source="Ref", sim_source="Sim")
+    valid = xr.DataArray([1.0], dims="cell")
+    missing = xr.DataArray([np.nan], dims="cell")
+    paired = xr.DataArray([True], dims="cell")
+    write_diagnostics(evaluator, [valid] * 5, valid, paired)
+    original = next((tmp_path / "diagnostics").rglob("summary.json"))
+    original_contents = original.read_bytes()
+
+    write_diagnostics(evaluator, [missing] * 5, missing, paired)
+
+    assert original.read_bytes() == original_contents
+    summaries = list((tmp_path / "diagnostics").rglob("summary.json"))
+    assert len(summaries) == 2
+    latest = next(path for path in summaries if path != original)
+    assert json.loads(latest.read_text())["finite_overall"] == 0
+    assert (latest.parent / "component_validity.nc").exists()
+
+
 def test_grid_integration_preserves_score_and_only_requested_diagnostics(tmp_path):
     evaluator = Evaluation_grid.__new__(Evaluation_grid)
     evaluator.casedir = str(tmp_path)

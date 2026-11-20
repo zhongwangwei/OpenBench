@@ -944,14 +944,21 @@ class Evaluation_stn(metrics, scores):
                     diagnostic_components = []
                     for name in NAMES:
                         values = np.full(len(results), np.nan)
-                        values[valid_indices] = spatial_value if name == "nSpatialScore" else station_list[f"_diagnostic_{name}"]
+                        values[valid_indices] = (
+                            spatial_value if name == "nSpatialScore" else station_list[f"_diagnostic_{name}"]
+                        )
                         diagnostic_components.append(xr.DataArray(values, dims="station"))
                     diagnostic_overall = np.full(len(results), np.nan)
                     diagnostic_overall[valid_indices] = station_list["Overall_Score"]
                     paired = np.zeros(len(results), dtype=bool)
                     paired[valid_indices] = finite
-                    write_diagnostics(self, diagnostic_components, xr.DataArray(diagnostic_overall, dims="station"),
-                                      xr.DataArray(paired, dims="station"), stations=diagnostic_station_ids)
+                    write_diagnostics(
+                        self,
+                        diagnostic_components,
+                        xr.DataArray(diagnostic_overall, dims="station"),
+                        xr.DataArray(paired, dims="station"),
+                        stations=diagnostic_station_ids,
+                    )
 
             internal_columns.extend(f"_diagnostic_{name}" for name in NAMES[:-1])
             station_list = station_list.drop(columns=internal_columns, errors="ignore")

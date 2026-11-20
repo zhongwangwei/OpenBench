@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -119,9 +121,10 @@ def test_constant_station_keeps_spatial_but_not_overall(tmp_path, monkeypatch, l
     assert np.isfinite(frame.loc[frame.ID == "B", "Overall_Score"]).all()
 
 
-def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatch):
+@pytest.mark.parametrize("score_names", [["nSpatialScore"], ["nSpatialScore", "Overall_Score"]])
+def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatch, score_names):
     values = {"A": (10.0, 12.0), "B": (20.0, 18.0), "C": (30.0, 33.0)}
-    evaluator = _station_evaluator(tmp_path, ["nSpatialScore"], values)
+    evaluator = _station_evaluator(tmp_path, score_names, values)
     missing_path = tmp_path / "data" / "stn_Ref_Sim" / "Runoff_ref_C_2000_2001.nc"
     with xr.open_dataset(missing_path) as dataset:
         missing = dataset.load()
@@ -139,6 +142,19 @@ def test_unavailable_station_is_excluded_from_network_score(tmp_path, monkeypatc
     )
     assert frame["ID"].tolist() == ["A", "B"]
     np.testing.assert_allclose(frame["nSpatialScore"], expected)
+    if "Overall_Score" in score_names:
+        diagnostic_path = next((tmp_path / "diagnostics").rglob("component_validity.csv"))
+        diagnostic = pd.read_csv(diagnostic_path)
+        assert diagnostic["ID"].tolist() == ["A", "B", "C"]
+        np.testing.assert_array_equal(diagnostic["paired_data_mask"], [1, 1, 0])
+        missing = diagnostic.loc[diagnostic.ID == "C"].iloc[0]
+        assert missing["valid_component_count"] == 0
+        assert missing["valid_weight_sum"] == 0
+        assert np.isnan(missing["Overall_Score"])
+        np.testing.assert_allclose(diagnostic["Overall_Score"][:2], frame["Overall_Score"], rtol=1e-7)
+        summary = json.loads((diagnostic_path.parent / "summary.json").read_text())
+        assert summary["total_locations"] == 3
+        assert summary["paired_data_locations"] == 2
 
 
 def test_explicit_station_spatial_score_reports_degenerate_network(tmp_path, monkeypatch):
@@ -197,6 +213,10 @@ def test_all_constant_stations_export_nan_overall_and_finite_spatial(tmp_path, m
     frame = _run_and_read(evaluator, tmp_path, monkeypatch)
     assert frame.Overall_Score.isna().all()
     assert np.isfinite(frame.nSpatialScore).all()
+    summary = json.loads(next((tmp_path / "diagnostics").rglob("summary.json")).read_text())
+    assert summary["spatial_only"] == 2
+    assert summary["any_nonspatial"] == 0
+    assert summary["finite_overall"] == 0
 
 
 def test_station_spatial_serial_and_parallel_results_match(tmp_path, monkeypatch):
