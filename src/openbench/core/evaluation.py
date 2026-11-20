@@ -63,6 +63,7 @@ from openbench.util.netcdf import write_file_atomic as _write_file_atomic
 from openbench.util.netcdf import write_netcdf_atomic as _write_netcdf_atomic
 from openbench.util.station_ids import read_station_csv
 from openbench.core._visualization_bridge import visualization_callable
+from openbench.core._hydrology_extreme_metrics import inundation_spatial_csi
 from openbench.core.metrics import metrics
 from openbench.core.scores import scores
 
@@ -221,6 +222,19 @@ class Evaluation_grid(metrics, scores):
         self.date = "Mar 2023"
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.__dict__.update(info)
+
+        # The configuration selects metrics globally. Only calculate the
+        # discharge metrics for Streamflow, and CSI for Inundation_Fraction;
+        # retain other selected metrics for both variables.
+        incompatible = set()
+        if getattr(self, "item", None) != "Streamflow":
+            incompatible.update({"Q95_Bias", "Q99_Bias", "PeakTimingError", "PeakTimingMatchRate"})
+        if getattr(self, "item", None) != "Inundation_Fraction":
+            incompatible.add("Inundation_CSI")
+        excluded = incompatible.intersection(getattr(self, "metrics", ()) or ())
+        if excluded:
+            logging.info("Skipping incompatible metrics %s for %s", sorted(excluded), self.item)
+            self.metrics = [name for name in self.metrics if name not in excluded]
         self.fig_nml = fig_nml
         os.makedirs(self.casedir, exist_ok=True)
 
@@ -284,9 +298,49 @@ class Evaluation_grid(metrics, scores):
             _write_netcdf_atomic(pb_da, output_path)
             logging.info(f"Saved metric {metric} to {output_path}")
 
+    def _save_inundation_spatial_csi(self, s, o, vkey=""):
+        """Write per-time spatial IoU and its area-time pooled summary.
+
+        Unlike the registered raster metric, these are spatial overlap scores
+        computed across all valid domain cells at each matching timestamp.
+        """
+        if self.item != "Inundation_Fraction":
+            raise ValueError("Inundation_CSI is defined for Inundation_Fraction only")
+        result = inundation_spatial_csi(s, o).load()
+        frame = result.to_dataframe().reset_index()
+        frame["threshold_fraction"] = 0.05
+        hits = float(result["hit_weight"].sum().item())
+        false_alarms = float(result["false_alarm_weight"].sum().item())
+        misses = float(result["miss_weight"].sum().item())
+        union = hits + false_alarms + misses
+        n_defined = int(np.isfinite(result["CSI_spatial"]).sum().item())
+        summary = pd.DataFrame(
+            [
+                {
+                    "threshold_fraction": 0.05,
+                    "CSI_spatial_pooled": hits / union if union > 0 else np.nan,
+                    "CSI_spatial_mean": float(result["CSI_spatial"].mean(skipna=True).item()) if n_defined else np.nan,
+                    "n_defined_times": n_defined,
+                    "n_total_times": int(result.sizes["time"]),
+                }
+            ]
+        )
+        stem = f"{self.item}_ref_{self.ref_source}_sim_{self.sim_source}_Inundation_CSI{vkey}"
+        target_dir = os.path.join(self.casedir, "metrics")
+        os.makedirs(target_dir, exist_ok=True)
+        for filename, data in (
+            (stem + "_spatial_timeseries.csv", frame),
+            (stem + "_spatial_summary.csv", summary),
+        ):
+            path = os.path.join(target_dir, filename)
+            _write_file_atomic(path, lambda tmp, table=data: table.to_csv(tmp, index=False), suffix=".tmp.csv")
+            logging.info("Saved spatial inundation CSI to %s", path)
+
     def process_metric(self, metric, s, o, vkey=""):
         pb = getattr(self, metric)(s, o)
         self._save_metric_array(metric, _grid_output_array(pb, o, metric), vkey)
+        if metric == "Inundation_CSI":
+            self._save_inundation_spatial_csi(s, o, vkey)
 
     def _prepare_mfm_shared_metrics(self, s, o):
         shared_names = _mfm_shared_metric_names(self.metrics)
@@ -488,6 +542,19 @@ class Evaluation_stn(metrics, scores):
         self.author = "Zhongwang Wei / zhongwang007@gmail.com"
         self.fig_nml = fig_nml
         self.__dict__.update(info)
+
+        # The configuration selects metrics globally. Only calculate the
+        # discharge metrics for Streamflow, and CSI for Inundation_Fraction;
+        # retain other selected metrics for both variables.
+        incompatible = set()
+        if getattr(self, "item", None) != "Streamflow":
+            incompatible.update({"Q95_Bias", "Q99_Bias", "PeakTimingError", "PeakTimingMatchRate"})
+        if getattr(self, "item", None) != "Inundation_Fraction":
+            incompatible.add("Inundation_CSI")
+        excluded = incompatible.intersection(getattr(self, "metrics", ()) or ())
+        if excluded:
+            logging.info("Skipping incompatible metrics %s for %s", sorted(excluded), self.item)
+            self.metrics = [name for name in self.metrics if name not in excluded]
         if isinstance(self.sim_varname, str):
             self.sim_varname = [self.sim_varname]
         if isinstance(self.ref_varname, str):

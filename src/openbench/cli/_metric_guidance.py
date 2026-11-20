@@ -74,6 +74,46 @@ def metric_score_errors(cfg: Any, effective_tim_res: str | None) -> list[str]:
     resolution = str(effective_tim_res or "").strip().lower()
     errors: list[str] = []
 
+    # Time of flood peaks cannot be inferred from monthly or annual means.
+    peak_metrics = {"PeakTimingError", "PeakTimingMatchRate"} & set(selected_metrics)
+    if peak_metrics and resolution and not resolution.startswith("climatology"):
+        from pandas.tseries.frequencies import to_offset
+
+        from openbench.data.time_utils import comparison_time_freq
+
+        try:
+            # Reuse the evaluation parser, including supported 3Hour/6Hour
+            # resolutions. Non-fixed frequencies (months/years) raise here.
+            nanos = to_offset(comparison_time_freq(resolution)).nanos
+            daily_or_finer = 0 < nanos <= 86400 * 10**9
+        except ValueError:
+            daily_or_finer = False
+        if not daily_or_finer:
+            for name in sorted(peak_metrics):
+                errors.append(
+                    f"{name} cannot be calculated for {effective_tim_res!r}: "
+                    "flood peak timing requires daily or finer observations."
+                )
+
+    # In a mixed-variable evaluation, non-inundation items skip CSI at
+    # runtime. If inundation fractions are not requested at all, fail now.
+    if "Inundation_CSI" in selected_metrics:
+        variables = getattr(getattr(cfg, "evaluation", None), "variables", None)
+        if variables is not None and "Inundation_Fraction" not in variables:
+            errors.append(
+                "Inundation_CSI requires Inundation_Fraction in evaluation.variables; "
+                "it cannot be evaluated directly on Inundation_Area or Streamflow."
+            )
+
+    discharge_metrics = {"Q95_Bias", "Q99_Bias", "PeakTimingError", "PeakTimingMatchRate"} & set(selected_metrics)
+    if discharge_metrics:
+        variables = getattr(getattr(cfg, "evaluation", None), "variables", None)
+        if variables is not None and "Streamflow" not in variables:
+            errors.append(
+                "High-flow quantiles and flood-peak timing require Streamflow in "
+                "evaluation.variables; these metrics are skipped for other variables."
+            )
+
     if resolution in {"climatology-month", "climatology-year"}:
         from openbench.data.climatology import ClimatologyProcessor
 
