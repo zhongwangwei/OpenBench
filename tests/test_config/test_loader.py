@@ -343,6 +343,10 @@ def test_simulation_scalar_fields_are_validated(field, value, message):
         ("grid_res", 0, "project.grid_res"),
         ("grid_res", "0.5", "project.grid_res"),
         ("timezone", "UTC", "project.timezone"),
+        ("streamflow_max_hii", -1, "project.streamflow_max_hii"),
+        ("streamflow_max_hii", 10.01, "project.streamflow_max_hii"),
+        ("streamflow_max_hii", float("nan"), "project.streamflow_max_hii"),
+        ("streamflow_max_hii", True, "project.streamflow_max_hii"),
     ],
 )
 def test_project_numeric_fields_are_validated(field, value, message):

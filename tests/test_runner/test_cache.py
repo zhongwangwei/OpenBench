@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -172,6 +173,41 @@ def test_algorithm_source_fingerprint_tracks_runner_processing_and_comparisons()
     assert "openbench.data._processing_grid_regrid" in modules
     assert "openbench.data.compute" in modules
     assert "openbench.data.file_lookup" in modules
+
+
+def test_hii_threshold_changes_only_streamflow_preprocessing_signature(tmp_path):
+    from openbench.config.schema import EvaluationConfig, OpenBenchConfig, ProjectConfig, ReferenceConfig
+    from openbench.runner.hashing import task_hash_payload
+    from openbench.runner.orchestration import _resume_preprocess_signature
+
+    cfg = OpenBenchConfig(
+        project=ProjectConfig(name="test", output_dir=str(tmp_path), years=[2000, 2001]),
+        evaluation=EvaluationConfig(variables=["Streamflow", "Runoff"]),
+        reference=ReferenceConfig(sources={}),
+        simulation={},
+    )
+    bindings = SimpleNamespace(runner_cfg=SimpleNamespace(general={}))
+
+    def signature(variable):
+        return _resume_preprocess_signature(
+            task_hash_payload(
+                cfg=cfg,
+                bindings=bindings,
+                var_name=variable,
+                sim_source="Sim",
+                ref_source="Ref",
+                metric_vars=[],
+                score_vars=[],
+                comparison_vars=[],
+                statistic_vars=[],
+            )
+        )
+
+    unfiltered = signature("Streamflow")
+    runoff = signature("Runoff")
+    cfg.project.streamflow_max_hii = 0.0
+    assert signature("Streamflow") != unfiltered
+    assert signature("Runoff") == runoff
 
 
 def test_source_specific_section_does_not_capture_longer_source_name():

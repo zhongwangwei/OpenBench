@@ -140,6 +140,11 @@ ZH_CN = {
     "Year Range:": "年份范围：",
     "Min Year Threshold:": "最少年数阈值：",
     "Minimum number of years of valid data required": "有效数据所需的最少年数",
+    "Streamflow HII maximum": "径流人类影响指数上限",
+    (
+        "Retain Streamflow stations whose Human Impact Index is at most this value. "
+        "Requires HII in the reference data. Stations with missing or invalid HII are excluded."
+    ): "保留人类影响指数不高于此值的径流站点。参考数据须含 HII，缺测和无效值会被排除。",
     "Latitude Range:": "纬度范围：",
     "Longitude Range:": "经度范围：",
     "Time Resolution:": "时间分辨率：",

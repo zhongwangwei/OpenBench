@@ -84,6 +84,7 @@ _PROJECT_KEYS = {
     "lat_range",
     "lon_range",
     "basin_mask",
+    "streamflow_max_hii",
     "tim_res",
     "grid_res",
     "timezone",
@@ -399,7 +400,7 @@ def _validated_optional_float_range(raw: Any, path: str, *, lower: float, upper:
     if isinstance(raw, bool) or not isinstance(raw, (int, float)):
         raise ConfigError(f"{path} must be a number between {lower} and {upper}")
     value = float(raw)
-    if value < lower or value > upper:
+    if not lower <= value <= upper:
         raise ConfigError(f"{path} must be between {lower} and {upper}, got {raw}")
     return value
 
@@ -937,6 +938,9 @@ def _build_project(raw: dict[str, Any]) -> ProjectConfig:
         lat_range=lat_range,
         lon_range=lon_range,
         basin_mask=basin_mask,
+        streamflow_max_hii=_validated_optional_float_range(
+            raw.get("streamflow_max_hii"), "project.streamflow_max_hii", lower=0.0, upper=10.0
+        ),
         tim_res=_validated_optional_tim_res(raw.get("tim_res"), "project.tim_res"),
         grid_res=_validated_optional_positive_number(raw.get("grid_res"), "project.grid_res"),
         timezone=_validated_optional_number(raw.get("timezone"), "project.timezone"),

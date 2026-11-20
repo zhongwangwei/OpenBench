@@ -103,6 +103,7 @@ class ProjectConfig:
     strict_reference: bool = False  # Treat LOW-provenance refs as errors instead of warnings
     dask: DaskConfig = field(default_factory=DaskConfig)  # Optional dask.distributed runtime options
     io: IOConfig = field(default_factory=IOConfig)  # Optional high-volume IO performance options
+    streamflow_max_hii: Optional[float] = None  # Maximum per-station Human Impact Index for Streamflow
 
 
 @dataclass

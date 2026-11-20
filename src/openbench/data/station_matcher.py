@@ -54,6 +54,26 @@ def _require_dataset_field(ds: xr.Dataset, requested: str, label: str, dataset_p
     )
 
 
+def streamflow_hii_mask(ds: xr.Dataset, station_id_var: str, max_hii: float, dataset_path: Path) -> np.ndarray:
+    """Select stations with a valid HII at or below the configured limit."""
+    key = get_xarray_key_case_insensitive(ds, "HII")
+    if key is None:
+        raise DataProcessingError(
+            f"Streamflow HII filtering requires a per-station HII variable in {dataset_path}. "
+            "Select a reference with HII or clear project.streamflow_max_hii."
+        )
+    score = ds[key]
+    station_key = _require_dataset_field(ds, station_id_var, "station_id_var", dataset_path)
+    station_dims = ds[station_key].dims
+    if len(station_dims) != 1 or score.dims != station_dims or score.dtype.kind not in "iuf":
+        raise DataProcessingError(f"HII must be a numeric variable on the station dimension in {dataset_path}")
+    values = np.asarray(score.values, dtype=np.float64)
+    eligible = (values >= 0.0) & (values <= max_hii)
+    if not eligible.any():
+        raise DataProcessingError(f"No stations have a valid HII <= {max_hii:g} in {dataset_path}")
+    return eligible
+
+
 def get_resolution_suffix(sim_grid_res: float) -> str:
     """Map simulation grid resolution (degrees) to CaMA resolution suffix."""
     res_map = {
@@ -573,6 +593,7 @@ def run_station_matching(
     n_jobs: int | None = None,
     varname: Optional[str] = None,
     varname_falls_back: bool = False,
+    max_hii: Optional[float] = None,
 ):
     """Run station matching on a consolidated reference NC file.
 
@@ -583,6 +604,8 @@ def run_station_matching(
     The minimum upstream area comes from ``info.sim_grid_res`` via
     ``MIN_UPAREA_BY_RESOLUTION``; an unsupported resolution raises ValueError.
     The allocation error limit is ``MAX_CAMA_ALLOC_ERR``.
+
+    ``max_hii`` optionally requires a valid station HII at or below that limit.
 
     ``varname`` is the evaluated item's reference variable: it is read from the
     dataset and names the variable in the per-station files, which are read
@@ -597,6 +620,8 @@ def run_station_matching(
     dataset_path = Path(dataset_path)
     if not dataset_path.exists():
         raise FileNotFoundError(f"Station dataset not found: {dataset_path}")
+    if max_hii is not None and (isinstance(max_hii, (bool, np.bool_)) or not 0.0 <= max_hii <= 10.0):
+        raise ValueError("The maximum HII must be between 0 and 10")
     min_uparea = resolution_min_uparea(getattr(info, "sim_grid_res", None))
 
     ref_name = scratch_subdir or dataset_path.stem
@@ -610,14 +635,27 @@ def run_station_matching(
         station_id_key = _require_dataset_field(ds, station_id_var, "station_id_var", dataset_path)
         lon_key = _require_dataset_field(ds, lon_var, "lon_var", dataset_path)
         lat_key = _require_dataset_field(ds, lat_var, "lat_var", dataset_path)
-        if not varname:
-            discharge_key = _require_dataset_field(ds, discharge_var, "discharge_var", dataset_path)
-        elif varname_falls_back:
-            discharge_key = get_xarray_key_case_insensitive(ds, varname) or _require_dataset_field(
-                ds, discharge_var, "discharge_var", dataset_path
+        if varname_falls_back:
+            # Native products label the station dimension with integer indices
+            # and store the actual gauge IDs in a CF time-series coordinate.
+            cf_id = ds.get("station_id")
+            if (
+                station_id_key == "station"
+                and cf_id is not None
+                and cf_id.dims == ds[station_id_key].dims
+                and cf_id.attrs.get("cf_role") == "timeseries_id"
+            ):
+                station_id_key = "station_id"
+            discharge_key = (
+                get_xarray_key_case_insensitive(ds, varname or discharge_var)
+                or get_xarray_key_case_insensitive(ds, discharge_var)
+                or get_xarray_key_case_insensitive(ds, "Streamflow")
+                or _require_dataset_field(ds, discharge_var, "discharge_var", dataset_path)
             )
         else:
-            discharge_key = _require_dataset_field(ds, varname, "varname", dataset_path)
+            discharge_key = _require_dataset_field(
+                ds, varname or discharge_var, "varname" if varname else "discharge_var", dataset_path
+            )
         output_var = varname or "discharge"
         time_key = get_xarray_key_case_insensitive(ds, time_var) or get_xarray_key_case_insensitive(ds, "time")
         if time_key is None:
@@ -638,6 +676,10 @@ def run_station_matching(
         times = ds[time_key].values
 
         n_stations = len(station_ids)
+        hii_eligible = None
+        if max_hii is not None:
+            hii_eligible = streamflow_hii_mask(ds, station_id_key, max_hii, dataset_path)
+            logging.info("HII <= %g: %d/%d stations in %s", max_hii, hii_eligible.sum(), n_stations, dataset_path.name)
         discharge_da = ds[discharge_key]
         missing_sentinels = _as_missing_sentinels(discharge_da.attrs, discharge_da.encoding)
         worker_count = _station_matching_jobs(n_stations, n_jobs)
@@ -682,6 +724,8 @@ def run_station_matching(
                 min_uparea,
                 max_uparea,
             )
+            if hii_eligible is not None:
+                station_indices = station_indices[hii_eligible[station_indices]]
             if station_indices.size == 0:
                 raise ValueError(f"No stations passed non-flow filters for {dataset_path.name}")
             logging.info(
@@ -741,6 +785,8 @@ def run_station_matching(
                 min_uparea,
             )
             station_indices = _direct_candidate_station_indices(lons, lats, areas, info, min_uparea, max_uparea)
+            if hii_eligible is not None:
+                station_indices = station_indices[hii_eligible[station_indices]]
             if station_indices.size == 0:
                 raise ValueError(f"No stations passed non-flow filters for {dataset_path.name}")
             logging.info(

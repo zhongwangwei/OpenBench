@@ -306,7 +306,7 @@ def _resolve_effective_reference(cfg, resolved_ref):
     return ref_ds, var_map, root, directory
 
 
-def reference_data_findings(ref_ds, var_map, root: str, directory: str):
+def reference_data_findings(ref_ds, var_map, root: str, directory: str, *, max_hii: float | None = None):
     """Common init/check directory and station-dataset validation."""
     if not root or not str(root).strip():
         return (
@@ -321,6 +321,8 @@ def reference_data_findings(ref_ds, var_map, root: str, directory: str):
     info = [f"effective root: {root_path}"]
     matching = getattr(ref_ds, "station_matching", None)
     dataset_file = getattr(matching, "dataset_file", "") if matching else ""
+    if max_hii is not None and (not dataset_file or ref_ds.data_type != "stn"):
+        return ["Streamflow HII filtering requires a consolidated station NetCDF reference with HII."], [], info
     if dataset_file:
         path = root_path
     if not path.is_dir():
@@ -333,9 +335,21 @@ def reference_data_findings(ref_ds, var_map, root: str, directory: str):
     if dataset_file:
         from openbench.data.station_matcher import resolve_station_dataset, station_dataset_candidates
 
-        if resolve_station_dataset(root_path, dataset_file) is None:
+        dataset_path = resolve_station_dataset(root_path, dataset_file)
+        if dataset_path is None:
             tried = " or ".join(str(p) for p in station_dataset_candidates(root_path, dataset_file))
             return [f"Reference dataset file does not exist: {tried}"], warnings, info
+        if max_hii is not None:
+            import xarray as xr
+
+            from openbench.data.station_matcher import streamflow_hii_mask
+            from openbench.util.exceptions import DataProcessingError
+
+            try:
+                with xr.open_dataset(dataset_path, decode_times=False) as dataset:
+                    streamflow_hii_mask(dataset, matching.station_id_var, max_hii, dataset_path)
+            except (OSError, ValueError, DataProcessingError) as exc:
+                return [str(exc)], warnings, info
     elif not _has_nearby_netcdf_files(path):
         if getattr(ref_ds, "data_type", "grid") != "stn":
             # Gridded preprocessing reads files from this tree; with none it cannot run.
@@ -348,7 +362,8 @@ def reference_data_findings(ref_ds, var_map, root: str, directory: str):
 def _reference_data_findings(cfg, resolved_ref) -> tuple[list[str], list[str], list[str]]:
     if resolved_ref.status != "ok" or resolved_ref.ref_ds is None:
         return [], [], []
-    return reference_data_findings(*_effective_reference(cfg, resolved_ref))
+    max_hii = cfg.project.streamflow_max_hii if resolved_ref.var_name.casefold() == "streamflow" else None
+    return reference_data_findings(*_effective_reference(cfg, resolved_ref), max_hii=max_hii)
 
 
 def _probe_years(project_years: list[int], data_years: Any) -> list[int]:

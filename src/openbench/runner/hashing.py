@@ -614,6 +614,11 @@ def task_hash_payload(
             "only_drawing": cfg.project.only_drawing,
             "basin_mask": cfg.project.basin_mask,
             "basin_mask_signature": single_file_signature(cfg.project.basin_mask),
+            **(
+                {"streamflow_max_hii": cfg.project.streamflow_max_hii}
+                if var_name.casefold() == "streamflow" and cfg.project.streamflow_max_hii is not None
+                else {}
+            ),
         },
         "regrid_backend": {
             "selected": selected_regrid_backend,

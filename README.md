@@ -332,6 +332,7 @@ statistics:
 |---|---|---|
 | `years` | `[start, end]` | Evaluation time window |
 | `lat_range` / `lon_range` | `[min, max]` | Spatial domain |
+| `streamflow_max_hii` | 0–10 / `null` (default) | Retain Streamflow stations whose human impact index is at or below this value |
 | `grid_res` | float (degrees) | Common grid the data is regridded to |
 | `num_cores` | int / `null` | Parallel workers (`null`/`0` → all CPUs) |
 | `time_alignment` | `intersection` (default) / `per_pair` / `strict` | How model & reference time windows are matched |
@@ -341,6 +342,11 @@ statistics:
 | `IGBP_groupby` / `PFT_groupby` / `climate_zone_groupby` | `false` | Per-class aggregation (see below) |
 | `generate_report` | `true` | Emit HTML report |
 | `station_plots` | `true` | One time-series figure per station; set `false` for large station sets |
+
+The Streamflow HII limit requires a consolidated station NetCDF with numeric
+`HII` on the station dimension. Stations with missing or invalid HII are
+excluded when the limit is enabled. In the GUI, enable **Streamflow HII
+maximum** under **General Settings → Spatial-Temporal Settings**.
 
 ### Advanced config helpers
 

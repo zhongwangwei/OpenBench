@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 
 from openbench.gui.config_manager import ConfigManager
@@ -108,6 +109,24 @@ def _runnable_config(tmp_path):
         "comparisons": {},
         "statistics": {},
     }
+
+
+@pytest.mark.parametrize("threshold", [None, 0.0, 2.35, 10.0])
+def test_streamflow_hii_threshold_survives_gui_and_export_roundtrip(tmp_path, threshold):
+    manager = ConfigManager()
+    config = _runnable_config(tmp_path)
+    config["general"]["streamflow_max_hii"] = threshold
+
+    exported = yaml.safe_load(manager.generate_config_yaml(config))
+    assert exported["project"].get("streamflow_max_hii") == threshold
+    if threshold is None:
+        assert "streamflow_max_hii" not in exported["project"]
+    gui = manager.unified_to_gui_config(exported)
+    assert gui["general"]["streamflow_max_hii"] == threshold
+    legacy = yaml.safe_load(manager.generate_main_nml(gui, str(tmp_path), str(tmp_path / "case")))
+    assert legacy["general"]["streamflow_max_hii"] == threshold
+    second_export = yaml.safe_load(manager.generate_config_yaml(gui))
+    assert second_export["project"].get("streamflow_max_hii") == threshold
 
 
 def test_generate_config_yaml_preserves_exact_reference_source_names(tmp_path):

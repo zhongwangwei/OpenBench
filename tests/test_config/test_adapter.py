@@ -164,6 +164,7 @@ def test_adapter_declares_legacy_general_key_contract():
         "min_lon",
         "max_lon",
         "basin_mask",
+        "streamflow_max_hii",
         "num_cores",
         "evaluation",
         "comparison",

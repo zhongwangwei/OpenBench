@@ -290,6 +290,8 @@ def migrate_config(main_config_path: str | Path, output_path: str | Path) -> dic
 
     if general.get("min_year") is not None:
         new_config["project"]["min_year_threshold"] = general["min_year"]
+    if general.get("streamflow_max_hii") is not None:
+        new_config["project"]["streamflow_max_hii"] = general["streamflow_max_hii"]
     lat_range = [general.get("min_lat", -90), general.get("max_lat", 90)]
     lon_range = [general.get("min_lon", -180), general.get("max_lon", 180)]
     if lat_range != [-90, 90]:

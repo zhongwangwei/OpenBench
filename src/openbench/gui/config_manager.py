@@ -379,6 +379,7 @@ class ConfigManager:
             "syear": years[0] if len(years) > 0 else 2000,
             "eyear": years[1] if len(years) > 1 else 2020,
             "min_year": project.get("min_year_threshold", 1.0),
+            "streamflow_max_hii": project.get("streamflow_max_hii"),
             "min_lat": lat_range[0] if len(lat_range) > 0 else -90.0,
             "max_lat": lat_range[1] if len(lat_range) > 1 else 90.0,
             "min_lon": lon_range[0] if len(lon_range) > 0 else -180.0,
@@ -610,6 +611,7 @@ class ConfigManager:
             "syear": general.get("syear", 2000),
             "eyear": general.get("eyear", 2020),
             "min_year": general.get("min_year", 1.0),
+            "streamflow_max_hii": general.get("streamflow_max_hii"),
             "max_lat": general.get("max_lat", 90.0),
             "min_lat": general.get("min_lat", -90.0),
             "max_lon": general.get("max_lon", 180.0),
@@ -957,6 +959,8 @@ class ConfigManager:
         min_year = general.get("min_year", 1.0)
         if min_year and float(min_year) != 3.0:
             project["min_year_threshold"] = float(min_year)
+        if general.get("streamflow_max_hii") is not None:
+            project["streamflow_max_hii"] = general["streamflow_max_hii"]
         lat_range = [general.get("min_lat", -90.0), general.get("max_lat", 90.0)]
         lon_range = [general.get("min_lon", -180.0), general.get("max_lon", 180.0)]
         if lat_range != [-90.0, 90.0]:

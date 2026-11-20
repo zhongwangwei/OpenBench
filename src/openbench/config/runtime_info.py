@@ -373,8 +373,15 @@ class GeneralInfoReader:
 
         raise ValueError(f"Cannot parse resolution: {resolution}")
 
+    def _streamflow_hii_limit(self):
+        limit = getattr(self, "streamflow_max_hii", None)
+        return limit if limit is not None and self.item.casefold() == "streamflow" else None
+
     def _process_station_data(self):
         """Process station data if applicable."""
+
+        if self._streamflow_hii_limit() is not None and self.ref_data_type != "stn":
+            raise ConfigurationError("Streamflow HII filtering requires a station reference with HII.")
 
         if self.ref_data_type == "stn" or self.sim_data_type == "stn":
             try:
@@ -654,6 +661,10 @@ class GeneralInfoReader:
 
         initial_count = len(self.stn_list)
         custom_filter = self._get_custom_filter()
+        if self._streamflow_hii_limit() is not None and not getattr(custom_filter, "is_station_matcher", False):
+            raise ConfigurationError(
+                "Streamflow HII filtering requires a consolidated station NetCDF reference with HII."
+            )
         if custom_filter is not None:
             logging.info(f"Applying custom filter for {self.ref_source}")
             try:
@@ -755,6 +766,7 @@ class GeneralInfoReader:
                             scratch_subdir=f"{dataset_path.stem}_{info.item}" if per_item_scratch else None,
                             varname=varname or None,
                             varname_falls_back=str(info.item).casefold() == "streamflow",
+                            max_hii=self._streamflow_hii_limit(),
                         )
 
                     _station_matcher_filter.is_station_matcher = True

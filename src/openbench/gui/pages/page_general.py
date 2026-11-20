@@ -164,6 +164,20 @@ class PageGeneral(BasePage):
         self.weight_combo.setToolTip("Weight method for spatial averaging (None, area-weighted, or mass-weighted)")
         st_layout.addWidget(self.weight_combo, 6, 3)
 
+        self.cb_streamflow_hii = QCheckBox("Streamflow HII maximum")
+        self.streamflow_max_hii_spin = NoScrollDoubleSpinBox()
+        self.streamflow_max_hii_spin.setRange(0.0, 10.0)
+        self.streamflow_max_hii_spin.setSingleStep(0.1)
+        self.streamflow_max_hii_spin.setValue(10.0)
+        self.streamflow_max_hii_spin.setEnabled(False)
+        self.streamflow_max_hii_spin.setToolTip(
+            "Retain Streamflow stations whose Human Impact Index is at most this value. "
+            "Requires HII in the reference data. Stations with missing or invalid HII are excluded."
+        )
+        self.cb_streamflow_hii.toggled.connect(self.streamflow_max_hii_spin.setEnabled)
+        st_layout.addWidget(self.cb_streamflow_hii, 7, 0)
+        st_layout.addWidget(self.streamflow_max_hii_spin, 7, 1)
+
         self.content_layout.addWidget(st_group)
 
         toggle_group = QGroupBox("Feature Toggles")
@@ -558,6 +572,8 @@ class PageGeneral(BasePage):
             self.syear_spin,
             self.eyear_spin,
             self.min_year_spin,
+            self.cb_streamflow_hii,
+            self.streamflow_max_hii_spin,
             self.min_lat_spin,
             self.max_lat_spin,
             self.min_lon_spin,
@@ -638,6 +654,10 @@ class PageGeneral(BasePage):
             self.syear_spin.setValue(general.get("syear", 2000))
             self.eyear_spin.setValue(general.get("eyear", 2020))
             self.min_year_spin.setValue(general.get("min_year", 1.0))
+            max_hii = general.get("streamflow_max_hii")
+            self.cb_streamflow_hii.setChecked(max_hii is not None)
+            self.streamflow_max_hii_spin.setEnabled(max_hii is not None)
+            self.streamflow_max_hii_spin.setValue(max_hii if max_hii is not None else 10.0)
             self.min_lat_spin.setValue(general.get("min_lat", -90.0))
             self.max_lat_spin.setValue(general.get("max_lat", 90.0))
             self.min_lon_spin.setValue(general.get("min_lon", -180.0))
@@ -817,6 +837,9 @@ class PageGeneral(BasePage):
             "syear": self.syear_spin.value(),
             "eyear": self.eyear_spin.value(),
             "min_year": self.min_year_spin.value(),
+            "streamflow_max_hii": (
+                self.streamflow_max_hii_spin.value() if self.cb_streamflow_hii.isChecked() else None
+            ),
             "min_lat": self.min_lat_spin.value(),
             "max_lat": self.max_lat_spin.value(),
             "min_lon": self.min_lon_spin.value(),

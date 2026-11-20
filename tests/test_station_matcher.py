@@ -536,6 +536,49 @@ def _uparea_info(tmp_path, sim_grid_res):
     )
 
 
+@pytest.mark.parametrize(("method", "field"), [("cama_allocation", "HII"), ("direct", "hii")])
+def test_streamflow_hii_limit_keeps_boundary_and_cf_station_ids(tmp_path, method, field):
+    from openbench.data.station_matcher import run_station_matching
+
+    ids = ["natural", "boundary", "high", "missing", "invalid", "small"]
+    path = _uparea_stations(tmp_path, [2000.0] * 5 + [100.0])
+    native = tmp_path / "native.nc"
+    with xr.open_dataset(path) as source:
+        source.rename({"discharge": "Streamflow"}).assign(
+            station_id=("station", ids, {"cf_role": "timeseries_id"}),
+            **{field: ("station", [0.0, 2.0, 2.1, np.nan, -9999.0, 0.0])},
+        ).to_netcdf(native)
+
+    info = _uparea_info(tmp_path, 0.05)
+    for limit, expected in [(None, ids[:-1]), (2.0, ids[:2]), (0.0, ids[:1])]:
+        run_station_matching(
+            info,
+            str(native),
+            method=method,
+            varname="discharge",
+            varname_falls_back=True,
+            max_hii=limit,
+            n_jobs=1,
+        )
+        assert info.stn_list["ID"].tolist() == expected
+
+
+def test_streamflow_hii_limit_requires_per_station_hii(tmp_path):
+    from openbench.data.station_matcher import run_station_matching
+    from openbench.util.exceptions import DataProcessingError
+
+    path = _uparea_stations(tmp_path, [2000.0, 2000.0])
+    info = _uparea_info(tmp_path, 0.05)
+    with pytest.raises(DataProcessingError, match="requires a per-station HII variable"):
+        run_station_matching(info, str(path), max_hii=2.0, n_jobs=1)
+
+    wrong_shape = tmp_path / "wrong_shape.nc"
+    with xr.open_dataset(path) as source:
+        source.assign(HII=("time", [1.0, 2.0])).to_netcdf(wrong_shape)
+    with pytest.raises(DataProcessingError, match="numeric variable on the station dimension"):
+        run_station_matching(info, str(wrong_shape), max_hii=2.0, n_jobs=1)
+
+
 @pytest.mark.parametrize(
     ("sim_grid_res", "expected_ids"),
     [(0.25, ["1", "2"]), (0.1, ["0", "1", "2"])],
