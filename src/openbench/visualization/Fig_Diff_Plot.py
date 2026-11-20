@@ -30,6 +30,22 @@ from ._validation import finite_min_max, finite_values
 
 logger = logging.getLogger(__name__)
 
+_QUANTILE_BIAS_METRICS = {"Q95_Bias", "Q99_Bias"}
+
+
+def _data_colorbar_extend(values, vmin, vmax):
+    """Report finite data outside the displayed color range."""
+    finite = finite_values(values, label="Diff Plot colorbar extension")
+    below = np.min(finite) < vmin
+    above = np.max(finite) > vmax
+    if below and above:
+        return "both"
+    if below:
+        return "min"
+    if above:
+        return "max"
+    return "neither"
+
 
 def _legacy_diff_filename(data_type, item_type, evaluation_item, ref_source, sim_source, sim_nml, ref_data_type):
     if ref_data_type == "stn":
@@ -102,7 +118,7 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
     ds = Convert_Type.convert_nc(ds)
 
     data = downsample_for_plot(ds[xitem], option)
-    finite_values(data, label=f"Diff Plot grid {filename}/{xitem}")
+    valid_values = finite_values(data, label=f"Diff Plot grid {filename}/{xitem}")
 
     # Extract variables after plot-only downsampling.
     ilat = data.lat.values
@@ -117,6 +133,8 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
             "rSD",
             "PBIAS_HF",
             "PBIAS_LF",
+            "Q95_Bias",
+            "Q99_Bias",
             "NSE",
             "KGE",
             "KGESS",
@@ -138,6 +156,8 @@ def plot_grid_map(basedir, filename, main_nml, metric, xitem, option):
         min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    if metric in _QUANTILE_BIAS_METRICS:
+        extend = _data_colorbar_extend(valid_values, mticks[0], mticks[-1])
     if hasattr(cmap, "copy"):
         cmap = cmap.copy()
     cmap.set_bad("#d9d9d9")
@@ -259,6 +279,8 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
             "rSD",
             "PBIAS_HF",
             "PBIAS_LF",
+            "Q95_Bias",
+            "Q99_Bias",
             "NSE",
             "KGE",
             "KGESS",
@@ -288,6 +310,8 @@ def plot_stn_map(basedir, filename, stn_lon, stn_lat, metric, main_nml, var, var
         min_value, max_value = option["vmin"], option["vmax"]
 
     cmap, mticks, norm, bnd, extend = get_index(min_value, max_value, option["cmap"])
+    if var in _QUANTILE_BIAS_METRICS and has_valid_values:
+        extend = _data_colorbar_extend(valid_values, mticks[0], mticks[-1])
     if hasattr(cmap, "copy"):
         cmap = cmap.copy()
     cmap.set_bad("#d9d9d9")
@@ -418,7 +442,10 @@ def plot_diff_results(
         plot_option["title"] = f"{evaluation_item} {item_type} difference {sim_source[0]} vs {sim_source[1]}"
         # if not plot_option['colorbar_label']:
         unit = UnitProcessing.display_unit(sim_nml[f"{evaluation_item}"][f"{sim_source[0]}_varunit"], evaluation_item)
-        plot_option["colorbar_label"] = process_unit(unit, "", item_type)
+        # A difference between two percentage-valued biases is measured in percentage points.
+        plot_option["colorbar_label"] = (
+            "pp" if item_type in _QUANTILE_BIAS_METRICS else process_unit(unit, "", item_type)
+        )
 
     if not plot_option["cmap"]:
         plot_option["cmap"] = "RdBu_r"  # Diverging colormap for anomalies/differences
