@@ -698,7 +698,7 @@ class GeneralInfoReader:
         """Get custom filter function for the reference source.
 
         Priority:
-        1. Streamflow station_matching config in reference_catalog.yaml → StationMatcher engine
+        1. River-network station_matching config in reference_catalog.yaml → StationMatcher engine
         2. Python filter file (built-in or user ~/.openbench/custom/)
         3. None → default filter
         """
@@ -714,15 +714,17 @@ class GeneralInfoReader:
                 matched_items = [name for name in ref.variables if is_station_matched_item(name)]
                 if not matched_items:
                     logging.warning(
-                        "Ignoring station_matching for reference %s, which has no Streamflow or sediment "
+                        "Ignoring station_matching for reference %s, which has no supported river-network "
                         "variable; rescan the reference catalog to generate a station list.",
                         self.ref_source,
                     )
                 else:
                     sm = ref.station_matching
-                    # One dataset serving several items (discharge, SSC and SSL at
-                    # sediment gauges) gets per-item station files.
-                    per_item_scratch = len(matched_items) > 1
+                    # A multi-item dataset or the shared reservoir NC needs
+                    # separate scratch files for each evaluated variable.
+                    per_item_scratch = len(matched_items) > 1 or any(
+                        name.casefold() in {"dam_inflow", "dam_outflow"} for name in matched_items
+                    )
 
                     def _station_matcher_filter(info):
                         from openbench.data.station_matcher import (

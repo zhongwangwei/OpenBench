@@ -141,9 +141,16 @@ def resolve_station_dataset(root, dataset_file: str) -> Optional[Path]:
 AREA_VAR_FALLBACKS = ("upstream_area", "area")
 
 # Evaluation items whose station references are matched to the river network
-# (river discharge and the suspended sediment measured at sediment gauges).
+# (river discharge, reservoir flows and suspended sediment).
 STATION_MATCHED_ITEMS = frozenset(
-    {"streamflow", "discharge_for_sediment", "suspended_sediment_concentration", "suspended_sediment_load"}
+    {
+        "streamflow",
+        "dam_inflow",
+        "dam_outflow",
+        "discharge_for_sediment",
+        "suspended_sediment_concentration",
+        "suspended_sediment_load",
+    }
 )
 
 

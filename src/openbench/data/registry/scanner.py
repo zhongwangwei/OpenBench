@@ -2010,7 +2010,7 @@ def _preserve_user_edits(descriptor: dict, existing: dict | None) -> None:
     if "timezone" in existing:
         descriptor["timezone"] = existing["timezone"]
 
-    # station_matching serves Streamflow and the sediment items only. Keep valid
+    # station_matching serves river-network evaluation items. Keep valid
     # user-defined matchers, but drop invalid blocks from other station data.
     from openbench.data.station_matcher import is_station_matched_item
 

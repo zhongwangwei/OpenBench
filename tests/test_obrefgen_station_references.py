@@ -118,6 +118,41 @@ def test_profile_rescan_keeps_each_variable_station_list(tmp_path, monkeypatch):
         assert len(read_station_csv(station_list)) == 2
 
 
+def test_resopsus_shared_file_scan_registers_both_flows(tmp_path, monkeypatch):
+    root = tmp_path / "Reference"
+    monkeypatch.setenv("OPENBENCH_REF_ROOT", str(root))
+    monkeypatch.setenv("OPENBENCH_HOME", str(tmp_path / "home"))
+    directory = root / "Station/Anth/Dam/ResOpsUS"
+    directory.mkdir(parents=True)
+    path = directory / "OpenBench_ResOpsUS_Daily_full.nc"
+    xr.Dataset(
+        {
+            "Dam_Inflow": (("station", "time"), [[1.0]]),
+            "Dam_Outflow": (("station", "time"), [[2.0]]),
+        },
+        coords={"station": ["1"], "time": pd.date_range("2001-01-01", periods=1)},
+    ).to_netcdf(path)
+    monkeypatch.setattr(scanner, "_REFERENCE_PROFILES", None)
+
+    variants = [variant for group in scanner.scan_reference_directory(root) for variant in group.variants.values()]
+    expected = {
+        "OpenBench_ResOpsUS_Inflow_Daily": "Dam_Inflow",
+        "OpenBench_ResOpsUS_Outflow_Daily": "Dam_Outflow",
+    }
+    assert {variant.registry_name for variant in variants} == set(expected)
+    catalog = scanner.register_scanned_datasets_batch(variants, catalog_path=tmp_path / "catalog.yaml")
+    entries = yaml.safe_load(catalog.read_text())
+    for name, variable in expected.items():
+        ref = manager._build_reference(entries[name])
+        assert Path(ref.root_dir) == directory
+        assert list(ref.variables) == [variable]
+        assert ref.variables[variable].varname == variable
+        assert ref.station_matching.method == "cama_allocation"
+        assert ref.station_matching.discharge_var == variable
+        assert ref.station_matching.dataset_file == path.name
+        assert not ref.fulllist
+
+
 def test_new_reference_catalog_excludes_unqualified_records_and_runoff(tmp_path):
     registry = manager.RegistryManager(user_dir=tmp_path / "registry")
     references = [reference for reference in registry.list_references() if reference.name.startswith("OBRefGen_")]

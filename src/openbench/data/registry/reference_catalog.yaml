@@ -3047,6 +3047,52 @@ ResOpsUS:
   _provenance:
     data_groupby: profile
     tim_res: nc
+OpenBench_ResOpsUS_Inflow_Daily:
+  name: OpenBench_ResOpsUS_Inflow_Daily
+  description: Consolidated ResOpsUS daily reservoir inflow (source calendar dates)
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Dam/ResOpsUS
+  years: [1900, 2020]
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_ResOpsUS_Daily_full.nc
+    station_id_var: station_id
+    lon_var: lon
+    lat_var: lat
+    area_var: upstream_area
+    discharge_var: Dam_Inflow
+    time_var: time
+  variables:
+    Dam_Inflow:
+      varname: Dam_Inflow
+      varunit: m3 s-1
+OpenBench_ResOpsUS_Outflow_Daily:
+  name: OpenBench_ResOpsUS_Outflow_Daily
+  description: Consolidated ResOpsUS daily reservoir outflow (source calendar dates)
+  category: Water
+  data_type: stn
+  tim_res: Day
+  data_groupby: single
+  timezone: 0
+  root_dir: ${OPENBENCH_REF_ROOT}/Station/Anth/Dam/ResOpsUS
+  years: [1900, 2020]
+  station_matching:
+    method: cama_allocation
+    dataset_file: OpenBench_ResOpsUS_Daily_full.nc
+    station_id_var: station_id
+    lon_var: lon
+    lat_var: lat
+    area_var: upstream_area
+    discharge_var: Dam_Outflow
+    time_var: time
+  variables:
+    Dam_Outflow:
+      varname: Dam_Outflow
+      varunit: m3 s-1
 Rn-Xu2022_MidRes:
   _provenance:
     data_groupby: scan
